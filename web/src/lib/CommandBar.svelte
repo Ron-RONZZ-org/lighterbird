@@ -2,7 +2,7 @@
   import { commandTree } from "./commandTree.js";
   import { getCompletions, getDataCompletionsFromCache } from "./commandEngine.js";
   import { parseCommand, hasTrailingSpace } from "./parser.js";
-  import { email as emailApi, calendar as calendarApi } from "./api.js";
+  import { email as emailApi, calendar as calendarApi, contacts as contactsApi, todo as todoApi, journal as journalApi } from "./api.js";
   import { history } from "./commandHistory.svelte.js";
   import { popup } from "./popupStore.svelte.js";
 
@@ -40,7 +40,8 @@
         (n) => n.name.toLowerCase() === tokens[i].toLowerCase(),
       );
       if (!found) return i;
-      if (found.apiMethod) return i + 1;
+      // Leaf nodes have no children (or have params directly)
+      if (!found.children || found.children.length === 0) return i + 1;
       current = found.children || [];
     }
     return tokens.length;
@@ -123,19 +124,23 @@
     selectedDataIndex = -1;
   }
 
-  /** Refresh the data cache with current accounts/calendars from the backend. */
+  /** Refresh the data cache with current data from the backend. */
   async function refreshDataCache() {
     try {
-      const [accts, cals] = await Promise.all([
+      const [accts, cals, conts, tds, jrnl] = await Promise.all([
         emailApi.listAccounts().catch(() => null),
         calendarApi.listCalendars().catch(() => null),
+        contactsApi.list({limit: 50}).catch(() => null),
+        todoApi.list({limit: 50}).catch(() => null),
+        journalApi.list({limit: 50}).catch(() => null),
       ]);
       popup.updateCache({
         accounts: accts?.accounts ?? [],
         calendars: cals?.calendars ?? [],
+        contacts: conts?.contacts ?? [],
+        todos: tds?.todos ?? [],
+        journal: jrnl?.entries ?? [],
       });
-      // Re-read from cache to update dataCompletions if the popup is still
-      // showing UUID completions
       updateSuggestions();
     } catch { /* background fetch failed silently */ }
   }

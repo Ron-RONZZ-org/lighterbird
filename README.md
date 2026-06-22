@@ -1,2 +1,65 @@
 # lighterbird
-Lighterbird — email, contacts, calendar, and todo. A production-oriented fork of A-lien + A-organizi with built-in BYOK LLM support. AGPL-3.0.
+
+Lighterbird — email, contacts, calendar, and todo. A command-driven personal information manager (PIM) with built-in BYOK (Bring Your Own Key) LLM support. AGPL-3.0.
+
+## Philosophy: You see only what you need
+
+Traditional PIM apps drown you in sidebars, nested menus, and feature flags. Lighterbird does the opposite:
+
+```
+┌──────────────────────────────────────┐
+│ ❯ !account add ...                   │  ← Always-visible command bar
+├──────────────────────────────────────┤
+│                                      │
+│  Rich result area                    │  ← Shows only what you asked for
+│  (email reader, calendar grid,       │
+│   todo list, LLM chat, etc.)         │
+│                                      │
+└──────────────────────────────────────┘
+```
+
+- `!account add/list/modify/remove` — manage accounts
+- `!new` — see new emails
+- `!search` — search across domains
+- Just type naturally → ask the built-in LLM to do things on your behalf
+- As-you-type command suggestions — no memorisation needed
+
+## Architecture
+
+```
+lighterbird/
+├── core/          Forked from A-core   — DB, crypto, keyring, AI providers, paths
+├── email/         Forked from A-lien   — IMAP sync, SMTP send, contacts, accounts
+├── calendar/      Forked from A-organizi — CalDAV, events, todo, journal
+├── server/        FastAPI backend      — REST API, WebSocket, static serving
+└── web/           Svelte 5 SPA         — Command-bar UI, rich result rendering
+```
+
+## Stack
+
+| Layer | Choice | Why |
+|-------|--------|-----|
+| Backend | Python 3.11+ / FastAPI | Lightweight, async, auto-docs |
+| Frontend | Svelte 5 SPA + Vite | Minimal bundle, excellent custom component DX |
+| Database | SQLite (WAL mode) | Embedded, zero-config |
+| Credentials | System keyring | Never in DB or config files |
+| AI | OpenAI-compatible API + Ollama | BYOK: bring your own model/key |
+
+## Quick Start
+
+```bash
+# Backend
+uv pip install -e .
+uv run python -m lighterbird
+
+# Frontend (separate terminal)
+cd web
+npm install
+npm run dev
+```
+
+Open http://localhost:5173 — the Vite dev server proxies API calls to the Python backend on port 8000.
+
+## Status
+
+**Pre-alpha.** The code is being forked from the frozen [A-lien](../A-lien), [A-organizi](../A-organizi), and [A-core](../A-core) projects. Backend logic exists and is proven; the frontend is being built from scratch.
