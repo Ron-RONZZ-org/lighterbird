@@ -6,6 +6,7 @@
 
 <div class="status">
   {#if d.accounts}
+    <!-- Email accounts -->
     {#each d.accounts as account}
       <div class="row">
         <span class="key">{account.uuid?.slice(0, 8) || ""}</span>
@@ -16,6 +17,7 @@
       <p class="empty">No accounts configured.</p>
     {/each}
   {:else if d.calendars}
+    <!-- Calendar accounts -->
     {#each d.calendars as cal}
       <div class="row">
         <span class="key">{cal.uuid?.slice(0, 8) || ""}</span>
@@ -26,19 +28,67 @@
       <p class="empty">No calendars configured.</p>
     {/each}
   {:else if d.messages}
+    <!-- Email messages -->
     {#each d.messages as msg}
       <div class="row">
         <span class="key">{msg.uuid?.slice(0, 8) || ""}</span>
-        <span class="val">{(msg.de || "").slice(0, 28)}</span>
-        <span class="hint">{(msg.subjekto || "").slice(0, 28)}</span>
+        <span class="val">{(msg.from || "").slice(0, 28)}</span>
+        <span class="hint">{(msg.subject || "").slice(0, 28)}</span>
       </div>
     {:else}
       <p class="empty">No messages.</p>
     {/each}
+  {:else if d.todos}
+    <!-- Todo items -->
+    {#each d.todos as todo}
+      <div class="row">
+        <span class="key">{todo.uuid?.slice(0, 8) || ""}</span>
+        <span class="val">{(todo.title || "").slice(0, 36)}</span>
+        <span class="hint">{todo.status || ""}</span>
+      </div>
+    {:else}
+      <p class="empty">No todos.</p>
+    {/each}
+  {:else if d.contacts}
+    <!-- Contacts -->
+    {#each d.contacts as contact}
+      <div class="row">
+        <span class="key">{contact.uuid?.slice(0, 8) || ""}</span>
+        <span class="val">{(contact.name || "").slice(0, 24)}</span>
+        <span class="hint">{contact.email || ""}</span>
+      </div>
+    {:else}
+      <p class="empty">No contacts.</p>
+    {/each}
+  {:else if d.entries}
+    <!-- Journal entries -->
+    {#each d.entries as entry}
+      <div class="row">
+        <span class="key">{entry.uuid?.slice(0, 8) || ""}</span>
+        <span class="val">{(entry.title || "").slice(0, 32)}</span>
+        <span class="hint">{entry.date || ""}</span>
+      </div>
+    {:else}
+      <p class="empty">No journal entries.</p>
+    {/each}
+  {:else if d.uuid}
+    <!-- Single-item result (e.g. todo add, account add) -->
+    <div class="row">
+      <span class="key">{d.uuid?.slice(0, 8) || ""}</span>
+      <span class="val">{d.title || d.email || ""}</span>
+    </div>
+  {:else if d.title}
+    <p class="message">{d.title}</p>
   {:else if d.message}
     <p class="message">{d.message}</p>
   {:else if d.status}
     <p class="message">{d.status}</p>
+  {:else if d.removed}
+    <p class="message">Removed: {d.removed.join(", ")}</p>
+  {:else if d.done}
+    <p class="message">Done: {d.done.join(", ")}</p>
+  {:else if d.new !== undefined}
+    <p class="message">{d.new} new items synced.</p>
   {:else}
     <p class="message">Done.</p>
   {/if}
