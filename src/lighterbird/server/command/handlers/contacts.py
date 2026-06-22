@@ -66,7 +66,7 @@ def contacts_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, An
     uuid = remaining[0]
     svc: ContactService = get_contact_service()
     updates = {}
-    field_map = {"name": "nomo", "email": "retposto", "phone": "telefonnumero", "org": "organizo", "notes": "notoj"}
+    field_map = {"name": "nomo", "email": "retposto", "phone": "telefonnumero", "organization": "organizo", "org": "organizo", "notes": "notoj"}
     for flag_key, db_key in field_map.items():
         if flag_key in flags:
             updates[db_key] = flags[flag_key]
