@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -17,6 +18,10 @@ import httpx
 from lighterbird.core.ai import LLMProvider, ProviderConfig
 
 logger = logging.getLogger(__name__)
+
+
+# Pattern to extract !commands from LLM natural language responses
+_CMD_PATTERN = re.compile(r"`(![a-z0-9_-]+(?:\s+[^\s`]+)*)`")
 
 
 # ── OpenAI-compatible provider ─────────────────────────────────────────────
@@ -90,49 +95,78 @@ class OpenAICompatibleProvider:
         message: str,
         command_defs: list[dict],
     ) -> dict | None:
-        """Ask the LLM to generate a structured command from natural language."""
+        """Ask the LLM to generate a structured command from natural language.
+
+        Returns:
+            ``{"tokens": [...], "flags": {...}}`` if a command was identified,
+            ``None`` if the LLM could not generate one.
+        """
         if not self._available:
             return None
 
         from lighterbird.core.system_prompt import load_system_prompt
 
         user_prompt = load_system_prompt()
-        system_prompt = (
-            "You are a command parser for the lighterbird PIM. "
-            "Given a user's natural language request, generate a structured "
-            "command from the available command definitions.\n\n"
-            "Respond with ONLY a JSON object containing 'tokens' (list of command "
-            "words) and 'flags' (dict of flag values). If you cannot generate a "
-            "command, respond with null."
-        )
-
         defs_text = json.dumps(command_defs, indent=2) if command_defs else "[]"
 
+        system_prompt = (
+            "You are a command parser for the lighterbird PIM. Your job is to "
+            "translate the user's natural language request into a structured command.\n\n"
+            "Respond with ONLY a valid JSON object — no markdown, no explanation, no extra text.\n\n"
+            "If the request maps to a command, use this format:\n"
+            '{"tokens": ["command", "subcommand", ...], "flags": {"--flag": "value"}}\n\n'
+            "Examples:\n"
+            '- "show my inbox" → {"tokens": ["email", "list"], "flags": {}}\n'
+            '- "add a contact John john@example.com" → {"tokens": ["contacts", "add", "john@example.com", "John"], "flags": {}}\n'
+            '- "create a todo buy milk with priority 3" → {"tokens": ["todo", "add", "buy milk"], "flags": {"priority": "3"}}\n'
+            '- "send an email to bob@test.com about the meeting" → {"tokens": ["email", "send", "bob@test.com", "about the meeting"], "flags": {}}\n\n'
+            "If you CANNOT map the request to any command, respond with: null\n\n"
+            "Available commands:\n" + defs_text
+        )
+
         messages = [
-            {
-                "role": "system",
-                "content": (
-                    f"{user_prompt}\n\n"
-                    f"---\n"
-                    f"Command parsing instructions:\n"
-                    f"{system_prompt}\n\n"
-                    f"Available commands:\n{defs_text}"
-                ),
-            },
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": message},
         ]
 
         result = await self.chat(messages, stream=False)
         if isinstance(result, str):
-            result = result.strip()
-            try:
-                parsed = json.loads(result)
-                if parsed is None:
-                    return None
-                if isinstance(parsed, dict) and "tokens" in parsed:
-                    return parsed
-            except (json.JSONDecodeError, ValueError):
-                pass
+            return self._parse_command_result(result.strip())
+        return None
+
+    @staticmethod
+    def _parse_command_result(text: str) -> dict | None:
+        """Try to parse an LLM response as a command JSON.
+
+        Handles both bare JSON and JSON wrapped in ``` fences.
+        Also extracts !commands from plain text as a fallback.
+        """
+        # Strip markdown code fences if present
+        cleaned = text.strip()
+        if cleaned.startswith("```"):
+            # Remove opening fence (possibly with language hint)
+            cleaned = re.sub(r"^```\w*\n?", "", cleaned)
+            cleaned = re.sub(r"\n?```$", "", cleaned)
+            cleaned = cleaned.strip()
+
+        # Try JSON parse
+        try:
+            parsed = json.loads(cleaned)
+            if parsed is None:
+                return None
+            if isinstance(parsed, dict) and "tokens" in parsed:
+                return parsed
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+        # Fallback: extract !command from plain text
+        match = _CMD_PATTERN.search(cleaned)
+        if match:
+            cmd_text = match.group(1)
+            parts = cmd_text[1:].split()  # remove leading !
+            if parts:
+                return {"tokens": parts, "flags": {}}
+
         return None
 
     async def _stream_chat(
