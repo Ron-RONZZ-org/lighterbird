@@ -1,4 +1,8 @@
-"""Todo database schema and initialization."""
+"""Todo database schema and initialization.
+
+Schema includes taskoj table with formula-based priority (TEXT),
+etikedoj (labels) table, and todog_etikedo junction table.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +16,7 @@ CREATE TABLE IF NOT EXISTS taskoj (
     uuid            TEXT PRIMARY KEY,
     titolo          TEXT NOT NULL,
     priskribo       TEXT NOT NULL DEFAULT '',
-    prioritato      INTEGER NOT NULL DEFAULT 5,
+    prioritato      TEXT NOT NULL DEFAULT '5',
     stato           TEXT NOT NULL DEFAULT 'pending',
     limdato         TEXT,
     kreita_je       TEXT NOT NULL,
@@ -20,9 +24,31 @@ CREATE TABLE IF NOT EXISTS taskoj (
 );
 """
 
+_CREATE_ETIKEDOJ = """
+CREATE TABLE IF NOT EXISTS etikedoj (
+    uuid        TEXT PRIMARY KEY,
+    teksto      TEXT NOT NULL UNIQUE,
+    koloro      TEXT NOT NULL DEFAULT '',
+    kreita_je   TEXT NOT NULL,
+    modifita_je TEXT NOT NULL
+);
+"""
+
+_CREATE_TODOJ_ETIKEDO = """
+CREATE TABLE IF NOT EXISTS todoj_etikedo (
+    todo_uuid   TEXT NOT NULL REFERENCES taskoj(uuid) ON DELETE CASCADE,
+    etikedo_uuid TEXT NOT NULL REFERENCES etikedoj(uuid) ON DELETE CASCADE,
+    PRIMARY KEY (todo_uuid, etikedo_uuid)
+);
+"""
+
 _SCHEMA_STMTS: list[str] = [
     _CREATE_TASKOJ,
+    _CREATE_ETIKEDOJ,
+    _CREATE_TODOJ_ETIKEDO,
     "CREATE INDEX IF NOT EXISTS idx_taskoj_stato ON taskoj(stato);",
+    "CREATE INDEX IF NOT EXISTS idx_todoj_etikedo_todo ON todoj_etikedo(todo_uuid);",
+    "CREATE INDEX IF NOT EXISTS idx_todoj_etikedo_etikedo ON todoj_etikedo(etikedo_uuid);",
 ]
 
 
