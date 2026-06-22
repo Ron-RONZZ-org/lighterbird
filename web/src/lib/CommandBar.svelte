@@ -215,10 +215,19 @@
       const cmd = inputValue.trim();
       if (!cmd) return;
 
-      // If suggestions exist and input is partial, complete instead of execute
+      // If suggestions exist and input is partial (last token is a prefix
+      // of a suggestion), complete instead of execute.  This catches
+      // ``!email lis`` → completes to ``!email list``, but does NOT catch
+      // ``!email list`` → flag suggestions like ``--limit`` are not a
+      // prefix match for ``list``, so Enter executes normally.
       if (displaySuggestions.length > 0) {
         const lastToken = cmd.split(/\s+/).pop() || "";
-        const isPartial = displaySuggestions.some((s) => s !== lastToken && !s.startsWith("<") && !s.startsWith("["));
+        const isPartial = displaySuggestions.some((s) =>
+          s.toLowerCase().startsWith(lastToken.toLowerCase())
+          && s !== lastToken
+          && !s.startsWith("<")
+          && !s.startsWith("[")
+        );
         if (isPartial) {
           const idx = selectedSuggestion >= 0 ? selectedSuggestion : 0;
           applyCompletion(displaySuggestions[idx]);
