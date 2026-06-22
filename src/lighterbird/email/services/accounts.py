@@ -47,16 +47,14 @@ class AccountService(CRUDService):
     def get_account_with_password(self, uuid_: str) -> dict[str, Any] | None:
         """Get account config with password from keyring.
 
-        Returns the account dict with ``"password"`` key, or None if
-        the account does not exist or password is unavailable.
+        Returns the account dict with ``"password"`` key (or ``""`` if
+        no password is stored), or None if the account does not exist.
         """
         acct = self.get(uuid_)
         if acct is None:
             return None
         pw = self.get_password(uuid_)
-        if not pw:
-            return None
-        acct["password"] = pw
+        acct["password"] = pw or ""
         return acct
 
     def find_by_email(self, email: str) -> dict[str, Any] | None:

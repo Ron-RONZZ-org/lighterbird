@@ -39,7 +39,7 @@ def todo_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     data = {
         "titolo": title,
         "priskribo": flags.get("description", ""),
-        "prioritato": int(flags.get("priority", 5)),
+        "prioritato": flags.get("priority", "5"),
         "limdato": flags.get("due", ""),
     }
     svc: TodoService = get_todo_service()
@@ -88,7 +88,7 @@ def todo_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         if flag_key in flags:
             updates[db_key] = flags[flag_key]
     if "priority" in flags:
-        updates["prioritato"] = int(flags["priority"])
+        updates["prioritato"] = flags["priority"]
     if not updates:
         raise CommandValidationError("No fields to modify.", "Usage: !todo modify <uuid> [--title ...]")
     svc.update(uuid, updates)
