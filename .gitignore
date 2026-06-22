@@ -34,3 +34,4 @@ build/
 
 # UV
 uv.lock
+.dev
