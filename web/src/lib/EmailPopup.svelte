@@ -6,28 +6,28 @@
 <div class="email">
   <div class="field">
     <span class="label">From</span>
-    <span class="value">{msg.de || ""}</span>
+    <span class="value">{msg.from || ""}</span>
   </div>
   <div class="field">
     <span class="label">To</span>
     <span class="value">
-      {Array.isArray(msg.al) ? msg.al.join(", ") : msg.al || ""}
+      {Array.isArray(msg.to) ? msg.to.join(", ") : msg.to || ""}
     </span>
   </div>
   <div class="field">
     <span class="label">Subject</span>
-    <span class="value subject">{msg.subjekto || "(no subject)"}</span>
+    <span class="value subject">{msg.subject || "(no subject)"}</span>
   </div>
   <div class="field">
     <span class="label">Date</span>
-    <span class="value">{msg.ricevita_je || ""}</span>
+    <span class="value">{msg.received_at || ""}</span>
   </div>
   <div class="field">
     <span class="label">Read</span>
-    <span class="value">{msg.legita ? "yes" : "no"}</span>
+    <span class="value">{msg.is_read ? "yes" : "no"}</span>
   </div>
   <hr />
-  <div class="body-text">{msg.korpo || "(no body)"}</div>
+  <div class="body-text">{msg.body || "(no body)"}</div>
 </div>
 
 <style>

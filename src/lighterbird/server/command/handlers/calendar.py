@@ -20,6 +20,7 @@ from typing import Any
 
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
+from lighterbird.server.command.response import normalize_calendar, normalize_event
 from lighterbird.server.deps import get_calendar_service
 from lighterbird.calendar.service import CalendarService
 
@@ -36,13 +37,13 @@ def calendar_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     calendar_uuid = flags.get("calendar")
     query = flags.get("query")
 
-    events = svc.list_events(start, end, calendar_uuid=calendar_uuid)
+    events = [normalize_event(e) for e in svc.list_events(start, end, calendar_uuid=calendar_uuid)]
     if query:
         q = query.lower()
         events = [
             e for e in events
-            if q in (e.get("titolo") or "").lower()
-            or q in (e.get("priskribo") or "").lower()
+            if q in (e.get("title") or "").lower()
+            or q in (e.get("description") or "").lower()
         ]
     return {"type": "events", "title": "Events", "data": {"events": events}}
 
@@ -77,7 +78,7 @@ def event_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     evt = svc.get_event(remaining[0])
     if not evt:
         raise CommandValidationError(f"Event not found: {remaining[0][:8]}")
-    return {"type": "events", "title": evt.get("titolo", "(untitled)"), "data": evt}
+    return {"type": "events", "title": evt.get("titolo", "(untitled)"), "data": normalize_event(evt)}
 
 
 @command("calendar.event.modify")
@@ -132,13 +133,13 @@ def event_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     end = flags.get("end", "2099-12-31")
     calendar_uuid = flags.get("calendar")
 
-    events = svc.list_events(start, end, calendar_uuid=calendar_uuid)
+    events = [normalize_event(e) for e in svc.list_events(start, end, calendar_uuid=calendar_uuid)]
     if query:
         q = query.lower()
         events = [
             e for e in events
-            if q in (e.get("titolo") or "").lower()
-            or q in (e.get("priskribo") or "").lower()
+            if q in (e.get("title") or "").lower()
+            or q in (e.get("description") or "").lower()
         ]
     return {"type": "events", "title": "Search Results", "data": {"events": events}}
 
@@ -150,7 +151,7 @@ def event_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 def cal_account_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar account list"""
     svc: CalendarService = get_calendar_service()
-    calendars = svc.list_calendars()
+    calendars = [normalize_calendar(c) for c in svc.list_calendars()]
     return {"type": "status", "title": "Calendars", "data": {"calendars": calendars}}
 
 

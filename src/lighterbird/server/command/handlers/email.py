@@ -20,6 +20,7 @@ from typing import Any
 
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
+from lighterbird.server.command.response import normalize_account, normalize_message
 from lighterbird.server.deps import get_email_service
 from lighterbird.email.service import EmailService
 
@@ -32,7 +33,7 @@ def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email list [--limit N]"""
     svc: EmailService = get_email_service()
     limit = int(flags.get("limit", 20))
-    messages = svc.list_messages(limit=limit)
+    messages = [normalize_message(m) for m in svc.list_messages(limit=limit)]
     return {
         "type": "status",
         "title": "Inbox",
@@ -50,7 +51,7 @@ def email_read(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     msg = svc.get_message(uuid)
     if not msg:
         raise CommandValidationError(f"Message not found: {uuid[:8]}")
-    return {"type": "email", "title": msg.get("subjekto", "(no subject)"), "data": msg}
+    return {"type": "email", "title": msg.get("subjekto", "(no subject)"), "data": normalize_message(msg)}
 
 
 @command("email.send")
@@ -101,9 +102,9 @@ def email_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         filters["query"] = " ".join(remaining)
 
     if filters:
-        messages = svc.search_messages(filters, limit=limit)
+        messages = [normalize_message(m) for m in svc.search_messages(filters, limit=limit)]
     else:
-        messages = svc.list_messages(limit=limit)
+        messages = [normalize_message(m) for m in svc.list_messages(limit=limit)]
     return {
         "type": "status",
         "title": "Search Results",
@@ -151,7 +152,7 @@ def email_archive(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
 def account_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email account list"""
     svc: EmailService = get_email_service()
-    accounts = svc.list_accounts()
+    accounts = [normalize_account(a) for a in svc.list_accounts()]
     return {"type": "status", "title": "Email Accounts", "data": {"accounts": accounts}}
 
 

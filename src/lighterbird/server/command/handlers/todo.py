@@ -16,6 +16,7 @@ from typing import Any
 
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
+from lighterbird.server.command.response import normalize_todo
 from lighterbird.server.deps import get_todo_service
 from lighterbird.todo.services import TodoService
 
@@ -25,7 +26,7 @@ def todo_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!todo list [--status pending|done]"""
     svc: TodoService = get_todo_service()
     status = flags.get("status")
-    todos = svc.search("", status=status) if status else svc.list()
+    todos = [normalize_todo(t) for t in (svc.search("", status=status) if status else svc.list())]
     return {"type": "status", "title": "Todos", "data": {"todos": todos}}
 
 
@@ -55,7 +56,7 @@ def todo_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     todo = svc.get(remaining[0])
     if not todo:
         raise CommandValidationError(f"Todo not found: {remaining[0][:8]}")
-    return {"type": "status", "title": todo.get("titolo", "(untitled)"), "data": todo}
+    return {"type": "status", "title": todo.get("titolo", "(untitled)"), "data": normalize_todo(todo)}
 
 
 @command("todo.done")
@@ -116,5 +117,5 @@ def todo_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     svc: TodoService = get_todo_service()
     query = " ".join(remaining) if remaining else flags.get("query", "")
     status = flags.get("status")
-    todos = svc.search(query, status=status)
+    todos = [normalize_todo(t) for t in svc.search(query, status=status)]
     return {"type": "status", "title": "Todo Search", "data": {"todos": todos}}
