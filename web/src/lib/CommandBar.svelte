@@ -206,6 +206,13 @@
         }
       }
 
+      // If UUID suggestions are shown and one is selected (or first), apply it
+      if (dataCompletions.length > 0) {
+        const idx = selectedDataIndex >= 0 ? selectedDataIndex : 0;
+        applyCompletion(dataCompletions[idx].uuid.slice(0, 8));
+        return;
+      }
+
       // Execute the command, then refresh cache with current backend state
       history.push(cmd);
       inputValue = "";
