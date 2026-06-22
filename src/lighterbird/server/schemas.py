@@ -1,0 +1,158 @@
+"""Pydantic schemas for all API request/response models."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
+from pydantic import BaseModel, Field
+
+
+# ── Generic ──────────────────────────────────────────────────────────────
+
+class ErrorResponse(BaseModel):
+    error: str
+    code: str = ""
+    suggestion: str = ""
+
+    model_config = {"extra": "forbid"}
+
+
+class HealthResponse(BaseModel):
+    status: str = "ok"
+    version: str = "0.1.0"
+
+
+# ── Email ────────────────────────────────────────────────────────────────
+
+class AccountCreate(BaseModel):
+    email: str = Field(..., description="Email address")
+    imap_server: str = Field(default="", description="IMAP server hostname")
+    imap_port: int = Field(default=993, description="IMAP server port")
+    imap_ssl: bool = Field(default=True, description="Use SSL for IMAP")
+    smtp_server: str = Field(default="", description="SMTP server hostname")
+    smtp_port: int = Field(default=587, description="SMTP server port")
+    smtp_tls: bool = Field(default=True, description="Use STARTTLS for SMTP")
+    password: str = Field(..., description="Account password")
+    name: str = Field(default="", description="Display name for the account")
+
+    model_config = {"extra": "forbid"}
+
+
+class AccountResponse(BaseModel):
+    uuid: str
+    email: str
+    name: str
+    imap_server: str
+    imap_port: int
+    smtp_server: str
+    smtp_port: int
+    created_at: str
+    modified_at: str
+
+
+class AccountListResponse(BaseModel):
+    accounts: list[AccountResponse]
+
+
+class SyncRequest(BaseModel):
+    account_uuid: str | None = Field(default=None, description="Account UUID (or empty for all)")
+
+
+class SyncResultResponse(BaseModel):
+    total: int = 0
+    new: int = 0
+    errors: list[str] = []
+
+
+class SyncAllResponse(BaseModel):
+    results: dict[str, SyncResultResponse | dict]
+
+
+class MessageResponse(BaseModel):
+    uuid: str
+    account_uuid: str
+    subject: str
+    from_addr: str = Field(alias="from")
+    to: list[str]
+    body: str = ""
+    html_body: str = ""
+    is_read: bool
+    received_at: str
+    created_at: str
+
+    model_config = {"populate_by_name": True, "extra": "ignore"}
+
+
+class MessageListResponse(BaseModel):
+    messages: list[dict[str, Any]]
+    total: int
+
+
+class SendRequest(BaseModel):
+    account_uuid: str
+    to: list[str]
+    subject: str
+    body: str = ""
+    cc: list[str] = []
+
+    model_config = {"extra": "forbid"}
+
+
+class MarkReadRequest(BaseModel):
+    read: bool = True
+
+
+# ── Calendar ─────────────────────────────────────────────────────────────
+
+class CalendarCreate(BaseModel):
+    url: str = Field(..., description="CalDAV URL")
+    username: str = Field(default="", description="Username")
+    password: str = Field(default="", description="Password")
+    remote: bool = Field(default=True, description="Whether this is a remote calendar")
+
+    model_config = {"extra": "forbid"}
+
+
+class CalendarResponse(BaseModel):
+    uuid: str
+    url: str
+    username: str
+    remote: bool
+
+
+class CalendarListResponse(BaseModel):
+    calendars: list[CalendarResponse]
+
+
+class EventCreate(BaseModel):
+    calendar_uuid: str
+    title: str
+    start: str = Field(..., description="ISO 8601 start datetime")
+    end: str = Field(..., description="ISO 8601 end datetime")
+    location: str = ""
+    description: str = ""
+    category: str = ""
+
+    model_config = {"extra": "forbid"}
+
+
+class EventResponse(BaseModel):
+    uuid: str
+    calendar_uuid: str
+    title: str
+    start: str
+    end: str
+    location: str
+    description: str
+    category: str
+
+
+class EventListResponse(BaseModel):
+    events: list[EventResponse]
+
+
+class EventQueryParams(BaseModel):
+    start: str = Field(default="2000-01-01", description="Start date (ISO)")
+    end: str = Field(default="2099-12-31", description="End date (ISO)")
+    calendar_uuid: str | None = Field(default=None, description="Calendar UUID filter")

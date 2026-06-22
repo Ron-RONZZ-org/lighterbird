@@ -1,7 +1,13 @@
 /** Reactive popup state and data cache — module-level $state. */
 
 let _current = $state(null);
-let _dataCache = $state({ accounts: [], calendars: [] });
+let _dataCache = $state({
+  accounts: [],
+  calendars: [],
+  contacts: [],
+  todos: [],
+  journal: [],
+});
 /** When non-null, the popup shows a live view of this data type and persists
  *  across commands. Set by list commands, cleared on manual close. */
 let _persistentDataType = $state(null);
@@ -11,10 +17,16 @@ function _cacheData(data) {
   const update = {};
   if (data.accounts) update.accounts = data.accounts;
   if (data.calendars) update.calendars = data.calendars;
+  if (data.contacts) update.contacts = data.contacts;
+  if (data.todos) update.todos = data.todos;
+  if (data.entries) update.journal = data.entries;
   if (Object.keys(update).length > 0) {
     _dataCache = {
       accounts: update.accounts ?? _dataCache.accounts,
       calendars: update.calendars ?? _dataCache.calendars,
+      contacts: update.contacts ?? _dataCache.contacts,
+      todos: update.todos ?? _dataCache.todos,
+      journal: update.journal ?? _dataCache.journal,
     };
   }
 }
@@ -70,6 +82,9 @@ export const popup = {
     _dataCache = {
       accounts: data.accounts ?? _dataCache.accounts,
       calendars: data.calendars ?? _dataCache.calendars,
+      contacts: data.contacts ?? _dataCache.contacts,
+      todos: data.todos ?? _dataCache.todos,
+      journal: data.journal ?? _dataCache.journal,
     };
   },
 };

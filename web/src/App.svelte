@@ -2,16 +2,25 @@
   import CommandBar from "./lib/CommandBar.svelte";
   import PopupOverlay from "./lib/PopupOverlay.svelte";
   import { popup } from "./lib/popupStore.svelte.js";
-  import { execute } from "./lib/commandDispatcher.js";
-  import { email, calendar } from "./lib/api.js";
+  import { execute } from "./lib/commandExecutor.js";
+  import { findNode } from "./lib/commandTree.js";
+  import { parseCommand } from "./lib/parser.js";
+  import { email, calendar, contacts, todo, journal } from "./lib/api.js";
+  import ComposeEmail from "./lib/ComposeEmail.svelte";
+  import EventForm from "./lib/EventForm.svelte";
 
   let isLoading = $state(false);
+  let activeForm = $state(null);
+  let formOnSubmit = $state(null);
 
   /** Detect whether a command string opens a persistent live view. */
   function detectPersistentType(input) {
     const t = input.trim();
-    if (/^!account\s+list\s*$/i.test(t)) return "accounts";
-    if (/^!calendar\s+list\s*$/i.test(t)) return "calendars";
+    if (/^!(email\s+)?account\s+list\s*$/i.test(t)) return "accounts";
+    if (/^!(calendar\s+)?account\s+list\s*$/i.test(t)) return "calendars";
+    if (/^!contacts\s+list\s*$/i.test(t)) return "contacts";
+    if (/^!todo\s+list\s*$/i.test(t)) return "todos";
+    if (/^!journal\s+list\s*$/i.test(t)) return "journal";
     return null;
   }
 
@@ -19,8 +28,11 @@
   function isRelevantMutation(input, dataType) {
     if (!dataType) return false;
     const t = input.trim();
-    if (dataType === "accounts" && /^!account\s+(add|remove)\b/i.test(t)) return true;
-    if (dataType === "calendars" && /^!calendar\s+(add|sync)\b/i.test(t)) return true;
+    if (dataType === "accounts" && /^!(email\s+)?account\s+(add|remove|modify)\b/i.test(t)) return true;
+    if (dataType === "calendars" && /^!(calendar\s+)?account\s+(add|remove|modify|sync)\b/i.test(t)) return true;
+    if (dataType === "contacts" && /^!contacts\s+(add|remove|modify)\b/i.test(t)) return true;
+    if (dataType === "todos" && /^!todo\s+(add|remove|modify|done)\b/i.test(t)) return true;
+    if (dataType === "journal" && /^!journal\s+write\b/i.test(t)) return true;
     return false;
   }
 
@@ -28,14 +40,17 @@
   async function refreshPersistentPopup() {
     try {
       let data;
-      let title;
       const dt = popup.persistentDataType;
       if (dt === "accounts") {
         data = await email.listAccounts();
-        title = "Email Accounts";
       } else if (dt === "calendars") {
         data = await calendar.listCalendars();
-        title = "Calendars";
+      } else if (dt === "contacts") {
+        data = await contacts.list();
+      } else if (dt === "todos") {
+        data = await todo.list();
+      } else if (dt === "journal") {
+        data = await journal.list();
       } else {
         return;
       }
@@ -43,7 +58,54 @@
     } catch { /* refresh failed silently */ }
   }
 
+  /** Check if the input resolves to an interactive command (form popup). */
+  function detectInteractive(input) {
+    const trimmed = input.trim();
+    if (!trimmed.startsWith("!")) return null;
+    const { tokens, partial } = parseCommand(trimmed);
+    const effective = partial ? [...tokens, partial] : tokens;
+    const node = findNode(effective);
+    if (node && node.interactive) {
+      return node;
+    }
+    return null;
+  }
+
+  /** Handle form submission from interactive popups. */
+  async function handleFormSubmit(formData) {
+    const { tokens, flags, remaining } = formData;
+    const allTokens = [...tokens, ...(remaining || [])];
+    isLoading = true;
+    try {
+      const result = await execute(`!${allTokens.join(" ")}` +
+        Object.entries(flags || {}).map(([k, v]) => ` --${k} "${v}"`).join(""));
+      popup.show(result.type, result.title, result.data);
+    } catch (err) {
+      popup.show("error", "Error", { message: err.message || String(err) });
+    } finally {
+      isLoading = false;
+      activeForm = null;
+    }
+  }
+
   async function handleCommand(input) {
+    // Check for interactive command (form popup)
+    const interactiveNode = detectInteractive(input);
+    if (interactiveNode) {
+      const cmdName = interactiveNode.name;
+      if (cmdName === "send") {
+        activeForm = ComposeEmail;
+      } else if (cmdName === "add" && input.includes("event")) {
+        activeForm = EventForm;
+      } else if (cmdName === "addevent") {
+        activeForm = EventForm;
+      }
+      if (activeForm) {
+        popup.show("form", "Compose", { component: activeForm });
+        return;
+      }
+    }
+
     isLoading = true;
 
     try {
@@ -53,10 +115,8 @@
       // execute the mutation then refresh the live view.
       if (popup.persistentDataType && isRelevantMutation(input, popup.persistentDataType)) {
         if (result.type === "error") {
-          // Show error, which replaces the persistent view temporarily
           popup.show(result.type, result.title, result.data);
         } else {
-          // Mutation succeeded — refresh the live view
           await refreshPersistentPopup();
         }
         return;
@@ -67,18 +127,12 @@
       if (dataType) {
         popup.showPersistent(result.type, result.title, result.data, dataType);
       } else {
-        // For errors and transient results, show and keep popup open.
-        // Only close if the existing popup was a persistent view of a
-        // *different* type — otherwise just overwrite.
         if (result.type === "error" && popup.persistentDataType) {
-          // Don't overwrite persistent popup with error; the user sees the
-          // error in the command input area instead.
           return;
         }
         popup.show(result.type, result.title, result.data);
       }
     } catch (err) {
-      // Only show error popup if no persistent view is active
       if (!popup.persistentDataType) {
         popup.show("error", "Error", {
           message: err.message || String(err),

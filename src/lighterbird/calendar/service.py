@@ -1,0 +1,97 @@
+"""CalendarService — unified facade for calendar operations.
+
+Composes CalendarCRUD and EventService.
+"""
+
+from __future__ import annotations
+
+from lighterbird.calendar.services import CalendarCRUD, EventService
+from lighterbird.calendar.db import get_db
+from lighterbird.calendar.keyring import get_password, set_password, delete_password
+
+
+class CalendarService:
+    """Unified calendar operations facade."""
+
+    def __init__(self, db=None):
+        self.db = db or get_db()
+        self.calendars = CalendarCRUD(self.db)
+        self.events = EventService(self.db)
+
+    # ── Calendar operations ──────────────────────────────────────────────
+
+    def create_calendar(self, data: dict, password: str = "") -> dict:
+        """Create a calendar. Password is stored in keyring if provided."""
+        cal = self.calendars.create(data)
+        if password:
+            set_password(cal["uuid"], password)
+        return cal
+
+    def list_calendars(self):
+        return self.calendars.list()
+
+    def delete_calendar(self, uuid_: str):
+        delete_password(uuid_)
+        return self.calendars.delete(uuid_)
+
+    def resolve_calendar(self, ref: str):
+        return self.calendars.resolve_uuid(ref)
+
+    # ── CalDAV sync (pull only) ──────────────────────────────────────────
+
+    def sync_calendar(self, uuid_: str) -> dict:
+        """Pull events from a remote CalDAV calendar."""
+        from lighterbird.calendar.caldav import fetch_remote_calendar_payloads
+        from lighterbird.calendar.ics import insert_ics_events
+
+        cal = self.calendars.get(uuid_)
+        if not cal:
+            raise ValueError(f"Calendar not found: {uuid_[:8]}")
+        if not cal.get("remote"):
+            return {"status": "local_calendar", "new_events": 0}
+
+        url = cal.get("url", "")
+        username = cal.get("username", "")
+        password = get_password(uuid_)
+        if not password and cal.get("remote"):
+            raise ValueError(f"No password configured for calendar {uuid_[:8]}")
+
+        results = fetch_remote_calendar_payloads(url, username, password)
+        total_imported = 0
+        for href, ics_data in results:
+            added = insert_ics_events(self.db, uuid_, ics_data)
+            total_imported += len(added)
+        return {"status": "ok", "remote_events": len(results), "new_events": total_imported}
+
+    def sync_all_calendars(self) -> dict[str, dict]:
+        """Pull events from all remote calendars."""
+        results = {}
+        for cal in self.calendars.list():
+            uuid_ = cal["uuid"]
+            if not cal.get("remote"):
+                results[uuid_] = {"status": "local_calendar"}
+                continue
+            pw = get_password(uuid_)
+            if not pw:
+                results[uuid_] = {"status": "no_password"}
+                continue
+            try:
+                results[uuid_] = self.sync_calendar(uuid_)
+            except Exception as e:
+                results[uuid_] = {"status": "error", "error": str(e)}
+        return results
+
+    # ── Event operations ─────────────────────────────────────────────────
+
+    def create_event(self, data: dict) -> dict:
+        return self.events.create(data)
+
+    def list_events(self, start: str, end: str, calendar_uuid: str | None = None) -> list:
+        cal_uuids = [calendar_uuid] if calendar_uuid else None
+        return self.events.list_by_date_range(start, end, calendar_uuids=cal_uuids)
+
+    def get_event(self, uuid_: str):
+        return self.events.get(uuid_)
+
+    def delete_event(self, uuid_: str) -> bool:
+        return self.events.delete(uuid_)

@@ -198,7 +198,8 @@ function findNodeIndex(tokens) {
       (n) => n.name.toLowerCase() === tokens[i].toLowerCase(),
     );
     if (!found) return i - 1;
-    if (found.apiMethod) return i;
+    // Leaf node — no children means this is the command name
+    if (!found.children || found.children.length === 0) return i;
     current = found.children || [];
   }
   return tokens.length - 1;
@@ -206,25 +207,67 @@ function findNodeIndex(tokens) {
 
 /**
  * Fetch context-aware completions (UUIDs) from the cache.
- * @param {object} cachedData — { accounts: [...], calendars: [...] }
- * @param {string} [uuidSource] — optional filter like "email.listAccounts" or "calendar.listCalendars"
+ * @param {object} cachedData — { accounts, calendars, contacts, todos, journal }
+ * @param {string} [uuidSource] — optional filter like "email.listAccounts" or "contacts.list"
  * @returns {{ uuid: string, label: string }[]}
  */
 export function getDataCompletionsFromCache(cachedData, uuidSource) {
   if (!cachedData) return [];
   const result = [];
-  // If uuidSource is specified, only return matching type
-  const wantAccounts = !uuidSource || uuidSource.startsWith("email.");
-  const wantCalendars = !uuidSource || uuidSource.startsWith("calendar.");
-  if (wantAccounts && cachedData.accounts && cachedData.accounts.length > 0) {
-    for (const a of cachedData.accounts) {
+
+  if (!uuidSource) {
+    // Return everything
+    addAccounts(cachedData, result);
+    addCalendars(cachedData, result);
+    addContacts(cachedData, result);
+    return result;
+  }
+
+  if (uuidSource.startsWith("email.")) addAccounts(cachedData, result);
+  if (uuidSource.startsWith("calendar.")) addCalendars(cachedData, result);
+  if (uuidSource.startsWith("contacts.")) addContacts(cachedData, result);
+  if (uuidSource.startsWith("todo.")) addTodos(cachedData, result);
+  if (uuidSource.startsWith("journal.")) addJournal(cachedData, result);
+
+  return result;
+}
+
+function addAccounts(cache, result) {
+  if (cache.accounts) {
+    for (const a of cache.accounts) {
       result.push({ uuid: a.uuid, label: `${a.email} (${a.name || ""})` });
     }
   }
-  if (wantCalendars && cachedData.calendars && cachedData.calendars.length > 0) {
-    for (const c of cachedData.calendars) {
+}
+
+function addCalendars(cache, result) {
+  if (cache.calendars) {
+    for (const c of cache.calendars) {
       result.push({ uuid: c.uuid, label: c.url });
     }
   }
-  return result;
+}
+
+function addContacts(cache, result) {
+  if (cache.contacts) {
+    for (const c of cache.contacts) {
+      result.push({ uuid: c.uuid, label: `${c.nomo || ""} <${c.retposto || ""}>` });
+    }
+  }
+}
+
+function addTodos(cache, result) {
+  if (cache.todos) {
+    for (const t of cache.todos) {
+      result.push({ uuid: t.uuid, label: t.titolo || "(untitled)" });
+    }
+  }
+}
+
+function addJournal(cache, result) {
+  if (cache.journal) {
+    for (const e of cache.journal) {
+      result.push({ uuid: e.uuid, label: `${e.dato || ""} — ${e.titolo || ""}` });
+    }
+  }
 }
