@@ -1,4 +1,4 @@
-"""Email message parsing — MIME body extraction, metadata.
+"""Email message parsing — MIME body extraction, metadata, attachments.
 
 Forked from A-lien's imap/_message_parser.py.
 """
@@ -19,17 +19,21 @@ def parse_email_message(
     konto_id: str,
     dosierujo_id: str,
     imap_uid: int,
+    store_attachments: bool = True,
 ) -> dict[str, Any]:
     """Parse a single email message into a storage dict.
 
     Args:
-        msg: Email message object (from email.message_from_bytes)
-        konto_id: Account UUID
-        dosierujo_id: Folder UUID
-        imap_uid: IMAP UID
+        msg: Email message object (from email.message_from_bytes).
+        konto_id: Account UUID.
+        dosierujo_id: Folder UUID.
+        imap_uid: IMAP UID.
+        store_attachments: If True, persist attachment blobs via
+            AttachmentStore and include attachment metadata in the result.
 
     Returns:
-        Dict with all fields for the mesagoj table.
+        Dict with all fields for the mesagoj table, plus an extra
+        ``_attachments`` key with attachment metadata if any were found.
     """
     now = datetime.now(timezone.utc).isoformat()
     message_id = decode_mime_header(msg.get("Message-ID", ""))
@@ -51,13 +55,37 @@ def parse_email_message(
 
     body = ""
     html_body = ""
+    attachments: list[dict[str, Any]] = []
+
     if msg.is_multipart():
         for part in msg.walk():
             ct = part.get_content_type()
             disp = str(part.get("Content-Disposition") or "")
             filename = part.get_filename()
+
             if "attachment" in disp or filename:
-                continue  # Skip attachments for MVP
+                payload = part.get_payload(decode=True)
+                content_id = (part.get("Content-ID") or str(uuid_mod.uuid4())).strip("<>")
+                att = {
+                    "filename": filename or "attachment",
+                    "mime_type": ct,
+                    "size": len(payload) if payload else 0,
+                    "content_id": content_id,
+                    "data": payload if store_attachments else None,
+                }
+                attachments.append(att)
+            elif ct not in ("text/plain", "text/html") and not part.is_multipart():
+                name = part.get_param("name", None, "Content-Type") or ""
+                if name:
+                    payload = part.get_payload(decode=True)
+                    content_id = (part.get("Content-ID") or str(uuid_mod.uuid4())).strip("<>")
+                    attachments.append({
+                        "filename": name,
+                        "mime_type": ct,
+                        "size": len(payload) if payload else 0,
+                        "content_id": content_id,
+                        "data": payload if store_attachments else None,
+                    })
             elif ct == "text/plain" and not body and not filename:
                 payload = part.get_payload(decode=True)
                 if payload:
@@ -95,4 +123,21 @@ def parse_email_message(
         "kreita_je": now,
         "modifita_je": now,
     }
+
+    if attachments:
+        # Store metadata as JSON in the message (backward compat)
+        meta_list = [
+            {
+                "dosiernomo": a["filename"],
+                "mime_tipo": a["mime_type"],
+                "grandeco": a["size"],
+                "content_id": a["content_id"],
+            }
+            for a in attachments
+        ]
+        data["_attachments_meta"] = meta_list
+        data["_attachments_data"] = [
+            a for a in attachments if a["data"] is not None
+        ]
+
     return data

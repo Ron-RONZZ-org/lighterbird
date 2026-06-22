@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -16,6 +17,16 @@ from lighterbird.server.routes.contacts import router as contacts_router
 from lighterbird.server.routes.todo import router as todo_router
 from lighterbird.server.routes.journal import router as journal_router
 from lighterbird.server.routes.chat import router as chat_router
+from lighterbird.server.tasks import init_workers, shutdown_workers
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """FastAPI lifespan handler — starts/stops background workers."""
+    workers = init_workers()
+    app.state.worker_pool = workers
+    yield
+    shutdown_workers(timeout=5.0)
 
 
 def create_app(static_dir: str | Path | None = None) -> FastAPI:
@@ -30,8 +41,9 @@ def create_app(static_dir: str | Path | None = None) -> FastAPI:
     """
     app = FastAPI(
         title="lighterbird",
-        version="0.1.0",
+        version="0.2.0",
         description="Email, contacts, calendar, and todo — command-driven PIM",
+        lifespan=lifespan,
     )
 
     # ── Middleware ───────────────────────────────────────────────────────

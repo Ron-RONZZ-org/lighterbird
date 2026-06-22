@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lighterbird"
-version = "0.1.0"
+version = "0.2.0"
 description = "Email, contacts, calendar, and todo — a command-driven PIM with built-in BYOK LLM"
 authors = [{name = "Ron"}]
 readme = "README.md"

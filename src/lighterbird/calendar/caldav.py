@@ -140,3 +140,110 @@ def probe_calendar_config(
     except Exception:
         count = 0
     return {"count": str(count), "description": f"{count} event(s) found"}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CalDAV push / delete helpers
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+_HTTP_DESCRIPTION: dict[int, str] = {
+    400: "Bad Request",
+    401: "Unauthorized — check username and password",
+    403: "Forbidden — check credentials or calendar permissions",
+    404: "Not Found — check calendar URL",
+    405: "Method Not Allowed",
+    408: "Request Timeout",
+    409: "Conflict",
+    500: "Internal Server Error",
+}
+
+
+def _event_url(url: str, event_uuid: str, remote_href: str | None = None) -> str:
+    """Build the PUT/DELETE URL for a remote event.
+
+    Uses the server-provided ``remote_href`` when available, otherwise
+    falls back to fabricating ``{url}/{event_uuid}.ics``.
+    """
+    if remote_href:
+        if remote_href.startswith("/"):
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            return f"{parsed.scheme}://{parsed.netloc}{remote_href}"
+        return remote_href
+    return url.rstrip("/") + f"/{event_uuid}.ics"
+
+
+def push_event(
+    url: str,
+    username: str,
+    password: str,
+    ics_payload: str,
+    event_uuid: str,
+    remote_href: str | None = None,
+) -> int:
+    """PUT an ICS event to the remote CalDAV server.
+
+    Args:
+        url: Base calendar URL.
+        username: Username for Basic auth.
+        password: Password for Basic auth.
+        ics_payload: Full ICS text (VCALENDAR wrapper).
+        event_uuid: Event UUID used as the resource name.
+        remote_href: Server-provided resource path (from multistatus REPORT).
+
+    Returns:
+        HTTP status code (200, 201, or 204 on success).
+
+    Raises:
+        RuntimeError: If the server returns an unexpected status.
+    """
+    put_url = _event_url(url, event_uuid, remote_href)
+    headers = {
+        "Content-Type": "text/calendar; charset=utf-8",
+    }
+    status, resp_body = http_fetch_text(
+        put_url, username, password, "PUT", ics_payload, headers,
+    )
+    if status not in (200, 201, 204):
+        desc = _HTTP_DESCRIPTION.get(status, f"HTTP {status}")
+        msg = f"CalDAV PUT failed: {desc} — URL: {put_url}"
+        if resp_body:
+            msg += f" — server: {resp_body.strip()[:120]}"
+        raise RuntimeError(msg)
+    return status
+
+
+def delete_event(
+    url: str,
+    username: str,
+    password: str,
+    event_uuid: str,
+    remote_href: str | None = None,
+) -> int:
+    """DELETE an event from the remote CalDAV server.
+
+    Args:
+        url: Base calendar URL.
+        username: Username for Basic auth.
+        password: Password for Basic auth.
+        event_uuid: Event UUID used as the resource name.
+        remote_href: Server-provided resource path (from multistatus REPORT).
+
+    Returns:
+        HTTP status code (200 or 204 on success; 404 is accepted).
+
+    Raises:
+        RuntimeError: If the server returns an unexpected status.
+    """
+    delete_url = _event_url(url, event_uuid, remote_href)
+    status, resp_body = http_fetch_text(
+        delete_url, username, password, "DELETE",
+    )
+    if status not in (200, 204, 404):
+        desc = _HTTP_DESCRIPTION.get(status, f"HTTP {status}")
+        msg = f"CalDAV DELETE failed: {desc} — URL: {delete_url}"
+        if resp_body:
+            msg += f" — server: {resp_body.strip()[:120]}"
+        raise RuntimeError(msg)
+    return status

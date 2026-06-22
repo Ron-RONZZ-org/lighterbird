@@ -1,7 +1,8 @@
 """Email database schema and initialization.
 
 Forked from A-lien's data storage, simplified for MVP.
-Only essential tables: kontoj (accounts), dosierujoj (folders), mesagoj (messages).
+Schema includes: kontoj (accounts), dosierujoj (folders), mesagoj (messages),
+aldonajxoj (attachments).
 """
 
 from __future__ import annotations
@@ -27,6 +28,8 @@ CREATE TABLE IF NOT EXISTS kontoj (
     smtp_tls        INTEGER NOT NULL DEFAULT 1,
     imap_uzantonomo TEXT,
     smtp_uzantonomo TEXT,
+    subskribo       TEXT NOT NULL DEFAULT '',
+    auth_type       TEXT NOT NULL DEFAULT 'password',
     kreita_je       TEXT NOT NULL,
     modifita_je     TEXT NOT NULL
 );
@@ -69,6 +72,30 @@ CREATE TABLE IF NOT EXISTS mesagoj (
 );
 """
 
+_CREATE_ALDONAĴOJ = """
+CREATE TABLE IF NOT EXISTS aldonajxoj (
+    uuid            TEXT PRIMARY KEY,
+    mesago_uuid     TEXT NOT NULL REFERENCES mesagoj(uuid) ON DELETE CASCADE,
+    filename        TEXT NOT NULL,
+    mime_type       TEXT NOT NULL DEFAULT 'application/octet-stream',
+    size            INTEGER NOT NULL DEFAULT 0,
+    content_id      TEXT NOT NULL,
+    storage_path    TEXT NOT NULL,
+    kreita_je       TEXT NOT NULL,
+    modifita_je     TEXT NOT NULL
+);
+"""
+
+_CREATE_SPAM_BLOKOJ = """
+CREATE TABLE IF NOT EXISTS spam_blockoj (
+    uuid        TEXT PRIMARY KEY,
+    type        TEXT NOT NULL,
+    pattern     TEXT NOT NULL,
+    kreita_je   TEXT NOT NULL,
+    modifita_je TEXT NOT NULL
+);
+"""
+
 _IDX_MESAGOJ_KONTO = "CREATE INDEX IF NOT EXISTS idx_mesagoj_konto ON mesagoj(konto_id);"
 _IDX_MESAGOJ_DOSIERUJO = "CREATE INDEX IF NOT EXISTS idx_mesagoj_dosierujo ON mesagoj(dosierujo_id);"
 _IDX_MESAGOJ_IMAP_UID = """
@@ -77,15 +104,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_mesagoj_imap_uid
     WHERE imap_uid IS NOT NULL;
 """
 _IDX_MESAGOJ_DATO = "CREATE INDEX IF NOT EXISTS idx_mesagoj_dato ON mesagoj(ricevita_je);"
+_IDX_ALDONAĴOJ_MESAGO = "CREATE INDEX IF NOT EXISTS idx_aldonajxoj_mesago ON aldonajxoj(mesago_uuid);"
 
 _SCHEMA_STATEMENTS: list[str] = [
     _CREATE_KONTOJ,
     _CREATE_DOSIERUJOJ,
     _CREATE_MESAGOJ,
+    _CREATE_ALDONAĴOJ,
+    _CREATE_SPAM_BLOKOJ,
     _IDX_MESAGOJ_KONTO,
     _IDX_MESAGOJ_DOSIERUJO,
     _IDX_MESAGOJ_IMAP_UID,
     _IDX_MESAGOJ_DATO,
+    _IDX_ALDONAĴOJ_MESAGO,
 ]
 
 # ── Database path ───────────────────────────────────────────────────────────

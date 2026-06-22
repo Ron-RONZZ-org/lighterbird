@@ -185,10 +185,41 @@ class IMAPClient:
                         if not force and imap_uid in known_uids:
                             continue
                         from lighterbird.email.imap.parser import parse_email_message
+                        from lighterbird.core.storage import AttachmentStore
                         msg = email_lib.message_from_bytes(raw_data)
-                        data = parse_email_message(msg, konto_id, dosierujo_id, imap_uid)
+                        data = parse_email_message(msg, konto_id, dosierujo_id, imap_uid, store_attachments=True)
+                        # Store attachment blobs if any
+                        if "_attachments_data" in data:
+                            uid_str = str(uuid_mod.uuid4())
+                            store = AttachmentStore()
+                            for att in data["_attachments_data"]:
+                                try:
+                                    store.store(uid_str, att["content_id"], att["data"])
+                                except Exception as store_err:
+                                    result["errors"].append(
+                                        f"Attachment store error for UID {imap_uid}: {store_err}"
+                                    )
                         # Insert message
-                        store_message(db_store.db, data, force=force)
+                        msg_uuid = store_message(db_store.db, data, force=force)
+                        # Store attachment metadata in aldonajxoj table
+                        if "_attachments_meta" in data:
+                            now_ts = datetime.now(timezone.utc).isoformat()
+                            for meta in data["_attachments_meta"]:
+                                try:
+                                    att_uuid = str(uuid_mod.uuid4())
+                                    store_path = f"{uid_str}/{meta['content_id']}"
+                                    db_store.db.execute(
+                                        "INSERT OR IGNORE INTO aldonajxoj "
+                                        "(uuid, mesago_uuid, filename, mime_type, size, content_id, storage_path, kreita_je, modifita_je) "
+                                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                        (att_uuid, msg_uuid, meta["dosiernomo"], meta["mime_tipo"],
+                                         meta["grandeco"], meta["content_id"], store_path,
+                                         now_ts, now_ts),
+                                    )
+                                except Exception as meta_err:
+                                    result["errors"].append(
+                                        f"Attachment meta insert error for UID {imap_uid}: {meta_err}"
+                                    )
                         result["new"] += 1
                     except Exception as e:
                         result["errors"].append(f"Parse/store error at UID {imap_uid}: {e}")
