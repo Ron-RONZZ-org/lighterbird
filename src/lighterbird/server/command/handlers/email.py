@@ -12,14 +12,6 @@ Registered paths:
     - email.account.list
     - email.account.modify
     - email.account.remove
-
-Backward-compat aliases:
-    - inbox → email.list
-    - new → email.sync
-    - read → email.read
-    - send → email.send
-    - search → email.search
-    - account.add → email.account.add → (aliased via "account" root)
 """
 
 from __future__ import annotations
@@ -27,26 +19,9 @@ from __future__ import annotations
 from typing import Any
 
 from lighterbird.server.command.errors import CommandValidationError
-from lighterbird.server.command.registry import alias, command
+from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_email_service
 from lighterbird.email.service import EmailService
-
-
-# ── Backward-compat aliases ─────────────────────────────────────────────
-
-def _alias_flat_to_domain():
-    alias(["inbox"], ["email", "list"])
-    alias(["new"], ["email", "sync"])
-    alias(["read"], ["email", "read"])
-    alias(["send"], ["email", "send"])
-    alias(["search"], ["email", "search"])
-    # Old !account add/list/remove → !email account add/list/remove
-    alias(["account", "add"], ["email", "account", "add"])
-    alias(["account", "list"], ["email", "account", "list"])
-    alias(["account", "remove"], ["email", "account", "remove"])
-
-
-_alias_flat_to_domain()
 
 
 # ── Handlers ────────────────────────────────────────────────────────────

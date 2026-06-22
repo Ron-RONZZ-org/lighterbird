@@ -7,8 +7,6 @@
  *   params       — positional arguments (leaf nodes)
  *   flags        — flag arguments (e.g. --calendar)
  *   interactive  — if true, opens an interactive form popup
- *   aliasFor     — if set, this is a backward-compat alias redirecting
- *                  to the canonical path (array of tokens)
  *
  * The frontend only uses the tree for autocomplete + help.
  * Command execution is handled by the backend via POST /api/v1/command.
@@ -16,7 +14,7 @@
 
 /** @typedef {{name:string, required:boolean, type:string, placeholder?:string, repeatable?:boolean, uuidSource?:string}} ParamDef */
 /** @typedef {{name:string, short?:string, type:string, help?:string}} FlagDef */
-/** @typedef {{name:string, description?:string, children?:CommandNode[], params?:ParamDef[], flags?:FlagDef[], interactive?:boolean, aliasFor?:string[]}} CommandNode */
+/** @typedef {{name:string, description?:string, children?:CommandNode[], params?:ParamDef[], flags?:FlagDef[], interactive?:boolean}} CommandNode */
 
 /** @type {CommandNode[]} */
 export const commandTree = [
@@ -444,105 +442,6 @@ export const commandTree = [
     description: "Show available commands",
   },
 
-  // ── Backward-compat aliases ──────────────────────────────────────────
-  {
-    name: "inbox",
-    description: "Show inbox (alias for !email list)",
-    aliasFor: ["email", "list"],
-  },
-  {
-    name: "new",
-    description: "Fetch new email (alias for !email sync)",
-    aliasFor: ["email", "sync"],
-  },
-  {
-    name: "read",
-    description: "Read message (alias for !email read)",
-    aliasFor: ["email", "read"],
-    params: [
-      { name: "uuid", required: true, type: "uuid", placeholder: "message-uuid", uuidSource: "email.listMessages" },
-    ],
-  },
-  {
-    name: "send",
-    description: "Send email (alias for !email send)",
-    aliasFor: ["email", "send"],
-    interactive: true,
-    params: [
-      { name: "to", required: true, type: "string", placeholder: "recipient@example.com" },
-      { name: "subject", required: true, type: "string" },
-      { name: "body", required: true, type: "string" },
-    ],
-  },
-  {
-    name: "search",
-    description: "Search messages (alias for !email search)",
-    aliasFor: ["email", "search"],
-    flags: [
-      { name: "from", type: "string", help: "Sender email" },
-      { name: "subject", type: "string", help: "Subject text" },
-      { name: "body", type: "string", help: "Body text" },
-      { name: "after", type: "date", help: "Start date" },
-      { name: "before", type: "date", help: "End date" },
-      { name: "limit", short: "l", type: "number", help: "Max results" },
-    ],
-  },
-  {
-    name: "addevent",
-    description: "Create event (alias for !calendar event add)",
-    aliasFor: ["calendar", "event", "add"],
-    interactive: true,
-    params: [
-      { name: "calendar-uuid", required: true, type: "uuid", placeholder: "calendar-uuid", uuidSource: "calendar.listCalendars" },
-      { name: "title", required: true, type: "string" },
-      { name: "start", required: true, type: "datetime", placeholder: "2024-06-15T09:00:00" },
-      { name: "end", required: true, type: "datetime", placeholder: "2024-06-15T10:00:00" },
-      { name: "location", required: false, type: "string" },
-    ],
-  },
-  {
-    name: "events",
-    description: "List events (alias for !calendar list)",
-    aliasFor: ["calendar", "list"],
-    params: [
-      { name: "start", required: false, type: "date", placeholder: "2000-01-01" },
-      { name: "end", required: false, type: "date", placeholder: "2099-12-31" },
-    ],
-    flags: [
-      { name: "calendar", short: "c", type: "uuid", help: "Filter by calendar UUID", uuidSource: "calendar.listCalendars" },
-      { name: "query", short: "q", type: "string", help: "Search text" },
-    ],
-  },
-  {
-    name: "account",
-    description: "Manage accounts (alias for !email account ...)",
-    children: [
-      {
-        name: "add",
-        description: "Add account (alias for !email account add)",
-        aliasFor: ["email", "account", "add"],
-        params: [
-          { name: "email", required: true, type: "string", placeholder: "user@example.com" },
-          { name: "imap_server", required: false, type: "string", placeholder: "imap.example.com" },
-          { name: "smtp_server", required: false, type: "string", placeholder: "smtp.example.com" },
-          { name: "password", required: false, type: "string" },
-        ],
-      },
-      {
-        name: "list",
-        description: "List accounts (alias for !email account list)",
-        aliasFor: ["email", "account", "list"],
-      },
-      {
-        name: "remove",
-        description: "Remove accounts (alias for !email account remove)",
-        aliasFor: ["email", "account", "remove"],
-        params: [
-          { name: "uuid", required: true, type: "uuid", placeholder: "account-uuid", uuidSource: "email.listAccounts", repeatable: true },
-        ],
-      },
-    ],
-  },
 ];
 
 /** Build a flat list of all root-level command names (for initial ! completion). */
@@ -553,8 +452,7 @@ export function getRootNames() {
 /** Find the deepest node matching a path of tokens (case-insensitive).
  *
  * Stops at leaf nodes — remaining tokens are parameter values.
- * If the matched node has `aliasFor`, the effective path changes.
- * Returns `null` if zero tokens match.
+ * Returns ``null`` if zero tokens match.
  */
 export function findNode(tokens) {
   let current = commandTree;
@@ -566,27 +464,11 @@ export function findNode(tokens) {
     if (!matched) return node;
     node = matched;
 
-    // If node is an alias, use the canonical path for further resolution
-    if (node.aliasFor) {
-      // We stop here — the alias redirect is handled at dispatch time
-      return node;
-    }
-
     // Stop at leaf (no children) — remaining tokens are parameter values
     if (!node.children || node.children.length === 0) return node;
     current = node.children;
   }
   return node;
-}
-
-/** Check if a node is an alias for another command. */
-export function isAlias(node) {
-  return node && Array.isArray(node.aliasFor) && node.aliasFor.length > 0;
-}
-
-/** Resolve an alias node to its canonical path tokens. */
-export function resolveAlias(node) {
-  return node.aliasFor || [];
 }
 
 /** Get all children that match a prefix (case-insensitive). */
