@@ -107,17 +107,10 @@ def dispatch(
 def get_definitions() -> list[dict]:
     """Return registered command definitions for LLM tool schema."""
     definitions: list[dict] = []
-    for path, handler in _commands.items():
+    for path in _commands:
         parts = path.split(".")
         definitions.append({
             "path": parts,
             "canonical": f"!{' '.join(parts)}",
-        })
-    # Add aliases
-    for alias_path, canonical in _aliases.items():
-        definitions.append({
-            "path": alias_path.split("."),
-            "canonical": f"!{' '.join(canonical)}",
-            "alias": True,
         })
     return definitions

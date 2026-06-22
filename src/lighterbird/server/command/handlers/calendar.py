@@ -12,13 +12,6 @@ Registered paths:
     - calendar.account.modify
     - calendar.account.remove
     - calendar.sync
-
-Backward-compat aliases:
-    - addevent → calendar.event.add
-    - events → calendar.list
-    - calendar.add → calendar.account.add
-    - calendar.list → calendar.account.list (handled via tree; root calendar.list is new)
-    - calendar.sync → calendar.sync (same path)
 """
 
 from __future__ import annotations
@@ -26,19 +19,9 @@ from __future__ import annotations
 from typing import Any
 
 from lighterbird.server.command.errors import CommandValidationError
-from lighterbird.server.command.registry import alias, command
+from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_calendar_service
 from lighterbird.calendar.service import CalendarService
-
-
-# ── Backward-compat aliases ─────────────────────────────────────────────
-
-def _alias_flat_to_domain():
-    alias(["addevent"], ["calendar", "event", "add"])
-    alias(["events"], ["calendar", "list"])
-
-
-_alias_flat_to_domain()
 
 
 # ── Handlers ────────────────────────────────────────────────────────────
