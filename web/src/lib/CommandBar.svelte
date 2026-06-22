@@ -89,6 +89,13 @@
           dataCompletions = getDataCompletionsFromCache(popup.cache, lastParam.uuidSource);
         }
       }
+
+      // Filter out already-inputted UUIDs from suggestions
+      if (dataCompletions.length > 0) {
+        const paramTokens = effectiveTokens.slice(cmdTokens);
+        const usedUuids = new Set(paramTokens.map(t => t.toLowerCase()));
+        dataCompletions = dataCompletions.filter(dc => !usedUuids.has(dc.uuid.slice(0, 8).toLowerCase()));
+      }
     }
   }
 
@@ -162,7 +169,6 @@
         applyCompletion(displaySuggestions[idx]);
       } else if (dataCompletions.length > 0) {
         const idx = selectedDataIndex >= 0 ? selectedDataIndex : 0;
-        // Insert only the UUID prefix (first 8 chars) — backend resolves via LIKE
         applyCompletion(dataCompletions[idx].uuid.slice(0, 8));
       }
       return;
@@ -220,18 +226,26 @@
         }
       }
 
-      // If UUID suggestions are shown and user hasn't typed a complete UUID
-      // prefix yet, apply the first one. Otherwise (user already typed one
-      // or more UUIDs), let Enter execute the command.
+      // UUID suggestions: Enter behavior depends on context.
+      //   - If user actively selected a suggestion (selectedDataIndex >= 0):
+      //     insert that UUID (allows adding more for repeatable params).
+      //   - If last token is an incomplete UUID (< 8 hex chars):
+      //     auto-complete with the first suggestion.
+      //   - Otherwise (last token is a complete UUID or not a UUID at all):
+      //     execute the command.
       if (dataCompletions.length > 0) {
         const lastToken = cmd.split(/\s+/).pop() || "";
-        // Only auto-complete if the last token is NOT a complete UUID prefix
-        // (8+ hex chars). Once a UUID prefix is present, Enter executes.
-        if (!/^[0-9a-f]{8,}$/i.test(lastToken)) {
-          const idx = selectedDataIndex >= 0 ? selectedDataIndex : 0;
-          applyCompletion(dataCompletions[idx].uuid.slice(0, 8));
+        if (selectedDataIndex >= 0) {
+          // User explicitly selected a suggestion — insert it
+          applyCompletion(dataCompletions[selectedDataIndex].uuid.slice(0, 8));
           return;
         }
+        if (!/^[0-9a-f]{8,}$/i.test(lastToken)) {
+          // Last token is not a complete UUID — auto-complete
+          applyCompletion(dataCompletions[0].uuid.slice(0, 8));
+          return;
+        }
+        // Last token is a complete UUID — proceed to execute
       }
 
       // Execute the command, then refresh cache with current backend state
