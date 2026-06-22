@@ -79,6 +79,15 @@
           break;
         }
       }
+
+      // If all params are consumed but the last one is repeatable with
+      // uuidSource, keep showing data completions for additional values.
+      if (dataCompletions.length === 0 && result.node.params.length > 0) {
+        const lastParam = result.node.params[result.node.params.length - 1];
+        if (lastParam.repeatable && lastParam.uuidSource && consumed >= result.node.params.length) {
+          dataCompletions = getDataCompletionsFromCache(popup.cache, lastParam.uuidSource);
+        }
+      }
     }
   }
 
@@ -206,11 +215,18 @@
         }
       }
 
-      // If UUID suggestions are shown and one is selected (or first), apply it
+      // If UUID suggestions are shown and user hasn't typed a complete UUID
+      // prefix yet, apply the first one. Otherwise (user already typed one
+      // or more UUIDs), let Enter execute the command.
       if (dataCompletions.length > 0) {
-        const idx = selectedDataIndex >= 0 ? selectedDataIndex : 0;
-        applyCompletion(dataCompletions[idx].uuid.slice(0, 8));
-        return;
+        const lastToken = cmd.split(/\s+/).pop() || "";
+        // Only auto-complete if the last token is NOT a complete UUID prefix
+        // (8+ hex chars). Once a UUID prefix is present, Enter executes.
+        if (!/^[0-9a-f]{8,}$/i.test(lastToken)) {
+          const idx = selectedDataIndex >= 0 ? selectedDataIndex : 0;
+          applyCompletion(dataCompletions[idx].uuid.slice(0, 8));
+          return;
+        }
       }
 
       // Execute the command, then refresh cache with current backend state

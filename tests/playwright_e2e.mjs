@@ -149,8 +149,9 @@ async function run() {
       await pressEnter();
     }
     const text = await getPopupText();
-    assert(text.includes("delet") || text.includes("Done"),
+    assert(text.match(/\b(done|delet)\b/i) || text.includes("Done"),
       `Expected deletion, got: '${text}'`);
+    console.log(`    Result: "${text.substring(0, 60)}"`);
   });
 
   await test("!account list (after delete)", async () => {
