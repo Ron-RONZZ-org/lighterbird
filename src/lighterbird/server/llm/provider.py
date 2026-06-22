@@ -3,6 +3,10 @@
 Provides a singleton provider instance with configuration resolved
 from keyring and environment. The server layer manages which provider
 is "active"; the core providers are stateless.
+
+The system prompt is loaded from the user-editable file at
+``~/.config/lighterbird/system_prompt.md`` and automatically prepended
+as a ``system`` message to every conversation.
 """
 
 from __future__ import annotations
@@ -10,11 +14,36 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Any
 
-from lighterbird.core.ai import ProviderConfig, get_provider
+from lighterbird.core.ai import ProviderConfig, get_provider as _create_core_provider
 from lighterbird.core.keyring import get_password as _get_kr, set_password as _set_kr, delete_password as _del_kr
+from lighterbird.core.system_prompt import load_system_prompt, reload_system_prompt
 
 _SERVICE_NAME = "lighterbird-llm"
 _CONFIG_ACCOUNT = "active-provider"
+
+
+def _build_messages(
+    message: str,
+    context: list[dict] | None = None,
+    *,
+    system_override: str | None = None,
+) -> list[dict]:
+    """Build the messages list with system prompt prepended.
+
+    Args:
+        message: User message text.
+        context: Optional message history (will be placed after system).
+        system_override: If set, use this instead of the file-based prompt.
+
+    Returns:
+        List of message dicts suitable for the provider API.
+    """
+    system_content = system_override if system_override is not None else load_system_prompt()
+    messages: list[dict] = [{"role": "system", "content": system_content}]
+    if context:
+        messages.extend(context)
+    messages.append({"role": "user", "content": message})
+    return messages
 
 
 class LLMProviderWrapper:
@@ -50,6 +79,9 @@ class LLMProviderWrapper:
     ) -> str | AsyncIterator[str]:
         """Send a chat message and return/stream the response.
 
+        The system prompt (from the user-editable file) is automatically
+        prepended as a ``system`` message.
+
         Args:
             message: User message text.
             context: Optional message history.
@@ -65,10 +97,8 @@ class LLMProviderWrapper:
                 return _placeholder()
             return "LLM not configured. Use ! commands or configure a provider."
 
-        messages = list(context or [])
-        messages.append({"role": "user", "content": message})
-
-        provider = get_provider(self.config)
+        messages = _build_messages(message, context)
+        provider = _create_core_provider(self.config)
         return await provider.chat(messages, stream=stream)
 
     async def generate_command(
@@ -85,13 +115,15 @@ class LLMProviderWrapper:
         if not self.is_available():
             return None
 
-        messages = list(context or [])
-        messages.append({"role": "user", "content": message})
-        provider = get_provider(self.config)
-        result = await provider.generate_command(message, command_defs)
+        core_provider = _create_core_provider(self.config)
+        result = await core_provider.generate_command(message, command_defs)
         if isinstance(result, dict):
             return result
         return None
+
+    def reload_prompt(self) -> str:
+        """Reload the system prompt from disk (for when the user edits it)."""
+        return reload_system_prompt()
 
     # ── Configuration persistence ────────────────────────────────────────
 

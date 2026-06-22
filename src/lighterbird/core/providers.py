@@ -94,9 +94,13 @@ class OpenAICompatibleProvider:
         if not self._available:
             return None
 
+        from lighterbird.core.system_prompt import load_system_prompt
+
+        user_prompt = load_system_prompt()
         system_prompt = (
-            "You are a command parser. Given a user's natural language request, "
-            "generate a structured command from the available command definitions. "
+            "You are a command parser for the lighterbird PIM. "
+            "Given a user's natural language request, generate a structured "
+            "command from the available command definitions.\n\n"
             "Respond with ONLY a JSON object containing 'tokens' (list of command "
             "words) and 'flags' (dict of flag values). If you cannot generate a "
             "command, respond with null."
@@ -105,7 +109,16 @@ class OpenAICompatibleProvider:
         defs_text = json.dumps(command_defs, indent=2) if command_defs else "[]"
 
         messages = [
-            {"role": "system", "content": f"{system_prompt}\n\nAvailable commands:\n{defs_text}"},
+            {
+                "role": "system",
+                "content": (
+                    f"{user_prompt}\n\n"
+                    f"---\n"
+                    f"Command parsing instructions:\n"
+                    f"{system_prompt}\n\n"
+                    f"Available commands:\n{defs_text}"
+                ),
+            },
             {"role": "user", "content": message},
         ]
 
