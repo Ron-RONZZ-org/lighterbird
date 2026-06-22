@@ -23,11 +23,13 @@ router = APIRouter(prefix="/api/v1", tags=["chat"])
 
 @router.post("/chat", response_model=CommandResponse)
 async def chat_endpoint(data: dict[str, Any]) -> dict[str, Any]:
-    """Accept a natural language message and return a structured response.
+    """Accept a natural language message.
 
-    If the LLM is available and configured, it will attempt to parse
-    the user's intent into a structured command. Otherwise returns a
-    fallback message.
+    Flow:
+    1. Ask the LLM to parse the user's intent into a structured command.
+    2. If a command is generated → execute it, send the result to the
+       LLM for a natural-language summary, and return that summary.
+    3. If the LLM can't generate a command, just return its response.
     """
     message = data.get("message", "").strip()
     if not message:
@@ -41,18 +43,14 @@ async def chat_endpoint(data: dict[str, Any]) -> dict[str, Any]:
             "data": {"message": "LLM not configured. Use ! commands or configure a provider."},
         }
 
-    # Attempt to generate a command from the natural language
+    # ── Phase 1: Try to parse into a command ────────────────────────────
     defs = get_definitions()
     cmd = await provider.generate_command(message, defs)
 
     if cmd and cmd.get("tokens"):
+        # Execute the command
         try:
-            result = dispatch(cmd["tokens"], cmd.get("flags", {}))
-            return {
-                "type": result.get("type", "status"),
-                "title": result.get("title", ""),
-                "data": result.get("data", result),
-            }
+            raw_result = dispatch(cmd["tokens"], cmd.get("flags", {}))
         except Exception as exc:
             return {
                 "type": "status",
@@ -63,7 +61,30 @@ async def chat_endpoint(data: dict[str, Any]) -> dict[str, Any]:
                 },
             }
 
-    # Fall back to plain chat (non-streaming)
+        # ── Phase 2: Summarize the result with the LLM ─────────────────
+        import json as _json
+
+        result_summary = _json.dumps(raw_result.get("data", raw_result), indent=2, default=str)
+        summary = await provider.chat(
+            message=(
+                f"I executed this command based on your request '{message}':\n"
+                f"Command: !{' '.join(cmd['tokens'])}\n"
+                f"Result:\n{result_summary}\n\n"
+                f"Please summarize the result for the user in a helpful, "
+                f"friendly way. Be concise but include all relevant details. "
+                f"Use natural language, not JSON."
+            ),
+        )
+        if isinstance(summary, str) and summary.strip():
+            return {
+                "type": "status",
+                "title": "LLM Chat",
+                "data": {"message": summary.strip()},
+            }
+        # Fallback: return raw result if LLM summarization fails
+        return raw_result
+
+    # ── Phase 3: No command — respond as plain chat ───────────────────
     response = await provider.chat(message)
     if isinstance(response, str):
         return {
