@@ -113,124 +113,134 @@
   }
 </script>
 
-<div class="email-view">
-  <!-- Toolbar -->
-  <div class="toolbar">
-    <button class="tool-btn" onclick={reply} title="Reply (Ctrl+R)">
-      <span class="tool-icon">↩</span> Reply
-    </button>
-    <button class="tool-btn" onclick={replyAll} title="Reply All (Ctrl+Shift+R)">
-      <span class="tool-icon">↩↩</span> Reply All
-    </button>
-    <button class="tool-btn" onclick={forward} title="Forward (Ctrl+L)">
-      <span class="tool-icon">→</span> Forward
-    </button>
-    {#if hasHtml}
-      <button class="tool-btn" onclick={toggleRender} title="Toggle HTML/plain text">
-        <span class="tool-icon">{useHtml ? "🔤" : "🌐"}</span>
-        {useHtml ? "Plain" : "HTML"}
+<div class="email-wrapper">
+  <div class="email-view">
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <button class="tool-btn" onclick={reply} title="Reply (Ctrl+R)">
+        <span class="tool-icon">↩</span> Reply
       </button>
-    {/if}
-    <button class="tool-btn" onclick={markRead} disabled={msg.is_read} title="Mark as read">
-      <span class="tool-icon">✓</span> Read
-    </button>
-    <button class="tool-btn trash-btn" onclick={trash} title="Trash">
-      <span class="tool-icon">🗑</span>
-    </button>
-    <div class="toolbar-spacer"></div>
-    <button
-      class="tool-btn conv-btn"
-      class:active={showConversation}
-      onclick={toggleConversation}
-      title="Conversation history"
-    >
-      <span class="tool-icon">💬</span>
-      Thread
-    </button>
+      <button class="tool-btn" onclick={replyAll} title="Reply All (Ctrl+Shift+R)">
+        <span class="tool-icon">↩↩</span> Reply All
+      </button>
+      <button class="tool-btn" onclick={forward} title="Forward (Ctrl+L)">
+        <span class="tool-icon">→</span> Forward
+      </button>
+      {#if hasHtml}
+        <button class="tool-btn" onclick={toggleRender} title="Toggle HTML/plain text">
+          <span class="tool-icon">{useHtml ? "🔤" : "🌐"}</span>
+          {useHtml ? "Plain" : "HTML"}
+        </button>
+      {/if}
+      <button class="tool-btn" onclick={markRead} disabled={msg.is_read} title="Mark as read">
+        <span class="tool-icon">✓</span> Read
+      </button>
+      <button class="tool-btn trash-btn" onclick={trash} title="Trash">
+        <span class="tool-icon">🗑</span>
+      </button>
+      <div class="toolbar-spacer"></div>
+      <button
+        class="tool-btn conv-btn"
+        class:active={showConversation}
+        onclick={toggleConversation}
+        title="Conversation history"
+      >
+        <span class="tool-icon">💬</span>
+        Thread
+      </button>
+    </div>
+
+    <!-- Headers -->
+    <div class="headers">
+      <div class="field">
+        <span class="label">From</span>
+        <span class="value">{msg.from || ""}</span>
+      </div>
+      <div class="field">
+        <span class="label">To</span>
+        <span class="value">
+          {Array.isArray(msg.to) ? msg.to.join(", ") : msg.to || ""}
+        </span>
+      </div>
+      <div class="field">
+        <span class="label">Subject</span>
+        <span class="value subject">{msg.subject || "(no subject)"}</span>
+      </div>
+      <div class="field">
+        <span class="label">Date</span>
+        <span class="value">{msg.received_at || ""}</span>
+      </div>
+    </div>
+    <hr />
+
+    <!-- Body: HTML iframe or plain text -->
+    <div class="body-area">
+      {#if hasHtml && useHtml}
+        <!-- svelte-ignore a11y_no_iframes -->
+        <iframe
+          class="html-frame"
+          srcdoc={htmlContent}
+          sandbox="allow-same-origin"
+          title="Email body"
+        ></iframe>
+      {:else}
+        <pre class="plain-text">{msg.body || "(no body)"}</pre>
+      {/if}
+    </div>
   </div>
 
-  <!-- Headers -->
-  <div class="headers">
-    <div class="field">
-      <span class="label">From</span>
-      <span class="value">{msg.from || ""}</span>
+  <!-- Conversation sidebar (inside wrapper, does not cover tab bar) -->
+  {#if showConversation}
+    <!-- svelte-ignore a11y_click_events_have_key_events,a11y_no_static_element_interactions -->
+    <div class="conv-overlay" role="presentation" onclick={() => { showConversation = false; }}>
+      <!-- svelte-ignore a11y_click_events_have_key_events,a11y_no_static_element_interactions -->
+      <div class="conv-panel" role="presentation" onclick={(e) => e.stopPropagation()}>
+        <div class="conv-header">
+          <span>Thread</span>
+          <button class="close-btn" onclick={() => { showConversation = false; }}>✕</button>
+        </div>
+        <div class="conv-list">
+          {#if conversationLoading}
+            <p class="conv-loading">Loading…</p>
+          {:else if conversation.length === 0}
+            <p class="conv-empty">No other messages in this thread.</p>
+          {:else}
+            {#each conversation as cm}
+              <div
+                class="conv-item"
+                class:active={cm.uuid === msg.uuid}
+                role="button"
+                tabindex="0"
+                onclick={() => openConversationMsg(cm)}
+                onkeydown={(e) => { if (e.key === 'Enter') openConversationMsg(cm); }}
+              >
+                <span class="conv-from">{(cm.from || "").slice(0, 24)}</span>
+                <span class="conv-subject">{(cm.subject || "").slice(0, 32)}</span>
+                <span class="conv-date">{cm.received_at || ""}</span>
+              </div>
+            {/each}
+          {/if}
+        </div>
+      </div>
     </div>
-    <div class="field">
-      <span class="label">To</span>
-      <span class="value">
-        {Array.isArray(msg.to) ? msg.to.join(", ") : msg.to || ""}
-      </span>
-    </div>
-    <div class="field">
-      <span class="label">Subject</span>
-      <span class="value subject">{msg.subject || "(no subject)"}</span>
-    </div>
-    <div class="field">
-      <span class="label">Date</span>
-      <span class="value">{msg.received_at || ""}</span>
-    </div>
-  </div>
-  <hr />
-
-  <!-- Body: HTML iframe or plain text -->
-  <div class="body-area">
-    {#if hasHtml && useHtml}
-      <!-- svelte-ignore a11y_no_iframes -->
-      <iframe
-        class="html-frame"
-        srcdoc={htmlContent}
-        sandbox="allow-same-origin"
-        title="Email body"
-      ></iframe>
-    {:else}
-      <pre class="plain-text">{msg.body || "(no body)"}</pre>
-    {/if}
-  </div>
+  {/if}
 </div>
 
-<!-- Conversation sidebar overlay -->
-{#if showConversation}
-  <!-- svelte-ignore a11y_click_events_have_key_events,a11y_no_static_element_interactions -->
-  <div class="conv-overlay" role="presentation" onclick={() => { showConversation = false; }}>
-    <!-- svelte-ignore a11y_click_events_have_key_events,a11y_no_static_element_interactions -->
-    <div class="conv-panel" role="presentation" onclick={(e) => e.stopPropagation()}>
-      <div class="conv-header">
-        <span>Thread</span>
-        <button class="close-btn" onclick={() => { showConversation = false; }}>✕</button>
-      </div>
-      <div class="conv-list">
-        {#if conversationLoading}
-          <p class="conv-loading">Loading…</p>
-        {:else if conversation.length === 0}
-          <p class="conv-empty">No other messages in this thread.</p>
-        {:else}
-          {#each conversation as cm}
-            <div
-              class="conv-item"
-              class:active={cm.uuid === msg.uuid}
-              role="button"
-              tabindex="0"
-              onclick={() => openConversationMsg(cm)}
-              onkeydown={(e) => { if (e.key === 'Enter') openConversationMsg(cm); }}
-            >
-              <span class="conv-from">{(cm.from || "").slice(0, 24)}</span>
-              <span class="conv-subject">{(cm.subject || "").slice(0, 32)}</span>
-              <span class="conv-date">{cm.received_at || ""}</span>
-            </div>
-          {/each}
-        {/if}
-      </div>
-    </div>
-  </div>
-{/if}
-
 <style>
+  .email-wrapper {
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
   .email-view {
     font-family: system-ui, monospace;
     font-size: 0.85rem;
     display: flex;
     flex-direction: column;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
   }
 
   /* ── Toolbar ─────────────────────────────────────── */
@@ -339,10 +349,10 @@
 
   /* ── Conversation sidebar ────────────────────────── */
   .conv-overlay {
-    position: fixed;
+    position: absolute;
     inset: 0;
     background: rgba(0, 0, 0, 0.4);
-    z-index: 500;
+    z-index: 100;
     display: flex;
     justify-content: flex-end;
   }

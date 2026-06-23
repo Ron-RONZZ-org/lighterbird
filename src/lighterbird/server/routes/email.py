@@ -112,6 +112,7 @@ def list_messages(
     offset: int = 0,
     email_svc: EmailService = Depends(get_email_service),
 ):
+    from lighterbird.server.command.response import normalize_message
     filters = {}
     if query:
         filters["query"] = query
@@ -133,24 +134,17 @@ def list_messages(
         msgs = email_svc.search_messages(filters, limit=limit)
     else:
         msgs = email_svc.list_messages(limit=limit, offset=offset)
-    return {"messages": msgs, "total": len(msgs)}
+    return {"messages": [normalize_message(m) for m in msgs], "total": len(msgs)}
 
 
 @router.get("/messages/{uuid}")
 def get_message(uuid: str, email_svc: EmailService = Depends(get_email_service)):
+    from lighterbird.server.command.response import normalize_message
     msg = email_svc.get_message(uuid)
     if not msg:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Message not found: {uuid[:8]}")
-    # Parse JSON list fields
-    for field in ("al", "kc"):
-        raw = msg.get(field, "[]")
-        if isinstance(raw, str):
-            try:
-                msg[field] = json.loads(raw) if raw.strip() else []
-            except (json.JSONDecodeError, TypeError):
-                msg[field] = []
-    return msg
+    return normalize_message(msg)
 
 
 _EMAIL_HTML_TMPL = """\
