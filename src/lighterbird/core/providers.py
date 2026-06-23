@@ -294,8 +294,8 @@ class OllamaProvider:
                             token = delta.get("content", "")
                             if token:
                                 yield token
-                    except (json.JSONDecodeError, KeyError, IndexError):
-                        continue
+                        except (json.JSONDecodeError, KeyError, IndexError):
+                            continue
         finally:
             await client.aclose()
 
