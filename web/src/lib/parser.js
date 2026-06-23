@@ -109,6 +109,9 @@ export function parseCommand(input) {
       // No trailing space — user may still be typing
       partial = current;
     }
+  } else if (inFlag !== null) {
+    // Flag was set but current is empty (e.g. "--flag " with trailing space)
+    flags[inFlag] = "";
   }
 
   return { tokens, flags, partial };
