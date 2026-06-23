@@ -236,6 +236,49 @@ class LLMProviderWrapper:
             return None
         return profiles.get(name)
 
+    def modify_profile(self, name: str, **kwargs: Any) -> dict | None:
+        """Partially update a saved profile.
+
+        Args:
+            name: Profile name.
+            **kwargs: Fields to update (provider_type, api_key, base_url,
+                      model, temperature, max_tokens).
+
+        Returns:
+            The updated profile dict, or None if profile not found.
+        """
+        import json as _json
+
+        raw = _get_kr(_SERVICE_NAME, _PROFILES_ACCOUNT) or "{}"
+        try:
+            profiles = _json.loads(raw)
+        except (_json.JSONDecodeError, ValueError):
+            return None
+
+        if name not in profiles:
+            return None
+
+        profile = profiles[name]
+        for key in ("provider_type", "api_key", "base_url", "model"):
+            if key in kwargs:
+                profile[key] = kwargs[key]
+        if "temperature" in kwargs:
+            profile["temperature"] = float(kwargs["temperature"])
+        if "max_tokens" in kwargs:
+            profile["max_tokens"] = int(kwargs["max_tokens"])
+
+        profiles[name] = profile
+        _set_kr(_SERVICE_NAME, _PROFILES_ACCOUNT, _json.dumps(profiles))
+
+        # Return without API key for safety
+        return {
+            "name": name,
+            "provider_type": profile.get("provider_type", ""),
+            "base_url": profile.get("base_url", ""),
+            "model": profile.get("model", ""),
+            "has_api_key": bool(profile.get("api_key", "")),
+        }
+
     def delete_profile(self, name: str) -> bool:
         """Delete a saved profile. Returns True if deleted."""
         import json as _json

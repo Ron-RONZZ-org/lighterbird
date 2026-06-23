@@ -156,3 +156,59 @@ class EventQueryParams(BaseModel):
     start: str = Field(default="2000-01-01", description="Start date (ISO)")
     end: str = Field(default="2099-12-31", description="End date (ISO)")
     calendar_uuid: str | None = Field(default=None, description="Calendar UUID filter")
+
+
+# ── LLM ──────────────────────────────────────────────────────────────────
+
+class LLMProfileCreate(BaseModel):
+    name: str = Field(..., description="Profile name")
+    provider_type: str = Field(..., description='Provider type: "openai" or "ollama"')
+    api_key: str = Field(default="", description="API key")
+    base_url: str = Field(default="", description="Base URL")
+    model: str = Field(default="", description="Model name")
+    temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="Temperature")
+    max_tokens: int = Field(default=2048, ge=1, description="Max tokens")
+
+    model_config = {"extra": "forbid"}
+
+
+class LLMProfileResponse(BaseModel):
+    name: str
+    provider_type: str
+    base_url: str
+    model: str
+    has_api_key: bool
+
+
+class LLMProfileListResponse(BaseModel):
+    profiles: list[LLMProfileResponse]
+
+
+class LLMProfileUpdate(BaseModel):
+    provider_type: str | None = Field(default=None, description='Provider type: "openai" or "ollama"')
+    api_key: str | None = Field(default=None, description="API key")
+    base_url: str | None = Field(default=None, description="Base URL")
+    model: str | None = Field(default=None, description="Model name")
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0, description="Temperature")
+    max_tokens: int | None = Field(default=None, ge=1, description="Max tokens")
+
+    model_config = {"extra": "forbid"}
+
+
+# ── Account Updates ──────────────────────────────────────────────────────
+
+class AccountUpdate(BaseModel):
+    name: str | None = Field(default=None, description="Display name")
+    password: str | None = Field(default=None, description="Account password")
+    imap_server: str | None = Field(default=None, description="IMAP server")
+    smtp_server: str | None = Field(default=None, description="SMTP server")
+
+    model_config = {"extra": "forbid"}
+
+
+class CalendarUpdate(BaseModel):
+    url: str | None = Field(default=None, description="CalDAV URL")
+    username: str | None = Field(default=None, description="Username")
+    password: str | None = Field(default=None, description="Password")
+
+    model_config = {"extra": "forbid"}

@@ -1,10 +1,84 @@
 <script>
   import { tabStore } from "./tabStore.svelte.js";
-  import { email as emailApi } from "./api.js";
+  import { email as emailApi, calendar as calendarApi, llm as llmApi } from "./api.js";
+  import AccountList from "./AccountList.svelte";
+  import LlmProfileForm from "./LlmProfileForm.svelte";
+  import EmailAccountForm from "./EmailAccountForm.svelte";
+  import CalendarAccountForm from "./CalendarAccountForm.svelte";
 
   let { data = {} } = $props();
   // Normalize null to empty object (delete commands return 204 → null)
   let d = $derived(data || {});
+
+  // ── Form overlay state ──────────────────────────────────────────────
+
+  let activeForm = $state(null); // null | "llm" | "email" | "calendar"
+  let editingItem = $state(null);
+
+  function openForm(type, item = null) {
+    activeForm = type;
+    editingItem = item;
+  }
+
+  function closeForm() {
+    activeForm = null;
+    editingItem = null;
+  }
+
+  /** Re-execute the current command to refresh the list after save/delete. */
+  async function refreshList() {
+    // Re-trigger the command that generated this data
+    // We use the tab store to know which tab is active and re-execute
+    const active = tabStore.active;
+    if (!active) return;
+    try {
+      const resp = await fetch("/api/v1/command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tokens: [], flags: {} }),
+      });
+      // This is a soft approach — we just update the tab data directly
+      // by re-running the command via the command dispatch.
+    } catch {}
+  }
+
+  /** Remove an item with confirmation. */
+  async function removeItem(type, item) {
+    if (!confirm(`Remove this ${type} account/profile?`)) return;
+    try {
+      if (type === "email") {
+        await emailApi.deleteAccount(item.uuid);
+      } else if (type === "calendar") {
+        await calendarApi.deleteCalendar(item.uuid);
+      } else if (type === "llm") {
+        await llmApi.deleteProfile(item.name);
+      }
+      closeForm();
+      // Re-fetch data by issuing the same command
+      await refetchCurrentTab();
+    } catch (err) {
+      alert(`Failed to remove: ${err.message}`);
+    }
+  }
+
+  /** Re-fetch the data for the current tab by re-executing the command. */
+  async function refetchCurrentTab() {
+    const active = tabStore.active;
+    if (!active) return;
+    try {
+      let result;
+      if (d.accounts !== undefined) {
+        result = await emailApi.listAccounts();
+      } else if (d.calendars !== undefined) {
+        result = await calendarApi.listCalendars();
+      } else if (d.profiles !== undefined) {
+        result = await llmApi.listProfiles();
+      }
+      if (result) {
+        tabStore.update(active.id, result);
+      }
+    } catch {}
+  }
 
   /** Open an email message in a new tab. */
   async function openMessage(uuid) {
@@ -37,26 +111,54 @@
 </script>
 
 <div class="status">
-  {#if d.accounts}
-    {#each d.accounts as account}
-      <div class="row">
-        <span class="key">{account.uuid?.slice(0, 8) || ""}</span>
-        <span class="val">{account.email || ""}</span>
-        <span class="hint">{account.name || ""}</span>
-      </div>
-    {:else}
-      <p class="empty">No accounts configured.</p>
-    {/each}
-  {:else if d.calendars}
-    {#each d.calendars as cal}
-      <div class="row">
-        <span class="key">{cal.uuid?.slice(0, 8) || ""}</span>
-        <span class="val">{cal.url || ""}</span>
-        <span class="hint">{cal.remote ? "remote" : "local"}</span>
-      </div>
-    {:else}
-      <p class="empty">No calendars configured.</p>
-    {/each}
+  {#if d.accounts !== undefined}
+    {#if activeForm === "email"}
+      <EmailAccountForm
+        account={editingItem}
+        onSaved={() => { closeForm(); refetchCurrentTab(); }}
+        onDismiss={closeForm}
+      />
+    {/if}
+    <AccountList
+      type="email"
+      items={d.accounts}
+      onAdd={() => openForm("email")}
+      onModify={(item) => openForm("email", item)}
+      onRemove={(item) => removeItem("email", item)}
+    />
+
+  {:else if d.calendars !== undefined}
+    {#if activeForm === "calendar"}
+      <CalendarAccountForm
+        calendar={editingItem}
+        onSaved={() => { closeForm(); refetchCurrentTab(); }}
+        onDismiss={closeForm}
+      />
+    {/if}
+    <AccountList
+      type="calendar"
+      items={d.calendars}
+      onAdd={() => openForm("calendar")}
+      onModify={(item) => openForm("calendar", item)}
+      onRemove={(item) => removeItem("calendar", item)}
+    />
+
+  {:else if d.profiles !== undefined}
+    {#if activeForm === "llm"}
+      <LlmProfileForm
+        profile={editingItem}
+        onSaved={() => { closeForm(); refetchCurrentTab(); }}
+        onDismiss={closeForm}
+      />
+    {/if}
+    <AccountList
+      type="llm"
+      items={d.profiles}
+      onAdd={() => openForm("llm")}
+      onModify={(item) => openForm("llm", item)}
+      onRemove={(item) => removeItem("llm", item)}
+    />
+
   {:else if d.messages}
     <p class="list-hint" class:compact={d.messages.length > 10}>
       Click a message to view it. <kbd>Ctrl+click</kbd> opens in a new tab.
@@ -192,5 +294,4 @@
     color: #e0e0e0;
     white-space: pre-wrap;
   }
-
 </style>

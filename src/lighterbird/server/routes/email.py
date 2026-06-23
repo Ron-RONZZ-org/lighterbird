@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 
 from lighterbird.server.deps import get_email_service
 from lighterbird.server.schemas import (
-    AccountCreate, AccountResponse, AccountListResponse,
+    AccountCreate, AccountUpdate, AccountResponse, AccountListResponse,
     SyncRequest, SyncResultResponse, SyncAllResponse,
     SendRequest, MarkReadRequest,
     ErrorResponse,
@@ -67,6 +67,32 @@ def create_account(
     }
     acct = email_svc.create_account(acct_data, data.password)
     return _account_to_response(acct)
+
+
+@router.patch("/accounts/{uuid}")
+def update_account(
+    uuid: str,
+    data: AccountUpdate,
+    email_svc: EmailService = Depends(get_email_service),
+):
+    """Update an email account (partial)."""
+    acct = email_svc.get_account(uuid)
+    if not acct:
+        raise HTTPException(status_code=404, detail=f"Account not found: {uuid[:8]}")
+
+    updates = {}
+    if data.name is not None:
+        updates["nomo"] = data.name
+    if data.imap_server is not None:
+        updates["imap_servilo"] = data.imap_server
+    if data.smtp_server is not None:
+        updates["smtp_servilo"] = data.smtp_server
+    if updates:
+        email_svc.accounts.update(uuid, updates)
+    if data.password is not None:
+        email_svc.accounts.set_password(uuid, data.password)
+
+    return {"status": "updated", "uuid": uuid[:8]}
 
 
 @router.delete("/accounts/{uuid}")

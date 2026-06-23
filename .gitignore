@@ -35,3 +35,6 @@ build/
 # UV
 uv.lock
 .dev
+
+# Agent memory
+.serena/
