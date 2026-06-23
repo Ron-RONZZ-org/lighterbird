@@ -228,6 +228,7 @@ export function getDataCompletionsFromCache(cachedData, uuidSource) {
   if (uuidSource.startsWith("contacts.")) addContacts(cachedData, result);
   if (uuidSource.startsWith("todo.")) addTodos(cachedData, result);
   if (uuidSource.startsWith("journal.")) addJournal(cachedData, result);
+  if (uuidSource === "email.folders") addFolders(cachedData, result);
 
   return result;
 }
@@ -268,6 +269,19 @@ function addJournal(cache, result) {
   if (cache.journal) {
     for (const e of cache.journal) {
       result.push({ uuid: e.uuid, label: `${e.dato || ""} — ${e.titolo || ""}` });
+    }
+  }
+}
+
+function addFolders(cache, result) {
+  if (cache.folders) {
+    for (const f of cache.folders) {
+      // Folders use value-based completion (full path, not UUID)
+      result.push({
+        uuid: f.folder_uuid,
+        label: f.label || `${f.account_email}/${f.folder_name}`,
+        value: f.label || `${f.account_email}/${f.folder_name}`,
+      });
     }
   }
 }

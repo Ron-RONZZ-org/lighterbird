@@ -85,10 +85,11 @@
 
       if (dataCompletions.length > 0) {
         const paramTokens = effectiveTokens.slice(cmdTokens);
-        const usedUuids = new Set(paramTokens.map((t) => t.toLowerCase()));
-        dataCompletions = dataCompletions.filter(
-          (dc) => !usedUuids.has(dc.uuid.slice(0, 8).toLowerCase()),
-        );
+        const usedValues = new Set(paramTokens.map(t => t.toLowerCase()));
+        dataCompletions = dataCompletions.filter((dc) => {
+          const insertVal = getDataValue(dc).toLowerCase();
+          return !usedValues.has(insertVal);
+        });
       }
     }
   }
@@ -107,6 +108,18 @@
   function handleInput() {
     checkCommandMode();
     if (isCommandMode) updateSuggestions();
+  }
+
+  /** Get the text to insert when a data completion is selected. */
+  function getDataValue(dc) {
+    // Folders have a "value" field with the full folder path
+    return dc.value || dc.uuid.slice(0, 8);
+  }
+
+  /** Get the display text for a data completion item. */
+  function getDataLabel(dc) {
+    // For value-based completions (folders), show the value, not the UUID
+    return dc.value || dc.uuid.slice(0, 8);
   }
 
   function applyCompletion(completion) {
@@ -148,7 +161,7 @@
         applyCompletion(displaySuggestions[idx]);
       } else if (dataCompletions.length > 0) {
         const idx = selectedDataIndex >= 0 ? selectedDataIndex : 0;
-        applyCompletion(dataCompletions[idx].uuid.slice(0, 8));
+        applyCompletion(getDataValue(dataCompletions[idx]));
       }
       return;
     }
@@ -201,11 +214,11 @@
       if (dataCompletions.length > 0) {
         const lastToken = cmd.split(/\s+/).pop() || "";
         if (selectedDataIndex >= 0) {
-          applyCompletion(dataCompletions[selectedDataIndex].uuid.slice(0, 8));
+          applyCompletion(getDataValue(dataCompletions[selectedDataIndex]));
           return;
         }
         if (!/^[0-9a-f]{8,}$/i.test(lastToken)) {
-          applyCompletion(dataCompletions[0].uuid.slice(0, 8));
+          applyCompletion(getDataValue(dataCompletions[0]));
           return;
         }
       }
@@ -220,11 +233,7 @@
   }
 
   function handlePaste(e) {
-    // If pasting something starting with !, switch to command mode
-    const text = (e.clipboardData || window.clipboardData).getData("text");
-    if (text.startsWith("!") && !value) {
-      // Let the input handle it normally
-    }
+    // If pasting something starting with !, switch to command mode (handled by input event)
   }
 
   function handleTextareaClick() {
@@ -278,11 +287,11 @@
           class:selected={i === selectedDataIndex}
           onmousedown={(e) => {
             e.preventDefault();
-            applyCompletion(dc.uuid.slice(0, 8));
+            applyCompletion(getDataValue(dc));
           }}
         >
-          <span class="suggestion-text">{dc.uuid.slice(0, 8)}</span>
-          <span class="hint-text">{dc.label}</span>
+          <span class="suggestion-text">{getDataLabel(dc)}</span>
+          <span class="hint-text">{dc.value ? "" : dc.label}</span>
         </button>
       {/each}
     </div>

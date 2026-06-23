@@ -31,8 +31,14 @@ async def chat_endpoint(data: dict[str, Any]) -> dict[str, Any]:
     2. If a command is generated → execute it, send the result to the
        LLM for a natural-language summary, and return that summary.
     3. If the LLM can't generate a command, just return its response.
+
+    Request body accepts:
+        - ``message``: User message string.
+        - ``context``: Optional list of previous messages
+          ``[{"role": "user"|"assistant", "content": "..."}]``.
     """
     message = data.get("message", "").strip()
+    context = data.get("context", None)
     if not message:
         raise HTTPException(status_code=400, detail="Message is required.")
 
@@ -86,7 +92,7 @@ async def chat_endpoint(data: dict[str, Any]) -> dict[str, Any]:
         return raw_result
 
     # ── Phase 3: No command — respond as plain chat ───────────────────
-    response = await provider.chat(message)
+        response = await provider.chat(message, context=context)
     if isinstance(response, str):
         html = render_markdown(response)
         return {
@@ -107,8 +113,13 @@ async def chat_stream(data: dict[str, Any]) -> StreamingResponse:
 
     Returns a ``text/event-stream`` response with tokens sent as
     ``data: {"token": "..."}`` events, terminated by ``data: [DONE]``.
+
+    Request body accepts:
+        - ``message``: User message string.
+        - ``context``: Optional list of previous messages.
     """
     message = data.get("message", "").strip()
+    context = data.get("context", None)
     if not message:
         raise HTTPException(status_code=400, detail="Message is required.")
 
@@ -121,7 +132,7 @@ async def chat_stream(data: dict[str, Any]) -> StreamingResponse:
             return
 
         try:
-            result = await provider.chat(message, stream=True)
+            result = await provider.chat(message, context=context, stream=True)
             if hasattr(result, "__aiter__"):
                 async for token in result:
                     yield f"data: {json.dumps({'token': token})}\n\n"
