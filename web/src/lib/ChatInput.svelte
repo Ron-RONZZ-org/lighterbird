@@ -295,14 +295,14 @@
       <!-- Positional argument tracker (non-interactive) -->
       {#if positionals.length > 0}
         <div class="positional-tracker" aria-hidden="true">
-          {#each positionals as p}
+          {#each positionals as p, i}
             <span class="pos-arg" class:entered={p.entered} class:pending={!p.entered}>
               {p.entered ? p.name : `<${p.name}>`}
             </span>
             {#if !p.entered && p.required}
               <span class="pos-required" aria-hidden="true">*</span>
             {/if}
-            {#if !@last}
+            {#if i < positionals.length - 1}
               <span class="pos-sep"> </span>
             {/if}
           {/each}
