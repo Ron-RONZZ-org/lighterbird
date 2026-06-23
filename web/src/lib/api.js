@@ -57,7 +57,16 @@ async function request(method, path, body = null) {
   }
 
   if (!resp.ok) {
-    const err = new Error(data?.error || data?.detail || `HTTP ${resp.status}`);
+    // Handle validation error arrays (FastAPI 422) and object details
+    let msg;
+    if (Array.isArray(data?.detail)) {
+      msg = data.detail.map((d) => d.msg || JSON.stringify(d)).join("; ");
+    } else if (typeof data?.detail === "object" && data?.detail !== null) {
+      msg = data.detail.error || data.detail.message || JSON.stringify(data.detail);
+    } else {
+      msg = data?.detail;
+    }
+    const err = new Error(data?.error || msg || `HTTP ${resp.status}`);
     err.code = data?.code || "UNKNOWN";
     err.suggestion = data?.suggestion || BACKEND_HELP;
     err.status = resp.status;

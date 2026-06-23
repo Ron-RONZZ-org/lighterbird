@@ -15,7 +15,7 @@
   let isEdit = $derived(profile !== null);
 
   let name = $state(profile?.name || "");
-  let providerType = $state(profile?.provider_type || "openai");
+  let providerType = $state(profile?.provider_type || "deepseek");
   let apiKey = $state("");
   let baseUrl = $state(profile?.base_url || "");
   let model = $state(profile?.model || "");
@@ -25,10 +25,10 @@
   let error = $state("");
 
   const PROVIDERS = [
-    { id: "openai", name: "OpenAI", baseUrl: "https://api.openai.com", model: "gpt-4o" },
-    { id: "deepseek", name: "DeepSeek", baseUrl: "https://api.deepseek.com", model: "deepseek-chat" },
+    { id: "deepseek", name: "DeepSeek", baseUrl: "https://api.deepseek.com", model: "deepseek-v4-flash" },
     { id: "ollama", name: "Ollama (local)", baseUrl: "http://localhost:11434", model: "llama3.2", noKey: true },
-    { id: "custom", name: "Custom", baseUrl: "", model: "" },
+    { id: "openai", name: "OpenAI", baseUrl: "https://api.openai.com", model: "gpt-4o" },
+    { id: "custom", name: "Custom (OpenAI-compatible)", baseUrl: "", model: "" },
   ];
 
   function updatePreset() {
@@ -47,19 +47,27 @@
     saving = true;
     error = "";
     try {
-      const payload = {
-        name: name.trim(),
-        provider_type: providerType,
-        api_key: apiKey,
-        base_url: baseUrl,
-        model: model,
-        temperature: temperature,
-        max_tokens: maxTokens,
-      };
       if (isEdit) {
-        await llmApi.updateProfile(profile.name, payload);
+        // Only send fields that actually changed
+        const updates = {};
+        updates.provider_type = providerType;
+        updates.base_url = baseUrl;
+        updates.model = model;
+        updates.temperature = temperature;
+        updates.max_tokens = maxTokens;
+        // Only send api_key if user entered something (blank = keep current)
+        if (apiKey) updates.api_key = apiKey;
+        await llmApi.updateProfile(profile.name, updates);
       } else {
-        await llmApi.createProfile(payload);
+        await llmApi.createProfile({
+          name: name.trim(),
+          provider_type: providerType,
+          api_key: apiKey,
+          base_url: baseUrl,
+          model: model,
+          temperature: temperature,
+          max_tokens: maxTokens,
+        });
       }
       onSaved();
     } catch (err) {

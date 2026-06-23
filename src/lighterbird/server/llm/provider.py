@@ -243,6 +243,7 @@ class LLMProviderWrapper:
             name: Profile name.
             **kwargs: Fields to update (provider_type, api_key, base_url,
                       model, temperature, max_tokens).
+                      Empty string for api_key is treated as "keep current".
 
         Returns:
             The updated profile dict, or None if profile not found.
@@ -259,9 +260,12 @@ class LLMProviderWrapper:
             return None
 
         profile = profiles[name]
-        for key in ("provider_type", "api_key", "base_url", "model"):
+        for key in ("provider_type", "base_url", "model"):
             if key in kwargs:
                 profile[key] = kwargs[key]
+        # api_key requires explicit non-empty value (empty = keep current)
+        if "api_key" in kwargs and kwargs["api_key"]:
+            profile["api_key"] = kwargs["api_key"]
         if "temperature" in kwargs:
             profile["temperature"] = float(kwargs["temperature"])
         if "max_tokens" in kwargs:
