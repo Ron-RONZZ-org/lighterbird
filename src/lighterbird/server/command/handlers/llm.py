@@ -2,15 +2,16 @@
 
 Registered paths:
     - llm
-    - llm.configure
-    - llm.config
-    - llm.reset
     - llm.prompt
     - llm.profile
+    - llm.profile.show
+    - llm.profile.new
+    - llm.profile.set
+    - llm.profile.clear
+    - llm.profile.save
+    - llm.profile.load
     - llm.profile.list
-    - llm.profile.add
-    - llm.profile.remove
-    - llm.profile.switch
+    - llm.profile.delete
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ from lighterbird.server.llm.provider import get_provider
 
 @command("llm")
 def llm_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!llm — Show LLM subcommands or delegate to profile."""
+    """!llm — Show LLM subcommands or quick-switch to a profile by name."""
     if remaining:
         # Delegate: !llm <profile-name> → switch to that profile
         name = remaining[0]
@@ -44,75 +45,20 @@ def llm_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         "data": {
             "_summary": (
                 "Available !llm commands:\n"
-                "  !llm configure <type>   — Configure provider (openai|ollama)\n"
-                "  !llm config             — Show current config\n"
-                "  !llm reset              — Clear config\n"
-                "  !llm prompt             — Show system prompt\n"
-                "  !llm profile [name]      — List profiles or switch\n"
-                "  !llm profile list       — List saved profiles\n"
-                "  !llm profile add <name> — Save a profile\n"
-                "  !llm profile remove <n> — Delete a profile\n"
-                "  !llm profile switch <n> — Activate a profile\n"
-                "  !llm <profile-name>     — Quick switch to a profile"
+                "  !llm prompt                — Show system prompt\n"
+                "  !llm profile               — Show profile subcommands\n"
+                "  !llm profile show          — Show current config\n"
+                "  !llm profile new <type>    — Create config (openai|ollama)\n"
+                "  !llm profile set [flags]   — Modify current settings\n"
+                "  !llm profile clear         — Clear config\n"
+                "  !llm profile save <name>   — Save current as named profile\n"
+                "  !llm profile load <name>   — Load a saved profile\n"
+                "  !llm profile list          — List saved profiles\n"
+                "  !llm profile delete <name> — Delete a saved profile\n"
+                "  !llm <profile-name>        — Quick switch to a profile"
             ),
         },
     }
-
-
-@command("llm.configure")
-def llm_configure(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!llm configure <provider> [--api-key KEY] [--base-url URL] [--model MODEL]"""
-    if not remaining:
-        raise CommandValidationError(
-            "Missing provider type.",
-            "Usage: !llm configure openai|ollama [--api-key KEY] [--base-url URL] [--model MODEL]",
-        )
-    provider_type = remaining[0]
-    provider = get_provider()
-    provider.configure(
-        provider_type=provider_type,
-        api_key=flags.get("api_key", ""),
-        base_url=flags.get("base_url", ""),
-        model=flags.get("model", ""),
-        temperature=float(flags.get("temperature", 0.7)),
-        max_tokens=int(flags.get("max_tokens", 2048)),
-    )
-    return {
-        "type": "status",
-        "title": "LLM Configured",
-        "data": {
-            "provider": provider_type,
-            "available": provider.is_available(),
-        },
-    }
-
-
-@command("llm.config")
-def llm_config(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!llm config — Show current LLM configuration."""
-    provider = get_provider()
-    cfg = provider.config
-    return {
-        "type": "status",
-        "title": "LLM Config",
-        "data": {
-            "provider_type": cfg.provider_type,
-            "api_key_set": bool(cfg.api_key),
-            "base_url": cfg.base_url,
-            "model": cfg.model,
-            "temperature": cfg.temperature,
-            "max_tokens": cfg.max_tokens,
-            "available": provider.is_available(),
-        },
-    }
-
-
-@command("llm.reset")
-def llm_reset(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!llm reset — Clear LLM provider configuration."""
-    provider = get_provider()
-    provider.clear_config()
-    return {"type": "status", "title": "LLM Reset", "data": {"status": "cleared"}}
 
 
 @command("llm.prompt")
@@ -138,7 +84,7 @@ def llm_prompt(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 @command("llm.profile")
 def llm_profile_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!llm profile [name] — List profiles or switch to one."""
+    """!llm profile — List profiles (default) or switch by name."""
     if remaining:
         # !llm profile <name> → quick switch
         name = remaining[0]
@@ -155,14 +101,112 @@ def llm_profile_root(remaining: list[str], flags: dict[str, str]) -> dict[str, A
     provider = get_provider()
     profiles = provider.list_profiles()
     active = provider.config
-    result = {"profiles": profiles} if profiles else {"message": "No saved profiles."}
+    result = {
+        "_summary": "Available subcommands:\n"
+        "  show               — Show current config\n"
+        "  new <type>         — Create config (openai|ollama)\n"
+        "  set [flags]        — Modify current settings\n"
+        "  clear              — Clear config\n"
+        "  save <name>        — Save current as named profile\n"
+        "  load <name>        — Load a saved profile\n"
+        "  list               — List saved profiles\n"
+        "  delete <name>      — Delete a saved profile",
+    }
+    if profiles:
+        result["profiles"] = profiles
+    else:
+        result["message"] = "No saved profiles."
     if active.provider_type:
         result["active"] = {
             "provider_type": active.provider_type,
             "model": active.model,
             "base_url": active.base_url,
         }
-    return {"type": "status", "title": "LLM Profiles", "data": result}
+    return {"type": "status", "title": "LLM Profile", "data": result}
+
+
+@command("llm.profile.show")
+def llm_profile_show(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!llm profile show — Show current LLM configuration."""
+    return {
+        "type": "status",
+        "title": "LLM Config",
+        "data": {"_summary": "done"},
+    }
+
+
+@command("llm.profile.new")
+def llm_profile_new(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!llm profile new <provider> [--api-key KEY] [--base-url URL] [--model MODEL] [--temperature TEMP] [--max-tokens N]
+
+    Create a new LLM provider configuration from scratch.
+    """
+    if not remaining:
+        raise CommandValidationError(
+            "Missing provider type.",
+            "Usage: !llm profile new openai|ollama [--api-key KEY] [--base-url URL] [--model MODEL]",
+        )
+    provider_type = remaining[0]
+    provider = get_provider()
+    provider.configure(
+        provider_type=provider_type,
+        api_key=flags.get("api_key", ""),
+        base_url=flags.get("base_url", ""),
+        model=flags.get("model", ""),
+        temperature=float(flags.get("temperature", 0.7)),
+        max_tokens=int(flags.get("max_tokens", 2048)),
+    )
+    return {
+        "type": "status",
+        "title": "Profile Created",
+        "data": {
+            "provider": provider_type,
+            "available": provider.is_available(),
+        },
+    }
+
+
+@command("llm.profile.set")
+def llm_profile_set(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!llm profile set [--provider TYPE] [--api-key KEY] [--base-url URL] [--model MODEL] [--temperature TEMP] [--max-tokens N]
+
+    Modify current LLM profile settings. Only provided flags are changed.
+    """
+    if not flags:
+        raise CommandValidationError(
+            "No settings provided.",
+            "Usage: !llm profile set --model gpt-4 --api-key sk-...",
+        )
+    provider = get_provider()
+    cfg = provider.config
+
+    if not cfg.provider_type and "provider" not in flags:
+        raise CommandValidationError(
+            "No active profile. Use !llm profile new <type> first, or include --provider.",
+            "Usage: !llm profile set --provider openai --model gpt-4",
+        )
+
+    provider.configure(
+        provider_type=flags.get("provider", cfg.provider_type or "openai"),
+        api_key=flags.get("api_key", cfg.api_key or ""),
+        base_url=flags.get("base_url", cfg.base_url or ""),
+        model=flags.get("model", cfg.model or ""),
+        temperature=float(flags.get("temperature", cfg.temperature or 0.7)),
+        max_tokens=int(flags.get("max_tokens", cfg.max_tokens or 2048)),
+    )
+    return {
+        "type": "status",
+        "title": "Profile Updated",
+        "data": {"_summary": "done"},
+    }
+
+
+@command("llm.profile.clear")
+def llm_profile_clear(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!llm profile clear — Clear LLM provider configuration."""
+    provider = get_provider()
+    provider.clear_config()
+    return {"type": "status", "title": "Profile Cleared", "data": {"_summary": "done"}}
 
 
 @command("llm.profile.list")
@@ -177,58 +221,47 @@ def llm_profile_list(remaining: list[str], flags: dict[str, str]) -> dict[str, A
     }
 
 
-@command("llm.profile.add")
-def llm_profile_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!llm profile add <name> [--provider TYPE] [--api-key KEY] [--base-url URL] [--model MODEL]
+@command("llm.profile.save")
+def llm_profile_save(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!llm profile save <name> — Save current profile as a named profile.
 
-    Save a named LLM provider profile.
+    The current active configuration is saved under the given name.
     """
     if not remaining:
         raise CommandValidationError(
             "Missing profile name.",
-            "Usage: !llm profile add my-profile --provider openai --api-key sk-...",
+            "Usage: !llm profile save my-profile",
         )
     name = remaining[0]
-    provider_type = flags.get("provider", "openai")
     provider = get_provider()
+    cfg = provider.config
+    if not cfg.provider_type:
+        raise CommandValidationError(
+            "No active profile to save. Configure one first with !llm profile new <type>.",
+        )
     provider.save_profile(
         name=name,
-        provider_type=provider_type,
-        api_key=flags.get("api_key", ""),
-        base_url=flags.get("base_url", ""),
-        model=flags.get("model", ""),
-        temperature=float(flags.get("temperature", 0.7)),
-        max_tokens=int(flags.get("max_tokens", 2048)),
+        provider_type=cfg.provider_type,
+        api_key=cfg.api_key or "",
+        base_url=cfg.base_url or "",
+        model=cfg.model or "",
+        temperature=cfg.temperature,
+        max_tokens=cfg.max_tokens,
     )
     return {
         "type": "status",
         "title": "Profile Saved",
-        "data": {"name": name, "provider": provider_type},
+        "data": {"name": name, "provider": cfg.provider_type},
     }
 
 
-@command("llm.profile.remove")
-def llm_profile_remove(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!llm profile remove <name> — Delete a saved profile."""
+@command("llm.profile.load")
+def llm_profile_load(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!llm profile load <name> — Activate a saved profile."""
     if not remaining:
         raise CommandValidationError(
             "Missing profile name.",
-            "Usage: !llm profile remove my-profile",
-        )
-    name = remaining[0]
-    provider = get_provider()
-    if provider.delete_profile(name):
-        return {"type": "status", "title": "Profile Removed", "data": {"removed": [name]}}
-    raise CommandValidationError(f"Profile not found: {name}")
-
-
-@command("llm.profile.switch")
-def llm_profile_switch(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!llm profile switch <name> — Activate a saved profile."""
-    if not remaining:
-        raise CommandValidationError(
-            "Missing profile name.",
-            "Usage: !llm profile switch my-profile",
+            "Usage: !llm profile load my-profile",
         )
     name = remaining[0]
     provider = get_provider()
@@ -237,7 +270,7 @@ def llm_profile_switch(remaining: list[str], flags: dict[str, str]) -> dict[str,
         raise CommandValidationError(f"Profile not found: {name}")
     return {
         "type": "status",
-        "title": "Profile Activated",
+        "title": "Profile Loaded",
         "data": {
             "name": name,
             "provider": config.provider_type,
@@ -245,3 +278,18 @@ def llm_profile_switch(remaining: list[str], flags: dict[str, str]) -> dict[str,
             "available": provider.is_available(),
         },
     }
+
+
+@command("llm.profile.delete")
+def llm_profile_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!llm profile delete <name> — Delete a saved profile."""
+    if not remaining:
+        raise CommandValidationError(
+            "Missing profile name.",
+            "Usage: !llm profile delete my-profile",
+        )
+    name = remaining[0]
+    provider = get_provider()
+    if provider.delete_profile(name):
+        return {"type": "status", "title": "Profile Deleted", "data": {"removed": [name]}}
+    raise CommandValidationError(f"Profile not found: {name}")

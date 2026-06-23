@@ -10,11 +10,31 @@
   import HelpPopup from "./HelpPopup.svelte";
 
   function handleKeydown(e) {
+    // Ctrl+W / Cmd+W — close current tab
+    if ((e.ctrlKey || e.metaKey) && (e.key === "w" || e.key === "W")) {
+      const closableTabs = tabStore.tabs.filter((t) => t.closable);
+      if (closableTabs.length > 0) {
+        e.preventDefault();
+        if (tabStore.active && tabStore.active.closable && !tabStore.isHome) {
+          tabStore.close(tabStore.active.id);
+        } else {
+          // On home tab, close the last result tab
+          tabStore.close(closableTabs[closableTabs.length - 1].id);
+        }
+      } else {
+        // Only home tab remains — browser will close unless cancelled
+        if (!confirm("Close lighterbird?")) {
+          e.preventDefault();
+        }
+      }
+      return;
+    }
+
+    // Escape — close current tab
     if (e.key === "Escape") {
       if (tabStore.active && tabStore.active.closable && !tabStore.isHome) {
         tabStore.close(tabStore.active.id);
       } else if (tabStore.isHome) {
-        // On home tab, close the last result tab
         const resultTabs = tabStore.tabs.filter((t) => t.closable);
         if (resultTabs.length > 0) {
           tabStore.close(resultTabs[resultTabs.length - 1].id);

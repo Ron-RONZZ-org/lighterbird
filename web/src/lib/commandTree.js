@@ -450,26 +450,6 @@ export const commandTree = [
     description: "LLM provider configuration",
     children: [
       {
-        name: "configure",
-        description: "Configure LLM provider",
-        params: [
-          { name: "provider", required: true, type: "string", placeholder: "openai|ollama" },
-        ],
-        flags: [
-          { name: "api-key", type: "string", help: "API key" },
-          { name: "base-url", type: "string", help: "API base URL" },
-          { name: "model", type: "string", help: "Model name" },
-        ],
-      },
-      {
-        name: "config",
-        description: "Show current LLM configuration",
-      },
-      {
-        name: "reset",
-        description: "Clear LLM provider configuration",
-      },
-      {
         name: "prompt",
         description: "Show current system prompt",
       },
@@ -478,32 +458,58 @@ export const commandTree = [
         description: "Manage LLM profiles",
         children: [
           {
-            name: "list",
-            description: "List saved profiles",
+            name: "show",
+            description: "Show current LLM configuration",
           },
           {
-            name: "add",
-            description: "Save a new profile",
+            name: "new",
+            description: "Create a new profile from scratch",
             params: [
-              { name: "name", required: true, type: "string", placeholder: "profile-name" },
+              { name: "provider", required: true, type: "string", placeholder: "openai|ollama" },
             ],
             flags: [
-              { name: "provider", type: "string", help: "Provider type (openai|ollama)" },
               { name: "api-key", type: "string", help: "API key" },
               { name: "base-url", type: "string", help: "API base URL" },
               { name: "model", type: "string", help: "Model name" },
             ],
           },
           {
-            name: "remove",
-            description: "Delete a saved profile",
+            name: "set",
+            description: "Modify current profile settings",
+            flags: [
+              { name: "provider", type: "string", help: "Provider type (openai|ollama)" },
+              { name: "api-key", type: "string", help: "API key" },
+              { name: "base-url", type: "string", help: "API base URL" },
+              { name: "model", type: "string", help: "Model name" },
+              { name: "temperature", type: "string", help: "Temperature (0.0-2.0)" },
+              { name: "max-tokens", type: "string", help: "Max tokens" },
+            ],
+          },
+          {
+            name: "clear",
+            description: "Clear current profile configuration",
+          },
+          {
+            name: "save",
+            description: "Save current profile as named",
             params: [
               { name: "name", required: true, type: "string", placeholder: "profile-name" },
             ],
           },
           {
-            name: "switch",
-            description: "Activate a saved profile",
+            name: "load",
+            description: "Load a saved profile",
+            params: [
+              { name: "name", required: true, type: "string", placeholder: "profile-name" },
+            ],
+          },
+          {
+            name: "list",
+            description: "List saved profiles",
+          },
+          {
+            name: "delete",
+            description: "Delete a saved profile",
             params: [
               { name: "name", required: true, type: "string", placeholder: "profile-name" },
             ],
