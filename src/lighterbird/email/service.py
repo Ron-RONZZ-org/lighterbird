@@ -51,7 +51,14 @@ class EmailService:
         acct = self.accounts.get_account_with_password(uuid_)
         if not acct:
             result = SyncResult()
-            result.errors.append(f"No password configured for account {uuid_[:8]}")
+            result.errors.append(f"Account not found: {uuid_[:8]}")
+            return result
+        if not acct.get("password"):
+            result = SyncResult()
+            result.errors.append(
+                f"No password configured for account {uuid_[:8]}. "
+                f"Set it with: !email account modify {uuid_[:8]} --password <pw>"
+            )
             return result
         try:
             result = _sync(
@@ -70,14 +77,15 @@ class EmailService:
         return result
 
     def sync_all(self, force: bool = False) -> dict[str, dict]:
-        """Sync messages for all accounts."""
+        """Sync messages for all accounts.
+
+        Delegates to :meth:`sync_account` per account — errors (missing
+        password, IMAP failure, etc.) are captured in each result's
+        ``errors`` list.
+        """
         results = {}
         for acct in self.accounts.list_accounts():
             uuid_ = acct["uuid"]
-            pw = self.accounts.get_password(uuid_)
-            if not pw:
-                results[uuid_] = {"total": 0, "new": 0, "errors": ["No password in keyring"]}
-                continue
             try:
                 sr = self.sync_account(uuid_, force=force)
                 results[uuid_] = sr.to_dict()

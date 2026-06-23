@@ -207,10 +207,40 @@ def cal_account_remove(remaining: list[str], flags: dict[str, str]) -> dict[str,
 
 @command("calendar.sync")
 def cal_sync(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!calendar sync [uuid]"""
+    """!calendar sync [uuid] [--all]
+
+    Without arguments, syncs the first listed remote calendar.
+    Use ``--all`` or provide a UUID to sync specific calendar(s).
+    """
     svc: CalendarService = get_calendar_service()
-    if remaining:
-        result = svc.sync_calendar(remaining[0])
-        return {"type": "status", "title": "Calendar Synced", "data": result}
+    do_all = "all" in flags
+
+    if remaining and not do_all:
+        try:
+            result = svc.sync_calendar(remaining[0])
+            is_error = result.get("status") in ("error", "no_password")
+            title = f"Calendar Sync {'Error' if is_error else 'Complete'}"
+            return {"type": "status", "title": title, "data": result}
+        except ValueError as e:
+            return {"type": "status", "title": "Calendar Sync Error", "data": {"error": str(e)}}
+
+    # Sync all calendars
     results = svc.sync_all_calendars()
-    return {"type": "status", "title": "All Calendars Synced", "data": results}
+    total_errors = sum(
+        1 for r in results.values()
+        if r.get("status") in ("error", "no_password")
+    )
+    total_ok = sum(
+        1 for r in results.values()
+        if r.get("status") == "ok"
+    )
+    title = f"Calendars Synced ({total_ok} ok, {total_errors} errors)" if total_errors else "All Calendars Synced"
+    return {
+        "type": "status",
+        "title": title,
+        "data": {
+            "results": results,
+            "total": len(results),
+            "errors": total_errors,
+        },
+    }

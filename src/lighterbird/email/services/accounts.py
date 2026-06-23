@@ -34,10 +34,28 @@ class AccountService(CRUDService):
         return _del_keyring_pw(account_uuid)
 
     def create_account(self, data: dict[str, Any], password: str) -> dict[str, Any]:
-        """Create a new email account with password in keyring."""
+        """Create a new email account with password in keyring.
+
+        Returns:
+            The created account dict.
+
+        Raises:
+            RuntimeError: If a password was provided but the system keyring
+                is unavailable or fails to store it.
+        """
         data.pop("pasvorto", None)
         account = self.create(data)
-        self.set_password(account["uuid"], password)
+        if password:
+            if not self.set_password(account["uuid"], password):
+                # Roll back the created account since we can't store the password
+                self.delete(account["uuid"])
+                raise RuntimeError(
+                    "System keyring is unavailable — cannot store account password. "
+                    "Install a keyring backend (e.g. 'sudo apt install gnome-keyring' "
+                    "or set up secret-service). Alternatively, re-run the add command "
+                    "without a password and use '!email account modify <uuid> --password <pw>' "
+                    "once keyring is working."
+                )
         return account
 
     def list_accounts(self) -> list[dict[str, Any]]:

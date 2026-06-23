@@ -66,9 +66,12 @@ export const commandTree = [
       },
       {
         name: "sync",
-        description: "Fetch new email",
+        description: "Fetch new email (omit UUID or use --all for all accounts)",
         params: [
-          { name: "uuid", required: false, type: "uuid", placeholder: "account-uuid (optional)", uuidSource: "email.listAccounts" },
+          { name: "uuid", required: false, type: "uuid", placeholder: "account-uuid", uuidSource: "email.listAccounts" },
+        ],
+        flags: [
+          { name: "all", type: "flag", help: "Sync all accounts" },
         ],
       },
       {
@@ -246,9 +249,12 @@ export const commandTree = [
       },
       {
         name: "sync",
-        description: "Sync calendar(s) by UUID",
+        description: "Sync calendar(s) by UUID (omit or use --all for all)",
         params: [
-          { name: "uuid", required: false, type: "uuid", placeholder: "calendar-uuid (optional)", uuidSource: "calendar.listCalendars" },
+          { name: "uuid", required: false, type: "uuid", placeholder: "calendar-uuid", uuidSource: "calendar.listCalendars" },
+        ],
+        flags: [
+          { name: "all", type: "flag", help: "Sync all calendars" },
         ],
       },
     ],
