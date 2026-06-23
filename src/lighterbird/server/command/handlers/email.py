@@ -142,14 +142,21 @@ def email_sync(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
             error_details[label] = r["errors"]
 
     title = "Sync Complete (with errors)" if total_errors > 0 else "Sync Complete"
+    summary = f"{total_new} new items synced."
+    if total_errors > 0:
+        err_lines = [f"  {label}: {'; '.join(errs[:3])}" for label, errs in error_details.items()]
+        summary += f"\n{total_errors} error(s):\n" + "\n".join(err_lines[:5])
+        if total_errors > 5:
+            summary += f"\n  ... and {total_errors - 5} more"
     return {
         "type": "status",
         "title": title,
         "data": {
             "new": total_new,
-            "accounts": len(results),
+            "account_count": len(results),
             "errors": total_errors,
             "error_details": error_details or None,
+            "_summary": summary,
         },
     }
 
