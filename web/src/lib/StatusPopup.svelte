@@ -6,7 +6,6 @@
 
 <div class="status">
   {#if d.accounts}
-    <!-- Email accounts -->
     {#each d.accounts as account}
       <div class="row">
         <span class="key">{account.uuid?.slice(0, 8) || ""}</span>
@@ -17,7 +16,6 @@
       <p class="empty">No accounts configured.</p>
     {/each}
   {:else if d.calendars}
-    <!-- Calendar accounts -->
     {#each d.calendars as cal}
       <div class="row">
         <span class="key">{cal.uuid?.slice(0, 8) || ""}</span>
@@ -28,7 +26,6 @@
       <p class="empty">No calendars configured.</p>
     {/each}
   {:else if d.messages}
-    <!-- Email messages -->
     {#each d.messages as msg}
       <div class="row">
         <span class="key">{msg.uuid?.slice(0, 8) || ""}</span>
@@ -39,7 +36,6 @@
       <p class="empty">No messages.</p>
     {/each}
   {:else if d.todos}
-    <!-- Todo items -->
     {#each d.todos as todo}
       <div class="row">
         <span class="key">{todo.uuid?.slice(0, 8) || ""}</span>
@@ -50,7 +46,6 @@
       <p class="empty">No todos.</p>
     {/each}
   {:else if d.contacts}
-    <!-- Contacts -->
     {#each d.contacts as contact}
       <div class="row">
         <span class="key">{contact.uuid?.slice(0, 8) || ""}</span>
@@ -61,7 +56,6 @@
       <p class="empty">No contacts.</p>
     {/each}
   {:else if d.entries}
-    <!-- Journal entries -->
     {#each d.entries as entry}
       <div class="row">
         <span class="key">{entry.uuid?.slice(0, 8) || ""}</span>
@@ -72,7 +66,6 @@
       <p class="empty">No journal entries.</p>
     {/each}
   {:else if d.uuid}
-    <!-- Single-item result (e.g. todo add, account add) -->
     <div class="row">
       <span class="key">{d.uuid?.slice(0, 8) || ""}</span>
       <span class="val">{d.title || d.email || ""}</span>
@@ -87,8 +80,8 @@
     <p class="message">Removed: {d.removed.join(", ")}</p>
   {:else if d.done}
     <p class="message">Done: {d.done.join(", ")}</p>
-  {:else if d.new !== undefined}
-    <p class="message">{d.new} new items synced.</p>
+  {:else if d._summary}
+    <p class="message" style="white-space:pre-wrap">{d._summary}</p>
   {:else}
     <p class="message">Done.</p>
   {/if}
@@ -128,4 +121,5 @@
     color: #e0e0e0;
     white-space: pre-wrap;
   }
+
 </style>
