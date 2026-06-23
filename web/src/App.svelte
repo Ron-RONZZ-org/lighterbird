@@ -24,6 +24,28 @@
       }
     }
 
+    // Ctrl+W / Cmd+W — close current tab (must be here, not in TabView:
+    // Firefox processes Ctrl+W at browser level and a <svelte:window> handler
+    // in a child component may not reliably intercept it before the browser
+    // closes the window)
+    if ((e.ctrlKey || e.metaKey) && (e.key === "w" || e.key === "W")) {
+      const closableTabs = tabStore.tabs.filter((t) => t.closable);
+      if (closableTabs.length > 0) {
+        e.preventDefault();
+        if (tabStore.active && tabStore.active.closable && !tabStore.isHome) {
+          tabStore.close(tabStore.active.id);
+        } else {
+          tabStore.close(closableTabs[closableTabs.length - 1].id);
+        }
+      } else {
+        // Only home tab remains — browser will close unless cancelled
+        if (!confirm("Close lighterbird?")) {
+          e.preventDefault();
+        }
+      }
+      return;
+    }
+
     // Ctrl+R / Ctrl+Shift+R / Ctrl+L — email actions (dispatched to EmailViewTab)
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "r") {
       const active = tabStore.active;
