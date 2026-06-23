@@ -99,7 +99,7 @@
         </button>
       {/each}
       <span class="tab-bar-spacer"></span>
-      <span class="tab-hint" title="Keyboard shortcuts"><kbd>Ctrl+W</kbd> <kbd>q</kbd> <kbd>Esc</kbd> close</span>
+      <span class="tab-hint" title="Keyboard shortcuts"><kbd>q</kbd> <kbd>Esc</kbd> close</span>
     </div>
   {/if}
 </div>
