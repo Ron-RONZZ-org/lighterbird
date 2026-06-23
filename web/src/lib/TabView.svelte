@@ -1,5 +1,6 @@
 <script>
   import { tabStore } from "./tabStore.svelte.js";
+  import HomeTab from "./HomeTab.svelte";
   import LoadingPopup from "./LoadingPopup.svelte";
   import StatusPopup from "./StatusPopup.svelte";
   import EmailPopup from "./EmailPopup.svelte";
@@ -8,20 +9,16 @@
   import ErrorPopup from "./ErrorPopup.svelte";
   import HelpPopup from "./HelpPopup.svelte";
 
-  /** Map tab types to content components. */
-  const CONTENT = {
-    status: StatusPopup,
-    email: EmailViewTab,
-    events: EventsPopup,
-    error: ErrorPopup,
-    help: HelpPopup,
-    loading: LoadingPopup,
-  };
-
   function handleKeydown(e) {
     if (e.key === "Escape") {
-      if (tabStore.active && tabStore.active.closable) {
+      if (tabStore.active && tabStore.active.closable && !tabStore.isHome) {
         tabStore.close(tabStore.active.id);
+      } else if (tabStore.isHome) {
+        // On home tab, close the last result tab
+        const resultTabs = tabStore.tabs.filter((t) => t.closable);
+        if (resultTabs.length > 0) {
+          tabStore.close(resultTabs[resultTabs.length - 1].id);
+        }
       }
     }
   }
@@ -29,72 +26,79 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-{#if tabStore.tabs.length === 0}
-  <div class="empty-state">
-    <p class="empty-hint">Type a command to get started</p>
-  </div>
-{:else}
-  <div class="tab-view">
-    {#if tabStore.active}
-      <div class="tab-content" role="region" aria-label="Tab content">
-        {#if tabStore.active.type === "loading"}
-          <LoadingPopup message={tabStore.active.title} />
-        {:else if tabStore.active.type === "status"}
-          <StatusPopup data={tabStore.active.data} />
-        {:else if tabStore.active.type === "email"}
-          <EmailViewTab data={tabStore.active.data} tabId={tabStore.active.id} />
-        {:else if tabStore.active.type === "events"}
-          <EventsPopup data={tabStore.active.data} />
-        {:else if tabStore.active.type === "error"}
-          <ErrorPopup data={tabStore.active.data} />
-        {:else if tabStore.active.type === "help"}
-          <HelpPopup data={tabStore.active.data} />
-        {:else}
-          <StatusPopup data={tabStore.active.data} />
-        {/if}
-      </div>
-    {/if}
+<div class="tab-view">
+  <!-- Tab content -->
+  {#if tabStore.active}
+    <div class="tab-content" role="region" aria-label="Tab content">
+      {#if tabStore.isHome}
+        <HomeTab />
+      {:else if tabStore.active.type === "loading"}
+        <LoadingPopup message={tabStore.active.title} />
+      {:else if tabStore.active.type === "status"}
+        <StatusPopup data={tabStore.active.data} />
+      {:else if tabStore.active.type === "email"}
+        <EmailViewTab data={tabStore.active.data} tabId={tabStore.active.id} />
+      {:else if tabStore.active.type === "events"}
+        <EventsPopup data={tabStore.active.data} />
+      {:else if tabStore.active.type === "error"}
+        <ErrorPopup data={tabStore.active.data} />
+      {:else if tabStore.active.type === "help"}
+        <HelpPopup data={tabStore.active.data} />
+      {:else}
+        <StatusPopup data={tabStore.active.data} />
+      {/if}
+    </div>
+  {/if}
 
-    <!-- Tab bar at bottom -->
-    {#if tabStore.count > 0}
-      <div class="tab-bar" role="tablist" aria-label="Open tabs">
-        {#each tabStore.tabs as tab, i}
-          <button
-            role="tab"
-            class="tab"
-            class:active={tab.id === tabStore.active?.id}
-            onclick={() => tabStore.setActive(tab.id)}
-            aria-selected={tab.id === tabStore.active?.id}
-            title={tab.title}
-          >
-            <span class="tab-icon">{tabIcon(tab.type)}</span>
-            <span class="tab-label">{truncate(tab.title, 20)}</span>
-            {#if tab.closable}
-              <span
-                class="tab-close"
-                role="button"
-                tabindex="-1"
-                onclick={(e) => { e.stopPropagation(); tabStore.close(tab.id); }}
-                onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); tabStore.close(tab.id); }}}
-              >✕</span>
-            {/if}
-          </button>
-        {/each}
-        <span class="tab-bar-spacer"></span>
-      </div>
-    {/if}
-  </div>
-{/if}
+  <!-- Tab bar (hidden when only home tab exists) -->
+  {#if tabStore.count > 1}
+    <div class="tab-bar" role="tablist" aria-label="Open tabs">
+      {#each tabStore.tabs as tab, i}
+        <button
+          role="tab"
+          class="tab"
+          class:active={tab.id === tabStore.active?.id}
+          onclick={() => tabStore.setActive(tab.id)}
+          aria-selected={tab.id === tabStore.active?.id}
+          title={tab.title}
+        >
+          <span class="tab-icon">{tabIcon(tab.type)}</span>
+          <span class="tab-label">{truncate(tab.title, 22)}</span>
+          {#if tab.closable}
+            <span
+              class="tab-close"
+              role="button"
+              tabindex="-1"
+              onclick={(e) => {
+                e.stopPropagation();
+                tabStore.close(tab.id);
+              }}
+              onkeydown={(e) => {
+                if (e.key === "Enter") {
+                  e.stopPropagation();
+                  tabStore.close(tab.id);
+                }
+              }}
+            >✕</span>
+          {/if}
+        </button>
+      {/each}
+      <span class="tab-bar-spacer"></span>
+    </div>
+  {/if}
+</div>
 
 <script context="module">
   function tabIcon(type) {
     const icons = {
+      home: "⌂",
       status: "📋",
       email: "✉",
       events: "📅",
       error: "⚠",
       help: "?",
       loading: "⏳",
+      chat: "💬",
     };
     return icons[type] || "•";
   }
@@ -111,31 +115,24 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
-    animation: slideDown 0.12s ease;
-  }
-  @keyframes slideDown {
-    from { max-height: 0; opacity: 0; }
-    to { max-height: 60vh; opacity: 1; }
+    height: 100%;
   }
   .tab-content {
     flex: 1;
-    overflow-y: auto;
-    background: #1e1e32;
-    border: 1px solid #444;
-    border-bottom: none;
-    border-radius: 8px 8px 0 0;
-    max-height: 55vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: #1a1a2e;
   }
   .tab-bar {
     display: flex;
     align-items: stretch;
     background: #16162a;
-    border: 1px solid #444;
-    border-top: none;
-    border-radius: 0 0 8px 8px;
+    border-top: 1px solid #333;
     overflow-x: auto;
     gap: 1px;
     min-height: 32px;
+    flex-shrink: 0;
   }
   .tab {
     display: flex;
@@ -167,7 +164,7 @@
     opacity: 0.7;
   }
   .tab-label {
-    max-width: 120px;
+    max-width: 140px;
     overflow: hidden;
     text-overflow: ellipsis;
   }
@@ -186,17 +183,5 @@
   .tab-bar-spacer {
     flex: 1;
     background: #1a1a2e;
-  }
-  .empty-state {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 3rem;
-  }
-  .empty-hint {
-    color: #5a5a7a;
-    font-family: monospace;
-    font-size: 0.9rem;
-    font-style: italic;
   }
 </style>

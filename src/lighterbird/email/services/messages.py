@@ -94,11 +94,30 @@ class MessageService:
         if filters.get("account"):
             conditions.append("m.konto_id = ?")
             params.append(filters["account"])
-        if filters.get("folder"):
+        # Folder filtering: list of folders to INCLUDE
+        folder_names = filters.get("folder")
+        if folder_names:
+            if isinstance(folder_names, str):
+                folder_names = [folder_names]
+            placeholders = ",".join("?" for _ in folder_names)
             conditions.append(
-                "m.dosierujo_id IN (SELECT uuid FROM dosierujoj WHERE nomo = ?)"
+                f"m.dosierujo_id IN ("
+                f"SELECT uuid FROM dosierujoj WHERE nomo IN ({placeholders})"
+                f")"
             )
-            params.append(filters["folder"])
+            params.extend(folder_names)
+        # Exclude specific folders (e.g. Trash)
+        exclude_folders = filters.get("exclude_folder")
+        if exclude_folders:
+            if isinstance(exclude_folders, str):
+                exclude_folders = [exclude_folders]
+            placeholders = ",".join("?" for _ in exclude_folders)
+            conditions.append(
+                f"m.dosierujo_id NOT IN ("
+                f"SELECT uuid FROM dosierujoj WHERE nomo IN ({placeholders})"
+                f")"
+            )
+            params.extend(exclude_folders)
         where = " AND ".join(conditions)
         sql = (
             "SELECT m.*, COALESCE(d.nomo, '') AS dosierujo_nomo"

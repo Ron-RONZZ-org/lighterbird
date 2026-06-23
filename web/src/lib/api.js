@@ -96,6 +96,8 @@ export const email = {
 
   markRead: (uuid, read = true) =>
     request("PATCH", `/email/messages/${uuid}/read`, { read }),
+
+  listFolders: () => request("GET", "/email/folders"),
 };
 
 // ── Calendar API ──────────────────────────────────────────────────────

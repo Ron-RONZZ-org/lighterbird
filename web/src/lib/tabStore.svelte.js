@@ -1,109 +1,120 @@
-/** Reactive tab store — manages multiple open tabs. */
+/** Reactive tab store — manages multiple open tabs, with pinned home tab. */
 
 let _tabs = $state([]);
 let _activeId = $state(null);
 let _nextId = 1;
 
+const HOME_TAB = {
+  id: "home",
+  type: "home",
+  title: "Home",
+  data: null,
+  idKey: "home",
+  closable: false,
+  pinned: true,
+};
+
 function genId() {
   return `tab-${_nextId++}-${Date.now()}`;
 }
 
+/** Ensure the home tab exists at index 0. */
+function ensureHome() {
+  if (_tabs.length === 0 || _tabs[0].id !== HOME_TAB.id) {
+    _tabs = [HOME_TAB, ..._tabs.filter((t) => t.id !== HOME_TAB.id)];
+  }
+  if (!_activeId) {
+    _activeId = HOME_TAB.id;
+  }
+}
+
 export const tabStore = {
   get tabs() {
+    ensureHome();
     return _tabs;
   },
 
   get active() {
-    return _tabs.find((t) => t.id === _activeId) || null;
+    ensureHome();
+    return _tabs.find((t) => t.id === _activeId) || HOME_TAB;
   },
 
   get activeIndex() {
+    ensureHome();
     return _tabs.findIndex((t) => t.id === _activeId);
   },
 
   get count() {
+    ensureHome();
     return _tabs.length;
   },
 
   /**
-   * Open a new tab (or activate an existing one if same idKey is provided).
+   * Open a new result tab.
    *
-   * @param {"status"|"email"|"events"|"error"|"help"|"loading"} type
+   * @param {"status"|"email"|"events"|"error"|"help"|"loading"|"chat"} type
    * @param {string} title
    * @param {any} data
    * @param {object} [opts]
-   * @param {string} [opts.idKey]  — if a tab with this idKey exists, activate it instead of creating new
+   * @param {string} [opts.idKey] — dedup key
    * @param {boolean} [opts.closable=true]
-   * @param {boolean} [opts.replaceable=false] — if true, replaces the active tab instead of appending
    */
   open(type, title, data, opts = {}) {
-    const { idKey, closable = true, replaceable = false } = opts;
+    ensureHome();
+    const { idKey, closable = true } = opts;
 
-    // If idKey is provided, find existing tab with same idKey
+    // Dedup by idKey
     if (idKey) {
-      const existing = _tabs.find((t) => t.idKey === idKey);
+      const existing = _tabs.find((t) => t.idKey === idKey && t.id !== HOME_TAB.id);
       if (existing) {
         _activeId = existing.id;
-        // Update data
         _tabs = _tabs.map((t) => (t.id === existing.id ? { ...t, title, data } : t));
         return existing.id;
       }
     }
 
-    let newTabs;
-    const tab = { id: genId(), type, title, data, idKey: idKey || null, closable };
+    const tab = {
+      id: genId(),
+      type,
+      title,
+      data,
+      idKey: idKey || null,
+      closable,
+      pinned: false,
+    };
 
-    if (replaceable && _tabs.length > 0) {
-      // Replace active tab
-      const idx = _tabs.findIndex((t) => t.id === _activeId);
-      newTabs = [..._tabs];
-      newTabs[idx] = tab;
-    } else {
-      newTabs = [..._tabs, tab];
-    }
-
-    _tabs = newTabs;
+    _tabs = [..._tabs, tab];
     _activeId = tab.id;
     return tab.id;
   },
 
   close(id) {
-    if (_tabs.length === 0) return;
+    if (id === HOME_TAB.id) return; // home tab never closes
+    ensureHome();
     const idx = _tabs.findIndex((t) => t.id === id);
     if (idx === -1) return;
 
     const newTabs = _tabs.filter((t) => t.id !== id);
     _tabs = newTabs;
 
-    // If we removed the active tab, activate the nearest one
     if (id === _activeId) {
-      if (newTabs.length === 0) {
-        _activeId = null;
-      } else if (idx >= newTabs.length) {
-        _activeId = newTabs[newTabs.length - 1].id;
-      } else {
-        _activeId = newTabs[idx].id;
-      }
+      // Activate the nearest tab, preferring home (index 0)
+      _activeId = newTabs.length > 0 ? newTabs[Math.min(idx, newTabs.length - 1)].id : HOME_TAB.id;
     }
   },
 
   setActive(id) {
-    const exists = _tabs.find((t) => t.id === id);
-    if (exists) _activeId = id;
+    ensureHome();
+    if (_tabs.find((t) => t.id === id)) _activeId = id;
   },
 
-  /**
-   * Activate tab at a 0-based index.
-   */
   setActiveIndex(index) {
+    ensureHome();
     if (index >= 0 && index < _tabs.length) {
       _activeId = _tabs[index].id;
     }
   },
 
-  /**
-   * Update data for a tab.
-   */
   update(id, data, title) {
     _tabs = _tabs.map((t) =>
       t.id === id ? { ...t, data, ...(title !== undefined ? { title } : {}) } : t,
@@ -111,7 +122,16 @@ export const tabStore = {
   },
 
   closeAll() {
-    _tabs = [];
-    _activeId = null;
+    _tabs = [HOME_TAB];
+    _activeId = HOME_TAB.id;
+  },
+
+  goHome() {
+    _activeId = HOME_TAB.id;
+  },
+
+  /** @returns {boolean} true if the home tab is currently active */
+  get isHome() {
+    return _activeId === HOME_TAB.id;
   },
 };

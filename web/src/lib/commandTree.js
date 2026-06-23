@@ -29,6 +29,8 @@ export const commandTree = [
         params: [],
         flags: [
           { name: "limit", short: "l", type: "number", help: "Max messages (default 20)" },
+          { name: "folder", short: "f", type: "string", help: "Filter by folder (email/folder)", repeatable: true },
+          { name: "all", type: "flag", help: "Include trash folder" },
         ],
       },
       {

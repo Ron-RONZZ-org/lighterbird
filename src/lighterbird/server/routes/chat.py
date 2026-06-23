@@ -17,6 +17,7 @@ from fastapi.responses import StreamingResponse
 from lighterbird.server.command.models import CommandResponse
 from lighterbird.server.command.registry import dispatch, get_definitions
 from lighterbird.server.llm.provider import get_provider
+from lighterbird.server.llm.render import render_markdown, render_streaming_markdown
 
 router = APIRouter(prefix="/api/v1", tags=["chat"])
 
@@ -77,9 +78,9 @@ async def chat_endpoint(data: dict[str, Any]) -> dict[str, Any]:
         )
         if isinstance(summary, str) and summary.strip():
             return {
-                "type": "status",
+                "type": "chat",
                 "title": "LLM Chat",
-                "data": {"message": summary.strip()},
+                "data": {"html": render_markdown(summary.strip()), "actions": []},
             }
         # Fallback: return raw result if LLM summarization fails
         return raw_result
@@ -87,15 +88,16 @@ async def chat_endpoint(data: dict[str, Any]) -> dict[str, Any]:
     # ── Phase 3: No command — respond as plain chat ───────────────────
     response = await provider.chat(message)
     if isinstance(response, str):
+        html = render_markdown(response)
         return {
-            "type": "status",
+            "type": "chat",
             "title": "LLM Chat",
-            "data": {"message": response},
+            "data": {"html": html, "actions": []},
         }
     return {
-        "type": "status",
+        "type": "chat",
         "title": "LLM Chat",
-        "data": {"message": "LLM response unavailable."},
+        "data": {"html": "<p>LLM response unavailable.</p>", "actions": []},
     }
 
 
