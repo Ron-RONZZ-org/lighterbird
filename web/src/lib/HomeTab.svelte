@@ -4,9 +4,12 @@
   import { execute } from "./commandExecutor.js";
   import { renderMarkdown } from "./markdown.js";
   import ChatInput from "./ChatInput.svelte";
+  import LlmSetupModal from "./LlmSetupModal.svelte";
   import { email as emailApi, calendar, contacts, todo, journal } from "./api.js";
 
   let hasSentLlmMessage = $state(false);
+  let showLlmSetup = $state(false);
+  let llmAvailable = $state(null); // null = unknown, true/false = checked
   /** @type {{role:"user"|"assistant", html?:string, text?:string, actions?:[]}[]} */
   let messages = $state([]);
   let convoEl = $state(null);
@@ -64,7 +67,18 @@
       return;
     }
 
-    // ── LLM chat mode — streaming ────────────────────────────────────
+    // ── LLM chat mode ────────────────────────────────────────────────
+    // Check if LLM is available; if not, show setup modal
+    if (llmAvailable === null) {
+      await checkLlmAvailable();
+    }
+    if (llmAvailable === false) {
+      showLlmSetup = true;
+      isLoadingLlm = false;
+      return;
+    }
+
+    // ── Streaming ────────────────────────────────────────────────────
     isLoadingLlm = true;
     const msgIdx = messages.length;
     messages = [...messages, { role: "assistant", html: "", text: "", actions: [], _streaming: true }];
@@ -217,6 +231,25 @@
       });
     } catch { /* ignore */ }
   }
+
+  async function checkLlmAvailable() {
+    try {
+      const resp = await fetch("/api/v1/llm/config");
+      if (resp.ok) {
+        const cfg = await resp.json();
+        llmAvailable = !!cfg.available;
+      } else {
+        llmAvailable = false;
+      }
+    } catch {
+      llmAvailable = false;
+    }
+  }
+
+  function handleLlmConfigured() {
+    showLlmSetup = false;
+    llmAvailable = true;
+  }
 </script>
 
 <div class="home-tab">
@@ -266,6 +299,13 @@
     <ChatInput centered={!hasSentLlmMessage} onSubmit={handleSubmit} />
   </div>
 </div>
+
+{#if showLlmSetup}
+  <LlmSetupModal
+    onConfigured={handleLlmConfigured}
+    onDismiss={() => { showLlmSetup = false; }}
+  />
+{/if}
 
 <style>
   .home-tab {

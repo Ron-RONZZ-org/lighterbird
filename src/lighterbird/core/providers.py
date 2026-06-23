@@ -76,10 +76,10 @@ class OpenAICompatibleProvider:
             "stream": stream,
         }
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            if stream:
-                return self._stream_chat(client, headers, payload)
+        if stream:
+            return self._stream_chat(headers, payload)
 
+        async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
                 f"{self.base_url}/chat/completions",
                 headers=headers,
@@ -171,33 +171,41 @@ class OpenAICompatibleProvider:
 
     async def _stream_chat(
         self,
-        client: httpx.AsyncClient,
         headers: dict[str, str],
         payload: dict[str, Any],
     ) -> AsyncIterator[str]:
-        """Stream tokens from an OpenAI-compatible SSE endpoint."""
-        async with client.stream(
-            "POST",
-            f"{self.base_url}/chat/completions",
-            headers=headers,
-            json=payload,
-        ) as response:
-            response.raise_for_status()
-            async for line in response.aiter_lines():
-                if line.startswith("data: "):
-                    data_str = line[6:].strip()
-                    if data_str == "[DONE]":
-                        break
-                    if not data_str:
-                        continue
-                    try:
-                        chunk = json.loads(data_str)
-                        delta = chunk.get("choices", [{}])[0].get("delta", {})
-                        token = delta.get("content", "")
-                        if token:
-                            yield token
-                    except (json.JSONDecodeError, KeyError, IndexError):
-                        continue
+        """Stream tokens from an OpenAI-compatible SSE endpoint.
+
+        Manages its own httpx client lifecycle — the client stays open
+        as long as the iterator is alive, and is closed when iteration
+        completes or is cancelled.
+        """
+        client = httpx.AsyncClient(timeout=60.0)
+        try:
+            async with client.stream(
+                "POST",
+                f"{self.base_url}/chat/completions",
+                headers=headers,
+                json=payload,
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if line.startswith("data: "):
+                        data_str = line[6:].strip()
+                        if data_str == "[DONE]":
+                            break
+                        if not data_str:
+                            continue
+                        try:
+                            chunk = json.loads(data_str)
+                            delta = chunk.get("choices", [{}])[0].get("delta", {})
+                            token = delta.get("content", "")
+                            if token:
+                                yield token
+                        except (json.JSONDecodeError, KeyError, IndexError):
+                            continue
+        finally:
+            await client.aclose()
 
 
 # ── Ollama provider ────────────────────────────────────────────────────────
@@ -233,10 +241,10 @@ class OllamaProvider:
             "stream": stream,
         }
 
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            if stream:
-                return self._stream_chat(client, payload)
+        if stream:
+            return self._stream_chat(payload)
 
+        async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
                 f"{self.base_url}/chat/completions",
                 json=payload,
@@ -259,31 +267,37 @@ class OllamaProvider:
 
     async def _stream_chat(
         self,
-        client: httpx.AsyncClient,
         payload: dict[str, Any],
     ) -> AsyncIterator[str]:
-        """Stream tokens from Ollama's SSE endpoint."""
-        async with client.stream(
-            "POST",
-            f"{self.base_url}/chat/completions",
-            json=payload,
-        ) as response:
-            response.raise_for_status()
-            async for line in response.aiter_lines():
-                if line.startswith("data: "):
-                    data_str = line[6:].strip()
-                    if data_str == "[DONE]":
-                        break
-                    if not data_str:
-                        continue
-                    try:
-                        chunk = json.loads(data_str)
-                        delta = chunk.get("choices", [{}])[0].get("delta", {})
-                        token = delta.get("content", "")
-                        if token:
-                            yield token
+        """Stream tokens from Ollama's SSE endpoint.
+
+        Manages its own httpx client lifecycle.
+        """
+        client = httpx.AsyncClient(timeout=120.0)
+        try:
+            async with client.stream(
+                "POST",
+                f"{self.base_url}/chat/completions",
+                json=payload,
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if line.startswith("data: "):
+                        data_str = line[6:].strip()
+                        if data_str == "[DONE]":
+                            break
+                        if not data_str:
+                            continue
+                        try:
+                            chunk = json.loads(data_str)
+                            delta = chunk.get("choices", [{}])[0].get("delta", {})
+                            token = delta.get("content", "")
+                            if token:
+                                yield token
                     except (json.JSONDecodeError, KeyError, IndexError):
                         continue
+        finally:
+            await client.aclose()
 
 
 __all__ = [

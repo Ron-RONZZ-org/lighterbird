@@ -444,6 +444,75 @@ export const commandTree = [
     ],
   },
 
+  // ── LLM ──────────────────────────────────────────────────────────────
+  {
+    name: "llm",
+    description: "LLM provider configuration",
+    children: [
+      {
+        name: "configure",
+        description: "Configure LLM provider",
+        params: [
+          { name: "provider", required: true, type: "string", placeholder: "openai|ollama" },
+        ],
+        flags: [
+          { name: "api-key", type: "string", help: "API key" },
+          { name: "base-url", type: "string", help: "API base URL" },
+          { name: "model", type: "string", help: "Model name" },
+        ],
+      },
+      {
+        name: "config",
+        description: "Show current LLM configuration",
+      },
+      {
+        name: "reset",
+        description: "Clear LLM provider configuration",
+      },
+      {
+        name: "prompt",
+        description: "Show current system prompt",
+      },
+      {
+        name: "profile",
+        description: "Manage LLM profiles",
+        children: [
+          {
+            name: "list",
+            description: "List saved profiles",
+          },
+          {
+            name: "add",
+            description: "Save a new profile",
+            params: [
+              { name: "name", required: true, type: "string", placeholder: "profile-name" },
+            ],
+            flags: [
+              { name: "provider", type: "string", help: "Provider type (openai|ollama)" },
+              { name: "api-key", type: "string", help: "API key" },
+              { name: "base-url", type: "string", help: "API base URL" },
+              { name: "model", type: "string", help: "Model name" },
+            ],
+          },
+          {
+            name: "remove",
+            description: "Delete a saved profile",
+            params: [
+              { name: "name", required: true, type: "string", placeholder: "profile-name" },
+            ],
+          },
+          {
+            name: "switch",
+            description: "Activate a saved profile",
+            params: [
+              { name: "name", required: true, type: "string", placeholder: "profile-name" },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+
   // ── Help ─────────────────────────────────────────────────────────────
   {
     name: "help",
