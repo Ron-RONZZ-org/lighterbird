@@ -73,6 +73,8 @@ export const email = {
 
   createAccount: (data) => request("POST", "/email/accounts", data),
 
+  updateAccount: (uuid, data) => request("PATCH", `/email/accounts/${uuid}`, data),
+
   deleteAccount: (uuid) => request("DELETE", `/email/accounts/${uuid}`),
 
   sync: (accountUuid = null) =>
@@ -106,6 +108,10 @@ export const calendar = {
   listCalendars: () => request("GET", "/calendar/calendars"),
 
   createCalendar: (data) => request("POST", "/calendar/calendars", data),
+
+  updateCalendar: (uuid, data) => request("PATCH", `/calendar/calendars/${uuid}`, data),
+
+  deleteCalendar: (uuid) => request("DELETE", `/calendar/calendars/${uuid}`),
 
   sync: (uuid) => request("POST", `/calendar/sync/${uuid}`),
 
@@ -183,6 +189,29 @@ export const journal = {
   update: (uuid, data) => request("PATCH", `/journal/entries/${uuid}`, data),
 
   delete: (uuid) => request("DELETE", `/journal/entries/${uuid}`),
+};
+
+// ── LLM API ───────────────────────────────────────────────────────────
+
+export const llm = {
+  getConfig: () => request("GET", "/llm/config"),
+
+  configure: (data) => request("POST", "/llm/configure", data),
+
+  resetConfig: () => request("POST", "/llm/reset"),
+
+  listProfiles: () => request("GET", "/llm/profiles"),
+
+  createProfile: (data) => request("POST", "/llm/profiles", data),
+
+  getProfile: (name) => request("GET", `/llm/profiles/${encodeURIComponent(name)}`),
+
+  updateProfile: (name, data) =>
+    request("PATCH", `/llm/profiles/${encodeURIComponent(name)}`, data),
+
+  deleteProfile: (name) => request("DELETE", `/llm/profiles/${encodeURIComponent(name)}`),
+
+  loadProfile: (name) => request("POST", `/llm/profiles/${encodeURIComponent(name)}/load`),
 };
 
 // ── Admin API ─────────────────────────────────────────────────────────

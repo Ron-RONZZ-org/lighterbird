@@ -2,8 +2,8 @@
 
 ``POST /api/v1/chat`` — Standard response (single message).
 ``POST /api/v1/chat/stream`` — SSE streaming response for LLM output.
-``POST /api/v1/llm/configure`` — Configure the LLM provider.
-``GET /api/v1/llm/config`` — Get current LLM provider config.
+
+LLM configuration endpoints moved to ``routes/llm.py``.
 """
 
 from __future__ import annotations
@@ -153,73 +153,4 @@ async def chat_stream(data: dict[str, Any]) -> StreamingResponse:
     )
 
 
-# ── LLM configuration ──────────────────────────────────────────────────────
-
-
-@router.post("/llm/configure")
-async def llm_configure(data: dict[str, Any]) -> dict[str, Any]:
-    """Configure the LLM provider.
-
-    Accepts: ``provider_type``, ``api_key``, ``base_url``, ``model``,
-    ``temperature``, ``max_tokens``.
-
-    The configuration is persisted in the system keyring.
-    """
-    provider = get_provider()
-    provider_type = data.get("provider_type", "openai")
-    provider.configure(
-        provider_type=provider_type,
-        api_key=data.get("api_key", ""),
-        base_url=data.get("base_url", ""),
-        model=data.get("model", ""),
-        temperature=data.get("temperature", 0.7),
-        max_tokens=data.get("max_tokens", 2048),
-    )
-    return {
-        "status": "ok",
-        "provider": provider_type,
-        "available": provider.is_available(),
-    }
-
-
-@router.get("/llm/config")
-async def llm_config() -> dict[str, Any]:
-    """Get the current LLM provider configuration (redacted)."""
-    provider = get_provider()
-    cfg = provider.config
-    return {
-        "provider_type": cfg.provider_type,
-        "api_key": bool(cfg.api_key),
-        "base_url": cfg.base_url,
-        "model": cfg.model,
-        "temperature": cfg.temperature,
-        "max_tokens": cfg.max_tokens,
-        "available": provider.is_available(),
-    }
-
-
-@router.post("/llm/reset")
-async def llm_reset() -> dict[str, Any]:
-    """Clear the LLM provider configuration."""
-    provider = get_provider()
-    provider.clear_config()
-    return {"status": "ok"}
-
-
-@router.post("/llm/reload-prompt")
-async def llm_reload_prompt() -> dict[str, Any]:
-    """Reload the system prompt from disk."""
-    provider = get_provider()
-    content = provider.reload_prompt()
-    return {"status": "ok", "prompt_length": len(content)}
-
-
-@router.get("/llm/prompt")
-async def llm_get_prompt() -> dict[str, Any]:
-    """Get the current system prompt content."""
-    from lighterbird.core.system_prompt import load_system_prompt, system_prompt_path
-
-    return {
-        "prompt": load_system_prompt(),
-        "path": str(system_prompt_path()),
-    }
+# (LLM configuration endpoints moved to routes/llm.py)

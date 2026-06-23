@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from lighterbird.server.deps import get_calendar_service
 from lighterbird.server.schemas import (
-    CalendarCreate, CalendarResponse, CalendarListResponse,
+    CalendarCreate, CalendarResponse, CalendarListResponse, CalendarUpdate,
     EventCreate, EventResponse, EventListResponse, EventQueryParams,
 )
 from lighterbird.calendar.service import CalendarService
@@ -56,6 +56,40 @@ def create_calendar(
     }
     cal = cal_svc.create_calendar(cal_data, password=data.password)
     return _calendar_to_response(cal)
+
+
+@router.patch("/calendars/{uuid}")
+def update_calendar(
+    uuid: str,
+    data: CalendarUpdate,
+    cal_svc: CalendarService = Depends(get_calendar_service),
+):
+    """Update a calendar (partial)."""
+    existing = cal_svc.calendars.get(uuid)
+    if not existing:
+        raise HTTPException(status_code=404, detail=f"Calendar not found: {uuid[:8]}")
+    updates = {}
+    if data.url is not None:
+        updates["url"] = data.url
+    if data.username is not None:
+        updates["username"] = data.username
+    if updates:
+        cal_svc.calendars.update(uuid, updates)
+    if data.password is not None:
+        from lighterbird.calendar.keyring import set_password
+
+        set_password(uuid, data.password)
+    return {"status": "updated", "uuid": uuid[:8]}
+
+
+@router.delete("/calendars/{uuid}")
+def remove_calendar(uuid: str, cal_svc: CalendarService = Depends(get_calendar_service)):
+    """Delete a calendar."""
+    existing = cal_svc.calendars.get(uuid)
+    if not existing:
+        raise HTTPException(status_code=404, detail=f"Calendar not found: {uuid[:8]}")
+    cal_svc.delete_calendar(uuid)
+    return {"status": "deleted"}
 
 
 @router.post("/sync/{uuid}")
