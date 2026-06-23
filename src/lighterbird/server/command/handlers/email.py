@@ -30,13 +30,46 @@ from lighterbird.email.service import EmailService
 
 @command("email.list")
 def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email list [--limit N]"""
+    """!email list [--limit N] [--folder NAME] [--all]
+
+    By default excludes Trash, Spam, and Junk folders.
+    Use ``--all`` to include all folders (including trash).
+    Use ``--folder`` to filter to specific folder(s); repeatable.
+    Folder names use the ``{email}/{folder}`` convention, e.g.
+    ``user@gmail.com/INBOX``.
+    """
     svc: EmailService = get_email_service()
     limit = int(flags.get("limit", 20))
-    messages = [normalize_message(m) for m in svc.list_messages(limit=limit)]
+    include_all = "all" in flags
+    folder_filter = flags.get("folder", "")
+
+    filters = {}
+    if folder_filter:
+        # --folder can specify {email}/{folder} or just {folder}
+        parts = folder_filter.split("/", 1)
+        if len(parts) == 2:
+            # Resolve by account email
+            acct_email, folder_name = parts
+            accounts = svc.list_accounts()
+            for acct in accounts:
+                if acct.get("retposto", "").lower() == acct_email.lower():
+                    filters["account"] = acct["uuid"]
+                    filters["folder"] = [folder_name]
+                    break
+            else:
+                # Account not found; try folder name only
+                filters["folder"] = [folder_filter]
+        else:
+            filters["folder"] = [folder_filter]
+    elif not include_all:
+        # Default: exclude trash-like folders
+        filters["exclude_folder"] = ["Trash", "Spam", "Junk", "Bin"]
+
+    messages = [normalize_message(m) for m in svc.search_messages(filters, limit=limit)]
+    title_suffix = f" ({folder_filter})" if folder_filter else ""
     return {
         "type": "status",
-        "title": "Inbox",
+        "title": f"Inbox{title_suffix}",
         "data": {"messages": messages, "total": len(messages)},
     }
 

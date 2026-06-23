@@ -8,23 +8,64 @@ Svelte 5 SPA providing the lighterbird user interface. The core interaction mode
 
 The web frontend provides:
 
-- **Command bar** — always-visible text input at the top of the screen
-  - `!` prefix → execute a structured command (`!account list`, `!new`, `!search`)
+- **Home tab** — persistent pinned tab at index 0, non-closable, always present. This is the default view. It contains:
+  - lighterbird logo/wordmark in the upper center of the screen
+  - Command bar (`❯` input) in the **lower center** of the screen
+  - Empty content area (no results until a command is run)
+- **Command bar** — text input area with:
+  - `!` prefix → execute a structured command (`!email list`, `!new`, `!search`)
   - no `!` prefix → send as LLM chat message
-  - As-you-type autocomplete and suggestion dropdown
+  - As-you-type autocomplete with UUID and label-based suggestion dropdown
   - Arrow key history navigation (up/down through command history)
-  - Tab completion for command names and options
-- **Output area** — below the command bar, renders command results
-  - Plain text output (status messages, lists)
-  - Rich HTML blocks (rendered email messages, calendar grids)
-  - Form panels (compose email, edit contact, create event)
-  - Streaming LLM response (token-by-token display)
-- **Split view** (optional) — email list + reading pane side by side
+  - Tab completion for command names, flags, and folder paths
+  - Disabled with animated spinner while command is running
+- **Tab-based output** — each command result opens as a new tab in the tab bar (below the output area). Supported tab types:
+  - Status lists (messages, accounts, contacts, todos, journals)
+  - Rich HTML email body (fallback to plain text) with toolbar (Reply, Reply All, Forward, Mark Read, Trash, Thread sidebar)
+  - Calendar events
+  - Error reports with actionable suggestions
+  - Help/command reference
+  - Loading state with prominent spinner and "avoid clicking" hint
+- **Tab bar** — horizontal row at bottom of output area. Features:
+  - Left-click tab to switch; ✕ button to close (all tabs except home are closable)
+  - Alt+1/2/3/4 keyboard shortcuts to switch tabs
+  - Tab icon + truncated title
+  - Home tab always first, showing logo/command bar when active
+- **Full-screen output** — when a result tab is active, its content takes all available screen space (no wasted margins). The command bar is accessible by switching back to the home tab (Alt+1) or typing a new command from any tab.
+- **Conversation sidebar** — slides in from right on email detail tabs, shows thread history with clickable links
+- **Top progress bar** — thin animated gradient bar across the full viewport width while any command is loading, visible regardless of which tab is active
+
+## Layout
+
+```
+┌─────────────────────────────────────────┐
+│                                         │
+│         ◇ lighterbird ◇                 │  ← logo (upper center, home tab only)
+│                                         │
+│                                         │
+│                                         │
+│         ❯ Type !command...              │  ← command bar (lower center, home tab only)
+│                                         │
+├─────────────────────────────────────────┤
+│  [Home] [Inbox ✕] [Email... ✕]  [...]  │  ← tab bar (always visible)
+└─────────────────────────────────────────┘
+
+When a result tab is active:
+┌─────────────────────────────────────────┐
+│  ┌─────────────────────────────────┐    │
+│  │ tab content (full screen)       │    │
+│  │                                 │    │
+│  └─────────────────────────────────┘    │
+│  [Home] [Inbox ✕] [Email ✕]  [...]  │  ← tab bar
+└─────────────────────────────────────────┘
+```
 
 ## Constraints and Invariants
 
-- **No routing library initially** — single-page, single-view. Command output replaces the content area.
-- **State kept in Svelte stores** — no Redux/Pinia. Svelte 5 `$state` runes for reactive state.
+- **Home tab is always at index 0, never closable.** Switch to it via Alt+1 or by closing all result tabs.
+- **Command bar lives on the home tab only** (lower center). When viewing result tabs, the command bar is not visible — type a new `!` command or use Alt+1 to go home. The top progress bar is the only loading indicator that spans all tabs.
+- **No routing library initially** — single-page, command-driven. Tab switching is local Svelte state, not URL-based.
+- **State kept in Svelte stores** — no Redux/Pinia. Svelte 5 `$state` runes for reactive state. `tabStore` manages tabs; `popupStore` acts as backward-compat bridge.
 - **API calls via `fetch()`** — no Axios or heavy HTTP client. A thin `api.js` wrapper is enough.
 - **WebSocket for LLM streaming** — separate connection from REST API.
 - **No TypeScript initially** — plain JavaScript. TypeScript can be added later if the codebase grows.
@@ -33,7 +74,7 @@ The web frontend provides:
 
 ## Input/Output Expectations
 
-- `GET /api/v1/...` — fetch data (messages, contacts, events)
+- `GET /api/v1/...` — fetch data (messages, contacts, events, folders)
 - `POST /api/v1/...` — create/update data
 - `WebSocket /api/v1/ai/chat` — send message, receive streaming response
 - `WebSocket /api/v1/ai/command` — send `!` command, receive structured result
@@ -65,3 +106,5 @@ The Vite dev server proxies `/api/` requests to the FastAPI backend (port 8000).
 6. **Accessibility basics.** The command bar needs an `<input>` with proper ARIA labels, role="combobox" pattern for autocomplete, and keyboard-only navigation.
 7. **Build output goes to `web/dist/`** — the FastAPI server mounts this directory as static files.
 8. **Do not use SvelteKit** — this is a SPA, not an SSR app. SvelteKit would add unnecessary complexity and bundle size.
+9. **Tabs always append, never replace.** Loading tabs close when the result arrives. The home tab is pinned at index 0 and never closes.
+10. **Folder paths use `{email}/{folder}` convention.** Auto-completion for `--folder` flags inserts the full folder path, not a UUID.

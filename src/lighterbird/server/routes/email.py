@@ -98,6 +98,30 @@ def sync_email(
         return SyncResultResponse(total=total, new=new, errors=errors)
 
 
+@router.get("/folders")
+def list_folders(email_svc: EmailService = Depends(get_email_service)):
+    """List all known folders with account info."""
+    from lighterbird.server.command.response import normalize_account
+    # Get all accounts first to map account UUIDs to emails
+    accounts = {a["uuid"]: normalize_account(a) for a in email_svc.list_accounts()}
+    # Query folders
+    rows = list(email_svc.db.execute(
+        "SELECT d.uuid, d.nomo, d.konto_id FROM dosierujoj d ORDER BY d.konto_id, d.nomo"
+    ))
+    folders = []
+    for row in rows:
+        acct = accounts.get(row["konto_id"], {})
+        acct_email = acct.get("email", row["konto_id"][:8] if row["konto_id"] else "")
+        folders.append({
+            "folder_uuid": row["uuid"],
+            "folder_name": row["nomo"],
+            "account_uuid": row["konto_id"],
+            "account_email": acct_email,
+            "label": f"{acct_email}/{row['nomo']}",
+        })
+    return {"folders": folders}
+
+
 @router.get("/messages")
 def list_messages(
     account_uuid: str | None = Query(default=None, alias="account_uuid"),
