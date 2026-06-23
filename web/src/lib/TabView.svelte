@@ -10,27 +10,9 @@
   import HelpPopup from "./HelpPopup.svelte";
 
   function handleKeydown(e) {
-    // Ctrl+W / Cmd+W — close current tab
-    if ((e.ctrlKey || e.metaKey) && (e.key === "w" || e.key === "W")) {
-      const closableTabs = tabStore.tabs.filter((t) => t.closable);
-      if (closableTabs.length > 0) {
-        e.preventDefault();
-        if (tabStore.active && tabStore.active.closable && !tabStore.isHome) {
-          tabStore.close(tabStore.active.id);
-        } else {
-          // On home tab, close the last result tab
-          tabStore.close(closableTabs[closableTabs.length - 1].id);
-        }
-      } else {
-        // Only home tab remains — browser will close unless cancelled
-        if (!confirm("Close lighterbird?")) {
-          e.preventDefault();
-        }
-      }
-      return;
-    }
-
-    // Escape — close current tab
+    // Escape — close current tab (works even when typing in an input;
+    // the CommandBar/ChatInput's handleKeydown runs first, closes
+    // suggestions/popups, then this catches the bubble)
     if (e.key === "Escape") {
       if (tabStore.active && tabStore.active.closable && !tabStore.isHome) {
         tabStore.close(tabStore.active.id);
@@ -39,6 +21,18 @@
         if (resultTabs.length > 0) {
           tabStore.close(resultTabs[resultTabs.length - 1].id);
         }
+      }
+      return;
+    }
+
+    // Q / q — close current tab (inert when typing in an input to avoid
+    // accidental closes from someone inserting "q" in a text field)
+    if ((e.key === "q" || e.key === "Q") && !tabStore.isHome) {
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) {
+        return;
+      }
+      if (tabStore.active && tabStore.active.closable) {
+        tabStore.close(tabStore.active.id);
       }
     }
   }
@@ -105,6 +99,7 @@
         </button>
       {/each}
       <span class="tab-bar-spacer"></span>
+      <span class="tab-hint" title="Keyboard shortcuts"><kbd>Ctrl+W</kbd> <kbd>q</kbd> <kbd>Esc</kbd> close</span>
     </div>
   {/if}
 </div>
@@ -207,5 +202,25 @@
   .tab-bar-spacer {
     flex: 1;
     background: #1a1a2e;
+  }
+  .tab-hint {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0 8px;
+    font-size: 0.68rem;
+    color: #555;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .tab-hint kbd {
+    display: inline-block;
+    padding: 1px 4px;
+    font-size: 0.62rem;
+    font-family: monospace;
+    background: #222;
+    border: 1px solid #444;
+    border-radius: 3px;
+    color: #888;
   }
 </style>
