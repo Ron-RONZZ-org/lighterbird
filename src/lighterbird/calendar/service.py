@@ -21,10 +21,20 @@ class CalendarService:
     # ── Calendar operations ──────────────────────────────────────────────
 
     def create_calendar(self, data: dict, password: str = "") -> dict:
-        """Create a calendar. Password is stored in keyring if provided."""
+        """Create a calendar. Password is stored in keyring if provided.
+
+        Raises:
+            RuntimeError: If a password was provided but the system keyring
+                is unavailable or fails to store it.
+        """
         cal = self.calendars.create(data)
         if password:
-            set_password(cal["uuid"], password)
+            if not set_password(cal["uuid"], password):
+                self.calendars.delete(cal["uuid"])
+                raise RuntimeError(
+                    "System keyring is unavailable — cannot store calendar password. "
+                    "Install a keyring backend (e.g. 'sudo apt install gnome-keyring'). "
+                )
         return cal
 
     def list_calendars(self):
@@ -64,19 +74,22 @@ class CalendarService:
         return {"status": "ok", "remote_events": len(results), "new_events": total_imported}
 
     def sync_all_calendars(self) -> dict[str, dict]:
-        """Pull events from all remote calendars."""
+        """Pull events from all remote calendars.
+
+        Delegates to :meth:`sync_calendar` per calendar — errors (missing
+        password, connection failure, etc.) are captured in each result's
+        ``status`` field.
+        """
         results = {}
         for cal in self.calendars.list():
             uuid_ = cal["uuid"]
             if not cal.get("remote"):
                 results[uuid_] = {"status": "local_calendar"}
                 continue
-            pw = get_password(uuid_)
-            if not pw:
-                results[uuid_] = {"status": "no_password"}
-                continue
             try:
                 results[uuid_] = self.sync_calendar(uuid_)
+            except ValueError as e:
+                results[uuid_] = {"status": "no_password", "error": str(e)}
             except Exception as e:
                 results[uuid_] = {"status": "error", "error": str(e)}
         return results

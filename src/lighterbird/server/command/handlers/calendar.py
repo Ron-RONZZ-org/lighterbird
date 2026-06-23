@@ -221,7 +221,7 @@ def cal_sync(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
             is_error = result.get("status") in ("error", "no_password")
             title = f"Calendar Sync {'Error' if is_error else 'Complete'}"
             return {"type": "status", "title": title, "data": result}
-        except ValueError as e:
+        except Exception as e:
             return {"type": "status", "title": "Calendar Sync Error", "data": {"error": str(e)}}
 
     # Sync all calendars
