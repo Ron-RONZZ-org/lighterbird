@@ -282,9 +282,6 @@
       aria-label="Message input"
       autofocus
     ></textarea>
-    <span class="mode-badge" class:active={isCommandMode}>
-      {isCommandMode ? "CMD" : "CHAT"}
-    </span>
   </div>
 
   <!-- Autocomplete dropdown -->
@@ -372,27 +369,6 @@
   .input-field::placeholder {
     color: #555;
   }
-  .mode-badge {
-    position: absolute;
-    top: -8px;
-    right: 8px;
-    font-family: monospace;
-    font-size: 0.6rem;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    padding: 1px 6px;
-    border-radius: 4px;
-    background: #2a2a3e;
-    color: #5a5a7a;
-    border: 1px solid #333;
-    transition: all 0.15s;
-  }
-  .mode-badge.active {
-    background: #1a3a1a;
-    color: #6aaa6a;
-    border-color: #3a6a3a;
-  }
-
   /* Suggestions dropdown */
   .suggestions {
     width: 100%;

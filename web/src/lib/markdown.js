@@ -56,6 +56,24 @@ export function renderMarkdown(text) {
   // 10. Blockquotes
   h = h.replace(/^&gt; (.+)$/gm, "<blockquote>$1</blockquote>");
 
+  // 10b. Tables (| header | ... |) — process before line break splitting
+  h = h.replace(
+    /^\|(.+)\|\n\|[-| :]+\|\n((?:\|.+\|\n?)*)/gm,
+    (_, headerRow, bodyRows) => {
+      const headers = headerRow.split("|").map((s) => s.trim()).filter(Boolean);
+      const headerCells = headers.map((h) => `<th>${h}</th>`).join("");
+      let bodyHtml = "";
+      const bodyLines = bodyRows.trim().split("\n");
+      for (const line of bodyLines) {
+        const cells = line.split("|").map((s) => s.trim()).filter(Boolean);
+        if (cells.length > 0) {
+          bodyHtml += "<tr>" + cells.map((c) => `<td>${c}</td>`).join("") + "</tr>";
+        }
+      }
+      return `<table><thead><tr>${headerCells}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
+    },
+  );
+
   // 11. Unordered lists (- item)
   h = h.replace(/^- (.+)$/gm, "<li>$1</li>");
   h = h.replace(/(<li>.*<\/li>\n?)+/g, "<ul>$&</ul>");
