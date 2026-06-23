@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ── Generic ──────────────────────────────────────────────────────────────
@@ -186,13 +186,18 @@ class LLMProfileListResponse(BaseModel):
 
 class LLMProfileUpdate(BaseModel):
     provider_type: str | None = Field(default=None, description='Provider type: "openai" or "ollama"')
-    api_key: str | None = Field(default=None, description="API key")
+    api_key: str | None = Field(default=None, description="API key (empty = keep current)")
     base_url: str | None = Field(default=None, description="Base URL")
     model: str | None = Field(default=None, description="Model name")
     temperature: float | None = Field(default=None, ge=0.0, le=2.0, description="Temperature")
     max_tokens: int | None = Field(default=None, ge=1, description="Max tokens")
 
     model_config = {"extra": "forbid"}
+
+    @field_validator("api_key")
+    @classmethod
+    def empty_api_key_is_none(cls, v: str | None) -> str | None:
+        return v if v else None
 
 
 # ── Account Updates ──────────────────────────────────────────────────────
