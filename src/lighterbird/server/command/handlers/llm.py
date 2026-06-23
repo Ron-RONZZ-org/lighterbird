@@ -109,10 +109,7 @@ def llm_profile_root(remaining: list[str], flags: dict[str, str]) -> dict[str, A
         "  list               — List saved profiles\n"
         "  delete <name>      — Delete a saved profile",
     }
-    if profiles:
-        result["profiles"] = profiles
-    else:
-        result["message"] = "No saved profiles."
+    result["profiles"] = profiles
     if active.provider_type:
         result["active"] = {
             "protocol": active.provider_type,
@@ -252,7 +249,7 @@ def llm_profile_list(remaining: list[str], flags: dict[str, str]) -> dict[str, A
     return {
         "type": "status",
         "title": "LLM Profiles",
-        "data": {"profiles": profiles} if profiles else {"message": "No saved profiles."},
+        "data": {"profiles": profiles},
     }
 
 
