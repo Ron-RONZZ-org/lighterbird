@@ -94,12 +94,12 @@ export const commandTree = [
             description: "Add a new email account",
             params: [
               { name: "email", required: true, type: "string", placeholder: "user@example.com" },
-              { name: "imap_server", required: false, type: "string", placeholder: "imap.example.com" },
-              { name: "smtp_server", required: false, type: "string", placeholder: "smtp.example.com" },
-              { name: "password", required: false, type: "string", placeholder: "(prompt)" },
             ],
             flags: [
               { name: "name", type: "string", help: "Display name" },
+              { name: "imap", type: "string", help: "IMAP server hostname" },
+              { name: "smtp", type: "string", help: "SMTP server hostname" },
+              { name: "password", type: "string", help: "Account password" },
             ],
           },
           {
