@@ -34,9 +34,17 @@ function _cacheData(data) {
   }
 }
 
+/** Close all loading tabs currently open. */
+function _closeLoadingTabs() {
+  // Collect first, then close (avoid mutation during iteration)
+  const ids = tabStore.tabs.filter((t) => t.type === "loading").map((t) => t.id);
+  for (const id of ids) {
+    tabStore.close(id);
+  }
+}
+
 export const popup = {
   get current() {
-    // Delegate to tabStore for backward compat
     return tabStore.active;
   },
 
@@ -46,20 +54,18 @@ export const popup = {
 
   /** Show a transient popup (opens a new tab). */
   show(type, title, data) {
-    if (type === "loading") {
-      tabStore.open("loading", title, null, { closable: false });
-    } else {
-      tabStore.open(type, title, data, {
-        idKey: type === "email" ? `email-${data?.uuid}` : null,
-        replaceable: type === "loading",
-      });
-    }
+    // Close any stale loading tabs before showing the real result
+    _closeLoadingTabs();
+    tabStore.open(type, title, data, {
+      idKey: type === "email" ? `email-${data?.uuid}` : null,
+    });
     _persistentDataType = null;
     _cacheData(data);
   },
 
   /** Show a persistent live-view tab. */
   showPersistent(type, title, data, dataType) {
+    _closeLoadingTabs();
     tabStore.open(type, title, data, { idKey: `persistent-${dataType}` });
     _persistentDataType = dataType;
     _cacheData(data);
@@ -75,7 +81,8 @@ export const popup = {
   },
 
   showLoading(title) {
-    tabStore.open("loading", title, null, { closable: false, replaceable: true });
+    // Always append a new loading tab (never replaces existing tabs)
+    tabStore.open("loading", title, null, { closable: false });
   },
 
   close() {
