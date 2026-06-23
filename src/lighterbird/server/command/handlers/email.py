@@ -114,14 +114,44 @@ def email_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 @command("email.sync")
 def email_sync(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email sync [uuid]"""
+    """!email sync [uuid] [--all]
+
+    Without arguments, syncs the first listed account.
+    Use ``--all`` to sync all accounts.
+    Provide a UUID to sync a specific account.
+    """
     svc: EmailService = get_email_service()
-    if remaining:
+    do_all = "all" in flags
+
+    if remaining and not do_all:
         result = svc.sync_account(remaining[0])
-        return {"type": "status", "title": "Synced", "data": result.to_dict()}
+        data = result.to_dict()
+        title = "Sync Complete (with errors)" if data.get("errors") else "Synced"
+        return {"type": "status", "title": title, "data": data}
+
+    # Sync all accounts
     results = svc.sync_all()
-    total = sum(r.get("new", 0) for r in results.values())
-    return {"type": "status", "title": "Sync Complete", "data": {"new": total, "accounts": len(results)}}
+    total_new = sum(r.get("new", 0) for r in results.values())
+    total_errors = sum(len(r.get("errors", [])) for r in results.values())
+    error_details = {}
+    for acct_uuid, r in results.items():
+        if r.get("errors"):
+            # Resolve account email for helpful display
+            acct = svc.get_account(acct_uuid)
+            label = acct.get("retposto", acct_uuid[:8]) if acct else acct_uuid[:8]
+            error_details[label] = r["errors"]
+
+    title = "Sync Complete (with errors)" if total_errors > 0 else "Sync Complete"
+    return {
+        "type": "status",
+        "title": title,
+        "data": {
+            "new": total_new,
+            "accounts": len(results),
+            "errors": total_errors,
+            "error_details": error_details or None,
+        },
+    }
 
 
 @command("email.trash")

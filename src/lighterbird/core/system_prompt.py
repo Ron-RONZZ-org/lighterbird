@@ -31,7 +31,7 @@ AVAILABLE COMMANDS:
 - !email read <uuid> — Read a specific email
 - !email send <to> <subject> [body] — Send an email
 - !email search <query> — Search emails
-- !email sync [uuid] — Sync email account(s)
+- !email sync [uuid] [--all] — Sync email account(s) (omit UUID or use --all for all)
 - !email account list — List email accounts
 - !email account add <email> [--imap HOST] [--smtp HOST] [--password PW] [--name NAME] — Add email account
 - !email account modify <uuid> [--name] [--password] — Modify account
@@ -44,7 +44,7 @@ AVAILABLE COMMANDS:
 - !calendar event search <query> — Search events
 - !calendar account list — List calendar accounts
 - !calendar account add <url> [--username USER] [--password PW] — Add calendar
-- !calendar sync [uuid] — Sync calendar(s)
+- !calendar sync [uuid] [--all] — Sync calendar(s) (omit UUID or use --all for all)
 - !contacts list — List contacts
 - !contacts add <email> [name] [phone] — Add contact
 - !contacts view <uuid-or-email> — View contact
