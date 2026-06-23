@@ -158,16 +158,16 @@ def account_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 @command("email.account.add")
 def account_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email account add <email> [imap_server] [smtp_server] [password] [--name NAME]"""
+    """!email account add <email> [--imap HOST] [--smtp HOST] [--password PW] [--name NAME]"""
     if not remaining:
         raise CommandValidationError(
             "Missing email address.",
-            "Usage: !email account add user@example.com [imap] [smtp] [password]",
+            "Usage: !email account add user@example.com [--imap imap.example.com] [--smtp smtp.example.com] [--password ...] [--name NAME]",
         )
     email_addr = remaining[0]
-    imap_server = remaining[1] if len(remaining) > 1 else ""
-    smtp_server = remaining[2] if len(remaining) > 2 else ""
-    password = remaining[3] if len(remaining) > 3 else ""
+    imap_server = flags.get("imap", "")
+    smtp_server = flags.get("smtp", "")
+    password = flags.get("password", "")
     name = flags.get("name", "")
 
     from lighterbird.server.schemas import AccountCreate

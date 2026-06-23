@@ -33,7 +33,7 @@ AVAILABLE COMMANDS:
 - !email search <query> — Search emails
 - !email sync [uuid] — Sync email account(s)
 - !email account list — List email accounts
-- !email account add <email> [imap] [smtp] [password] — Add email account
+- !email account add <email> [--imap HOST] [--smtp HOST] [--password PW] [--name NAME] — Add email account
 - !email account modify <uuid> [--name] [--password] — Modify account
 - !email account remove <uuid> — Remove account(s)
 - !calendar list — List calendars
@@ -43,7 +43,7 @@ AVAILABLE COMMANDS:
 - !calendar event remove <uuid> — Remove event(s)
 - !calendar event search <query> — Search events
 - !calendar account list — List calendar accounts
-- !calendar account add <url> <username> — Add calendar
+- !calendar account add <url> [--username USER] [--password PW] — Add calendar
 - !calendar sync [uuid] — Sync calendar(s)
 - !contacts list — List contacts
 - !contacts add <email> [name] [phone] — Add contact
