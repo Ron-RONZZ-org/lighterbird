@@ -14,24 +14,28 @@
   let suggestions = $state([]);
   let hints = $state([]);
   let dataCompletions = $state([]);
+  let positionals = $state([]);
   let selectedSuggestion = $state(-1);
   let selectedDataIndex = $state(-1);
   let isCommandMode = $state(false);
   let textareaEl = $state(null);
 
-  let showSuggestions = $derived(
-    (isCommandMode && suggestions.length > 0) || dataCompletions.length > 0,
+  // Track if we have any interactive content in the dropdown
+  let hasInteractiveItems = $derived(
+    suggestions.length > 0 || dataCompletions.length > 0,
   );
 
+  let showSuggestions = $derived(
+    (isCommandMode && hasInteractiveItems) || positionals.length > 0,
+  );
+
+  // When data completions exist, hide flag suggestions to reduce clutter.
+  // Only the tracker (positionals) + data completions are shown.
   let displaySuggestions = $derived(
-    dataCompletions.length > 0
-      ? suggestions.filter((s) => !s.startsWith("<") && !s.startsWith("["))
-      : suggestions,
+    dataCompletions.length > 0 ? [] : suggestions,
   );
   let displayHints = $derived(
-    dataCompletions.length > 0
-      ? hints.filter((_, i) => !suggestions[i].startsWith("<") && !suggestions[i].startsWith("["))
-      : hints,
+    dataCompletions.length > 0 ? [] : hints,
   );
 
   // Check if input starts with ! → command mode
@@ -41,6 +45,7 @@
       suggestions = [];
       hints = [];
       dataCompletions = [];
+      positionals = [];
     }
   }
 
@@ -49,6 +54,7 @@
       suggestions = [];
       hints = [];
       dataCompletions = [];
+      positionals = [];
       selectedSuggestion = -1;
       selectedDataIndex = -1;
       return;
@@ -56,6 +62,7 @@
     const result = getCompletions(value);
     suggestions = result.completions;
     hints = result.hints;
+    positionals = result.positionals;
     selectedSuggestion = -1;
     selectedDataIndex = -1;
 
@@ -90,9 +97,6 @@
       if (dataCompletions.length === 0 && result.node.flags) {
         for (const f of result.node.flags) {
           if (f.uuidSource) {
-            // Show auto-completion when the flag name is present in parsed flags.
-            // This includes both when the value is being typed (flags[f.name] is the partial)
-            // and when the value is complete (flag name exists, user may be refining).
             if (f.name in flags) {
               dataCompletions = getDataCompletionsFromCache(popup.cache, f.uuidSource);
               break;
@@ -105,7 +109,7 @@
         const paramTokens = effectiveTokens.slice(cmdTokens);
         const usedValues = new Set(paramTokens.map(t => t.toLowerCase()));
         dataCompletions = dataCompletions.filter((dc) => {
-          const insertVal = getDataValue(dc).toLowerCase();
+          const insertVal = (dc.value || dc.uuid.slice(0, 8)).toLowerCase();
           return !usedValues.has(insertVal);
         });
       }
@@ -137,13 +141,11 @@
 
   /** Get the text to insert when a data completion is selected. */
   function getDataValue(dc) {
-    // Folders have a "value" field with the full folder path
     return dc.value || dc.uuid.slice(0, 8);
   }
 
   /** Get the display text for a data completion item. */
   function getDataLabel(dc) {
-    // For value-based completions (folders), show the value, not the UUID
     return dc.value || dc.uuid.slice(0, 8);
   }
 
@@ -161,6 +163,7 @@
     suggestions = [];
     hints = [];
     dataCompletions = [];
+    positionals = [];
     selectedSuggestion = -1;
     selectedDataIndex = -1;
     requestAnimationFrame(() => updateSuggestions());
@@ -173,13 +176,14 @@
         suggestions = [];
         hints = [];
         dataCompletions = [];
+        positionals = [];
         return;
       }
       return;
     }
 
     // Tab: autocomplete
-    if (e.key === "Tab" && showSuggestions) {
+    if (e.key === "Tab" && hasInteractiveItems) {
       e.preventDefault();
       if (displaySuggestions.length > 0) {
         const idx = selectedSuggestion >= 0 ? selectedSuggestion : 0;
@@ -191,8 +195,8 @@
       return;
     }
 
-    // Arrow keys for suggestion navigation
-    if (e.key === "ArrowUp" && showSuggestions) {
+    // Arrow keys for suggestion navigation (skip positional tracker)
+    if (e.key === "ArrowUp" && hasInteractiveItems) {
       e.preventDefault();
       if (dataCompletions.length > 0 && displaySuggestions.length === 0) {
         selectedDataIndex = Math.max(0, selectedDataIndex - 1);
@@ -202,7 +206,7 @@
       return;
     }
 
-    if (e.key === "ArrowDown" && showSuggestions) {
+    if (e.key === "ArrowDown" && hasInteractiveItems) {
       e.preventDefault();
       if (dataCompletions.length > 0 && displaySuggestions.length === 0) {
         selectedDataIndex = Math.min(dataCompletions.length - 1, selectedDataIndex + 1);
@@ -253,6 +257,7 @@
       suggestions = [];
       hints = [];
       dataCompletions = [];
+      positionals = [];
       if (onSubmit) onSubmit(cmd);
     }
   }
@@ -286,7 +291,25 @@
 
   <!-- Autocomplete dropdown -->
   {#if showSuggestions}
-    <div class="suggestions" class:above={!centered}>
+    <div class="suggestions">
+      <!-- Positional argument tracker (non-interactive) -->
+      {#if positionals.length > 0}
+        <div class="positional-tracker" aria-hidden="true">
+          {#each positionals as p}
+            <span class="pos-arg" class:entered={p.entered} class:pending={!p.entered}>
+              {p.entered ? p.name : `<${p.name}>`}
+            </span>
+            {#if !p.entered && p.required}
+              <span class="pos-required" aria-hidden="true">*</span>
+            {/if}
+            {#if !@last}
+              <span class="pos-sep"> </span>
+            {/if}
+          {/each}
+        </div>
+      {/if}
+
+      <!-- Flag suggestions -->
       {#each displaySuggestions as suggestion, i}
         <button
           class="suggestion"
@@ -302,6 +325,8 @@
           {/if}
         </button>
       {/each}
+
+      <!-- Data completions (UUIDs) -->
       {#each dataCompletions as dc, i}
         <button
           class="suggestion"
@@ -385,6 +410,40 @@
     margin-top: 0;
     margin-bottom: 4px;
   }
+
+  /* Positional tracker row (non-interactive, info-only) */
+  .positional-tracker {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.35rem 0.75rem;
+    background: #16162a;
+    border-bottom: 1px solid #333;
+    font-family: monospace;
+    font-size: 0.8rem;
+    user-select: none;
+    pointer-events: none;
+  }
+  .pos-arg {
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+  }
+  .pos-arg.entered {
+    color: #c0c0e0;
+    font-weight: 500;
+  }
+  .pos-arg.pending {
+    color: #5a5a7a;
+  }
+  .pos-required {
+    color: #c44;
+    font-size: 0.7rem;
+    margin-left: 0;
+  }
+  .pos-sep {
+    color: #444;
+  }
+
   .suggestion {
     display: flex;
     justify-content: space-between;

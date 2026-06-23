@@ -31,16 +31,32 @@ def contacts_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
 
 @command("contacts.add")
 def contacts_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!contacts add <email> [name] [phone]"""
+    """!contacts add <name> [--email EMAIL] [--phone PHONE] [--org ORG] [--notes NOTES]
+
+    Name is the only required positional argument.
+    All other details are optional flags.
+    """
     if not remaining:
-        raise CommandValidationError("Missing email.", "Usage: !contacts add <email> [name] [phone]")
-    email = remaining[0]
-    name = remaining[1] if len(remaining) > 1 else flags.get("name", "")
-    phone = remaining[2] if len(remaining) > 2 else flags.get("phone", "")
+        raise CommandValidationError(
+            "Missing contact name.",
+            "Usage: !contacts add \"Full Name\" [--email email@example.com] [--phone NUMBER] [--org ORG] [--notes NOTES]",
+        )
+    name = remaining[0]
+    email = flags.get("email", "")
+    phone = flags.get("phone", "")
+    org = flags.get("org", "")
+    notes = flags.get("notes", "")
+
     svc: ContactService = get_contact_service()
-    data = {"retposto": email, "nomo": name, "telefonnumero": phone}
+    data = {
+        "nomo": name,
+        "retposto": email,
+        "telefonnumero": phone,
+        "organizo": org,
+        "notoj": notes,
+    }
     contact = svc.create(data)
-    return {"type": "status", "title": "Contact Added", "data": {"uuid": contact["uuid"], "email": email}}
+    return {"type": "status", "title": "Contact Added", "data": {"uuid": contact["uuid"], "name": name}}
 
 
 @command("contacts.view")

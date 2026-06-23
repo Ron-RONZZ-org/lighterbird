@@ -8,7 +8,6 @@ Registered paths:
     - llm.profile.new
     - llm.profile.set
     - llm.profile.clear
-    - llm.profile.save
     - llm.profile.load
     - llm.profile.list
     - llm.profile.delete
@@ -35,7 +34,7 @@ def llm_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
             return {
                 "type": "status",
                 "title": "Profile Activated",
-                "data": {"name": name, "provider": config.provider_type, "model": config.model},
+                "data": {"name": name, "protocol": config.provider_type, "model": config.model},
             }
         raise CommandValidationError(f"Profile not found: {name}")
     # Show available subcommands
@@ -45,17 +44,16 @@ def llm_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         "data": {
             "_summary": (
                 "Available !llm commands:\n"
-                "  !llm prompt                — Show system prompt\n"
-                "  !llm profile               — Show profile subcommands\n"
-                "  !llm profile show          — Show current config\n"
-                "  !llm profile new <type>    — Create config (openai|ollama)\n"
-                "  !llm profile set [flags]   — Modify current settings\n"
-                "  !llm profile clear         — Clear config\n"
-                "  !llm profile save <name>   — Save current as named profile\n"
-                "  !llm profile load <name>   — Load a saved profile\n"
-                "  !llm profile list          — List saved profiles\n"
-                "  !llm profile delete <name> — Delete a saved profile\n"
-                "  !llm <profile-name>        — Quick switch to a profile"
+                "  !llm prompt                    — Show system prompt\n"
+                "  !llm profile                   — Show profile subcommands\n"
+                "  !llm profile show              — Show current config\n"
+                "  !llm profile new <protocol>    — Create config (openai|ollama)\n"
+                "  !llm profile set [flags]       — Modify current settings\n"
+                "  !llm profile clear             — Clear config\n"
+                "  !llm profile load <name>       — Load a saved profile\n"
+                "  !llm profile list              — List saved profiles\n"
+                "  !llm profile delete <name>     — Delete a saved profile\n"
+                "  !llm <profile-name>            — Quick switch to a profile"
             ),
         },
     }
@@ -94,7 +92,7 @@ def llm_profile_root(remaining: list[str], flags: dict[str, str]) -> dict[str, A
             return {
                 "type": "status",
                 "title": "Profile Activated",
-                "data": {"name": name, "provider": config.provider_type, "model": config.model},
+                "data": {"name": name, "protocol": config.provider_type, "model": config.model},
             }
         raise CommandValidationError(f"Profile not found: {name}")
     # List profiles
@@ -104,10 +102,9 @@ def llm_profile_root(remaining: list[str], flags: dict[str, str]) -> dict[str, A
     result = {
         "_summary": "Available subcommands:\n"
         "  show               — Show current config\n"
-        "  new <type>         — Create config (openai|ollama)\n"
+        "  new <protocol>     — Create config (openai|ollama)\n"
         "  set [flags]        — Modify current settings\n"
         "  clear              — Clear config\n"
-        "  save <name>        — Save current as named profile\n"
         "  load <name>        — Load a saved profile\n"
         "  list               — List saved profiles\n"
         "  delete <name>      — Delete a saved profile",
@@ -118,7 +115,7 @@ def llm_profile_root(remaining: list[str], flags: dict[str, str]) -> dict[str, A
         result["message"] = "No saved profiles."
     if active.provider_type:
         result["active"] = {
-            "provider_type": active.provider_type,
+            "protocol": active.provider_type,
             "model": active.model,
             "base_url": active.base_url,
         }
@@ -137,40 +134,60 @@ def llm_profile_show(remaining: list[str], flags: dict[str, str]) -> dict[str, A
 
 @command("llm.profile.new")
 def llm_profile_new(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!llm profile new <provider> [--api-key KEY] [--base-url URL] [--model MODEL] [--temperature TEMP] [--max-tokens N]
+    """!llm profile new <protocol> [--alias NAME] [--api-key KEY] [--base-url URL] [--model MODEL] [--temperature TEMP] [--max-tokens N]
 
     Create a new LLM provider configuration from scratch.
+    Use --alias to simultaneously save as a named profile.
     """
     if not remaining:
         raise CommandValidationError(
-            "Missing provider type.",
-            "Usage: !llm profile new openai|ollama [--api-key KEY] [--base-url URL] [--model MODEL]",
+            "Missing protocol.",
+            "Usage: !llm profile new openai|ollama [--alias my-profile] [--api-key KEY] [--base-url URL] [--model MODEL]",
         )
-    provider_type = remaining[0]
+    protocol = remaining[0]
     provider = get_provider()
     provider.configure(
-        provider_type=provider_type,
+        provider_type=protocol,
         api_key=flags.get("api_key", ""),
         base_url=flags.get("base_url", ""),
         model=flags.get("model", ""),
         temperature=float(flags.get("temperature", 0.7)),
         max_tokens=int(flags.get("max_tokens", 2048)),
     )
+
+    result: dict[str, Any] = {
+        "protocol": protocol,
+        "available": provider.is_available(),
+    }
+
+    # If --alias provided, also save as named profile
+    if "alias" in flags:
+        name = flags["alias"]
+        cfg = provider.config
+        provider.save_profile(
+            name=name,
+            provider_type=cfg.provider_type,
+            api_key=cfg.api_key or "",
+            base_url=cfg.base_url or "",
+            model=cfg.model or "",
+            temperature=cfg.temperature,
+            max_tokens=cfg.max_tokens,
+        )
+        result["saved_as"] = name
+
     return {
         "type": "status",
         "title": "Profile Created",
-        "data": {
-            "provider": provider_type,
-            "available": provider.is_available(),
-        },
+        "data": result,
     }
 
 
 @command("llm.profile.set")
 def llm_profile_set(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!llm profile set [--provider TYPE] [--api-key KEY] [--base-url URL] [--model MODEL] [--temperature TEMP] [--max-tokens N]
+    """!llm profile set [--protocol TYPE] [--alias NAME] [--api-key KEY] [--base-url URL] [--model MODEL] [--temperature TEMP] [--max-tokens N]
 
     Modify current LLM profile settings. Only provided flags are changed.
+    Use --alias to save the current config as a named profile.
     """
     if not flags:
         raise CommandValidationError(
@@ -180,24 +197,42 @@ def llm_profile_set(remaining: list[str], flags: dict[str, str]) -> dict[str, An
     provider = get_provider()
     cfg = provider.config
 
-    if not cfg.provider_type and "provider" not in flags:
+    if not cfg.provider_type and "protocol" not in flags:
         raise CommandValidationError(
-            "No active profile. Use !llm profile new <type> first, or include --provider.",
-            "Usage: !llm profile set --provider openai --model gpt-4",
+            "No active profile. Use !llm profile new <protocol> first, or include --protocol.",
+            "Usage: !llm profile set --protocol openai --model gpt-4",
         )
 
     provider.configure(
-        provider_type=flags.get("provider", cfg.provider_type or "openai"),
+        provider_type=flags.get("protocol", cfg.provider_type or "openai"),
         api_key=flags.get("api_key", cfg.api_key or ""),
         base_url=flags.get("base_url", cfg.base_url or ""),
         model=flags.get("model", cfg.model or ""),
         temperature=float(flags.get("temperature", cfg.temperature or 0.7)),
         max_tokens=int(flags.get("max_tokens", cfg.max_tokens or 2048)),
     )
+
+    result: dict[str, Any] = {"_summary": "done"}
+
+    # If --alias provided, also save as named profile
+    if "alias" in flags:
+        name = flags["alias"]
+        cfg = provider.config
+        provider.save_profile(
+            name=name,
+            provider_type=cfg.provider_type,
+            api_key=cfg.api_key or "",
+            base_url=cfg.base_url or "",
+            model=cfg.model or "",
+            temperature=cfg.temperature,
+            max_tokens=cfg.max_tokens,
+        )
+        result["saved_as"] = name
+
     return {
         "type": "status",
         "title": "Profile Updated",
-        "data": {"_summary": "done"},
+        "data": result,
     }
 
 
@@ -221,40 +256,6 @@ def llm_profile_list(remaining: list[str], flags: dict[str, str]) -> dict[str, A
     }
 
 
-@command("llm.profile.save")
-def llm_profile_save(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!llm profile save <name> — Save current profile as a named profile.
-
-    The current active configuration is saved under the given name.
-    """
-    if not remaining:
-        raise CommandValidationError(
-            "Missing profile name.",
-            "Usage: !llm profile save my-profile",
-        )
-    name = remaining[0]
-    provider = get_provider()
-    cfg = provider.config
-    if not cfg.provider_type:
-        raise CommandValidationError(
-            "No active profile to save. Configure one first with !llm profile new <type>.",
-        )
-    provider.save_profile(
-        name=name,
-        provider_type=cfg.provider_type,
-        api_key=cfg.api_key or "",
-        base_url=cfg.base_url or "",
-        model=cfg.model or "",
-        temperature=cfg.temperature,
-        max_tokens=cfg.max_tokens,
-    )
-    return {
-        "type": "status",
-        "title": "Profile Saved",
-        "data": {"name": name, "provider": cfg.provider_type},
-    }
-
-
 @command("llm.profile.load")
 def llm_profile_load(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!llm profile load <name> — Activate a saved profile."""
@@ -273,7 +274,7 @@ def llm_profile_load(remaining: list[str], flags: dict[str, str]) -> dict[str, A
         "title": "Profile Loaded",
         "data": {
             "name": name,
-            "provider": config.provider_type,
+            "protocol": config.provider_type,
             "model": config.model,
             "available": provider.is_available(),
         },

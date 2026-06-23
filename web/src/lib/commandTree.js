@@ -67,16 +67,6 @@ export const commandTree = [
         ],
       },
       {
-        name: "sync",
-        description: "Fetch new email (omit UUID or use --all for all accounts)",
-        params: [
-          { name: "uuid", required: false, type: "uuid", placeholder: "account-uuid", uuidSource: "email.listAccounts" },
-        ],
-        flags: [
-          { name: "all", type: "flag", help: "Sync all accounts" },
-        ],
-      },
-      {
         name: "trash",
         description: "Move message to trash",
         params: [
@@ -96,14 +86,14 @@ export const commandTree = [
         children: [
           {
             name: "add",
-            description: "Add a new email account",
+            description: "Add a new email account (IMAP/SMTP auto-detected for common providers)",
             params: [
               { name: "email", required: true, type: "string", placeholder: "user@example.com" },
             ],
             flags: [
               { name: "name", type: "string", help: "Display name" },
-              { name: "imap", type: "string", help: "IMAP server hostname" },
-              { name: "smtp", type: "string", help: "SMTP server hostname" },
+              { name: "imap", type: "string", help: "IMAP server hostname (auto-detected if omitted)" },
+              { name: "smtp", type: "string", help: "SMTP server hostname (auto-detected if omitted)" },
               { name: "password", type: "string", help: "Account password" },
             ],
           },
@@ -162,11 +152,13 @@ export const commandTree = [
             description: "Create a new event",
             interactive: true,
             params: [
-              { name: "calendar-uuid", required: true, type: "uuid", placeholder: "calendar-uuid", uuidSource: "calendar.listCalendars" },
               { name: "title", required: true, type: "string" },
               { name: "start", required: true, type: "datetime", placeholder: "2024-06-15T09:00:00Z" },
               { name: "end", required: true, type: "datetime", placeholder: "2024-06-15T10:00:00Z" },
               { name: "location", required: false, type: "string" },
+            ],
+            flags: [
+              { name: "calendar", short: "c", type: "uuid", help: "Calendar UUID (defaults to only calendar if one exists)", uuidSource: "calendar.listCalendars" },
             ],
           },
           {
@@ -249,16 +241,6 @@ export const commandTree = [
           },
         ],
       },
-      {
-        name: "sync",
-        description: "Sync calendar(s) by UUID (omit or use --all for all)",
-        params: [
-          { name: "uuid", required: false, type: "uuid", placeholder: "calendar-uuid", uuidSource: "calendar.listCalendars" },
-        ],
-        flags: [
-          { name: "all", type: "flag", help: "Sync all calendars" },
-        ],
-      },
     ],
   },
 
@@ -278,9 +260,13 @@ export const commandTree = [
         name: "add",
         description: "Add a contact",
         params: [
-          { name: "email", required: true, type: "string", placeholder: "email@example.com" },
-          { name: "name", required: false, type: "string", placeholder: "Full name" },
-          { name: "phone", required: false, type: "string", placeholder: "Phone number" },
+          { name: "name", required: true, type: "string", placeholder: "Full name" },
+        ],
+        flags: [
+          { name: "email", type: "string", help: "Email address" },
+          { name: "phone", type: "string", help: "Phone number" },
+          { name: "org", type: "string", help: "Organization" },
+          { name: "notes", type: "string", help: "Notes" },
         ],
       },
       {
@@ -409,6 +395,7 @@ export const commandTree = [
       {
         name: "write",
         description: "Write a journal entry",
+        interactive: true,
         params: [
           { name: "title", required: true, type: "string" },
         ],
@@ -434,13 +421,15 @@ export const commandTree = [
     ],
   },
 
-  // ── Sync ─────────────────────────────────────────────────────────────
+  // ── Sync (unified) ───────────────────────────────────────────────────
   {
     name: "sync",
-    description: "Synchronize all data (email & calendar)",
+    description: "Synchronize data (email & calendar)",
     flags: [
       { name: "email", type: "flag", help: "Sync email only" },
       { name: "calendar", type: "flag", help: "Sync calendar only" },
+      { name: "account", type: "uuid", help: "Sync specific email account", uuidSource: "email.listAccounts" },
+      { name: "calendar-uuid", type: "uuid", help: "Sync specific calendar", uuidSource: "calendar.listCalendars" },
     ],
   },
 
@@ -465,19 +454,23 @@ export const commandTree = [
             name: "new",
             description: "Create a new profile from scratch",
             params: [
-              { name: "provider", required: true, type: "string", placeholder: "openai|ollama" },
+              { name: "protocol", required: true, type: "string", placeholder: "openai|ollama" },
             ],
             flags: [
+              { name: "alias", type: "string", help: "Save as a named profile (e.g. --alias my-work)" },
               { name: "api-key", type: "string", help: "API key" },
               { name: "base-url", type: "string", help: "API base URL" },
               { name: "model", type: "string", help: "Model name" },
+              { name: "temperature", type: "string", help: "Temperature (0.0-2.0)" },
+              { name: "max-tokens", type: "string", help: "Max tokens" },
             ],
           },
           {
             name: "set",
             description: "Modify current profile settings",
             flags: [
-              { name: "provider", type: "string", help: "Provider type (openai|ollama)" },
+              { name: "alias", type: "string", help: "Save as a named profile (e.g. --alias my-work)" },
+              { name: "protocol", type: "string", help: "API protocol (openai|ollama)" },
               { name: "api-key", type: "string", help: "API key" },
               { name: "base-url", type: "string", help: "API base URL" },
               { name: "model", type: "string", help: "Model name" },
@@ -488,13 +481,6 @@ export const commandTree = [
           {
             name: "clear",
             description: "Clear current profile configuration",
-          },
-          {
-            name: "save",
-            description: "Save current profile as named",
-            params: [
-              { name: "name", required: true, type: "string", placeholder: "profile-name" },
-            ],
           },
           {
             name: "load",

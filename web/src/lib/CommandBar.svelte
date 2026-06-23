@@ -12,24 +12,25 @@
   let suggestions = $state([]);
   let hints = $state([]);
   let dataCompletions = $state([]);
+  let positionals = $state([]);
   let selectedSuggestion = $state(-1);
   let selectedDataIndex = $state(-1);
 
-  // Derived — show suggestions when either type has items
-  let showSuggestions = $derived(
-    displaySuggestions.length > 0 || dataCompletions.length > 0,
+  // Track if we have any interactive content in the dropdown
+  let hasInteractiveItems = $derived(
+    suggestions.length > 0 || dataCompletions.length > 0,
   );
 
-  // Filter out placeholder hints when real data completions exist.
+  let showSuggestions = $derived(
+    hasInteractiveItems || positionals.length > 0,
+  );
+
+  // When data completions exist, hide flag suggestions to reduce clutter
   let displaySuggestions = $derived(
-    dataCompletions.length > 0
-      ? suggestions.filter((s) => !s.startsWith("<") && !s.startsWith("["))
-      : suggestions,
+    dataCompletions.length > 0 ? [] : suggestions,
   );
   let displayHints = $derived(
-    dataCompletions.length > 0
-      ? hints.filter((_, i) => !suggestions[i].startsWith("<") && !suggestions[i].startsWith("["))
-      : hints,
+    dataCompletions.length > 0 ? [] : hints,
   );
 
   /** Count how many leading tokens are command path (not params). */
@@ -40,7 +41,6 @@
         (n) => n.name.toLowerCase() === tokens[i].toLowerCase(),
       );
       if (!found) return i;
-      // Leaf nodes have no children (or have params directly)
       if (!found.children || found.children.length === 0) return i + 1;
       current = found.children || [];
     }
@@ -52,6 +52,7 @@
       suggestions = [];
       hints = [];
       dataCompletions = [];
+      positionals = [];
       selectedSuggestion = -1;
       selectedDataIndex = -1;
       return;
@@ -59,12 +60,12 @@
     const result = getCompletions(inputValue);
     suggestions = result.completions;
     hints = result.hints;
+    positionals = result.positionals;
     selectedSuggestion = -1;
     selectedDataIndex = -1;
 
     // Only show data completions (UUIDs) when cursor is at a param position
-    // that expects a UUID (has uuidSource). This prevents UUIDs from appearing
-    // at root or child navigation levels.
+    // that expects a UUID (has uuidSource).
     dataCompletions = [];
     if (result.node && result.node.params && result.level === "params") {
       const { tokens, partial } = parseCommand(inputValue);
@@ -81,8 +82,7 @@
         }
       }
 
-      // If all params are consumed but the last one is repeatable with
-      // uuidSource, keep showing data completions for additional values.
+      // Repeatable params: keep showing completions after all consumed
       if (dataCompletions.length === 0 && result.node.params.length > 0) {
         const lastParam = result.node.params[result.node.params.length - 1];
         if (lastParam.repeatable && lastParam.uuidSource && consumed >= result.node.params.length) {
@@ -90,7 +90,7 @@
         }
       }
 
-      // Filter out already-inputted UUIDs from suggestions
+      // Filter out already-inputted UUIDs
       if (dataCompletions.length > 0) {
         const paramTokens = effectiveTokens.slice(cmdTokens);
         const usedUuids = new Set(paramTokens.map(t => t.toLowerCase()));
@@ -118,6 +118,7 @@
     suggestions = [];
     hints = [];
     dataCompletions = [];
+    positionals = [];
     selectedSuggestion = -1;
     selectedDataIndex = -1;
     requestAnimationFrame(() => updateSuggestions());
@@ -127,6 +128,7 @@
     suggestions = [];
     hints = [];
     dataCompletions = [];
+    positionals = [];
     selectedSuggestion = -1;
     selectedDataIndex = -1;
   }
@@ -153,8 +155,9 @@
   }
 
   function handleKeydown(e) {
+    // Escape
     if (e.key === "Escape") {
-      if (suggestions.length > 0 || dataCompletions.length > 0) {
+      if (hasInteractiveItems) {
         hideSuggestions();
         return;
       }
@@ -162,6 +165,7 @@
       return;
     }
 
+    // Tab: autocomplete (skip positional tracker — it has no items to select)
     if (e.key === "Tab") {
       e.preventDefault();
       if (displaySuggestions.length > 0) {
@@ -174,6 +178,7 @@
       return;
     }
 
+    // ArrowUp (skip positional tracker)
     if (e.key === "ArrowUp") {
       if (dataCompletions.length > 0 && displaySuggestions.length === 0) {
         e.preventDefault();
@@ -192,6 +197,7 @@
       return;
     }
 
+    // ArrowDown (skip positional tracker)
     if (e.key === "ArrowDown") {
       if (dataCompletions.length > 0 && displaySuggestions.length === 0) {
         e.preventDefault();
@@ -210,16 +216,13 @@
       return;
     }
 
+    // Enter
     if (e.key === "Enter") {
       e.preventDefault();
       const cmd = inputValue.trim();
       if (!cmd) return;
 
-      // If suggestions exist and input is partial (last token is a prefix
-      // of a suggestion), complete instead of execute.  This catches
-      // ``!email lis`` → completes to ``!email list``, but does NOT catch
-      // ``!email list`` → flag suggestions like ``--limit`` are not a
-      // prefix match for ``list``, so Enter executes normally.
+      // If suggestions exist and input is partial, complete instead of execute
       if (displaySuggestions.length > 0) {
         const lastToken = cmd.split(/\s+/).pop() || "";
         const isPartial = displaySuggestions.some((s) =>
@@ -235,33 +238,23 @@
         }
       }
 
-      // UUID suggestions: Enter behavior depends on context.
-      //   - If user actively selected a suggestion (selectedDataIndex >= 0):
-      //     insert that UUID (allows adding more for repeatable params).
-      //   - If last token is an incomplete UUID (< 8 hex chars):
-      //     auto-complete with the first suggestion.
-      //   - Otherwise (last token is a complete UUID or not a UUID at all):
-      //     execute the command.
+      // UUID completions
       if (dataCompletions.length > 0) {
         const lastToken = cmd.split(/\s+/).pop() || "";
         if (selectedDataIndex >= 0) {
-          // User explicitly selected a suggestion — insert it
           applyCompletion(dataCompletions[selectedDataIndex].uuid.slice(0, 8));
           return;
         }
         if (!/^[0-9a-f]{8,}$/i.test(lastToken)) {
-          // Last token is not a complete UUID — auto-complete
           applyCompletion(dataCompletions[0].uuid.slice(0, 8));
           return;
         }
-        // Last token is a complete UUID — proceed to execute
       }
 
-      // Execute the command, then refresh cache with current backend state
+      // Execute
       history.push(cmd);
       inputValue = "";
       hideSuggestions();
-      // Refresh cache AFTER command completes so UUID suggestions reflect reality
       Promise.resolve(oncommand(cmd)).finally(() => refreshDataCache());
     }
   }
@@ -291,6 +284,21 @@
   </div>
   {#if showSuggestions}
     <ul class="suggestions" role="listbox">
+      <!-- Positional argument tracker (non-interactive) -->
+      {#if positionals.length > 0}
+        <li role="presentation" class="positional-tracker" aria-hidden="true">
+          {#each positionals as p}
+            <span class="pos-arg" class:entered={p.entered} class:pending={!p.entered}>
+              {p.entered ? p.name : `<${p.name}>`}
+            </span>
+            {#if !p.entered && p.required}
+              <span class="pos-required" aria-hidden="true">*</span>
+            {/if}
+          {/each}
+        </li>
+      {/if}
+
+      <!-- Flag suggestions -->
       {#each displaySuggestions as suggestion, i}
         <li
           role="option"
@@ -305,6 +313,8 @@
           {/if}
         </li>
       {/each}
+
+      <!-- Data completions (UUIDs) -->
       {#each dataCompletions as dc, i}
         <li
           role="option"
@@ -333,7 +343,45 @@
   .spinner-dot:nth-child(3) { animation-delay: 0.32s; }
   @keyframes dot-bounce { 0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
   .suggestions { list-style: none; padding: 0; margin: 0; border-top: 1px solid #333; max-height: 240px; overflow-y: auto; }
-  .suggestion { display: flex; justify-content: space-between; align-items: center; padding: 0.35rem 1rem; font-family: monospace; font-size: 0.9rem; cursor: pointer; }
+
+  /* Positional tracker row (non-interactive) */
+  .positional-tracker {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.35rem 1rem;
+    background: #16162a;
+    border-bottom: 1px solid #333;
+    font-family: monospace;
+    font-size: 0.8rem;
+    user-select: none;
+    pointer-events: none;
+  }
+  .pos-arg {
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+  }
+  .pos-arg.entered {
+    color: #c0c0e0;
+    font-weight: 500;
+  }
+  .pos-arg.pending {
+    color: #5a5a7a;
+  }
+  .pos-required {
+    color: #c44;
+    font-size: 0.7rem;
+  }
+
+  .suggestion {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.35rem 1rem;
+    font-family: monospace;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
   .suggestion:hover, .suggestion.selected { background: #16213e; color: #fff; }
   .hint-text { color: #7c7c9a; font-size: 0.8rem; margin-left: 1rem; }
   .suggestion.selected .hint-text { color: #9a9ac0; }
