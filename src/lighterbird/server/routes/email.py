@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import HTMLResponse
 
 from lighterbird.server.deps import get_email_service
 from lighterbird.server.schemas import (
@@ -150,6 +151,87 @@ def get_message(uuid: str, email_svc: EmailService = Depends(get_email_service))
             except (json.JSONDecodeError, TypeError):
                 msg[field] = []
     return msg
+
+
+_EMAIL_HTML_TMPL = """\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{subject} — lighterbird</title>
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #1a1a2e; color: #e0e0e0; padding: 1.5rem; line-height: 1.5;
+    }}
+    .header {{ margin-bottom: 1.5rem; }}
+    .header h1 {{ font-size: 1.2rem; color: #e0e0e0; margin-bottom: 0.5rem; }}
+    .field {{ display: flex; gap: 0.5rem; padding: 0.2rem 0; font-size: 0.85rem; }}
+    .label {{ color: #7c7c9a; min-width: 5rem; flex-shrink: 0; }}
+    .value {{ color: #e0e0e0; }}
+    hr {{ border: none; border-top: 1px solid #333; margin: 1rem 0; }}
+    .body {{ color: #ccc; white-space: pre-wrap; font-family: monospace; font-size: 0.85rem; line-height: 1.6; }}
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>{subject}</h1>
+    <div class="field"><span class="label">From</span><span class="value">{from_addr}</span></div>
+    <div class="field"><span class="label">To</span><span class="value">{to_addr}</span></div>
+    <div class="field"><span class="label">Date</span><span class="value">{date}</span></div>
+  </div>
+  <hr>
+  <div class="body">{body}</div>
+</body>
+</html>
+"""
+
+
+@router.get("/messages/{uuid}/view", response_class=HTMLResponse)
+def view_message_html(uuid: str, email_svc: EmailService = Depends(get_email_service)):
+    """Render an email as a standalone HTML page (opens in a new tab)."""
+    import html as html_mod
+    import json as json_mod
+
+    msg = email_svc.get_message(uuid)
+    if not msg:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Message not found: {uuid[:8]}")
+
+    # Parse JSON list fields
+    for field in ("al", "kc"):
+        raw = msg.get(field, "[]")
+        if isinstance(raw, str):
+            try:
+                msg[field] = json_mod.loads(raw) if raw.strip() else []
+            except (json_mod.JSONDecodeError, TypeError):
+                msg[field] = []
+
+    to_raw = msg.get("al", [])
+    to_str = ", ".join(to_raw) if isinstance(to_raw, list) else str(to_raw)
+
+    subject = html_mod.escape(msg.get("subjekto", "(no subject)"))
+    from_addr = html_mod.escape(msg.get("de", ""))
+    to_addr = html_mod.escape(to_str)
+    date = html_mod.escape(msg.get("ricevita_je", ""))
+    body = html_mod.escape(msg.get("korpo", "(no body)"))
+
+    return HTMLResponse(
+        _EMAIL_HTML_TMPL.format(
+            subject=subject, from_addr=from_addr,
+            to_addr=to_addr, date=date, body=body,
+        )
+    )
+
+
+@router.get("/messages/{uuid}/conversation")
+def get_conversation(uuid: str, limit: int = 20, email_svc: EmailService = Depends(get_email_service)):
+    """Get all messages in the same conversation thread as the given message."""
+    from lighterbird.server.command.response import normalize_message
+    msgs = email_svc.get_conversation(uuid, limit=limit)
+    return {"messages": [normalize_message(m) for m in msgs], "total": len(msgs)}
 
 
 @router.post("/send", status_code=201)

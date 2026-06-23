@@ -119,3 +119,51 @@ class MessageService:
             )
             rows = self.db.execute(fallback_sql, (limit,))
         return list(rows)
+
+
+    def find_conversation(
+        self, message_id: str, references: str = "", in_reply_to: str = "", limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """Find messages in the same conversation thread.
+
+        Matches by ``references`` (full thread list), ``in_reply_to``
+        (direct parent), or ``message_id`` (the message itself, to catch
+        replies to it).
+        """
+        ids = set()
+        if message_id:
+            ids.add(message_id)
+        if in_reply_to:
+            # in_reply_to may contain multiple space-separated message IDs
+            for rid in in_reply_to.split():
+                rid = rid.strip()
+                if rid:
+                    ids.add(rid)
+        if references:
+            for rid in references.split():
+                rid = rid.strip()
+                if rid:
+                    ids.add(rid)
+
+        if not ids:
+            return []
+
+        placeholders = ",".join("?" for _ in ids)
+        sql = (
+            "SELECT m.*, COALESCE(d.nomo, '') AS dosierujo_nomo"
+            " FROM mesagoj m"
+            " LEFT JOIN dosierujoj d ON m.dosierujo_id = d.uuid"
+            " WHERE m.forigita = 0"
+            " AND (m.message_id IN ({p}) OR m.in_reply_to IN ({p})"
+            "      OR m.references IN ({p})"
+            "      OR EXISTS ("
+            "        SELECT 1 FROM mesagoj m2"
+            "        WHERE m2.message_id IN ({p})"
+            "        AND (m.references LIKE '%' || m2.message_id || '%'"
+            "             OR m.in_reply_to LIKE '%' || m2.message_id || '%')"
+            "      ))"
+            " ORDER BY m.ricevita_je ASC"
+            " LIMIT ?"
+        ).format(p=placeholders)
+        params = list(ids) * 4 + [limit]
+        return list(self.db.execute(sql, tuple(params)))

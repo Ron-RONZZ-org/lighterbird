@@ -1,6 +1,11 @@
-/** Reactive popup state and data cache — module-level $state. */
+/** Reactive popup state and data cache — delegates to tabStore for display.
+ *
+ *  Kept for backward compatibility so existing code (App.svelte, CommandBar)
+ *  continues to work. New code should use ``tabStore`` directly.
+ */
 
-let _current = $state(null);
+import { tabStore } from "./tabStore.svelte.js";
+
 let _dataCache = $state({
   accounts: [],
   calendars: [],
@@ -8,8 +13,6 @@ let _dataCache = $state({
   todos: [],
   journal: [],
 });
-/** When non-null, the popup shows a live view of this data type and persists
- *  across commands. Set by list commands, cleared on manual close. */
 let _persistentDataType = $state(null);
 
 function _cacheData(data) {
@@ -33,43 +36,52 @@ function _cacheData(data) {
 
 export const popup = {
   get current() {
-    return _current;
+    // Delegate to tabStore for backward compat
+    return tabStore.active;
   },
 
   get persistentDataType() {
     return _persistentDataType;
   },
 
-  /** Show a transient popup (replaces any current popup, clears persistence). */
+  /** Show a transient popup (opens a new tab). */
   show(type, title, data) {
-    _current = { type, title, data, isLoading: false };
+    if (type === "loading") {
+      tabStore.open("loading", title, null, { closable: false });
+    } else {
+      tabStore.open(type, title, data, {
+        idKey: type === "email" ? `email-${data?.uuid}` : null,
+        replaceable: type === "loading",
+      });
+    }
     _persistentDataType = null;
     _cacheData(data);
   },
 
-  /** Show a persistent live-view popup that stays across commands.
-   *
-   *  ``dataType`` identifies the kind of data shown ("accounts", "calendars").
-   *  Mutation commands affecting this type will auto-refresh it. */
+  /** Show a persistent live-view tab. */
   showPersistent(type, title, data, dataType) {
-    _current = { type, title, data, isLoading: false };
+    tabStore.open(type, title, data, { idKey: `persistent-${dataType}` });
     _persistentDataType = dataType;
     _cacheData(data);
   },
 
-  /** Replace the data in the current popup without clearing persistence. */
+  /** Replace the data in the active tab without closing it. */
   updatePersistent(data) {
-    if (!_current) return;
-    _current = { ..._current, data };
+    const active = tabStore.active;
+    if (active) {
+      tabStore.update(active.id, data);
+    }
     _cacheData(data);
   },
 
   showLoading(title) {
-    _current = { type: "loading", title, data: null, isLoading: true };
+    tabStore.open("loading", title, null, { closable: false, replaceable: true });
   },
 
   close() {
-    _current = null;
+    if (tabStore.active && tabStore.active.closable) {
+      tabStore.close(tabStore.active.id);
+    }
     _persistentDataType = null;
   },
 

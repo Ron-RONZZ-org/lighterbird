@@ -2,6 +2,7 @@
   import CommandBar from "./lib/CommandBar.svelte";
   import PopupOverlay from "./lib/PopupOverlay.svelte";
   import { popup } from "./lib/popupStore.svelte.js";
+  import { tabStore } from "./lib/tabStore.svelte.js";
   import { execute } from "./lib/commandExecutor.js";
   import { findNode } from "./lib/commandTree.js";
   import { parseCommand } from "./lib/parser.js";
@@ -12,6 +13,50 @@
   let isLoading = $state(false);
   let activeForm = $state(null);
   let formOnSubmit = $state(null);
+
+  /** Global keyboard shortcuts. */
+  function handleGlobalKeydown(e) {
+    // Alt+1/2/3/4 — switch tabs
+    if (e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      const num = parseInt(e.key, 10);
+      if (num >= 1 && num <= 9) {
+        e.preventDefault();
+        tabStore.setActiveIndex(num - 1);
+        return;
+      }
+    }
+
+    // Ctrl+R — Reply (only when email tab is active)
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'r') {
+      const active = tabStore.active;
+      if (active && active.type === 'email') {
+        e.preventDefault();
+        // Dispatch a custom event that EmailViewTab can listen for
+        window.dispatchEvent(new CustomEvent('email-action', { detail: { action: 'reply' } }));
+        return;
+      }
+    }
+
+    // Ctrl+Shift+R — Reply All
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'R') {
+      const active = tabStore.active;
+      if (active && active.type === 'email') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('email-action', { detail: { action: 'reply-all' } }));
+        return;
+      }
+    }
+
+    // Ctrl+L — Forward
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'l') {
+      const active = tabStore.active;
+      if (active && active.type === 'email') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('email-action', { detail: { action: 'forward' } }));
+        return;
+      }
+    }
+  }
 
   /** Detect whether a command string opens a persistent live view. */
   function detectPersistentType(input) {
@@ -88,6 +133,17 @@
     }
   }
 
+  /** Derive a human-readable loading label from the input. */
+  function loadingLabel(input) {
+    const t = input.trim();
+    if (!t.startsWith("!")) return "Thinking…";
+    // Show the command name (first two tokens, e.g. "email sync")
+    const parts = t.slice(1).split(/\s+/);
+    const cmd = parts.slice(0, 2).join(" ");
+    if (!cmd) return "Working…";
+    return `${cmd}…`;
+  }
+
   async function handleCommand(input) {
     // Check for interactive command (form popup)
     const interactiveNode = detectInteractive(input);
@@ -107,6 +163,8 @@
     }
 
     isLoading = true;
+    // Show loading popup so user sees immediate feedback
+    popup.showLoading(loadingLabel(input));
 
     try {
       const result = await execute(input);
@@ -145,9 +203,19 @@
   }
 </script>
 
+<svelte:window onkeydown={handleGlobalKeydown} />
+
 <main>
+  {#if isLoading}
+    <div class="loading-bar" aria-label="Loading"></div>
+  {/if}
   <header>
     <h1>lighterbird</h1>
+    {#if tabStore.count > 0}
+      <span class="tab-hint">
+        Alt+1..{Math.min(tabStore.count, 9)} switch tabs
+      </span>
+    {/if}
   </header>
   <CommandBar {isLoading} oncommand={handleCommand} />
   <PopupOverlay />
@@ -177,6 +245,9 @@
     width: 100%;
   }
   header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     padding: 0.5rem 1rem;
     border-bottom: 1px solid #333;
   }
@@ -186,5 +257,25 @@
     color: #7c7c9a;
     letter-spacing: 0.05em;
     text-transform: uppercase;
+  }
+  .tab-hint {
+    font-size: 0.7rem;
+    color: #5a5a7a;
+    font-family: monospace;
+  }
+  .loading-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: linear-gradient(90deg, #7c7c9a 0%, #a4a4d0 50%, #7c7c9a 100%);
+    background-size: 200% 100%;
+    animation: bar-slide 1.5s ease-in-out infinite;
+    z-index: 1000;
+  }
+  @keyframes bar-slide {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
   }
 </style>
