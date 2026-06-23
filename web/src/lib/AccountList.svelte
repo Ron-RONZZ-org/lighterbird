@@ -8,7 +8,7 @@
    *   onAdd, onModify(item), onRemove(item) — callbacks
    */
 
-  let { type = "email", items = [], onAdd = () => {}, onModify = () => {}, onRemove = () => {} } = $props();
+  let { type = "email", items = [], onAdd = () => {}, onModify = () => {}, onRemove = () => {}, onActivate = () => {} } = $props();
 
   const LABELS = {
     llm: { title: "LLM Profiles", add: "Add Profile", empty: "No LLM profiles configured." },
@@ -68,6 +68,9 @@
             {/if}
           </div>
           <div class="row-actions">
+            {#if type === "llm"}
+              <button class="btn-activate" onclick={() => onActivate(item)} title="Set as active profile">Activate</button>
+            {/if}
             <button class="btn-modify" onclick={() => onModify(item)} title="Modify">Modify</button>
             <button class="btn-remove" onclick={() => onRemove(item)} title="Remove">Remove</button>
           </div>
@@ -178,7 +181,7 @@
     flex-shrink: 0;
     margin-left: 1rem;
   }
-  .btn-modify, .btn-remove {
+  .btn-activate, .btn-modify, .btn-remove {
     padding: 0.25rem 0.55rem;
     border-radius: 4px;
     border: 1px solid #444;
@@ -186,6 +189,14 @@
     font-size: 0.75rem;
     cursor: pointer;
     transition: background 0.1s;
+  }
+  .btn-activate {
+    background: #2a4a3a;
+    color: #80c080;
+    border-color: #3a6a4a;
+  }
+  .btn-activate:hover {
+    background: #3a6a4a;
   }
   .btn-modify {
     background: #2a3a5a;

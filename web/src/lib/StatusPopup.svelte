@@ -42,6 +42,17 @@
     } catch {}
   }
 
+  /** Activate an LLM profile. */
+  async function activateProfile(item) {
+    try {
+      await llmApi.loadProfile(item.name);
+      // Show brief success by updating the tab with refreshed data
+      await refetchCurrentTab();
+    } catch (err) {
+      alert(`Failed to activate: ${err.message}`);
+    }
+  }
+
   /** Remove an item with confirmation. */
   async function removeItem(type, item) {
     if (!confirm(`Remove this ${type} account/profile?`)) return;
@@ -157,6 +168,7 @@
       onAdd={() => openForm("llm")}
       onModify={(item) => openForm("llm", item)}
       onRemove={(item) => removeItem("llm", item)}
+      onActivate={(item) => activateProfile(item)}
     />
 
   {:else if d.messages}

@@ -4,8 +4,8 @@
     onDismiss = () => {},
   } = $props();
 
-  let step = $state("select"); // "select" | "enter-key" | "custom" | "done"
-  let providerType = $state("openai");
+  let step = $state("checking"); // "checking" | "select" | "enter-key" | "custom" | "done"
+  let providerType = $state("deepseek");
   let apiKey = $state("");
   let baseUrl = $state("");
   let model = $state("");
@@ -14,19 +14,11 @@
 
   const PROVIDERS = [
     {
-      id: "openai",
-      name: "OpenAI",
-      baseUrl: "https://api.openai.com",
-      model: "gpt-4o",
-      desc: "GPT-4o, GPT-4, GPT-3.5",
-      needsKey: true,
-    },
-    {
       id: "deepseek",
       name: "DeepSeek",
       baseUrl: "https://api.deepseek.com",
-      model: "deepseek-chat",
-      desc: "DeepSeek-V3, DeepSeek-R1",
+      model: "deepseek-v4-flash",
+      desc: "DeepSeek-V4, DeepSeek-R1",
       needsKey: true,
     },
     {
@@ -38,18 +30,67 @@
       needsKey: false,
     },
     {
+      id: "openai",
+      name: "OpenAI",
+      baseUrl: "https://api.openai.com",
+      model: "gpt-4o",
+      desc: "GPT-4o, GPT-4, GPT-3.5",
+      needsKey: true,
+    },
+    {
       id: "custom",
-      name: "Custom provider",
+      name: "Custom (OpenAI-compatible)",
       baseUrl: "",
       model: "",
       desc: "Any OpenAI-compatible API",
       needsKey: true,
     },
+    {
+      id: "_skip",
+      name: "Skip",
+      desc: "Use ! commands only — configure LLM later",
+      skip: true,
+    },
   ];
 
   let selectedProvider = $state(null);
 
+  // On mount, check if exactly one saved profile exists — auto-activate it
+  $effect(() => {
+    if (step === "checking") {
+      checkSingleProfile();
+    }
+  });
+
+  async function checkSingleProfile() {
+    try {
+      const resp = await fetch("/api/v1/llm/profiles");
+      if (resp.ok) {
+        const data = await resp.json();
+        const profiles = data.profiles || [];
+        if (profiles.length === 1) {
+          // Auto-activate the single saved profile
+          const name = profiles[0].name;
+          const loadResp = await fetch(`/api/v1/llm/profiles/${encodeURIComponent(name)}/load`, {
+            method: "POST",
+          });
+          if (loadResp.ok) {
+            step = "done";
+            selectedProvider = { name: profiles[0].provider_type || name };
+            setTimeout(() => onConfigured(), 600);
+            return;
+          }
+        }
+      }
+    } catch { /* fall through to normal UI */ }
+    step = "select";
+  }
+
   function selectProvider(p) {
+    if (p.skip) {
+      onDismiss();
+      return;
+    }
     selectedProvider = p;
     providerType = p.id;
     baseUrl = p.baseUrl;
@@ -109,7 +150,17 @@
   }
 </script>
 
-{#if step === "select"}
+{#if step === "checking"}
+  <div class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Configure LLM</h2>
+        <p class="subtitle">Checking for saved profiles…</p>
+      </div>
+    </div>
+  </div>
+
+{:else if step === "select"}
   <div class="modal-overlay" onclick={onDismiss}>
     <div class="modal" onclick={(e) => e.stopPropagation()}>
       <div class="modal-header">
@@ -118,13 +169,12 @@
       </div>
       <div class="provider-list">
         {#each PROVIDERS as p}
-          <button class="provider-card" onclick={() => selectProvider(p)}>
+          <button class="provider-card" class:skip-card={p.skip} onclick={() => selectProvider(p)}>
             <span class="provider-name">{p.name}</span>
             <span class="provider-desc">{p.desc}</span>
           </button>
         {/each}
       </div>
-      <button class="dismiss-btn" onclick={onDismiss}>Skip — use !commands only</button>
     </div>
   </div>
 
@@ -267,17 +317,19 @@
   }
   .provider-name { font-weight: 600; }
   .provider-desc { font-size: 0.78rem; color: #7c7c9a; margin-top: 2px; }
-  .dismiss-btn {
-    display: block;
-    margin: 1rem auto 0;
-    background: none;
-    border: none;
-    color: #5a5a7a;
-    font-size: 0.8rem;
-    cursor: pointer;
-    text-align: center;
+  .skip-card {
+    margin-top: 0.5rem;
+    border-color: #3a3a3a !important;
+    background: #22223a !important;
   }
-  .dismiss-btn:hover { color: #9a9ac0; }
+  .skip-card:hover {
+    background: #2a2a3e !important;
+    border-color: #5a5a7a !important;
+  }
+  .skip-card .provider-name {
+    color: #7c7c9a !important;
+    font-weight: 400 !important;
+  }
 
   .form { display: flex; flex-direction: column; gap: 0.75rem; }
   .field { display: flex; flex-direction: column; gap: 0.3rem; }
