@@ -59,27 +59,45 @@
     selectedSuggestion = -1;
     selectedDataIndex = -1;
 
-    // UUID completions
+    // UUID completions (positional params + flag values)
     dataCompletions = [];
-    if (result.node && result.node.params && result.level === "params") {
-      const { tokens, partial } = parseCommand(value);
+    if (result.node && result.level === "params") {
+      const { tokens, flags, partial } = parseCommand(value);
       const trailing = hasTrailingSpace(value);
       const effectiveTokens = trailing && partial ? [...tokens, partial] : tokens;
       const cmdTokens = countCommandTokens(effectiveTokens);
-      const consumed = effectiveTokens.length - cmdTokens;
 
-      for (let i = consumed; i < result.node.params.length; i++) {
-        const p = result.node.params[i];
-        if (p.uuidSource) {
-          dataCompletions = getDataCompletionsFromCache(popup.cache, p.uuidSource);
-          break;
+      // 1. Check positional params
+      if (result.node.params) {
+        const consumed = effectiveTokens.length - cmdTokens;
+        for (let i = consumed; i < result.node.params.length; i++) {
+          const p = result.node.params[i];
+          if (p.uuidSource) {
+            dataCompletions = getDataCompletionsFromCache(popup.cache, p.uuidSource);
+            break;
+          }
+        }
+
+        if (dataCompletions.length === 0 && result.node.params.length > 0) {
+          const lastParam = result.node.params[result.node.params.length - 1];
+          if (lastParam.repeatable && lastParam.uuidSource && consumed >= result.node.params.length) {
+            dataCompletions = getDataCompletionsFromCache(popup.cache, lastParam.uuidSource);
+          }
         }
       }
 
-      if (dataCompletions.length === 0 && result.node.params.length > 0) {
-        const lastParam = result.node.params[result.node.params.length - 1];
-        if (lastParam.repeatable && lastParam.uuidSource && consumed >= result.node.params.length) {
-          dataCompletions = getDataCompletionsFromCache(popup.cache, lastParam.uuidSource);
+      // 2. Check flags that have uuidSource (e.g. --folder)
+      if (dataCompletions.length === 0 && result.node.flags) {
+        for (const f of result.node.flags) {
+          if (f.uuidSource) {
+            // Show auto-completion when the flag name is present in parsed flags.
+            // This includes both when the value is being typed (flags[f.name] is the partial)
+            // and when the value is complete (flag name exists, user may be refining).
+            if (f.name in flags) {
+              dataCompletions = getDataCompletionsFromCache(popup.cache, f.uuidSource);
+              break;
+            }
+          }
         }
       }
 

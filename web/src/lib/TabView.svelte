@@ -27,12 +27,13 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="tab-view">
-  <!-- Tab content -->
-  {#if tabStore.active}
-    <div class="tab-content" role="region" aria-label="Tab content">
-      {#if tabStore.isHome}
-        <HomeTab />
-      {:else if tabStore.active.type === "loading"}
+  <!-- Tab content: HomeTab is always mounted (keeps conversation state) -->
+  <div class="tab-content" class:active={tabStore.isHome} role="region" aria-label="Home tab">
+    <HomeTab />
+  </div>
+  {#if tabStore.active && !tabStore.isHome}
+    <div class="tab-content" class:active={true} role="region" aria-label="Tab content">
+      {#if tabStore.active.type === "loading"}
         <LoadingPopup message={tabStore.active.title} />
       {:else if tabStore.active.type === "status"}
         <StatusPopup data={tabStore.active.data} />
@@ -120,9 +121,12 @@
   .tab-content {
     flex: 1;
     overflow: hidden;
-    display: flex;
+    display: none;
     flex-direction: column;
     background: #1a1a2e;
+  }
+  .tab-content.active {
+    display: flex;
   }
   .tab-bar {
     display: flex;
