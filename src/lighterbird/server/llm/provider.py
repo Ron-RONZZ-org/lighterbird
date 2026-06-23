@@ -20,6 +20,7 @@ from lighterbird.core.system_prompt import load_system_prompt, reload_system_pro
 
 _SERVICE_NAME = "lighterbird-llm"
 _CONFIG_ACCOUNT = "active-provider"
+_PROFILES_ACCOUNT = "saved-profiles"
 
 
 def _build_messages(
@@ -177,6 +178,92 @@ class LLMProviderWrapper:
         except Exception:
             pass
         self._config = None
+
+    # ── Profile management ────────────────────────────────────────────────
+
+    def save_profile(self, name: str, provider_type: str, **kwargs: Any) -> dict:
+        """Save a named LLM profile.
+
+        Profiles are stored as a JSON dict keyed by name.
+        """
+        import json as _json
+
+        raw = _get_kr(_SERVICE_NAME, _PROFILES_ACCOUNT) or "{}"
+        try:
+            profiles = _json.loads(raw)
+        except (_json.JSONDecodeError, ValueError):
+            profiles = {}
+
+        profiles[name] = {
+            "provider_type": provider_type,
+            "api_key": kwargs.get("api_key", ""),
+            "base_url": kwargs.get("base_url", ""),
+            "model": kwargs.get("model", ""),
+            "temperature": float(kwargs.get("temperature", 0.7)),
+            "max_tokens": int(kwargs.get("max_tokens", 2048)),
+        }
+        _set_kr(_SERVICE_NAME, _PROFILES_ACCOUNT, _json.dumps(profiles))
+        return profiles[name]
+
+    def list_profiles(self) -> list[dict]:
+        """Return all saved profiles (without API keys)."""
+        import json as _json
+
+        raw = _get_kr(_SERVICE_NAME, _PROFILES_ACCOUNT) or "{}"
+        try:
+            profiles = _json.loads(raw)
+        except (_json.JSONDecodeError, ValueError):
+            return []
+        result = []
+        for name, data in profiles.items():
+            result.append({
+                "name": name,
+                "provider_type": data.get("provider_type", ""),
+                "base_url": data.get("base_url", ""),
+                "model": data.get("model", ""),
+                "has_api_key": bool(data.get("api_key", "")),
+            })
+        return result
+
+    def get_profile(self, name: str) -> dict | None:
+        """Get a saved profile by name (WITH api_key)."""
+        import json as _json
+
+        raw = _get_kr(_SERVICE_NAME, _PROFILES_ACCOUNT) or "{}"
+        try:
+            profiles = _json.loads(raw)
+        except (_json.JSONDecodeError, ValueError):
+            return None
+        return profiles.get(name)
+
+    def delete_profile(self, name: str) -> bool:
+        """Delete a saved profile. Returns True if deleted."""
+        import json as _json
+
+        raw = _get_kr(_SERVICE_NAME, _PROFILES_ACCOUNT) or "{}"
+        try:
+            profiles = _json.loads(raw)
+        except (_json.JSONDecodeError, ValueError):
+            return False
+        if name not in profiles:
+            return False
+        del profiles[name]
+        _set_kr(_SERVICE_NAME, _PROFILES_ACCOUNT, _json.dumps(profiles))
+        return True
+
+    def switch_to_profile(self, name: str) -> ProviderConfig | None:
+        """Activate a saved profile. Returns the config or None."""
+        profile = self.get_profile(name)
+        if not profile:
+            return None
+        return self.configure(
+            provider_type=profile["provider_type"],
+            api_key=profile.get("api_key", ""),
+            base_url=profile.get("base_url", ""),
+            model=profile.get("model", ""),
+            temperature=profile.get("temperature", 0.7),
+            max_tokens=profile.get("max_tokens", 2048),
+        )
 
 
 # Singleton

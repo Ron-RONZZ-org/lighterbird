@@ -6,7 +6,7 @@
 
   let {
     onSubmit,
-    placeholder = "Ask anything or type ! for commands…",
+    placeholder = "Ask anything in natural language or type ! for commands",
     centered = true,
   } = $props();
 
@@ -123,7 +123,14 @@
     return tokens.length;
   }
 
+  function autoResize() {
+    if (!textareaEl) return;
+    textareaEl.style.height = "auto";
+    textareaEl.style.height = Math.min(textareaEl.scrollHeight, 200) + "px";
+  }
+
   function handleInput() {
+    autoResize();
     checkCommandMode();
     if (isCommandMode) updateSuggestions();
   }
@@ -272,7 +279,6 @@
       onkeydown={handleKeydown}
       onpaste={handlePaste}
       onpointerdown={handleTextareaClick}
-      rows="1"
       aria-label="Message input"
       autofocus
     ></textarea>
@@ -341,15 +347,16 @@
   .input-field {
     flex: 1;
     background: #1e1e32;
-    border: 1px solid #444;
-    border-radius: 12px;
+    border: 1px solid #555;
+    border-radius: 14px;
     color: #e0e0e0;
-    font-family: monospace;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     font-size: 0.95rem;
-    padding: 0.75rem 1rem;
+    padding: 0.85rem 1rem;
     outline: none;
     resize: none;
-    line-height: 1.5;
+    line-height: 1.6;
+    min-height: 52px;
     max-height: 200px;
     overflow-y: auto;
     transition: border-color 0.15s, box-shadow 0.15s;
