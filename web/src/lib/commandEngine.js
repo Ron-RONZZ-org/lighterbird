@@ -12,10 +12,11 @@ import { parseCommand, hasTrailingSpace } from "./parser.js";
 /**
  * @param {string} input — raw user input
  * @returns {{
- *   completions: string[],    // suggested completions for current level
- *   hints: string[],          // parameter/flag hints (shown below the input)
- *   node: object|null,        // resolved leaf node
- *   level: string,            // "root" | "child" | "params" | "flags"
+ *   completions: string[],          // suggested completions for current level
+ *   hints: string[],                // parameter/flag hints (shown below the input)
+ *   node: object|null,              // resolved leaf node
+ *   level: string,                  // "root" | "child" | "params" | "flags"
+ *   positionals: {name:string, entered:boolean, required:boolean}[],
  * }}
  */
 export function getCompletions(input) {
@@ -38,6 +39,7 @@ export function getCompletions(input) {
         hints: commandTree.map((n) => n.description || ""),
         node: null,
         level: "root",
+        positionals: [],
       };
     }
     const matches = matchChildren(commandTree, prefix);
@@ -46,6 +48,7 @@ export function getCompletions(input) {
       hints: matches.map((n) => n.description || ""),
       node: null,
       level: "root",
+      positionals: [],
     };
   }
 
@@ -56,12 +59,13 @@ export function getCompletions(input) {
       hints: commandTree.map((n) => n.description || ""),
       node: null,
       level: "root",
+      positionals: [],
     };
   }
 
   // Walk the command tree to find current position
   const node = findNode(effectiveTokens);
-  
+
   if (!node) {
     // Partial token at this level — find suggestions
     const parent = findNode(effectiveTokens.slice(0, -1));
@@ -73,6 +77,7 @@ export function getCompletions(input) {
         hints: matches.map((n) => n.description || ""),
         node: null,
         level: "child",
+        positionals: [],
       };
     }
     if (!parent) {
@@ -82,18 +87,21 @@ export function getCompletions(input) {
         hints: matches.map((n) => n.description || ""),
         node: null,
         level: "root",
+        positionals: [],
       };
     }
     if (parent.params || parent.flags) {
-      const paramHints = buildParamHints(parent, effectiveTokens.slice(1), flags, effectivePartial);
+      const paramHints = buildParamHints(parent, effectiveTokens.slice(findNodeIndex(effectiveTokens) + 1), flags, effectivePartial);
+      const posInfo = buildPositionalInfo(parent, effectiveTokens.slice(findNodeIndex(effectiveTokens) + 1));
       return {
         completions: paramHints.map((h) => h.text),
         hints: paramHints.map((h) => h.desc),
         node: parent,
         level: "params",
+        positionals: posInfo,
       };
     }
-    return { completions: [], hints: [], node: null, level: "root" };
+    return { completions: [], hints: [], node: null, level: "root", positionals: [] };
   }
 
   // Exact node found
@@ -104,6 +112,7 @@ export function getCompletions(input) {
         hints: node.children.map((c) => c.description || ""),
         node,
         level: "child",
+        positionals: [],
       };
     }
     if (effectivePartial) {
@@ -113,28 +122,48 @@ export function getCompletions(input) {
         hints: matches.map((c) => c.description || ""),
         node,
         level: "child",
+        positionals: [],
       };
     }
-    return { completions: [], hints: [], node, level: "child" };
+    return { completions: [], hints: [], node, level: "child", positionals: [] };
   }
 
-  // Leaf node — show params and flags
+  // Leaf node — show flags and positional info
   if (trailing || effectivePartial) {
     const consumed = effectiveTokens.slice(findNodeIndex(effectiveTokens) + 1);
     const paramHints = buildParamHints(node, consumed, flags, effectivePartial);
+    const posInfo = buildPositionalInfo(node, consumed);
     return {
       completions: paramHints.map((h) => h.text),
       hints: paramHints.map((h) => h.desc),
       node,
       level: "params",
+      positionals: posInfo,
     };
   }
 
-  return { completions: [], hints: [], node, level: "params" };
+  return { completions: [], hints: [], node, level: "params", positionals: [] };
+}
+
+/**
+ * Build positional tracker info: which params are entered vs pending.
+ * @param {object} node — leaf command node
+ * @param {string[]} consumedTokens — positional tokens already typed
+ * @returns {{name:string, entered:boolean, required:boolean}[]}
+ */
+function buildPositionalInfo(node, consumedTokens) {
+  if (!node.params || node.params.length === 0) return [];
+  return node.params.map((p, i) => ({
+    name: p.name,
+    entered: i < consumedTokens.length,
+    required: p.required,
+  }));
 }
 
 /**
  * Build parameter/flag hints for a leaf command node.
+ * Only flag completions are returned — positional args are shown
+ * via the tracker row (buildPositionalInfo) instead.
  * @param {string} [partial] — partial input for filtering flags (e.g. "--c")
  */
 function buildParamHints(node, consumedTokens, flags, partial = "") {
@@ -155,23 +184,6 @@ function buildParamHints(node, consumedTokens, flags, partial = "") {
       }
     }
     return hints;
-  }
-
-  // Positional params not yet filled.
-  // Skip params with uuidSource — they get real completions from
-  // fetchDataCompletions() instead of a <placeholder> hint.
-  if (node.params) {
-    const filledCount = consumedTokens.length;
-    for (let i = filledCount; i < node.params.length; i++) {
-      const p = node.params[i];
-      if (p.uuidSource) continue; // Provided by fetchDataCompletions
-      const prefix = p.required ? "<" : "[";
-      const suffix = p.required ? ">" : "]";
-      hints.push({
-        text: `${prefix}${p.name}${suffix}`,
-        desc: p.placeholder || p.name,
-      });
-    }
   }
 
   // Available flags (only if user isn't already filling one)

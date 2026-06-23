@@ -11,7 +11,6 @@ Registered paths:
     - calendar.account.list
     - calendar.account.modify
     - calendar.account.remove
-    - calendar.sync
 """
 
 from __future__ import annotations
@@ -50,21 +49,45 @@ def calendar_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
 
 @command("calendar.event.add")
 def event_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!calendar event add <calendar-uuid> <title> <start> <end> [location]"""
-    if len(remaining) < 4:
+    """!calendar event add <title> <start> <end> [location] [--calendar UUID]
+
+    Calendar UUID is specified via --calendar flag. If omitted and only
+    one calendar exists, it is used automatically.
+    """
+    svc: CalendarService = get_calendar_service()
+
+    # Resolve calendar UUID
+    calendar_uuid = flags.get("calendar", "")
+    if not calendar_uuid:
+        calendars = svc.list_calendars()
+        if len(calendars) == 1:
+            calendar_uuid = calendars[0]["uuid"]
+        elif len(calendars) == 0:
+            raise CommandValidationError(
+                "No calendars configured.",
+                "Add one with: !calendar account add <url>",
+            )
+        else:
+            raise CommandValidationError(
+                "Multiple calendars. Specify one with --calendar <uuid>.",
+                "Usage: !calendar event add \"Title\" \"2024-06-15T09:00\" \"2024-06-15T10:00\" --calendar <uuid>",
+            )
+
+    if len(remaining) < 3:
         raise CommandValidationError(
-            "Missing required params: <calendar-uuid> <title> <start> <end> [location]",
+            "Missing required params: <title> <start> <end> [location]",
+            "Usage: !calendar event add \"Title\" \"2024-06-15T09:00:00Z\" \"2024-06-15T10:00:00Z\" [location] --calendar <uuid>",
         )
+
     evt_data = {
-        "kalendaro_uuid": remaining[0],
-        "titolo": remaining[1],
-        "komenco": remaining[2],
-        "fino": remaining[3],
-        "loko": remaining[4] if len(remaining) > 4 else "",
+        "kalendaro_uuid": calendar_uuid,
+        "titolo": remaining[0],
+        "komenco": remaining[1],
+        "fino": remaining[2],
+        "loko": remaining[3] if len(remaining) > 3 else "",
         "priskribo": "",
         "kategorio": "",
     }
-    svc: CalendarService = get_calendar_service()
     evt = svc.create_event(evt_data)
     return {"type": "status", "title": "Event Created", "data": {"uuid": evt["uuid"], "title": evt["titolo"]}}
 
@@ -203,44 +226,3 @@ def cal_account_remove(remaining: list[str], flags: dict[str, str]) -> dict[str,
         except Exception:
             pass
     return {"type": "status", "title": "Calendar(s) Removed", "data": {"removed": removed}}
-
-
-@command("calendar.sync")
-def cal_sync(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!calendar sync [uuid] [--all]
-
-    Without arguments, syncs the first listed remote calendar.
-    Use ``--all`` or provide a UUID to sync specific calendar(s).
-    """
-    svc: CalendarService = get_calendar_service()
-    do_all = "all" in flags
-
-    if remaining and not do_all:
-        try:
-            result = svc.sync_calendar(remaining[0])
-            is_error = result.get("status") in ("error", "no_password")
-            title = f"Calendar Sync {'Error' if is_error else 'Complete'}"
-            return {"type": "status", "title": title, "data": result}
-        except Exception as e:
-            return {"type": "status", "title": "Calendar Sync Error", "data": {"error": str(e)}}
-
-    # Sync all calendars
-    results = svc.sync_all_calendars()
-    total_errors = sum(
-        1 for r in results.values()
-        if r.get("status") in ("error", "no_password")
-    )
-    total_ok = sum(
-        1 for r in results.values()
-        if r.get("status") == "ok"
-    )
-    title = f"Calendars Synced ({total_ok} ok, {total_errors} errors)" if total_errors else "All Calendars Synced"
-    return {
-        "type": "status",
-        "title": title,
-        "data": {
-            "results": results,
-            "total": len(results),
-            "errors": total_errors,
-        },
-    }

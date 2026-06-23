@@ -5,7 +5,6 @@ Registered paths:
     - email.read
     - email.send
     - email.search
-    - email.sync
     - email.trash
     - email.archive
     - email.account.add
@@ -145,55 +144,6 @@ def email_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("email.sync")
-def email_sync(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email sync [uuid] [--all]
-
-    Without arguments, syncs the first listed account.
-    Use ``--all`` to sync all accounts.
-    Provide a UUID to sync a specific account.
-    """
-    svc: EmailService = get_email_service()
-    do_all = "all" in flags
-
-    if remaining and not do_all:
-        result = svc.sync_account(remaining[0])
-        data = result.to_dict()
-        title = "Sync Complete (with errors)" if data.get("errors") else "Synced"
-        return {"type": "status", "title": title, "data": data}
-
-    # Sync all accounts
-    results = svc.sync_all()
-    total_new = sum(r.get("new", 0) for r in results.values())
-    total_errors = sum(len(r.get("errors", [])) for r in results.values())
-    error_details = {}
-    for acct_uuid, r in results.items():
-        if r.get("errors"):
-            # Resolve account email for helpful display
-            acct = svc.get_account(acct_uuid)
-            label = acct.get("retposto", acct_uuid[:8]) if acct else acct_uuid[:8]
-            error_details[label] = r["errors"]
-
-    title = "Sync Complete (with errors)" if total_errors > 0 else "Sync Complete"
-    summary = f"{total_new} new items synced."
-    if total_errors > 0:
-        err_lines = [f"  {label}: {'; '.join(errs[:3])}" for label, errs in error_details.items()]
-        summary += f"\n{total_errors} error(s):\n" + "\n".join(err_lines[:5])
-        if total_errors > 5:
-            summary += f"\n  ... and {total_errors - 5} more"
-    return {
-        "type": "status",
-        "title": title,
-        "data": {
-            "new": total_new,
-            "account_count": len(results),
-            "errors": total_errors,
-            "error_details": error_details or None,
-            "_summary": summary,
-        },
-    }
-
-
 @command("email.trash")
 def email_trash(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email trash <uuid>"""
@@ -228,7 +178,11 @@ def account_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 @command("email.account.add")
 def account_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email account add <email> [--imap HOST] [--smtp HOST] [--password PW] [--name NAME]"""
+    """!email account add <email> [--imap HOST] [--smtp HOST] [--password PW] [--name NAME]
+
+    IMAP/SMTP servers are auto-detected for common providers.
+    Only specify --imap or --smtp to override auto-detection.
+    """
     if not remaining:
         raise CommandValidationError(
             "Missing email address.",
