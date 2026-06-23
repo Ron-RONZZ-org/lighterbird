@@ -282,7 +282,11 @@
       autofocus
     />
     {#if isLoading}
-      <span class="spinner" aria-label="Loading">...</span>
+      <span class="spinner" aria-label="Loading">
+        <span class="spinner-dot"></span>
+        <span class="spinner-dot"></span>
+        <span class="spinner-dot"></span>
+      </span>
     {/if}
   </div>
   {#if showSuggestions}
@@ -323,8 +327,11 @@
   input { flex: 1; background: transparent; border: none; color: #e0e0e0; font-family: monospace; font-size: 1rem; outline: none; }
   input::placeholder { color: #555; }
   input:disabled { opacity: 0.5; }
-  .spinner { color: #7c7c9a; animation: pulse 1s infinite; }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .spinner { display: flex; gap: 3px; align-items: center; padding: 0 4px; }
+  .spinner-dot { width: 6px; height: 6px; background: #7c7c9a; border-radius: 50%; animation: dot-bounce 1s ease-in-out infinite; }
+  .spinner-dot:nth-child(2) { animation-delay: 0.16s; }
+  .spinner-dot:nth-child(3) { animation-delay: 0.32s; }
+  @keyframes dot-bounce { 0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
   .suggestions { list-style: none; padding: 0; margin: 0; border-top: 1px solid #333; max-height: 240px; overflow-y: auto; }
   .suggestion { display: flex; justify-content: space-between; align-items: center; padding: 0.35rem 1rem; font-family: monospace; font-size: 0.9rem; cursor: pointer; }
   .suggestion:hover, .suggestion.selected { background: #16213e; color: #fff; }

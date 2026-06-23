@@ -106,6 +106,18 @@ class EmailService:
     def search_messages(self, filters: dict, limit=50):
         return self.messages.search_messages(filters, limit=limit)
 
+    def get_conversation(self, uuid_: str, limit: int = 20) -> list[dict[str, Any]]:
+        """Get all messages in the same conversation thread as the given message UUID."""
+        msg = self.get_message(uuid_)
+        if not msg:
+            return []
+        return self.messages.find_conversation(
+            message_id=msg.get("message_id", ""),
+            references=msg.get("references", ""),
+            in_reply_to=msg.get("in_reply_to", ""),
+            limit=limit,
+        )
+
     # ── Message operations ───────────────────────────────────────────────
 
     def mark_read(self, msg_uuid: str, legita: bool = True):
