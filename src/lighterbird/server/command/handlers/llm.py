@@ -47,7 +47,7 @@ def llm_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "  !llm prompt                    — Show system prompt\n"
                 "  !llm profile                   — Show profile subcommands\n"
                 "  !llm profile show              — Show current config\n"
-                "  !llm profile new <protocol>    — Create config (openai|ollama)\n"
+                "  !llm profile new <protocol>    — Create config (openai, deepseek, ollama, custom)\n"
                 "  !llm profile set [flags]       — Modify current settings\n"
                 "  !llm profile clear             — Clear config\n"
                 "  !llm profile load <name>       — Load a saved profile\n"
@@ -102,7 +102,7 @@ def llm_profile_root(remaining: list[str], flags: dict[str, str]) -> dict[str, A
     result = {
         "_summary": "Available subcommands:\n"
         "  show               — Show current config\n"
-        "  new <protocol>     — Create config (openai|ollama)\n"
+        "  new <protocol>     — Create config (openai, deepseek, ollama, custom)\n"
         "  set [flags]        — Modify current settings\n"
         "  clear              — Clear config\n"
         "  load <name>        — Load a saved profile\n"
@@ -110,6 +110,7 @@ def llm_profile_root(remaining: list[str], flags: dict[str, str]) -> dict[str, A
         "  delete <name>      — Delete a saved profile",
     }
     result["profiles"] = profiles
+    result["active_profile"] = provider.active_profile_name
     if active.provider_type:
         result["active"] = {
             "protocol": active.provider_type,
@@ -139,7 +140,7 @@ def llm_profile_new(remaining: list[str], flags: dict[str, str]) -> dict[str, An
     if not remaining:
         raise CommandValidationError(
             "Missing protocol.",
-            "Usage: !llm profile new openai|ollama [--alias my-profile] [--api-key KEY] [--base-url URL] [--model MODEL]",
+            "Usage: !llm profile new openai|deepseek|ollama|custom [--alias my-profile] [--api-key KEY] [--base-url URL] [--model MODEL]",
         )
     protocol = remaining[0]
     provider = get_provider()
@@ -246,10 +247,11 @@ def llm_profile_list(remaining: list[str], flags: dict[str, str]) -> dict[str, A
     """!llm profile list — List saved LLM profiles."""
     provider = get_provider()
     profiles = provider.list_profiles()
+    active_name = provider.active_profile_name
     return {
         "type": "status",
         "title": "LLM Profiles",
-        "data": {"profiles": profiles},
+        "data": {"profiles": profiles, "active_profile": active_name},
     }
 
 

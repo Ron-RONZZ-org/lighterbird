@@ -16,7 +16,8 @@ class ProviderConfig:
     """Configuration for an LLM provider instance.
 
     Attributes:
-        provider_type: ``"openai"`` or ``"ollama"``.
+        provider_type: ``"openai"``, ``"deepseek"``, ``"ollama"``, or any
+            OpenAI-compatible provider name.
         api_key: API key (retrieved from keyring at instantiation time).
         base_url: API base URL.
         model: Model name (e.g. ``"gpt-4o"``, ``"llama3"``).
@@ -76,17 +77,14 @@ def get_provider(config: ProviderConfig) -> LLMProvider:
 
     Returns:
         An :class:`LLMProvider` instance.
-
-    Raises:
-        ValueError: If ``provider_type`` is unknown.
     """
-    if config.provider_type == "openai":
-        from lighterbird.core.providers import OpenAICompatibleProvider
-        return OpenAICompatibleProvider(config)
-    elif config.provider_type == "ollama":
+    if config.provider_type == "ollama":
         from lighterbird.core.providers import OllamaProvider
         return OllamaProvider(config)
-    raise ValueError(f"Unknown provider type: {config.provider_type}")
+    # Everything else is treated as OpenAI-compatible (openai, deepseek,
+    # groq, together, or any custom endpoint).
+    from lighterbird.core.providers import OpenAICompatibleProvider
+    return OpenAICompatibleProvider(config)
 
 
 __all__ = [
