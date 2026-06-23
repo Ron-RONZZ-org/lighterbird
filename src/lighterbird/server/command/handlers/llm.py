@@ -1,10 +1,16 @@
 """Command handlers for the ``!llm`` domain.
 
 Registered paths:
+    - llm
     - llm.configure
     - llm.config
     - llm.reset
     - llm.prompt
+    - llm.profile
+    - llm.profile.list
+    - llm.profile.add
+    - llm.profile.remove
+    - llm.profile.switch
 """
 
 from __future__ import annotations
@@ -14,6 +20,43 @@ from typing import Any
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 from lighterbird.server.llm.provider import get_provider
+
+
+@command("llm")
+def llm_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!llm — Show LLM subcommands or delegate to profile."""
+    if remaining:
+        # Delegate: !llm <profile-name> → switch to that profile
+        name = remaining[0]
+        provider = get_provider()
+        config = provider.switch_to_profile(name)
+        if config is not None:
+            return {
+                "type": "status",
+                "title": "Profile Activated",
+                "data": {"name": name, "provider": config.provider_type, "model": config.model},
+            }
+        raise CommandValidationError(f"Profile not found: {name}")
+    # Show available subcommands
+    return {
+        "type": "status",
+        "title": "LLM Commands",
+        "data": {
+            "_summary": (
+                "Available !llm commands:\n"
+                "  !llm configure <type>   — Configure provider (openai|ollama)\n"
+                "  !llm config             — Show current config\n"
+                "  !llm reset              — Clear config\n"
+                "  !llm prompt             — Show system prompt\n"
+                "  !llm profile [name]      — List profiles or switch\n"
+                "  !llm profile list       — List saved profiles\n"
+                "  !llm profile add <name> — Save a profile\n"
+                "  !llm profile remove <n> — Delete a profile\n"
+                "  !llm profile switch <n> — Activate a profile\n"
+                "  !llm <profile-name>     — Quick switch to a profile"
+            ),
+        },
+    }
 
 
 @command("llm.configure")
@@ -91,6 +134,35 @@ def llm_prompt(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 
 # ── Profile management ──────────────────────────────────────────────────────
+
+
+@command("llm.profile")
+def llm_profile_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!llm profile [name] — List profiles or switch to one."""
+    if remaining:
+        # !llm profile <name> → quick switch
+        name = remaining[0]
+        provider = get_provider()
+        config = provider.switch_to_profile(name)
+        if config is not None:
+            return {
+                "type": "status",
+                "title": "Profile Activated",
+                "data": {"name": name, "provider": config.provider_type, "model": config.model},
+            }
+        raise CommandValidationError(f"Profile not found: {name}")
+    # List profiles
+    provider = get_provider()
+    profiles = provider.list_profiles()
+    active = provider.config
+    result = {"profiles": profiles} if profiles else {"message": "No saved profiles."}
+    if active.provider_type:
+        result["active"] = {
+            "provider_type": active.provider_type,
+            "model": active.model,
+            "base_url": active.base_url,
+        }
+    return {"type": "status", "title": "LLM Profiles", "data": result}
 
 
 @command("llm.profile.list")
