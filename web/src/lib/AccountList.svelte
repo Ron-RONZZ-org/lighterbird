@@ -5,10 +5,12 @@
    * Props:
    *   type  — "llm" | "email" | "calendar"
    *   items — array of account/profile objects
+   *   activeName — (llm only) name of the currently active profile
    *   onAdd, onModify(item), onRemove(item) — callbacks
+   *   onActivate(item) — (llm only) set a profile as active
    */
 
-  let { type = "email", items = [], onAdd = () => {}, onModify = () => {}, onRemove = () => {}, onActivate = () => {} } = $props();
+  let { type = "email", items = [], activeName = "", onAdd = () => {}, onModify = () => {}, onRemove = () => {}, onActivate = () => {} } = $props();
 
   const LABELS = {
     llm: { title: "LLM Profiles", add: "Add Profile", empty: "No LLM profiles configured." },
@@ -18,7 +20,7 @@
 
   const EMPTY_HINTS = {
     llm: [
-      "!llm profile new openai --alias my-profile",
+      "!llm profile new deepseek --alias my-deepseek",
       "!llm profile new ollama --alias local",
     ],
     email: [
@@ -69,7 +71,11 @@
           </div>
           <div class="row-actions">
             {#if type === "llm"}
-              <button class="btn-activate" onclick={() => onActivate(item)} title="Set as active profile">Activate</button>
+              {#if item.name === activeName}
+                <span class="badge-active">Activated</span>
+              {:else}
+                <button class="btn-activate" onclick={() => onActivate(item)} title="Set as active profile">Activate</button>
+              {/if}
             {/if}
             <button class="btn-modify" onclick={() => onModify(item)} title="Modify">Modify</button>
             <button class="btn-remove" onclick={() => onRemove(item)} title="Remove">Remove</button>
@@ -197,6 +203,16 @@
   }
   .btn-activate:hover {
     background: #3a6a4a;
+  }
+  .badge-active {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.72rem;
+    background: #1a3a2a;
+    color: #60b080;
+    border: 1px solid #2a5a3a;
   }
   .btn-modify {
     background: #2a3a5a;

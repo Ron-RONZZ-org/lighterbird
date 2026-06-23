@@ -162,7 +162,7 @@ class EventQueryParams(BaseModel):
 
 class LLMProfileCreate(BaseModel):
     name: str = Field(..., description="Profile name")
-    provider_type: str = Field(..., description='Provider type: "openai" or "ollama"')
+    provider_type: str = Field(..., description='Provider type: "openai", "deepseek", "ollama", or "custom"')
     api_key: str = Field(default="", description="API key")
     base_url: str = Field(default="", description="Base URL")
     model: str = Field(default="", description="Model name")
@@ -185,7 +185,7 @@ class LLMProfileListResponse(BaseModel):
 
 
 class LLMProfileUpdate(BaseModel):
-    provider_type: str | None = Field(default=None, description='Provider type: "openai" or "ollama"')
+    provider_type: str | None = Field(default=None, description='Provider type: "openai", "deepseek", "ollama", or "custom"')
     api_key: str | None = Field(default=None, description="API key (empty = keep current)")
     base_url: str | None = Field(default=None, description="Base URL")
     model: str | None = Field(default=None, description="Model name")

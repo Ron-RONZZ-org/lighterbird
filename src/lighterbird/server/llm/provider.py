@@ -57,6 +57,7 @@ class LLMProviderWrapper:
 
     def __init__(self) -> None:
         self._config: ProviderConfig | None = None
+        self._active_profile_name: str | None = None
 
     @property
     def config(self) -> ProviderConfig:
@@ -132,7 +133,7 @@ class LLMProviderWrapper:
         """Save provider configuration to keyring and return config.
 
         Args:
-            provider_type: ``"openai"`` or ``"ollama"``.
+            provider_type: ``"openai"``, ``"deepseek"``, ``"ollama"``, etc.
             **kwargs: Additional config fields (api_key, base_url, model, etc.).
 
         Returns:
@@ -298,12 +299,17 @@ class LLMProviderWrapper:
         _set_kr(_SERVICE_NAME, _PROFILES_ACCOUNT, _json.dumps(profiles))
         return True
 
+    @property
+    def active_profile_name(self) -> str | None:
+        """Return the name of the currently active profile, if any."""
+        return self._active_profile_name
+
     def switch_to_profile(self, name: str) -> ProviderConfig | None:
         """Activate a saved profile. Returns the config or None."""
         profile = self.get_profile(name)
         if not profile:
             return None
-        return self.configure(
+        cfg = self.configure(
             provider_type=profile["provider_type"],
             api_key=profile.get("api_key", ""),
             base_url=profile.get("base_url", ""),
@@ -311,6 +317,8 @@ class LLMProviderWrapper:
             temperature=profile.get("temperature", 0.7),
             max_tokens=profile.get("max_tokens", 2048),
         )
+        self._active_profile_name = name
+        return cfg
 
 
 # Singleton

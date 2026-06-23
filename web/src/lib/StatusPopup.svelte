@@ -165,6 +165,7 @@
     <AccountList
       type="llm"
       items={d.profiles}
+      activeName={d.active_profile || ""}
       onAdd={() => openForm("llm")}
       onModify={(item) => openForm("llm", item)}
       onRemove={(item) => removeItem("llm", item)}
