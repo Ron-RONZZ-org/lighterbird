@@ -106,5 +106,6 @@ The Vite dev server proxies `/api/` requests to the FastAPI backend (port 8000).
 6. **Accessibility basics.** The command bar needs an `<input>` with proper ARIA labels, role="combobox" pattern for autocomplete, and keyboard-only navigation.
 7. **Build output goes to `web/dist/`** — the FastAPI server mounts this directory as static files.
 8. **Do not use SvelteKit** — this is a SPA, not an SSR app. SvelteKit would add unnecessary complexity and bundle size.
-9. **Tabs always append, never replace.** Loading tabs close when the result arrives. The home tab is pinned at index 0 and never closes.
-10. **Folder paths use `{email}/{folder}` convention.** Auto-completion for `--folder` flags inserts the full folder path, not a UUID.
+9. **List tabs are persistent; detail tabs append.** List views (accounts, calendars, contacts, todos, journal entries, email list) are persistent — re-running the same command replaces the previous list tab (keyed by PersistentDataType). Detail views (individual email message, single contact, etc.) always append as new tabs. Loading tabs close when the result arrives. The home tab is pinned at index 0 and never closes.
+10. **In-tab filter/search bars are exceptions to rule #8.** The EmailListTab has a toggleable search bar (`f` key) that filters the current message list via REST API calls. This is not a command bar — it cannot run `!` commands, only text-search the current view. Similar filter bars in other list views are acceptable if they stay scope-limited to the current data set.
+11. **Folder paths use `{email}/{folder}` convention.** Auto-completion for `--folder` flags inserts the full folder path, not a UUID.

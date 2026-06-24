@@ -1,6 +1,6 @@
 <script>
   import { tabStore } from "./tabStore.svelte.js";
-  import { email as emailApi, calendar as calendarApi, llm as llmApi } from "./api.js";
+  import { calendar as calendarApi, llm as llmApi } from "./api.js";
   import AccountList from "./AccountList.svelte";
   import LlmProfileForm from "./LlmProfileForm.svelte";
   import EmailAccountForm from "./EmailAccountForm.svelte";
@@ -91,34 +91,6 @@
     } catch {}
   }
 
-  /** Open an email message in a new tab. */
-  async function openMessage(uuid) {
-    if (!uuid) return;
-    try {
-      const msg = await emailApi.getMessage(uuid);
-      tabStore.open("email", msg.subject || "(no subject)", msg, {
-        idKey: `email-${uuid}`,
-        replaceable: false,
-      });
-    } catch (err) {
-      tabStore.open("error", "Error", { message: err.message || "Failed to load message" });
-    }
-  }
-
-  /** Open an email in a new browser tab (Ctrl+click / middle-click). */
-  function openMessageInNewTab(e, uuid) {
-    if (!uuid) return;
-    e.preventDefault();
-    window.open(`/api/v1/email/messages/${uuid}/view`, "_blank");
-  }
-
-  function handleMessageClick(e, uuid) {
-    if (e.ctrlKey || e.metaKey || e.button === 1) {
-      openMessageInNewTab(e, uuid);
-    } else {
-      openMessage(uuid);
-    }
-  }
 </script>
 
 <div class="status">
@@ -172,27 +144,6 @@
       onActivate={(item) => activateProfile(item)}
     />
 
-  {:else if d.messages}
-    <p class="list-hint" class:compact={d.messages.length > 10}>
-      Click a message to view it. <kbd>Ctrl+click</kbd> opens in a new tab.
-    </p>
-    {#each d.messages as msg}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <div
-        class="row clickable"
-        role="button"
-        tabindex="0"
-        onclick={(e) => handleMessageClick(e, msg.uuid)}
-        onkeydown={(e) => { if (e.key === 'Enter') handleMessageClick(e, msg.uuid); }}
-        title="Click to view, Ctrl+click for new tab"
-      >
-        <span class="key">{msg.uuid?.slice(0, 8) || ""}</span>
-        <span class="val">{(msg.from || "").slice(0, 28)}</span>
-        <span class="hint">{(msg.subject || "").slice(0, 28)}</span>
-      </div>
-    {:else}
-      <p class="empty">No messages.</p>
-    {/each}
   {:else if d.todos}
     {#each d.todos as todo}
       <div class="row">
@@ -259,36 +210,8 @@
   .row:last-child {
     border-bottom: none;
   }
-  .row.clickable {
-    cursor: pointer;
-    transition: background 0.1s;
-  }
-  .row.clickable:hover {
-    background: #2a2a44;
-  }
-  .row.clickable:focus {
-    outline: 1px solid #7c7c9a;
-    outline-offset: -1px;
-  }
-  .list-hint {
-    font-size: 0.75rem;
-    color: #5a5a7a;
-    margin-bottom: 0.3rem;
-    padding: 0.2rem 0;
-  }
-  .list-hint.compact {
-    margin-bottom: 0;
-  }
-  kbd {
-    font-family: monospace;
-    background: #2a2a3e;
-    padding: 1px 4px;
-    border-radius: 3px;
-    font-size: 0.7rem;
-    border: 1px solid #444;
-  }
   .key {
-    color: #7c7c9a;
+    color: var(--clr-sub);
     min-width: 5rem;
   }
   .val {
@@ -296,10 +219,10 @@
     min-width: 12rem;
   }
   .hint {
-    color: #5a5a7a;
+    color: var(--clr-muted);
   }
   .empty {
-    color: #5a5a7a;
+    color: var(--clr-muted);
     text-align: center;
     padding: 2rem;
   }

@@ -304,7 +304,7 @@
     padding: 0.15rem 0;
   }
   .label {
-    color: #7c7c9a;
+    color: var(--clr-sub);
     min-width: 5rem;
     flex-shrink: 0;
   }
@@ -377,14 +377,14 @@
     border-bottom: 1px solid #333;
     font-family: monospace;
     font-size: 0.85rem;
-    color: #7c7c9a;
+    color: var(--clr-sub);
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
   .close-btn {
     background: none;
     border: none;
-    color: #7c7c9a;
+    color: var(--clr-sub);
     font-size: 1rem;
     cursor: pointer;
     padding: 2px 4px;
@@ -410,9 +410,9 @@
   }
   .conv-from { color: #e0e0e0; display: block; font-weight: 600; }
   .conv-subject { color: #b0b0c0; display: block; }
-  .conv-date { color: #5a5a7a; display: block; font-size: 0.7rem; margin-top: 2px; }
+  .conv-date { color: var(--clr-muted); display: block; font-size: 0.7rem; margin-top: 2px; }
   .conv-loading, .conv-empty {
-    color: #5a5a7a;
+    color: var(--clr-muted);
     text-align: center;
     padding: 2rem;
     font-family: monospace;

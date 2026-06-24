@@ -1,9 +1,5 @@
 /** Reactive tab store — manages multiple open tabs, with pinned home tab. */
 
-let _tabs = $state([]);
-let _activeId = $state(null);
-let _nextId = 1;
-
 const HOME_TAB = {
   id: "home",
   type: "home",
@@ -14,45 +10,35 @@ const HOME_TAB = {
   pinned: true,
 };
 
+let _tabs = $state([HOME_TAB]);
+let _activeId = $state(HOME_TAB.id);
+let _nextId = 1;
+
 function genId() {
   return `tab-${_nextId++}-${Date.now()}`;
 }
 
-/** Ensure the home tab exists at index 0. */
-function ensureHome() {
-  if (_tabs.length === 0 || _tabs[0].id !== HOME_TAB.id) {
-    _tabs = [HOME_TAB, ..._tabs.filter((t) => t.id !== HOME_TAB.id)];
-  }
-  if (!_activeId) {
-    _activeId = HOME_TAB.id;
-  }
-}
-
 export const tabStore = {
   get tabs() {
-    ensureHome();
     return _tabs;
   },
 
   get active() {
-    ensureHome();
     return _tabs.find((t) => t.id === _activeId) || HOME_TAB;
   },
 
   get activeIndex() {
-    ensureHome();
     return _tabs.findIndex((t) => t.id === _activeId);
   },
 
   get count() {
-    ensureHome();
     return _tabs.length;
   },
 
   /**
    * Open a new result tab.
    *
-   * @param {"status"|"email"|"events"|"error"|"help"|"loading"|"chat"} type
+   * @param {"status"|"email"|"email-list"|"events"|"error"|"help"|"loading"|"chat"} type
    * @param {string} title
    * @param {any} data
    * @param {object} [opts]
@@ -60,7 +46,6 @@ export const tabStore = {
    * @param {boolean} [opts.closable=true]
    */
   open(type, title, data, opts = {}) {
-    ensureHome();
     const { idKey, closable = true } = opts;
 
     // Dedup by idKey
@@ -90,7 +75,6 @@ export const tabStore = {
 
   close(id) {
     if (id === HOME_TAB.id) return; // home tab never closes
-    ensureHome();
     const idx = _tabs.findIndex((t) => t.id === id);
     if (idx === -1) return;
 
@@ -104,12 +88,10 @@ export const tabStore = {
   },
 
   setActive(id) {
-    ensureHome();
     if (_tabs.find((t) => t.id === id)) _activeId = id;
   },
 
   setActiveIndex(index) {
-    ensureHome();
     if (index >= 0 && index < _tabs.length) {
       _activeId = _tabs[index].id;
     }
