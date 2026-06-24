@@ -6,22 +6,35 @@ Forked from A-core's ``A.data.harden``.
 from __future__ import annotations
 
 import sqlite3
-import shutil
 from pathlib import Path
+
+from lighterbird.core.backup import backup_database, copy_to_external, load_config
 
 
 def backup_db(db_path: Path) -> None:
-    """Snapshot *db_path* to ``<name>.bak`` before schema-altering operations.
+    """Snapshot *db_path* to the timestamped backup system.
 
-    Best-effort: silently ignores missing files and copy failures.
+    Creates a checksum-verified timestamped copy in
+    ``data_dir()/.backups/``. If an external backup directory is
+    configured in backup config, also copies the backup there.
+
+    Silently ignores missing files and copy failures.
     """
     if not db_path.exists():
         return
-    bak = db_path.with_suffix(".db.bak")
     try:
-        shutil.copy2(str(db_path), str(bak))
+        result = backup_database(db_path)
+        if result is not None:
+            # Also copy to external dir if configured
+            cfg = load_config()
+            ext_dir = cfg.get("external_dir", "")
+            if ext_dir:
+                try:
+                    copy_to_external(ext_dir, backup_paths=[result])
+                except Exception:
+                    pass  # best-effort external copy
     except Exception:
-        pass
+        pass  # best-effort: never block DDL over a backup failure
 
 
 def health_check(db_path: Path) -> bool:

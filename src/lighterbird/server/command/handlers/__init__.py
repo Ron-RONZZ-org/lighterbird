@@ -11,3 +11,4 @@ from lighterbird.server.command.handlers import contacts  # noqa: F401
 from lighterbird.server.command.handlers import todo  # noqa: F401
 from lighterbird.server.command.handlers import journal  # noqa: F401
 from lighterbird.server.command.handlers import llm  # noqa: F401
+from lighterbird.server.command.handlers import backup  # noqa: F401
