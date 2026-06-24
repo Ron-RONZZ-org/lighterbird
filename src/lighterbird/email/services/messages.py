@@ -113,9 +113,9 @@ class MessageService:
                 exclude_folders = [exclude_folders]
             placeholders = ",".join("?" for _ in exclude_folders)
             conditions.append(
-                f"m.dosierujo_id NOT IN ("
+                f"(m.dosierujo_id IS NULL OR m.dosierujo_id NOT IN ("
                 f"SELECT uuid FROM dosierujoj WHERE nomo IN ({placeholders})"
-                f")"
+                f"))"
             )
             params.extend(exclude_folders)
         where = " AND ".join(conditions)
