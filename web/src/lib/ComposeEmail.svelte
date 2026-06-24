@@ -4,12 +4,14 @@
   import { email as emailApi } from "./api.js";
 
   let { initialData = {}, onsubmit } = $props();
+  // svelte-ignore state_referenced_locally
+  const _initial = initialData;
 
-  let accountUuid = $state(initialData.account || "");
-  let to = $state(initialData.to || "");
-  let subject = $state(initialData.subject || "");
-  let body = $state(initialData.body || "");
-  let cc = $state(initialData.cc || "");
+  let accountUuid = $state(_initial.account || "");
+  let to = $state(_initial.to || "");
+  let subject = $state(_initial.subject || "");
+  let body = $state(_initial.body || "");
+  let cc = $state(_initial.cc || "");
   let sending = $state(false);
   let accounts = $state([]);
 

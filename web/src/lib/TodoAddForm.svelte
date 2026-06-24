@@ -2,11 +2,13 @@
   /** Todo creation form — used when !todo add is typed interactively. */
 
   let { initialData = {}, onsubmit } = $props();
+  // svelte-ignore state_referenced_locally
+  const _initial = initialData;
 
-  let title = $state(initialData.title || "");
-  let description = $state(initialData.description || "");
-  let priority = $state(initialData.priority || "5");
-  let due = $state(initialData.due || "");
+  let title = $state(_initial.title || "");
+  let description = $state(_initial.description || "");
+  let priority = $state(_initial.priority || "5");
+  let due = $state(_initial.due || "");
   let adding = $state(false);
 
   async function handleSubmit(e) {
