@@ -12,6 +12,7 @@ from lighterbird.server.schemas import (
     AccountCreate, AccountUpdate, AccountResponse, AccountListResponse,
     SyncRequest, SyncResultResponse, SyncAllResponse,
     SendRequest, MarkReadRequest,
+    BatchDeleteRequest, BatchMoveRequest, BatchResultResponse,
     ErrorResponse,
 )
 from lighterbird.email.service import EmailService
@@ -295,3 +296,35 @@ def mark_read(
 ):
     email_svc.mark_read(uuid, req.read)
     return {"status": "ok"}
+
+
+@router.post("/messages/{uuid}/trash")
+def trash_message(
+    uuid: str,
+    email_svc: EmailService = Depends(get_email_service),
+):
+    """Soft-delete a single message."""
+    email_svc.trash_message(uuid)
+    return {"status": "trashed"}
+
+
+@router.post("/messages/batch-delete", response_model=BatchResultResponse)
+def batch_delete(
+    req: BatchDeleteRequest,
+    email_svc: EmailService = Depends(get_email_service),
+):
+    """Soft-delete multiple messages at once."""
+    for uuid in req.uuids:
+        email_svc.trash_message(uuid)
+    return BatchResultResponse(status="ok", count=len(req.uuids))
+
+
+@router.post("/messages/batch-move", response_model=BatchResultResponse)
+def batch_move(
+    req: BatchMoveRequest,
+    email_svc: EmailService = Depends(get_email_service),
+):
+    """Move multiple messages to a destination folder."""
+    for uuid in req.uuids:
+        email_svc.move_message(uuid, req.destination_folder_uuid)
+    return BatchResultResponse(status="ok", count=len(req.uuids))

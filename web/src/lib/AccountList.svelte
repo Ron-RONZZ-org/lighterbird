@@ -123,7 +123,7 @@
     padding: 2rem 0;
   }
   .empty-msg {
-    color: #7c7c9a;
+    color: var(--clr-sub);
     margin-bottom: 1rem;
   }
   .hints {
@@ -137,7 +137,7 @@
     background: #2a2a3e;
     padding: 0.3rem 0.6rem;
     border-radius: 4px;
-    color: #7c7c9a;
+    color: var(--clr-sub);
     font-size: 0.78rem;
     border: 1px solid #333;
   }
@@ -174,11 +174,11 @@
     white-space: nowrap;
   }
   .row-sub {
-    color: #7c7c9a;
+    color: var(--clr-sub);
     font-size: 0.75rem;
   }
   .row-meta {
-    color: #5a5a7a;
+    color: var(--clr-muted);
     font-size: 0.7rem;
   }
   .row-actions {

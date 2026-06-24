@@ -126,6 +126,9 @@ class EmailService:
     def trash_message(self, msg_uuid: str):
         self.msg_ops.trash_message(msg_uuid)
 
+    def move_message(self, msg_uuid: str, destination_folder_uuid: str):
+        self.msg_ops.move_message(msg_uuid, destination_folder_uuid)
+
     def send_email(self, account_uuid: str, to: list[str], subject: str,
                    body: str = "", cc: list[str] | None = None):
         self.msg_ops.send_email(account_uuid, to, subject, body, cc=cc)

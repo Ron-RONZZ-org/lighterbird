@@ -8,12 +8,23 @@
   import EventsPopup from "./EventsPopup.svelte";
   import ErrorPopup from "./ErrorPopup.svelte";
   import HelpPopup from "./HelpPopup.svelte";
+  import EmailListTab from "./EmailListTab.svelte";
+  import KeyboardShortcutOverlay from "./KeyboardShortcutOverlay.svelte";
+
+  let showGlobalHelp = $state(false);
 
   function handleKeydown(e) {
-    // Escape — close current tab (works even when typing in an input;
-    // the CommandBar/ChatInput's handleKeydown runs first, closes
-    // suggestions/popups, then this catches the bubble)
+    // Escape — close current tab
+    // Tabs with complex overlays (email-list) manage their own Escape;
+    // they use 'q' or the close button to close.
     if (e.key === "Escape") {
+      // Dismiss global help overlay first if open
+      if (showGlobalHelp) {
+        showGlobalHelp = false;
+        return;
+      }
+      const type = tabStore.active?.type;
+      if (type === "email-list") return; // self-managed Escape (dialogs, search, selection)
       if (tabStore.active && tabStore.active.closable && !tabStore.isHome) {
         tabStore.close(tabStore.active.id);
       } else if (tabStore.isHome) {
@@ -21,6 +32,20 @@
         if (resultTabs.length > 0) {
           tabStore.close(resultTabs[resultTabs.length - 1].id);
         }
+      }
+      return;
+    }
+
+    // H / h — toggle help (global, or delegate to email-list)
+    if (e.key === "h" || e.key === "H") {
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) {
+        return;
+      }
+      e.preventDefault();
+      if (tabStore.active?.type === "email-list") {
+        window.dispatchEvent(new CustomEvent("help-toggle"));
+      } else {
+        showGlobalHelp = !showGlobalHelp;
       }
       return;
     }
@@ -57,6 +82,8 @@
         <EventsPopup data={tabStore.active.data} />
       {:else if tabStore.active.type === "error"}
         <ErrorPopup data={tabStore.active.data} />
+      {:else if tabStore.active.type === "email-list"}
+        <EmailListTab data={tabStore.active.data} />
       {:else if tabStore.active.type === "help"}
         <HelpPopup data={tabStore.active.data} />
       {:else}
@@ -99,8 +126,16 @@
         </button>
       {/each}
       <span class="tab-bar-spacer"></span>
-      <span class="tab-hint" title="Keyboard shortcuts"><kbd>q</kbd> <kbd>Esc</kbd> close</span>
+      <span class="tab-hint" title="Keyboard shortcuts">
+        <kbd>h</kbd> help
+        <span class="hint-sep">·</span>
+        <kbd>q</kbd> <kbd>Esc</kbd> close
+      </span>
     </div>
+  {/if}
+
+  {#if showGlobalHelp}
+    <KeyboardShortcutOverlay scope="global" onDismiss={() => { showGlobalHelp = false; }} />
   {/if}
 </div>
 
@@ -110,6 +145,7 @@
       home: "⌂",
       status: "📋",
       email: "✉",
+      "email-list": "✉",
       events: "📅",
       error: "⚠",
       help: "?",
@@ -161,7 +197,7 @@
     background: #1a1a2e;
     border: none;
     border-right: 1px solid #333;
-    color: #7c7c9a;
+    color: var(--clr-sub);
     font-family: monospace;
     font-size: 0.78rem;
     cursor: pointer;
@@ -209,7 +245,7 @@
     gap: 3px;
     padding: 0 8px;
     font-size: 0.68rem;
-    color: #555;
+    color: var(--clr-dim);
     white-space: nowrap;
     flex-shrink: 0;
   }
@@ -221,6 +257,10 @@
     background: #222;
     border: 1px solid #444;
     border-radius: 3px;
-    color: #888;
+    color: var(--clr-kbd);
+  }
+  .hint-sep {
+    color: #444;
+    margin: 0 2px;
   }
 </style>

@@ -31,6 +31,6 @@
     white-space: pre;
   }
   .desc {
-    color: #7c7c9a;
+    color: var(--clr-sub);
   }
 </style>

@@ -30,7 +30,7 @@
     font-family: system-ui, monospace;
   }
   .empty {
-    color: #5a5a7a;
+    color: var(--clr-muted);
     text-align: center;
     padding: 2rem;
   }
@@ -47,7 +47,7 @@
     font-size: 0.95rem;
   }
   .meta {
-    color: #7c7c9a;
+    color: var(--clr-sub);
     font-size: 0.85rem;
     margin-top: 0.2rem;
   }

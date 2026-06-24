@@ -103,6 +103,24 @@ class MarkReadRequest(BaseModel):
     read: bool = True
 
 
+class BatchDeleteRequest(BaseModel):
+    uuids: list[str] = Field(..., min_length=1, max_length=200)
+
+    model_config = {"extra": "forbid"}
+
+
+class BatchMoveRequest(BaseModel):
+    uuids: list[str] = Field(..., min_length=1, max_length=200)
+    destination_folder_uuid: str = Field(..., min_length=1)
+
+    model_config = {"extra": "forbid"}
+
+
+class BatchResultResponse(BaseModel):
+    status: str = "ok"
+    count: int
+
+
 # ── Calendar ─────────────────────────────────────────────────────────────
 
 class CalendarCreate(BaseModel):

@@ -66,10 +66,19 @@ def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
     messages = [normalize_message(m) for m in svc.search_messages(filters, limit=limit)]
     title_suffix = f" ({folder_filter})" if folder_filter else ""
+
+    # Build frontend-compatible filter params for in-tab search bar
+    frontend_filters = {}
+    if "account" in filters:
+        frontend_filters["account_uuid"] = filters["account"]
+    if "folder" in filters:
+        fld = filters["folder"]
+        frontend_filters["folder"] = fld[0] if isinstance(fld, list) else fld
+
     return {
-        "type": "status",
+        "type": "email-list",
         "title": f"Inbox{title_suffix}",
-        "data": {"messages": messages, "total": len(messages)},
+        "data": {"messages": messages, "total": len(messages), "filters": frontend_filters},
     }
 
 
@@ -137,10 +146,29 @@ def email_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         messages = [normalize_message(m) for m in svc.search_messages(filters, limit=limit)]
     else:
         messages = [normalize_message(m) for m in svc.list_messages(limit=limit)]
+
+    # Build frontend-compatible filter params for in-tab search bar
+    frontend_filters = {}
+    if flags.get("from"):
+        frontend_filters["from"] = flags["from"]
+    if flags.get("subject"):
+        frontend_filters["subject"] = flags["subject"]
+    if flags.get("after"):
+        frontend_filters["after"] = flags["after"]
+    if flags.get("before"):
+        frontend_filters["before"] = flags["before"]
+
+    query = " ".join(remaining) if remaining else ""
+
     return {
-        "type": "status",
+        "type": "email-list",
         "title": "Search Results",
-        "data": {"messages": messages, "total": len(messages)},
+        "data": {
+            "messages": messages,
+            "total": len(messages),
+            "filters": frontend_filters,
+            "query": query,
+        },
     }
 
 

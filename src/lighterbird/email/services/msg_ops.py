@@ -32,6 +32,14 @@ class MessageOpsService:
             (now, msg_uuid),
         )
 
+    def move_message(self, msg_uuid: str, destination_folder_uuid: str) -> None:
+        """Move a message to a different folder."""
+        now = datetime.now(timezone.utc).isoformat()
+        self.db.execute(
+            "UPDATE mesagoj SET dosierujo_id = ?, modifita_je = ? WHERE uuid = ?",
+            (destination_folder_uuid, now, msg_uuid),
+        )
+
     def send_email(
         self,
         account_uuid: str,

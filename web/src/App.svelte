@@ -89,6 +89,7 @@
     if (/^!contacts\s+list\s*$/i.test(t)) return "contacts";
     if (/^!todo\s+list\s*$/i.test(t)) return "todos";
     if (/^!journal\s+list\s*$/i.test(t)) return "journal";
+    if (/^!email\s+(list|search)\b/i.test(t)) return "email-list";
     return null;
   }
 
@@ -110,6 +111,14 @@
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+  }
+  :global(:root) {
+    /* Greyscale chain — all pass WCAG AA 4.5:1 on #1a1a2e */
+    --clr-muted: #82829a;   /* metadata, dates, hints, empty states */
+    --clr-sub:   #9292aa;   /* labels, descriptions, secondary info */
+    --clr-dim:   #888;       /* tab hints, tertiary text */
+    --clr-kbd:   #999;       /* keyboard shortcut elements */
+    --clr-accent:#7c7c9a;   /* accents, borders (non-text) */
   }
   :global(body) {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
