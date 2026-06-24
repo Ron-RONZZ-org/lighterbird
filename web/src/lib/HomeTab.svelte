@@ -6,6 +6,8 @@
   import ChatInput from "./ChatInput.svelte";
   import LlmSetupModal from "./LlmSetupModal.svelte";
   import { email as emailApi, calendar, contacts, todo, journal } from "./api.js";
+  import { parseCommand } from "./parser.js";
+  import { commandTree, findNode } from "./commandTree.js";
 
   let hasSentLlmMessage = $state(false);
   let showLlmSetup = $state(false);
@@ -38,6 +40,51 @@
     return div.textContent || div.innerText || "";
   }
 
+  /** Count command-path tokens (excluding params). */
+  function countCmdTokens(tokens) {
+    let current = commandTree;
+    for (let i = 0; i < tokens.length; i++) {
+      const found = current.find((n) => n.name.toLowerCase() === tokens[i].toLowerCase());
+      if (!found) return i;
+      if (!found.children || found.children.length === 0) return i + 1;
+      current = found.children;
+    }
+    return tokens.length;
+  }
+
+  /** Open an interactive form tab for a command node with missing params. */
+  function openFormTab(node, input) {
+    const cmdPath = node.name; // leaf node name
+    // Detect parent domain from input
+    const parts = input.replace(/^!/, "").trim().split(/\s+/);
+    const parents = parts.slice(0, -1); // everything before the leaf command
+    const domain = parents[0] || "";
+    const parentStr = parents.join(".");
+
+    let formType = "";
+    let formTitle = "";
+    let FormComponent = null;
+
+    if (cmdPath === "write" && domain === "journal") {
+      formType = "journal-write";
+      formTitle = "Write Journal Entry";
+    } else if (cmdPath === "add" && parentStr === "todo") {
+      formType = "todo-add";
+      formTitle = "Add Todo";
+    } else if (cmdPath === "send" && domain === "email") {
+      formType = "email-send";
+      formTitle = "Compose Email";
+    } else if (cmdPath === "add" && parentStr === "calendar event") {
+      formType = "calendar-event-add";
+      formTitle = "Add Calendar Event";
+    } else {
+      // Unknown interactive command — let it fall through to backend error
+      return;
+    }
+
+    tabStore.open("form", formTitle, { form: formType, initialData: {} });
+  }
+
   /** Handle submission from ChatInput. */
   async function handleSubmit(input) {
     const trimmed = input.trim();
@@ -48,7 +95,35 @@
     hasSentLlmMessage = true;
 
     if (trimmed.startsWith("!")) {
-      // ── Command mode → result opens in new tab ─────────────────────
+      // ── Interactive form detection ─────────────────────────────────
+      // Check if the command tree says this is interactive AND the user
+      // hasn't provided all required positional params.
+      const { tokens, partial } = parseCommand(trimmed);
+      const trailing = trimmed.endsWith(" ");
+      // Build effective tokens: when there's no trailing space, the partial
+      // might be a complete command token (not a partial). Try resolving it.
+      let effectiveTokens = trailing && partial ? [...tokens, partial] : tokens;
+      if (!trailing && partial) {
+        // The partial might be the leaf command name — check if tokens +
+        // partial resolves to a deeper node.
+        const nodeWithPartial = findNode([...tokens, partial]);
+        if (nodeWithPartial) {
+          effectiveTokens = [...tokens, partial];
+        }
+      }
+      const node = findNode(effectiveTokens);
+
+      if (node?.interactive && effectiveTokens.length > 0) {
+        const consumed = effectiveTokens.length - countCmdTokens(effectiveTokens) - 1;
+        const missingRequired = node.params?.some((p, i) => p.required && i >= consumed);
+        if (missingRequired) {
+          openFormTab(node, trimmed);
+          scrollToBottom();
+          return;
+        }
+      }
+
+      // ── Normal command execution → result opens in new tab ─────────
       try {
         const result = await execute(trimmed);
         const dataType = detectPersistentType(trimmed);
@@ -200,7 +275,7 @@
     if (/^!(calendar\s+)?account\s+list\s*$/i.test(t)) return "calendars";
     if (/^!contacts\s+list\s*$/i.test(t)) return "contacts";
     if (/^!todo\s+list\s*$/i.test(t)) return "todos";
-    if (/^!journal\s+list\s*$/i.test(t)) return "journal";
+    if (/^!journal\s+(list|search)\b/i.test(t)) return "journal-list";
     if (/^!email\s+(list|search)\b/i.test(t)) return "email-list";
     return null;
   }
@@ -232,6 +307,16 @@
       });
     } catch { /* ignore */ }
   }
+
+  // Listen for focus-command-input event (dispatched from TabView on `i` key)
+  $effect(() => {
+    function handler() {
+      const input = document.querySelector(".input-field");
+      if (input) input.focus();
+    }
+    window.addEventListener("focus-command-input", handler);
+    return () => window.removeEventListener("focus-command-input", handler);
+  });
 
   async function checkLlmAvailable() {
     try {
