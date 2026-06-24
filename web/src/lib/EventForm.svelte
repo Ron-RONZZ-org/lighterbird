@@ -4,12 +4,14 @@
   import { calendar as calendarApi } from "./api.js";
 
   let { initialData = {}, onsubmit } = $props();
+  // svelte-ignore state_referenced_locally
+  const _initial = initialData;
 
-  let calendarUuid = $state(initialData.calendar_uuid || "");
-  let title = $state(initialData.title || "");
-  let start = $state(initialData.start || "");
-  let end = $state(initialData.end || "");
-  let location = $state(initialData.location || "");
+  let calendarUuid = $state(_initial.calendar_uuid || "");
+  let title = $state(_initial.title || "");
+  let start = $state(_initial.start || "");
+  let end = $state(_initial.end || "");
+  let location = $state(_initial.location || "");
   let creating = $state(false);
   let calendars = $state([]);
 

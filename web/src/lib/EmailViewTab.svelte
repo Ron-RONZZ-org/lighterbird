@@ -176,7 +176,7 @@
     <!-- Body: HTML iframe or plain text -->
     <div class="body-area">
       {#if hasHtml && useHtml}
-        <!-- svelte-ignore a11y_no_iframes -->
+        <!-- svelte-ignore a11y_distracting_elements -->
         <iframe
           class="html-frame"
           srcdoc={htmlContent}

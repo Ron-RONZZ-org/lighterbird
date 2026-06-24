@@ -161,8 +161,8 @@
   </div>
 
 {:else if step === "select"}
-  <div class="modal-overlay" onclick={onDismiss}>
-    <div class="modal" onclick={(e) => e.stopPropagation()}>
+  <div class="modal-overlay" onclick={onDismiss} onkeydown={(e) => e.key === "Escape" && onDismiss()} role="button" tabindex="-1" aria-label="Dismiss">
+    <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" tabindex="0" onkeydown={() => {}}>
       <div class="modal-header">
         <h2>Configure LLM</h2>
         <p class="subtitle">Choose a provider to enable AI chat</p>
@@ -179,8 +179,8 @@
   </div>
 
 {:else if step === "enter-key"}
-  <div class="modal-overlay" onclick={onDismiss}>
-    <div class="modal" onclick={(e) => e.stopPropagation()}>
+  <div class="modal-overlay" onclick={onDismiss} onkeydown={(e) => e.key === "Escape" && onDismiss()} role="button" tabindex="-1" aria-label="Dismiss">
+    <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" tabindex="0" onkeydown={() => {}}>
       <div class="modal-header">
         <h2>{selectedProvider?.name}</h2>
         <p class="subtitle">Paste your API key to get started</p>
@@ -210,8 +210,8 @@
   </div>
 
 {:else if step === "custom"}
-  <div class="modal-overlay" onclick={onDismiss}>
-    <div class="modal" onclick={(e) => e.stopPropagation()}>
+  <div class="modal-overlay" onclick={onDismiss} onkeydown={(e) => e.key === "Escape" && onDismiss()} role="button" tabindex="-1" aria-label="Dismiss">
+    <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" tabindex="0" onkeydown={() => {}}>
       <div class="modal-header">
         <h2>Custom Provider</h2>
         <p class="subtitle">Configure any OpenAI-compatible API</p>
