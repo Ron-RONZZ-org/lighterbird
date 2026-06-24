@@ -35,8 +35,8 @@
     try {
       await onsubmit({
         tokens: ["calendar", "event", "add"],
-        flags: {},
-        remaining: [calendarUuid, title, toIso(start), toIso(end), location],
+        flags: { calendar: calendarUuid },
+        remaining: [title, toIso(start), toIso(end), location].filter(Boolean),
       });
     } finally {
       creating = false;

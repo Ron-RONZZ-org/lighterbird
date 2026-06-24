@@ -29,7 +29,7 @@ def journal_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         entries = [normalize_journal_entry(e) for e in svc.list_by_date(date_str)]
     else:
         entries = [normalize_journal_entry(e) for e in svc.list(limit=limit)]
-    return {"type": "status", "title": "Journal", "data": {"entries": entries}}
+    return {"type": "journal-list", "title": "Journal", "data": {"entries": entries, "total": len(entries)}}
 
 
 @command("journal.write")
@@ -68,4 +68,4 @@ def journal_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     svc: JournalService = get_journal_service()
     query = " ".join(remaining) if remaining else flags.get("query", "")
     entries = [normalize_journal_entry(e) for e in svc.search(query)]
-    return {"type": "status", "title": "Journal Search", "data": {"entries": entries}}
+    return {"type": "journal-list", "title": "Journal Search", "data": {"entries": entries, "total": len(entries)}}
