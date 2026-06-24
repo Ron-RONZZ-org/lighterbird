@@ -11,10 +11,12 @@
   import EmailListTab from "./EmailListTab.svelte";
 
   function handleKeydown(e) {
-    // Escape — close current tab (works even when typing in an input;
-    // the CommandBar/ChatInput's handleKeydown runs first, closes
-    // suggestions/popups, then this catches the bubble)
+    // Escape — close current tab
+    // Tabs with complex overlays (email-list) manage their own Escape;
+    // they use 'q' or the close button to close.
     if (e.key === "Escape") {
+      const type = tabStore.active?.type;
+      if (type === "email-list") return; // self-managed Escape (dialogs, search, selection)
       if (tabStore.active && tabStore.active.closable && !tabStore.isHome) {
         tabStore.close(tabStore.active.id);
       } else if (tabStore.isHome) {
