@@ -26,8 +26,8 @@
 
   const PROVIDERS = [
     { id: "deepseek", name: "DeepSeek", baseUrl: "https://api.deepseek.com", model: "deepseek-v4-flash" },
-    { id: "ollama", name: "Ollama (local)", baseUrl: "http://localhost:11434", model: "llama3.2", noKey: true },
-    { id: "openai", name: "OpenAI", baseUrl: "https://api.openai.com", model: "gpt-4o" },
+    { id: "ollama", name: "Ollama (local)", baseUrl: "http://localhost:11434/v1", model: "llama3.2", noKey: true },
+    { id: "openai", name: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o" },
     { id: "custom", name: "Custom (OpenAI-compatible)", baseUrl: "", model: "" },
   ];
 

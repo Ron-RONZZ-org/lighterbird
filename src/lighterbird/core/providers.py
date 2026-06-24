@@ -24,6 +24,26 @@ logger = logging.getLogger(__name__)
 _CMD_PATTERN = re.compile(r"`(![a-z0-9_-]+(?:\s+[^\s`]+)*)`")
 
 
+# ── Default base URLs ─────────────────────────────────────────────────────
+
+_DEFAULT_BASE_URLS: dict[str, str] = {
+    "openai": "https://api.openai.com/v1",
+    "deepseek": "https://api.deepseek.com",  # no /v1 prefix
+    "ollama": "http://localhost:11434/v1",
+}
+
+
+def _resolve_base_url(provider_type: str, base_url: str) -> str:
+    """Resolve the effective base URL for a provider.
+
+    If ``base_url`` is non-empty, it's used as-is.
+    Otherwise the default for the given ``provider_type`` is returned.
+    """
+    if base_url:
+        return base_url.rstrip("/")
+    return _DEFAULT_BASE_URLS.get(provider_type, "https://api.openai.com/v1")
+
+
 # ── OpenAI-compatible provider ─────────────────────────────────────────────
 
 
@@ -33,11 +53,8 @@ class OpenAICompatibleProvider:
     def __init__(self, config: ProviderConfig) -> None:
         self.config = config
         self._available = bool(config.api_key) or config.provider_type == "ollama"
-        # Resolve base URL
-        if not config.base_url:
-            self.base_url = "https://api.openai.com/v1"
-        else:
-            self.base_url = config.base_url.rstrip("/") + "/v1"
+        # Resolve base URL — provider-type-aware defaults
+        self.base_url = _resolve_base_url(config.provider_type, config.base_url)
         # Resolve model
         if not config.model:
             self.model = "gpt-4o"
@@ -221,7 +238,7 @@ class OllamaProvider:
     def __init__(self, config: ProviderConfig) -> None:
         self.config = config
         self._available = True  # Ollama is always "available" — connection tested on first call
-        self.base_url = (config.base_url or "http://localhost:11434").rstrip("/") + "/v1"
+        self.base_url = _resolve_base_url(config.provider_type, config.base_url)
         self.model = config.model or "llama3.2"
 
     def is_available(self) -> bool:

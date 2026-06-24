@@ -24,7 +24,7 @@
     {
       id: "ollama",
       name: "Ollama (local)",
-      baseUrl: "http://localhost:11434",
+      baseUrl: "http://localhost:11434/v1",
       model: "llama3.2",
       desc: "Run models locally, no API key needed",
       needsKey: false,
@@ -32,7 +32,7 @@
     {
       id: "openai",
       name: "OpenAI",
-      baseUrl: "https://api.openai.com",
+      baseUrl: "https://api.openai.com/v1",
       model: "gpt-4o",
       desc: "GPT-4o, GPT-4, GPT-3.5",
       needsKey: true,
