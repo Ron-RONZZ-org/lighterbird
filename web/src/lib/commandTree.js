@@ -322,6 +322,7 @@ export const commandTree = [
       {
         name: "add",
         description: "Add a new todo",
+        interactive: true,
         params: [
           { name: "title", required: true, type: "string" },
         ],

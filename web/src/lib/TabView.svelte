@@ -9,6 +9,8 @@
   import ErrorPopup from "./ErrorPopup.svelte";
   import HelpPopup from "./HelpPopup.svelte";
   import EmailListTab from "./EmailListTab.svelte";
+  import JournalListTab from "./JournalListTab.svelte";
+  import FormTab from "./FormTab.svelte";
   import KeyboardShortcutOverlay from "./KeyboardShortcutOverlay.svelte";
 
   let showGlobalHelp = $state(false);
@@ -50,6 +52,16 @@
       return;
     }
 
+    // I / i — focus command input on home tab
+    if ((e.key === "i" || e.key === "I") && tabStore.isHome) {
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) {
+        return;
+      }
+      e.preventDefault();
+      window.dispatchEvent(new CustomEvent("focus-command-input"));
+      return;
+    }
+
     // Q / q — close current tab (inert when typing in an input to avoid
     // accidental closes from someone inserting "q" in a text field)
     if ((e.key === "q" || e.key === "Q") && !tabStore.isHome) {
@@ -84,8 +96,12 @@
         <ErrorPopup data={tabStore.active.data} />
       {:else if tabStore.active.type === "email-list"}
         <EmailListTab data={tabStore.active.data} />
+      {:else if tabStore.active.type === "journal-list"}
+        <JournalListTab data={tabStore.active.data} />
       {:else if tabStore.active.type === "help"}
         <HelpPopup data={tabStore.active.data} />
+      {:else if tabStore.active.type === "form"}
+        <FormTab data={tabStore.active.data} />
       {:else}
         <StatusPopup data={tabStore.active.data} />
       {/if}
@@ -146,11 +162,13 @@
       status: "📋",
       email: "✉",
       "email-list": "✉",
+      "journal-list": "📓",
       events: "📅",
       error: "⚠",
       help: "?",
       loading: "⏳",
       chat: "💬",
+      form: "✏",
     };
     return icons[type] || "•";
   }

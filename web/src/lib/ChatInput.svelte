@@ -170,7 +170,7 @@
   }
 
   function handleKeydown(e) {
-    // Escape: close suggestions
+    // Escape: close suggestions, or blur input
     if (e.key === "Escape") {
       if (showSuggestions) {
         suggestions = [];
@@ -179,6 +179,8 @@
         positionals = [];
         return;
       }
+      // Blur the textarea to exit input editing
+      textareaEl?.blur();
       return;
     }
 
