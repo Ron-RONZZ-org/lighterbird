@@ -1,33 +1,46 @@
 <script>
-  let { onDismiss = () => {} } = $props();
+  let { scope = "email-list", onDismiss = () => {} } = $props();
 
-  const shortcuts = [
-    { category: "Navigation", keys: [
-      { key: "Alt + 1-9", desc: "Switch to tab" },
-      { key: "q / Esc", desc: "Close current tab" },
-    ]},
-    { category: "Email List", keys: [
-      { key: "f", desc: "Toggle search/filter bar" },
-      { key: "v", desc: "Toggle selection mode" },
-      { key: "↑ / ↓", desc: "Navigate rows (selection mode)" },
-      { key: "PgUp / PgDn", desc: "Navigate pages (selection mode)" },
-      { key: "Shift + ↑ / ↓", desc: "Select range (selection mode)" },
-      { key: "Home / End", desc: "First / last row (selection mode)" },
-      { key: "Space", desc: "Toggle focused row (selection mode)" },
-      { key: "Delete", desc: "Delete selected messages" },
-      { key: "Ctrl + M", desc: "Move selected messages" },
-      { key: "h", desc: "Toggle this help overlay" },
-    ]},
-    { category: "Email Detail", keys: [
-      { key: "Ctrl + R", desc: "Reply" },
-      { key: "Ctrl + Shift + R", desc: "Reply All" },
-      { key: "Ctrl + L", desc: "Forward" },
-    ]},
-    { category: "General", keys: [
-      { key: "!command", desc: "Run a command" },
-      { key: "Alt + 1", desc: "Go to Home tab" },
-    ]},
-  ];
+  let shortcuts = $derived(
+    scope === "global"
+      ? [
+          { category: "Navigation", keys: [
+            { key: "Alt + 1-9", desc: "Switch to tab" },
+            { key: "q / Esc", desc: "Close current tab" },
+          ]},
+          { category: "General", keys: [
+            { key: "h", desc: "Toggle help overlay" },
+            { key: "!command", desc: "Run a command" },
+          ]},
+        ]
+      : [
+          { category: "Navigation", keys: [
+            { key: "Alt + 1-9", desc: "Switch to tab" },
+            { key: "q / Esc", desc: "Close current tab" },
+          ]},
+          { category: "Email List", keys: [
+            { key: "f", desc: "Toggle search/filter bar" },
+            { key: "v", desc: "Toggle selection mode" },
+            { key: "↑ / ↓", desc: "Navigate rows (selection mode)" },
+            { key: "PgUp / PgDn", desc: "Navigate pages (selection mode)" },
+            { key: "Shift + ↑ / ↓", desc: "Select range (selection mode)" },
+            { key: "Home / End", desc: "First / last row (selection mode)" },
+            { key: "Space", desc: "Toggle focused row (selection mode)" },
+            { key: "Delete", desc: "Delete selected messages" },
+            { key: "Ctrl + M", desc: "Move selected messages" },
+          ]},
+          { category: "Email Detail", keys: [
+            { key: "Ctrl + R", desc: "Reply" },
+            { key: "Ctrl + Shift + R", desc: "Reply All" },
+            { key: "Ctrl + L", desc: "Forward" },
+          ]},
+          { category: "General", keys: [
+            { key: "h", desc: "Toggle help overlay" },
+            { key: "!command", desc: "Run a command" },
+            { key: "Alt + 1", desc: "Go to Home tab" },
+          ]},
+        ]
+  );
 
   function handleKeydown(e) {
     if (e.key === "Escape") {
@@ -97,7 +110,7 @@
   }
 
   .hint {
-    color: #5a5a7a;
+    color: var(--clr-muted);
     font-size: 0.75rem;
     margin-bottom: 1rem;
   }
@@ -108,7 +121,7 @@
     background: #222;
     border: 1px solid #444;
     border-radius: 3px;
-    color: #888;
+    color: var(--clr-kbd);
     font-size: 0.7rem;
   }
 
@@ -122,7 +135,7 @@
   h4 {
     margin: 0 0 0.4rem;
     font-size: 0.78rem;
-    color: #7c7c9a;
+    color: var(--clr-sub);
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
@@ -150,7 +163,7 @@
     font-size: 0.75rem;
   }
   .key .sep {
-    color: #555;
+    color: var(--clr-dim);
     font-size: 0.7rem;
   }
 

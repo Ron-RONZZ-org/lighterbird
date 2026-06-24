@@ -211,7 +211,7 @@
     border-bottom: none;
   }
   .key {
-    color: #7c7c9a;
+    color: var(--clr-sub);
     min-width: 5rem;
   }
   .val {
@@ -219,10 +219,10 @@
     min-width: 12rem;
   }
   .hint {
-    color: #5a5a7a;
+    color: var(--clr-muted);
   }
   .empty {
-    color: #5a5a7a;
+    color: var(--clr-muted);
     text-align: center;
     padding: 2rem;
   }

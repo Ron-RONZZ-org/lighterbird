@@ -19,6 +19,13 @@
   let showShortcutHelp = $state(false);
   let confirmDelete = $state(false);
 
+  // Listen for global `h` key dispatched from TabView
+  $effect(() => {
+    function handler() { showShortcutHelp = !showShortcutHelp; }
+    window.addEventListener("help-toggle", handler);
+    return () => window.removeEventListener("help-toggle", handler);
+  });
+
   // Search bar — initialized from props via $effect below
   let showSearch = $state(false);
   let searchQuery = $state("");
@@ -206,9 +213,6 @@
     switch (e.key) {
       case "v":
         if (plain) { toggleSelectionMode(); e.preventDefault(); }
-        return;
-      case "h":
-        if (plain) { showShortcutHelp = !showShortcutHelp; e.preventDefault(); }
         return;
       case "f":
         if (plain) {
@@ -484,7 +488,7 @@
     color: #e0e0e0;
   }
   .date {
-    color: #5a5a7a;
+    color: var(--clr-muted);
     min-width: 6rem;
     text-align: right;
     flex-shrink: 0;
@@ -492,7 +496,7 @@
   }
 
   .empty {
-    color: #5a5a7a;
+    color: var(--clr-muted);
     text-align: center;
     padding: 2rem;
   }
