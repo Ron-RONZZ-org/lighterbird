@@ -52,7 +52,7 @@ export const tabStore = {
   /**
    * Open a new result tab.
    *
-   * @param {"status"|"email"|"events"|"error"|"help"|"loading"|"chat"} type
+   * @param {"status"|"email"|"email-list"|"events"|"error"|"help"|"loading"|"chat"} type
    * @param {string} title
    * @param {any} data
    * @param {object} [opts]

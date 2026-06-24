@@ -8,6 +8,7 @@
   import EventsPopup from "./EventsPopup.svelte";
   import ErrorPopup from "./ErrorPopup.svelte";
   import HelpPopup from "./HelpPopup.svelte";
+  import EmailListTab from "./EmailListTab.svelte";
 
   function handleKeydown(e) {
     // Escape — close current tab (works even when typing in an input;
@@ -57,6 +58,8 @@
         <EventsPopup data={tabStore.active.data} />
       {:else if tabStore.active.type === "error"}
         <ErrorPopup data={tabStore.active.data} />
+      {:else if tabStore.active.type === "email-list"}
+        <EmailListTab data={tabStore.active.data} />
       {:else if tabStore.active.type === "help"}
         <HelpPopup data={tabStore.active.data} />
       {:else}
@@ -110,6 +113,7 @@
       home: "⌂",
       status: "📋",
       email: "✉",
+      "email-list": "✉",
       events: "📅",
       error: "⚠",
       help: "?",

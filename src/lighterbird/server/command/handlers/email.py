@@ -67,7 +67,7 @@ def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     messages = [normalize_message(m) for m in svc.search_messages(filters, limit=limit)]
     title_suffix = f" ({folder_filter})" if folder_filter else ""
     return {
-        "type": "status",
+        "type": "email-list",
         "title": f"Inbox{title_suffix}",
         "data": {"messages": messages, "total": len(messages)},
     }

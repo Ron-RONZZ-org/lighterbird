@@ -108,6 +108,13 @@ export const email = {
   markRead: (uuid, read = true) =>
     request("PATCH", `/email/messages/${uuid}/read`, { read }),
 
+  trash: (uuid) => request("POST", `/email/messages/${uuid}/trash`),
+
+  batchDelete: (uuids) => request("POST", "/email/messages/batch-delete", { uuids }),
+
+  batchMove: (uuids, destinationFolderUuid) =>
+    request("POST", "/email/messages/batch-move", { uuids, destination_folder_uuid: destinationFolderUuid }),
+
   listFolders: () => request("GET", "/email/folders"),
 };
 
