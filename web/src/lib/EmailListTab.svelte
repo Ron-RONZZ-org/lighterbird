@@ -10,16 +10,21 @@
   let messages = $derived(data?.messages || []);
   let total = $derived(data?.total || 0);
 
-  // ── Selection state ──────────────────────────────────────────────────
   let selectionMode = $state(false);
   let selectedUuids = $state(new Set());
   let focusedIndex = $state(-1);
   let anchorIndex = $state(-1);
 
-  // ── Dialog state ─────────────────────────────────────────────────────
   let showMoveDialog = $state(false);
   let showShortcutHelp = $state(false);
   let confirmDelete = $state(false);
+
+  // Search bar
+  let showSearch = $state(!!(data?.query));
+  let searchQuery = $state(data?.query || "");
+  let currentFilters = $state(data?.filters || {});
+  let searchTimeout;
+  let abortController = null;
 
   let numSelected = $derived(selectedUuids.size);
 
@@ -117,17 +122,70 @@
     }
   }
 
+  // Sync state when tab data is updated (e.g. after delete/move)
+  $effect(() => {
+    if (data) {
+      currentFilters = data.filters || {};
+      if (data.query !== undefined) {
+        searchQuery = data.query || "";
+      }
+    }
+  });
+
+  /** Perform a search with the given query, preserving current filters. */
+  function performSearch(query) {
+    if (abortController) abortController.abort();
+    abortController = new AbortController();
+
+    const params = { ...currentFilters, limit: 50 };
+    if (query && query.length >= 2) {
+      params.query = query;
+    }
+
+    emailApi.listMessages(params)
+      .then((result) => {
+        tabStore.update(tabStore.active.id, result);
+        selectedUuids = new Set();
+      })
+      .catch((err) => {
+        // Silent on abort, let user retry otherwise
+        if (err?.name === "AbortError") return;
+      });
+  }
+
+  function handleSearchInput(e) {
+    const val = e.target.value;
+    searchQuery = val;
+    clearTimeout(searchTimeout);
+    if (val.length === 0 || val.length >= 2) {
+      searchTimeout = setTimeout(() => performSearch(val), 300);
+    }
+  }
+
+  function closeSearch() {
+    showSearch = false;
+    searchQuery = "";
+    // Reset to initial filter state if there was a query
+    if (data?.query) {
+      performSearch("");
+    }
+    // Re-focus the list area after closing
+    document.querySelector(".email-list .list")?.focus();
+  }
+
   async function refreshList() {
     try {
-      const result = await emailApi.listMessages({ limit: 50 });
+      const params = { ...currentFilters, limit: 50 };
+      if (searchQuery && searchQuery.length >= 2) {
+        params.query = searchQuery;
+      }
+      const result = await emailApi.listMessages(params);
       tabStore.update(tabStore.active.id, result);
       selectedUuids = new Set();
     } catch {
       // Silent — let user retry
     }
   }
-
-  // ── Keyboard navigation ─────────────────────────────────────────────
 
   function focusRow(index) {
     if (index < 0) index = 0;
@@ -143,17 +201,19 @@
     const tag = e.target.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || e.target.isContentEditable) return;
 
-    // ── Global shortcuts (always available) ──────────────────────────
+    const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
     switch (e.key) {
       case "v":
-        if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-          toggleSelectionMode();
-          e.preventDefault();
-        }
+        if (plain) { toggleSelectionMode(); e.preventDefault(); }
         return;
       case "h":
-        if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-          showShortcutHelp = !showShortcutHelp;
+        if (plain) { showShortcutHelp = !showShortcutHelp; e.preventDefault(); }
+        return;
+      case "f":
+        if (plain) {
+          showSearch = !showSearch;
+          if (showSearch) requestAnimationFrame(() => document.querySelector(".search-input")?.focus());
+          else closeSearch();
           e.preventDefault();
         }
         return;
@@ -161,106 +221,67 @@
         if (showMoveDialog) { showMoveDialog = false; e.preventDefault(); return; }
         if (showShortcutHelp) { showShortcutHelp = false; e.preventDefault(); return; }
         if (confirmDelete) { confirmDelete = false; e.preventDefault(); return; }
+        if (showSearch) { closeSearch(); e.preventDefault(); return; }
         if (selectionMode) { toggleSelectionMode(); e.preventDefault(); return; }
         return;
     }
 
-    // ── Selection-mode shortcuts ────────────────────────────────────
     if (!selectionMode) return;
-
-    // Range select with Shift
     const shift = e.shiftKey;
+
+    function navRow(idx) {
+      if (shift && anchorIndex >= 0) selectRange(anchorIndex, idx);
+      focusRow(idx);
+      if (!shift) anchorIndex = idx;
+    }
 
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault();
-        if (focusedIndex < messages.length - 1) {
-          const next = focusedIndex + 1;
-          if (shift && anchorIndex >= 0) {
-            // Extend range
-            selectRange(anchorIndex, next);
-          }
-          focusRow(next);
-          if (!shift) anchorIndex = next;
-        }
+        if (focusedIndex < messages.length - 1) navRow(focusedIndex + 1);
         return;
-
       case "ArrowUp":
         e.preventDefault();
-        if (focusedIndex > 0) {
-          const prev = focusedIndex - 1;
-          if (shift && anchorIndex >= 0) {
-            selectRange(anchorIndex, prev);
-          }
-          focusRow(prev);
-          if (!shift) anchorIndex = prev;
-        }
+        if (focusedIndex > 0) navRow(focusedIndex - 1);
         return;
-
       case "PageDown":
         e.preventDefault();
-        {
-          const step = Math.max(1, Math.floor(messages.length / 5));
-          const next = Math.min(focusedIndex + step, messages.length - 1);
-          if (shift && anchorIndex >= 0) selectRange(anchorIndex, next);
-          focusRow(next);
-          if (!shift) anchorIndex = next;
-        }
+        navRow(Math.min(focusedIndex + Math.max(1, Math.floor(messages.length / 5)), messages.length - 1));
         return;
-
       case "PageUp":
         e.preventDefault();
-        {
-          const step = Math.max(1, Math.floor(messages.length / 5));
-          const prev = Math.max(focusedIndex - step, 0);
-          if (shift && anchorIndex >= 0) selectRange(anchorIndex, prev);
-          focusRow(prev);
-          if (!shift) anchorIndex = prev;
-        }
+        navRow(Math.max(focusedIndex - Math.max(1, Math.floor(messages.length / 5)), 0));
         return;
-
       case "Home":
         e.preventDefault();
         if (shift && anchorIndex >= 0) selectRange(anchorIndex, 0);
         focusRow(0);
         if (!shift) anchorIndex = 0;
         return;
-
       case "End":
         e.preventDefault();
         if (shift && anchorIndex >= 0) selectRange(anchorIndex, messages.length - 1);
         focusRow(messages.length - 1);
         if (!shift) anchorIndex = messages.length - 1;
         return;
-
       case " ":
         e.preventDefault();
         if (focusedIndex >= 0 && focusedIndex < messages.length) {
           toggleMessage(messages[focusedIndex].uuid);
-          // Also set anchor if first selection
           if (anchorIndex < 0) anchorIndex = focusedIndex;
         }
         return;
-
       case "Delete":
         e.preventDefault();
-        if (numSelected > 0) {
-          confirmDelete = true;
-        }
+        if (numSelected > 0) confirmDelete = true;
         return;
     }
 
-    // Ctrl+M / Cmd+M — open move dialog
     if ((e.ctrlKey || e.metaKey) && e.key === "m") {
       e.preventDefault();
-      if (numSelected > 0) {
-        showMoveDialog = true;
-      }
-      return;
+      if (numSelected > 0) showMoveDialog = true;
     }
   }
-
-  // ── Format helpers ──────────────────────────────────────────────────
 
   function truncate(s, max) {
     if (!s) return "";
@@ -273,14 +294,13 @@
       const d = new Date(iso);
       if (isNaN(d.getTime())) return iso.slice(0, 10);
       const now = new Date();
-      const isToday = d.toDateString() === now.toDateString();
-      if (isToday) return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      const thisYear = d.getFullYear() === now.getFullYear();
-      if (thisYear) return d.toLocaleDateString([], { month: "short", day: "numeric" });
-      return d.toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
-    } catch {
-      return iso.slice(0, 10);
-    }
+      const opts = d.toDateString() === now.toDateString()
+        ? { hour: "2-digit", minute: "2-digit" }
+        : d.getFullYear() === now.getFullYear()
+          ? { month: "short", day: "numeric" }
+          : { year: "numeric", month: "short", day: "numeric" };
+      return d.toLocaleDateString([], opts);
+    } catch { return iso.slice(0, 10); }
   }
 </script>
 
@@ -291,9 +311,16 @@
   <EmailListToolbar
     {selectionMode}
     {numSelected}
+    {showSearch}
+    {searchQuery}
     onToggleMode={toggleSelectionMode}
     onDelete={() => { if (numSelected > 0) confirmDelete = true; }}
     onMove={() => { if (numSelected > 0) showMoveDialog = true; }}
+    onToggleSearch={() => { showSearch = !showSearch; if (showSearch) requestAnimationFrame(() => document.querySelector(".search-input")?.focus()); }}
+    onSearchInput={handleSearchInput}
+    onSearchClear={() => { searchQuery = ""; performSearch(""); }}
+    onSearchEscape={closeSearch}
+    onSearchEnter={() => performSearch(searchQuery)}
   />
 
   <!-- Message list -->

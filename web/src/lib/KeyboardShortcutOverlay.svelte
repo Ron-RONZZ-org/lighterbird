@@ -7,6 +7,7 @@
       { key: "q / Esc", desc: "Close current tab" },
     ]},
     { category: "Email List", keys: [
+      { key: "f", desc: "Toggle search/filter bar" },
       { key: "v", desc: "Toggle selection mode" },
       { key: "↑ / ↓", desc: "Navigate rows (selection mode)" },
       { key: "PgUp / PgDn", desc: "Navigate pages (selection mode)" },

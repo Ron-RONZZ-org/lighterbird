@@ -2,23 +2,55 @@
   let {
     selectionMode = false,
     numSelected = 0,
+    showSearch = false,
+    searchQuery = "",
     onToggleMode = () => {},
     onDelete = () => {},
     onMove = () => {},
+    onToggleSearch = () => {},
+    onSearchInput = () => {},
+    onSearchClear = () => {},
+    onSearchEscape = () => {},
+    onSearchEnter = () => {},
   } = $props();
+
+  function handleSearchKeydown(e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      onSearchEnter();
+    }
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      onSearchEscape();
+    }
+  }
 </script>
 
 <div class="toolbar" class:active={selectionMode || numSelected > 0}>
-  <div class="left">
-    <button class="tool-btn" title="Toggle selection mode (V)" onclick={onToggleMode}>
-      {selectionMode ? "Exit Select" : "Select"}
-    </button>
-    <span class="hint">
-      Press <kbd>v</kbd> to toggle
-    </span>
-  </div>
-
-  {#if selectionMode}
+  {#if showSearch}
+    <!-- Search mode: full-width input -->
+    <div class="search-bar">
+      <span class="search-icon">🔍</span>
+      <input
+        type="text"
+        class="search-input"
+        placeholder="Search messages… (min 2 chars)"
+        value={searchQuery}
+        oninput={onSearchInput}
+        onkeydown={handleSearchKeydown}
+        aria-label="Search messages"
+      />
+      {#if searchQuery}
+        <button class="search-clear" onclick={onSearchClear} aria-label="Clear search">✕</button>
+      {/if}
+    </div>
+  {:else if selectionMode}
+    <!-- Selection mode: action toolbar -->
+    <div class="left">
+      <button class="tool-btn" title="Exit selection mode (V)" onclick={onToggleMode}>
+        Exit Select
+      </button>
+    </div>
     <div class="center">
       {#if numSelected > 0}
         <span class="count">{numSelected} selected</span>
@@ -26,20 +58,20 @@
         <span class="count muted">Select messages with click or <kbd>Space</kbd></span>
       {/if}
     </div>
-
     <div class="right">
-      <button
-        class="tool-btn"
-        disabled={numSelected === 0}
-        onclick={onMove}
-        title="Move selected (Ctrl+M)"
-      >Move</button>
-      <button
-        class="tool-btn danger"
-        disabled={numSelected === 0}
-        onclick={onDelete}
-        title="Delete selected (Delete key)"
-      >Delete</button>
+      <button class="tool-btn" disabled={numSelected === 0} onclick={onMove} title="Move selected (Ctrl+M)">Move</button>
+      <button class="tool-btn danger" disabled={numSelected === 0} onclick={onDelete} title="Delete selected (Delete key)">Delete</button>
+    </div>
+  {:else}
+    <!-- View mode: minimal toolbar -->
+    <div class="left">
+      <button class="tool-btn" title="Toggle selection mode (V)" onclick={onToggleMode}>Select</button>
+    </div>
+    <div class="center">
+      <span class="search-hint"><kbd>f</kbd> search</span>
+    </div>
+    <div class="right">
+      <button class="tool-btn" onclick={onToggleSearch} title="Toggle search (F)">🔍</button>
     </div>
   {/if}
 </div>
@@ -48,7 +80,7 @@
   .toolbar {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.5rem;
     padding: 0.3rem 0.5rem;
     background: #16162a;
     border-bottom: 1px solid #333;
@@ -83,23 +115,15 @@
     font-size: 0.8rem;
     transition: background 0.1s;
   }
-  .tool-btn:hover:not(:disabled) {
-    background: #3a3a5e;
-  }
-  .tool-btn:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
-  .tool-btn.danger:hover:not(:disabled) {
-    background: #6b2020;
-    border-color: #8b3030;
-  }
+  .tool-btn:hover:not(:disabled) { background: #3a3a5e; }
+  .tool-btn:disabled { opacity: 0.4; cursor: default; }
+  .tool-btn.danger:hover:not(:disabled) { background: #6b2020; border-color: #8b3030; }
 
-  .hint {
+  .search-hint {
     color: #5a5a7a;
     font-size: 0.72rem;
   }
-  .hint kbd {
+  .search-hint kbd {
     display: inline-block;
     padding: 0 3px;
     font-family: monospace;
@@ -110,11 +134,37 @@
     font-size: 0.7rem;
   }
 
-  .count {
-    color: #7c7c9a;
+  .count { color: #7c7c9a; font-size: 0.82rem; }
+  .count.muted { color: #555; }
+
+  /* Search bar fills entire toolbar */
+  .search-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 1;
+  }
+  .search-icon { font-size: 0.75rem; opacity: 0.6; }
+  .search-input {
+    flex: 1;
+    padding: 0.3rem 0.4rem;
+    border: 1px solid #444;
+    border-radius: 4px;
+    background: #12122a;
+    color: #e0e0e0;
+    font-family: monospace;
     font-size: 0.82rem;
+    outline: none;
   }
-  .count.muted {
-    color: #555;
+  .search-input:focus { border-color: #6a6a9a; }
+  .search-input::placeholder { color: #555; }
+  .search-clear {
+    background: none;
+    border: none;
+    color: #7c7c9a;
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 0.2rem;
   }
+  .search-clear:hover { color: #e0e0e0; }
 </style>
