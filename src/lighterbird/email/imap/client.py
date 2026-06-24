@@ -71,7 +71,7 @@ class IMAPClient:
                 decoded = line.decode("utf-8", errors="replace")
                 parts = decoded.split('"')
                 if len(parts) >= 3:
-                    name = parts[-2].strip() if len(parts) == 3 else parts[2].strip()
+                    name = parts[2].strip() if len(parts) == 3 else parts[-2].strip()
                 else:
                     continue
             if not name or name == "/":
@@ -149,7 +149,7 @@ class IMAPClient:
             known_uids: set[int] = set()
             if not force:
                 rows = db_store.db.execute(
-                    "SELECT imap_uid FROM mesagoj WHERE konto_id = ? AND dosierujo_id = ? AND imap_uid IS NOT NULL",
+                    "SELECT imap_uid FROM mesagoj WHERE konto_id = ? AND dosierujo_id = ? AND imap_uid IS NOT NULL AND forigita = 0",
                     (konto_id, dosierujo_id),
                 )
                 known_uids = {r["imap_uid"] for r in rows}
@@ -180,6 +180,9 @@ class IMAPClient:
                     try:
                         uid_match = _IMAP_UID_RE.search(raw_flags)
                         if not uid_match:
+                            result["errors"].append(
+                                f"UID regex failed on: {raw_flags[:200]!r}"
+                            )
                             continue
                         imap_uid = int(uid_match.group(1))
                         if not force and imap_uid in known_uids:
@@ -248,7 +251,7 @@ def store_message(db: Any, data: dict[str, Any], force: bool = False) -> str:
                 local_stelo = existing["stelo"]
                 db.execute("DELETE FROM mesagoj WHERE uuid = ?", (msg_uuid,))
     db.execute(
-        """INSERT OR IGNORE INTO mesagoj
+        """INSERT OR REPLACE INTO mesagoj
            (uuid, konto_id, dosierujo_id, message_id, in_reply_to,
             imap_uid, de, al, kc, subjekto, korpo, html_korpo,
             prioritato, legita, stelo, forigita,
