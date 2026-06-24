@@ -40,8 +40,9 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="overlay" onclick={onDismiss} role="dialog" aria-label="Keyboard shortcuts">
+<div class="overlay" onclick={onDismiss} role="dialog" aria-label="Keyboard shortcuts" tabindex="0">
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div class="dialog" onclick={(e) => e.stopPropagation()} role="document">
     <h3>Keyboard Shortcuts</h3>
     <p class="hint">Press <kbd>h</kbd> or <kbd>Esc</kbd> to close</p>

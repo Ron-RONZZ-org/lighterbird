@@ -210,34 +210,6 @@
   .row:last-child {
     border-bottom: none;
   }
-  .row.clickable {
-    cursor: pointer;
-    transition: background 0.1s;
-  }
-  .row.clickable:hover {
-    background: #2a2a44;
-  }
-  .row.clickable:focus {
-    outline: 1px solid #7c7c9a;
-    outline-offset: -1px;
-  }
-  .list-hint {
-    font-size: 0.75rem;
-    color: #5a5a7a;
-    margin-bottom: 0.3rem;
-    padding: 0.2rem 0;
-  }
-  .list-hint.compact {
-    margin-bottom: 0;
-  }
-  kbd {
-    font-family: monospace;
-    background: #2a2a3e;
-    padding: 1px 4px;
-    border-radius: 3px;
-    font-size: 0.7rem;
-    border: 1px solid #444;
-  }
   .key {
     color: #7c7c9a;
     min-width: 5rem;

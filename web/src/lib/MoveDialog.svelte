@@ -84,8 +84,8 @@
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="overlay" onclick={onDismiss} onkeydown={handleKeydown} role="dialog" aria-label="Move messages">
+<div class="overlay" onclick={onDismiss} onkeydown={handleKeydown} role="dialog" aria-label="Move messages" tabindex="0">
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div class="dialog" onclick={(e) => e.stopPropagation()} role="document">
     <h3>Move to folder</h3>
     <p class="desc">Select a destination folder:</p>
@@ -95,7 +95,8 @@
     {:else if error}
       <p class="error-msg">{error}</p>
     {:else}
-      <div class="search-box" role="combobox" aria-expanded={showSuggestions}>
+      <div class="search-box" role="combobox" aria-expanded={showSuggestions} aria-controls="folder-suggestions">
+        <!-- svelte-ignore a11y_autofocus -->
         <input
           type="text"
           placeholder="Type account/folder…"
@@ -104,7 +105,6 @@
           onkeydown={handleKeydown}
           autofocus
           aria-autocomplete="list"
-          aria-controls="folder-suggestions"
         />
 
         {#if showSuggestions}

@@ -2,7 +2,10 @@
   let { message = "Confirm?", onConfirm = () => {}, onDismiss = () => {} } = $props();
 </script>
 
-<div class="confirm-overlay" role="alertdialog" aria-label="Confirm" onclick={onDismiss}>
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<div class="confirm-overlay" role="alertdialog" aria-label="Confirm" onclick={onDismiss} tabindex="0">
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div class="confirm-box" onclick={(e) => e.stopPropagation()}>
     <p>{message}</p>
     <div class="actions">

@@ -19,10 +19,10 @@
   let showShortcutHelp = $state(false);
   let confirmDelete = $state(false);
 
-  // Search bar
-  let showSearch = $state(!!(data?.query));
-  let searchQuery = $state(data?.query || "");
-  let currentFilters = $state(data?.filters || {});
+  // Search bar — initialized from props via $effect below
+  let showSearch = $state(false);
+  let searchQuery = $state("");
+  let currentFilters = $state({});
   let searchTimeout;
   let abortController = null;
 
@@ -122,13 +122,14 @@
     }
   }
 
-  // Sync state when tab data is updated (e.g. after delete/move)
+  // Sync state when tab data is replaced by a command (has filters/query).
+  // Do NOT sync on local API refreshes (delete/move/search) — those have no
+  // filters/query and would overwrite the user's current search bar state.
   $effect(() => {
-    if (data) {
+    if (data && (data.filters !== undefined || data.query !== undefined)) {
       currentFilters = data.filters || {};
-      if (data.query !== undefined) {
-        searchQuery = data.query || "";
-      }
+      searchQuery = data.query || "";
+      showSearch = !!(data.query);
     }
   });
 
@@ -342,7 +343,15 @@
             handleRowClick(e, msg);
           }
         }}
-        onmouseenter={() => { if (selectionMode && focusedIndex !== i) {} }}
+        onkeydown={(e) => {
+          if (e.key === "Enter") {
+            if (e.ctrlKey || e.metaKey) {
+              openMessageInNewTab(e, msg.uuid);
+            } else {
+              handleRowClick(e, msg);
+            }
+          }
+        }}
       >
         <!-- Checkbox (selection mode only, reserved space always) -->
         <span class="checkbox-cell">
