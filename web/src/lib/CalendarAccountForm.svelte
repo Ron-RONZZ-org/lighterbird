@@ -14,8 +14,10 @@
 
   let isEdit = $derived(calendar !== null);
 
-  let url = $state(calendar?.url || "");
-  let username = $state(calendar?.username || "");
+  // svelte-ignore state_referenced_locally
+  const _init = calendar || {};
+  let url = $state(_init.url || "");
+  let username = $state(_init.username || "");
   let password = $state("");
   let saving = $state(false);
   let error = $state("");
@@ -51,8 +53,8 @@
   }
 </script>
 
-<div class="modal-overlay" onclick={onDismiss}>
-  <div class="modal" onclick={(e) => e.stopPropagation()}>
+<div class="modal-overlay" onclick={onDismiss} onkeydown={(e) => e.key === "Escape" && onDismiss()} role="button" tabindex="-1" aria-label="Dismiss">
+  <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" tabindex="0" onkeydown={() => {}}>
     <div class="modal-header">
       <h2>{isEdit ? "Edit Calendar" : "Add Calendar"}</h2>
       <p class="subtitle">{isEdit ? `Editing "${calendar.url}"` : "Configure a new calendar"}</p>

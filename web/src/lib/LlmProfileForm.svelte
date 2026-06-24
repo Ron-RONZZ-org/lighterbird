@@ -14,11 +14,13 @@
 
   let isEdit = $derived(profile !== null);
 
-  let name = $state(profile?.name || "");
-  let providerType = $state(profile?.provider_type || "deepseek");
+  // svelte-ignore state_referenced_locally
+  const _init = profile || {};
+  let name = $state(_init.name || "");
+  let providerType = $state(_init.provider_type || "deepseek");
   let apiKey = $state("");
-  let baseUrl = $state(profile?.base_url || "");
-  let model = $state(profile?.model || "");
+  let baseUrl = $state(_init.base_url || "");
+  let model = $state(_init.model || "");
   let temperature = $state(0.7);
   let maxTokens = $state(2048);
   let saving = $state(false);
@@ -78,8 +80,8 @@
   }
 </script>
 
-<div class="modal-overlay" onclick={onDismiss}>
-  <div class="modal" onclick={(e) => e.stopPropagation()}>
+<div class="modal-overlay" onclick={onDismiss} onkeydown={(e) => e.key === "Escape" && onDismiss()} role="button" tabindex="-1" aria-label="Dismiss">
+  <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" tabindex="0" onkeydown={() => {}}>
     <div class="modal-header">
       <h2>{isEdit ? "Edit LLM Profile" : "Add LLM Profile"}</h2>
       <p class="subtitle">{isEdit ? `Editing "${profile.name}"` : "Create a new provider configuration"}</p>

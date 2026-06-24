@@ -14,11 +14,16 @@
 
   let isEdit = $derived(account !== null);
 
-  let email = $state(account?.email || account?.retposto || "");
-  let name = $state(account?.name || account?.nomo || "");
+  // Capture initial values from the `account` prop at mount time.
+  // Form fields are intentionally $state (not $derived) — the user
+  // edits them and we do NOT re-initialize on prop changes.
+  // svelte-ignore state_referenced_locally
+  const _init = account || {};
+  let email = $state(_init.email || _init.retposto || "");
+  let name = $state(_init.name || _init.nomo || "");
   let password = $state("");
-  let imapServer = $state(account?.imap_server || account?.imap_servilo || "");
-  let smtpServer = $state(account?.smtp_server || account?.smtp_servilo || "");
+  let imapServer = $state(_init.imap_server || _init.imap_servilo || "");
+  let smtpServer = $state(_init.smtp_server || _init.smtp_servilo || "");
   let saving = $state(false);
   let error = $state("");
 
@@ -55,8 +60,8 @@
   }
 </script>
 
-<div class="modal-overlay" onclick={onDismiss}>
-  <div class="modal" onclick={(e) => e.stopPropagation()}>
+<div class="modal-overlay" onclick={onDismiss} onkeydown={(e) => e.key === "Escape" && onDismiss()} role="button" tabindex="-1" aria-label="Dismiss">
+  <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" tabindex="0" onkeydown={() => {}}>
     <div class="modal-header">
       <h2>{isEdit ? "Edit Email Account" : "Add Email Account"}</h2>
       <p class="subtitle">{isEdit ? `Editing "${account.email || account.retposto}"` : "Configure a new email account"}</p>

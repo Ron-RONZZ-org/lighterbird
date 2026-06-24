@@ -408,11 +408,6 @@
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     z-index: 100;
   }
-  .suggestions.above {
-    margin-top: 0;
-    margin-bottom: 4px;
-  }
-
   /* Positional tracker row (non-interactive, info-only) */
   .positional-tracker {
     display: flex;
