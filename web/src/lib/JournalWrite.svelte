@@ -2,10 +2,12 @@
   /** Journal entry write form — used when !journal write is typed interactively. */
 
   let { initialData = {}, onsubmit } = $props();
+  // svelte-ignore state_referenced_locally
+  const _initial = initialData;
 
-  let title = $state(initialData.title || "");
-  let text = $state(initialData.text || "");
-  let date = $state(initialData.date || new Date().toISOString().slice(0, 10));
+  let title = $state(_initial.title || "");
+  let text = $state(_initial.text || "");
+  let date = $state(_initial.date || new Date().toISOString().slice(0, 10));
   let writing = $state(false);
 
   async function handleSubmit(e) {

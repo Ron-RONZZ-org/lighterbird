@@ -155,7 +155,7 @@
   {/if}
 </div>
 
-<script context="module">
+<script module>
   function tabIcon(type) {
     const icons = {
       home: "⌂",
