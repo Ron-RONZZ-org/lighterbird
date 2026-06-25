@@ -10,6 +10,20 @@
   // Normalize null to empty object (delete commands return 204 → null)
   let d = $derived(data || {});
 
+  // Dismissible notice banner
+  let noticeDismissed = $state(false);
+
+  async function dismissNotice(id) {
+    noticeDismissed = true;
+    try {
+      await fetch("/api/v1/chat/dismiss-notice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+    } catch { /* best-effort */ }
+  }
+
   // ── Form overlay state ──────────────────────────────────────────────
 
   let activeForm = $state(null); // null | "llm" | "email" | "calendar"
@@ -94,6 +108,12 @@
 </script>
 
 <div class="status">
+  {#if d._notice && !noticeDismissed}
+    <div class="notice-banner" role="alert">
+      <span class="notice-text">{d._notice.message}</span>
+      <button class="notice-close" onclick={() => dismissNotice(d._notice.id)} aria-label="Dismiss notice">✕</button>
+    </div>
+  {/if}
   {#if d.accounts !== undefined}
     {#if activeForm === "email"}
       <EmailAccountForm
@@ -229,5 +249,37 @@
   .message {
     color: #e0e0e0;
     white-space: pre-wrap;
+  }
+  .notice-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    margin: 4px 8px;
+    background: #2a2a3e;
+    border: 1px solid #4a4a6e;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    color: #c0c0d0;
+    line-height: 1.4;
+  }
+  .notice-text {
+    flex: 1;
+    white-space: pre-wrap;
+  }
+  .notice-close {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
+    line-height: 1;
+  }
+  .notice-close:hover {
+    color: #e0e0e0;
+    background: #3a3a4e;
   }
 </style>
