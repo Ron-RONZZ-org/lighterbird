@@ -241,6 +241,8 @@ def backup_config(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     Without flags: show current backup configuration.
 
     With flags: set the corresponding config values.
+    --auto-interval is specified in minutes (0 = disabled); the scheduler
+    checks at most once per minute so 15-30 is a sensible range.
     """
     cfg = load_config()
 
@@ -252,27 +254,36 @@ def backup_config(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
             "data": {
                 "external_dir": cfg.get("external_dir", "(not set)"),
                 "retention": cfg.get("retention", 10),
-                "auto_interval_hours": cfg.get("auto_interval_hours", 0),
+                "auto_interval_minutes": cfg.get("auto_interval_minutes", 0),
             },
         }
 
     # Update config
     changed: list[str] = []
     if "external_dir" in flags:
-        cfg["external_dir"] = flags["external_dir"]
+        val = flags["external_dir"]
+        if not val.strip():
+            raise CommandValidationError("--external-dir must not be empty.")
+        cfg["external_dir"] = val
         changed.append("external_dir")
     if "retention" in flags:
         try:
-            cfg["retention"] = int(flags["retention"])
-            changed.append("retention")
+            retention = int(flags["retention"])
         except ValueError:
             raise CommandValidationError(f"Invalid --retention value: {flags['retention']}")
+        if retention < 1:
+            raise CommandValidationError(f"--retention must be >= 1, got {retention}.")
+        cfg["retention"] = retention
+        changed.append("retention")
     if "auto_interval" in flags:
         try:
-            cfg["auto_interval_hours"] = int(flags["auto_interval"])
-            changed.append("auto_interval_hours")
+            interval = int(flags["auto_interval"])
         except ValueError:
             raise CommandValidationError(f"Invalid --auto-interval value: {flags['auto_interval']}")
+        if interval < 0:
+            raise CommandValidationError(f"--auto-interval must be >= 0, got {interval}.")
+        cfg["auto_interval_minutes"] = interval
+        changed.append("auto_interval_minutes")
 
     save_config(cfg)
 
