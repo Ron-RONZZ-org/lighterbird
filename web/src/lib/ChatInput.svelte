@@ -179,8 +179,10 @@
         positionals = [];
         return;
       }
-      // Blur the textarea to exit input editing
+      // Blur the textarea to exit input editing, and stop propagation
+      // to prevent TabView's Escape handler from also closing a tab.
       textareaEl?.blur();
+      e.stopPropagation();
       return;
     }
 
@@ -264,6 +266,14 @@
     }
   }
 
+  function handleFocus() {
+    window.dispatchEvent(new CustomEvent("input-focus-changed", { detail: { focused: true } }));
+  }
+
+  function handleBlur() {
+    window.dispatchEvent(new CustomEvent("input-focus-changed", { detail: { focused: false } }));
+  }
+
   function handlePaste(e) {
     // If pasting something starting with !, switch to command mode (handled by input event)
   }
@@ -284,6 +294,8 @@
       bind:value
       oninput={handleInput}
       onkeydown={handleKeydown}
+      onfocus={handleFocus}
+      onblur={handleBlur}
       onpaste={handlePaste}
       onpointerdown={handleTextareaClick}
       aria-label="Message input"
