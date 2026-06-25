@@ -9,13 +9,15 @@ LLM configuration endpoints moved to ``routes/llm.py``.
 from __future__ import annotations
 
 import json
-import re
 import logging
+import re
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
+from lighterbird.core.paths import config_dir
 from lighterbird.core.system_prompt import load_system_prompt
 from lighterbird.server.command.models import CommandResponse
 from lighterbird.server.command.registry import dispatch, get_definitions
@@ -24,12 +26,74 @@ from lighterbird.server.llm.render import render_markdown, render_streaming_mark
 
 logger = logging.getLogger(__name__)
 
-# Matches lines in system_prompt.md that look like a manual command listing
-# (e.g. "- !email list — description" or "!backup now").  Used to detect
-# stale AVAILABLE COMMANDS sections and show a gentle reminder.
-_COMMAND_LISTING_RE = re.compile(r"^- +(![a-z][\w-]*(?: [a-z][\w.-]*)*)", re.MULTILINE)
-
 router = APIRouter(prefix="/api/v1", tags=["chat"])
+
+# Matches lines in system_prompt.md that look like a manual command listing
+# (e.g. "- !email list — description").  Used to detect stale AVAILABLE
+# COMMANDS sections and show a dismissible notice to the user.
+_COMMAND_LISTING_RE = re.compile(
+    r"^- +(![a-z][\w-]*(?: [a-z][\w.-]*)*)", re.MULTILINE
+)
+
+# ── Notice system (dismissible banners) ─────────────────────────────────
+
+_NOTICE_DISMISSED_FILE = "dismissed_notices.json"
+
+
+def _dismissed_path() -> Path:
+    return config_dir() / _NOTICE_DISMISSED_FILE
+
+
+def _is_notice_dismissed(notice_id: str) -> bool:
+    """Check if a notice has been dismissed by the user."""
+    path = _dismissed_path()
+    if not path.exists():
+        return False
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return notice_id in data.get("dismissed", [])
+    except (OSError, json.JSONDecodeError):
+        return False
+
+
+def _dismiss_notice(notice_id: str) -> None:
+    """Persistently dismiss a notice so it never shows again."""
+    path = _dismissed_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if path.exists():
+            data = json.loads(path.read_text(encoding="utf-8"))
+        else:
+            data = {}
+        dismissed = set(data.get("dismissed", []))
+        dismissed.add(notice_id)
+        data["dismissed"] = sorted(dismissed)
+        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    except (OSError, json.JSONDecodeError):
+        pass
+
+
+def _check_notice() -> dict | None:
+    """Check if the user's ``system_prompt.md`` has stale command listings
+    and return notice data for the frontend banner if not yet dismissed."""
+    base_prompt = load_system_prompt()
+    if not _COMMAND_LISTING_RE.search(base_prompt):
+        return None
+    if _is_notice_dismissed("stale-commands"):
+        return None
+    logger.info(
+        "system_prompt.md has a manual command listing — "
+        "showing dismissible notice to user."
+    )
+    return {
+        "id": "stale-commands",
+        "message": (
+            "ℹ️ Your ``system_prompt.md`` contains a manual list of "
+            "commands. The authoritative, up-to-date command list is "
+            "auto-injected into the LLM context. You can safely remove "
+            "the ``AVAILABLE COMMANDS`` section from the file."
+        ),
+    }
 
 
 def _build_messages(
@@ -41,11 +105,8 @@ def _build_messages(
     """Build a chat messages list with dynamic command definitions injected.
 
     The user's behavioural instructions from ``system_prompt.md`` are
-    loaded and included as-is (never modified). If the prompt contains
-    what looks like a manual ``AVAILABLE COMMANDS`` listing, a gentle
-    reminder is appended noting that the authoritative list is
-    auto-injected below — the user can safely remove the section from
-    their file.
+    loaded and included as-is (never modified). The authoritative command
+    list is appended from :func:`get_definitions`.
 
     Args:
         user_message: The current user input. If empty, only the
@@ -64,33 +125,11 @@ def _build_messages(
     defs = get_definitions()
     defs_text = json.dumps(defs, indent=2) if defs else "[]"
 
-    # Detect stale command listings in the user's prompt and add a
-    # gentle reminder (only once per server start via logger, always in
-    # the LLM context so the user sees it).
-    has_stale_cmds = bool(_COMMAND_LISTING_RE.search(base_prompt))
-    if has_stale_cmds:
-        logger.info(
-            "system_prompt.md contains what looks like a manual command "
-            "listing — the authoritative list is auto-injected by the "
-            "server.  The AVAILABLE COMMANDS section in the file can be "
-            "safely removed."
-        )
-
-    parts = [base_prompt]
-
-    if has_stale_cmds:
-        parts.append(
-            "\n---\n"
-            "ℹ️ **Note**: The system automatically injects the complete, "
-            "up-to-date command list below. The manual ``AVAILABLE "
-            "COMMANDS`` section in your ``system_prompt.md`` is redundant "
-            "and can be safely removed.\n"
-            "---"
-        )
-
-    parts.append("\n\nAVAILABLE COMMANDS (machine-readable):\n" + defs_text)
-
-    system_content = "".join(parts)
+    system_content = (
+        base_prompt
+        + "\n\nAVAILABLE COMMANDS (machine-readable):\n"
+        + defs_text
+    )
 
     messages: list[dict] = [{"role": "system", "content": system_content}]
 
@@ -142,14 +181,14 @@ async def chat_endpoint(data: dict[str, Any]) -> dict[str, Any]:
         try:
             raw_result = dispatch(cmd["tokens"], cmd.get("flags", {}))
         except Exception as exc:
-            return {
+            return _with_notice({
                 "type": "status",
                 "title": "LLM Chat",
                 "data": {
                     "message": f"I understood your request but couldn't execute it: {exc}",
                     "original": message,
                 },
-            }
+            })
 
         # ── Phase 2: Summarize the result with the LLM ─────────────────
         import json as _json
@@ -167,29 +206,46 @@ async def chat_endpoint(data: dict[str, Any]) -> dict[str, Any]:
         )
         summary = await provider.chat(summary_messages)
         if isinstance(summary, str) and summary.strip():
-            return {
+            return _with_notice({
                 "type": "chat",
                 "title": "LLM Chat",
                 "data": {"html": render_markdown(summary.strip()), "actions": []},
-            }
+            })
         # Fallback: return raw result if LLM summarization fails
-        return raw_result
+        return _with_notice(raw_result)
 
     # ── Phase 3: No command — respond as plain chat ───────────────────
     messages = _build_messages(message, context=context)
     response = await provider.chat(messages)
     if isinstance(response, str):
         html = render_markdown(response)
-        return {
+        return _with_notice({
             "type": "chat",
             "title": "LLM Chat",
             "data": {"html": html, "actions": []},
-        }
-    return {
+        })
+    return _with_notice({
         "type": "chat",
         "title": "LLM Chat",
         "data": {"html": "<p>LLM response unavailable.</p>", "actions": []},
-    }
+    })
+
+
+def _with_notice(response: dict) -> dict:
+    """Attach a ``_notice`` field to the response if a pending notice exists."""
+    notice = _check_notice()
+    if notice:
+        response["_notice"] = notice
+    return response
+
+
+@router.post("/chat/dismiss-notice")
+def dismiss_notice(data: dict[str, Any]) -> dict:
+    """Persistently dismiss a notice by its ID."""
+    notice_id = data.get("id", "")
+    if notice_id:
+        _dismiss_notice(notice_id)
+    return {"status": "ok"}
 
 
 @router.post("/chat/stream")
