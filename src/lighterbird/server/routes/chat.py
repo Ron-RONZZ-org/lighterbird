@@ -205,6 +205,17 @@ def _with_notice(response: dict) -> dict:
     return response
 
 
+@router.get("/chat/notice")
+def get_notice() -> dict:
+    """Return the current notice (if any) for the frontend banner.
+
+    Called on page load so the notice appears independently of the
+    chat response (which may be streaming SSE events).
+    """
+    notice = _check_notice()
+    return {"notice": notice}
+
+
 @router.post("/chat/stream")
 async def chat_stream(data: dict[str, Any]) -> StreamingResponse:
     """SSE streaming endpoint for LLM chat.
