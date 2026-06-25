@@ -25,12 +25,12 @@
     return () => window.removeEventListener("input-focus-changed", handler);
   });
 
-  // Auto-focus command input when switching to home tab
+  // Auto-focus command input when switching to home tab.
+  // Directly query the DOM — avoids race conditions with event listeners.
   $effect(() => {
     if (tabStore.isHome) {
-      // Small delay to let the DOM settle
       requestAnimationFrame(() => {
-        window.dispatchEvent(new CustomEvent("focus-command-input"));
+        document.querySelector(".input-field")?.focus();
       });
     }
   });
@@ -165,11 +165,12 @@
       {/each}
       <span class="tab-bar-spacer"></span>
       <span class="tab-hint" title="Keyboard shortcuts">
-        {#if tabStore.isHome && !inputFocused}
-          <kbd>i</kbd> focus
-          <span class="hint-sep">·</span>
-        {:else if tabStore.isHome && inputFocused}
-          <kbd>Esc</kbd> blur
+        {#if tabStore.isHome}
+          {#if inputFocused}
+            <kbd>Esc</kbd> blur
+          {:else}
+            <kbd>i</kbd> focus
+          {/if}
           <span class="hint-sep">·</span>
         {/if}
         <kbd>h</kbd> help
@@ -177,6 +178,19 @@
           <span class="hint-sep">·</span>
           <kbd>q</kbd> <kbd>Esc</kbd> close
         {/if}
+      </span>
+    </div>
+  {:else}
+    <!-- Home-only hint strip — always visible when no result tabs -->
+    <div class="home-hints">
+      <span class="tab-hint" title="Keyboard shortcuts">
+        {#if inputFocused}
+          <kbd>Esc</kbd> blur
+        {:else}
+          <kbd>i</kbd> focus
+        {/if}
+        <span class="hint-sep">·</span>
+        <kbd>h</kbd> help
       </span>
     </div>
   {/if}
@@ -311,5 +325,16 @@
   .hint-sep {
     color: #444;
     margin: 0 2px;
+  }
+
+  .home-hints {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 0;
+    background: #16162a;
+    border-top: 1px solid #2a2a3e;
+    flex-shrink: 0;
+    min-height: 24px;
   }
 </style>
