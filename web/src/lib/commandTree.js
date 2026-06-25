@@ -8,8 +8,11 @@
  *   flags        — flag arguments (e.g. --calendar)
  *   interactive  — if true, opens an interactive form popup
  *
- * The frontend only uses the tree for autocomplete + help.
- * Command execution is handled by the backend via POST /api/v1/command.
+ * The tree is initially populated from the hardcoded data below for instant
+ * autocomplete on page load. On startup, ``initCommandTree()`` fetches the
+ * authoritative tree from ``GET /api/v1/command/tree`` and replaces the
+ * live binding — keeping autocomplete in sync with backend commands
+ * without a reload.
  */
 
 /** @typedef {{name:string, required:boolean, type:string, placeholder?:string, repeatable?:boolean, uuidSource?:string}} ParamDef */
@@ -17,7 +20,7 @@
 /** @typedef {{name:string, description?:string, children?:CommandNode[], params?:ParamDef[], flags?:FlagDef[], interactive?:boolean}} CommandNode */
 
 /** @type {CommandNode[]} */
-export const commandTree = [
+export let commandTree = [
   // ── Email ────────────────────────────────────────────────────────────
   {
     name: "email",
@@ -575,6 +578,32 @@ export const commandTree = [
   },
 
 ];
+
+/* ── Dynamic fetch from backend ────────────────────────────────────────── */
+
+/**
+ * Fetch the authoritative command tree from the backend and replace the
+ * live ``commandTree`` binding. If the fetch fails, the hardcoded fallback
+ * tree is kept and autocomplete continues to work.
+ *
+ * Call this once on app startup. Because ``commandTree`` is declared with
+ * ``let``, ES module live bindings propagate the new value to every
+ * consumer without a reload.
+ */
+export async function initCommandTree() {
+  try {
+    const resp = await fetch("/api/v1/command/tree");
+    if (resp.ok) {
+      commandTree = await resp.json();
+    }
+  } catch {
+    // Keep hardcoded fallback — autocomplete still works offline
+  }
+}
+
+// Auto-init on module load.  The hardcoded tree is used initially; the
+// dynamic fetch will replace it when the response arrives.
+initCommandTree();
 
 /** Build a flat list of all root-level command names (for initial ! completion). */
 export function getRootNames() {

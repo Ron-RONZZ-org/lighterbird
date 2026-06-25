@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException
 from lighterbird.server.command.errors import CommandError, CommandNotFound
 from lighterbird.server.command.models import CommandRequest, CommandResponse
 from lighterbird.server.command.registry import dispatch, get_definitions
+from lighterbird.server.command.tree import get_command_tree
 
 router = APIRouter(prefix="/api/v1", tags=["command"])
 
@@ -50,3 +51,14 @@ def list_command_definitions() -> list[dict]:
         - The LLM tool-calling schema
     """
     return get_definitions()
+
+
+@router.get("/command/tree")
+def command_tree() -> list[dict]:
+    """Return the full structured command tree for frontend autocomplete.
+
+    Each node contains name, description, children, params, flags, and
+    interactive flag for the command hierarchy. This is fetched dynamically
+    on frontend startup to keep autocomplete in sync with backend commands.
+    """
+    return get_command_tree()
