@@ -121,9 +121,6 @@ class OpenAICompatibleProvider:
         if not self._available:
             return None
 
-        from lighterbird.core.system_prompt import load_system_prompt
-
-        user_prompt = load_system_prompt()
         defs_text = json.dumps(command_defs, indent=2) if command_defs else "[]"
 
         system_prompt = (
