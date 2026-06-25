@@ -246,6 +246,9 @@ def _config_path() -> Path:
     return config_dir() / _BACKUP_CONFIG_FILE
 
 
+_VALID_KEYS = frozenset({"external_dir", "retention", "auto_interval_minutes"})
+
+
 def load_config() -> dict[str, Any]:
     """Load backup configuration.
 
@@ -255,25 +258,67 @@ def load_config() -> dict[str, Any]:
         - **external_dir** (:class:`str`) — Path to external backup
           directory, or ``""`` if not configured.
         - **retention** (:class:`int`) — Number of backups to keep.
-        - **auto_interval_hours** (:class:`int`) — Hours between
+        - **auto_interval_minutes** (:class:`int`) — Minutes between
           automatic backups (0 = disabled).
     """
+    defaults = {"external_dir": "", "retention": _DEFAULT_RETENTION, "auto_interval_minutes": 0}
     path = _config_path()
     if not path.exists():
-        return {"external_dir": "", "retention": _DEFAULT_RETENTION, "auto_interval_hours": 0}
+        return dict(defaults)
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        raw: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
-        return {"external_dir": "", "retention": _DEFAULT_RETENTION, "auto_interval_hours": 0}
+        return dict(defaults)
+
+    # Sanitize: strip unknown keys, fill defaults, coerce types
+    cleaned: dict[str, Any] = {}
+    for k, default_val in defaults.items():
+        val = raw.get(k, default_val)
+        # Coerce to the expected type
+        if isinstance(default_val, int):
+            try:
+                val = int(val)
+            except (TypeError, ValueError):
+                val = default_val
+        elif isinstance(default_val, str):
+            val = str(val) if not isinstance(val, str) else val
+        cleaned[k] = val
+    return cleaned
 
 
 def save_config(cfg: dict[str, Any]) -> None:
     """Save backup configuration to disk.
 
+    Validates that *cfg* contains only recognised keys with correct types.
+
     Args:
-        cfg: Dict with keys ``external_dir``, ``retention``,
-            ``auto_interval_hours``.
+        cfg: Dict with keys ``external_dir`` (:class:`str`),
+            ``retention`` (:class:`int`),
+            ``auto_interval_minutes`` (:class:`int`).
+
+    Raises:
+        ValueError: If *cfg* contains unknown keys or values of the
+            wrong type.
     """
+    unknown = set(cfg) - _VALID_KEYS
+    if unknown:
+        raise ValueError(
+            f"Unknown backup config key(s): {', '.join(sorted(unknown))}. "
+            f"Valid keys: {', '.join(sorted(_VALID_KEYS))}"
+        )
+
+    expected_types: dict[str, type] = {
+        "external_dir": str,
+        "retention": int,
+        "auto_interval_minutes": int,
+    }
+    for key, expected in expected_types.items():
+        if key in cfg and not isinstance(cfg[key], expected):
+            raise ValueError(
+                f"Backup config key '{key}' must be {expected.__name__}, "
+                f"got {type(cfg[key]).__name__}"
+            )
+
     path = _config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
