@@ -52,6 +52,27 @@ def _fmt_ts(ts: str) -> str:
 # ── !backup now ────────────────────────────────────────────────────────────
 
 
+@command("backup")
+def backup_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!backup — Show available backup subcommands."""
+    return {
+        "type": "status",
+        "title": "Backup Commands",
+        "data": {
+            "_summary": (
+                "Available !backup commands:\n"
+                "  !backup now          — Create timestamped backups of all DBs\n"
+                "  !backup list         — List available backup snapshots\n"
+                "  !backup restore      — Restore from the latest backup\n"
+                "  !backup prune        — Delete old backups, keeping N newest\n"
+                "  !backup config       — View or change backup settings\n"
+                "  !backup export       — Export all data to a portable directory\n"
+                "  !backup import       — Import data from an exported directory"
+            ),
+        },
+    }
+
+
 @command("backup.now")
 def backup_now(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!backup now [--kind data|config|all]

@@ -27,6 +27,30 @@ from lighterbird.email.service import EmailService
 # ── Handlers ────────────────────────────────────────────────────────────
 
 
+@command("email")
+def email_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!email — Show available email subcommands."""
+    return {
+        "type": "status",
+        "title": "Email Commands",
+        "data": {
+            "_summary": (
+                "Available !email commands:\n"
+                "  !email list              — List inbox messages\n"
+                "  !email read <uuid>       — Read a message\n"
+                "  !email send              — Send an email\n"
+                "  !email search            — Search messages\n"
+                "  !email trash <uuid>      — Trash a message\n"
+                "  !email archive <uuid>    — Archive a message\n"
+                "  !email account list      — List email accounts\n"
+                "  !email account add       — Add an email account\n"
+                "  !email account modify    — Modify an email account\n"
+                "  !email account remove    — Remove an email account"
+            ),
+        },
+    }
+
+
 @command("email.list")
 def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email list [--limit N] [--folder NAME] [--all]

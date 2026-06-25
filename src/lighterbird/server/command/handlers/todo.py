@@ -21,6 +21,27 @@ from lighterbird.server.deps import get_todo_service
 from lighterbird.todo.services import TodoService
 
 
+@command("todo")
+def todo_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!todo — Show available todo subcommands."""
+    return {
+        "type": "status",
+        "title": "Todo Commands",
+        "data": {
+            "_summary": (
+                "Available !todo commands:\n"
+                "  !todo list          — List todos\n"
+                "  !todo add           — Add a todo\n"
+                "  !todo view          — View a todo\n"
+                "  !todo done          — Mark todo(s) as done\n"
+                "  !todo modify        — Modify a todo\n"
+                "  !todo remove        — Remove a todo\n"
+                "  !todo search        — Search todos"
+            ),
+        },
+    }
+
+
 @command("todo.list")
 def todo_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!todo list [--status pending|done]"""

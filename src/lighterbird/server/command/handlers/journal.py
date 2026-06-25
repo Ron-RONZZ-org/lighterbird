@@ -19,6 +19,24 @@ from lighterbird.server.deps import get_journal_service
 from lighterbird.journal.services import JournalService
 
 
+@command("journal")
+def journal_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!journal — Show available journal subcommands."""
+    return {
+        "type": "status",
+        "title": "Journal Commands",
+        "data": {
+            "_summary": (
+                "Available !journal commands:\n"
+                "  !journal list         — List journal entries\n"
+                "  !journal write        — Write a journal entry\n"
+                "  !journal view         — View a journal entry\n"
+                "  !journal search       — Search journal entries"
+            ),
+        },
+    }
+
+
 @command("journal.list")
 def journal_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!journal list [--date YYYY-MM-DD] [--limit N]"""
