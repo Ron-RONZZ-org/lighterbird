@@ -422,6 +422,68 @@ export const commandTree = [
     ],
   },
 
+  // ── Backup ──────────────────────────────────────────────────────────
+  {
+    name: "backup",
+    description: "Database backup and restore",
+    children: [
+      {
+        name: "now",
+        description: "Create timestamped backups of all databases",
+        flags: [
+          { name: "kind", type: "string", help: "What to back up: data|config|all (default: all)" },
+        ],
+      },
+      {
+        name: "list",
+        description: "List available backup snapshots",
+        flags: [
+          { name: "stem", type: "string", help: "Filter by database (email|calendar|contacts|todo|journal)" },
+        ],
+      },
+      {
+        name: "restore",
+        description: "Restore from the latest backup",
+        flags: [
+          { name: "timestamp", type: "string", help: "Restore a specific snapshot by timestamp prefix" },
+        ],
+      },
+      {
+        name: "prune",
+        description: "Delete old backups, keeping N newest per database",
+        flags: [
+          { name: "keep", short: "k", type: "number", help: "Number of backups to keep per database (default: 10)" },
+        ],
+      },
+      {
+        name: "config",
+        description: "View or change backup settings",
+        flags: [
+          { name: "external-dir", type: "string", help: "External/synced backup directory path" },
+          { name: "retention", type: "number", help: "Backups to keep per database" },
+          { name: "auto-interval", type: "number", help: "Auto-backup interval in hours (0 = disabled)" },
+        ],
+      },
+      {
+        name: "export",
+        description: "Export all data to a portable directory",
+        flags: [
+          { name: "output", short: "o", type: "string", help: "Output directory (default: current dir)" },
+        ],
+      },
+      {
+        name: "import",
+        description: "Import data from an exported directory",
+        params: [
+          { name: "path", required: true, type: "string", placeholder: "/path/to/export" },
+        ],
+        flags: [
+          { name: "force", type: "flag", help: "Overwrite existing files" },
+        ],
+      },
+    ],
+  },
+
   // ── Sync (unified) ───────────────────────────────────────────────────
   {
     name: "sync",
