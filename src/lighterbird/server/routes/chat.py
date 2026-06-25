@@ -9,6 +9,7 @@ LLM configuration endpoints moved to ``routes/llm.py``.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -19,6 +20,14 @@ from lighterbird.server.command.models import CommandResponse
 from lighterbird.server.command.registry import dispatch, get_definitions
 from lighterbird.server.llm.provider import get_provider
 from lighterbird.server.llm.render import render_markdown, render_streaming_markdown
+
+# Matches any "AVAILABLE COMMANDS:" section that may exist in an older
+# system_prompt.md — we strip it to avoid the LLM treating a stale
+# hardcoded list as authoritative.
+_AVAILABLE_CMDS_RE = re.compile(
+    r"\n+AVAILABLE COMMANDS:.*?(?=\n+[A-Z]+:)",
+    re.DOTALL,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["chat"])
 
@@ -31,11 +40,11 @@ def _build_messages(
 ) -> list[dict]:
     """Build a chat messages list with dynamic command definitions injected.
 
-    The system prompt is loaded from ``system_prompt.md`` (or the shipped
-    default). The up-to-date command definitions from
-    ``GET /api/v1/command/definitions`` are appended dynamically so the
-    LLM always knows about all available commands — including backup and
-    any future additions.
+    The user's behavioural instructions from ``system_prompt.md`` are
+    preserved, but any stale hardcoded ``AVAILABLE COMMANDS`` section is
+    stripped and replaced with the authoritative list from
+    :func:`get_definitions` — so the LLM always sees the current set of
+    commands including backup and any future additions.
 
     Args:
         user_message: The current user input. If empty, only the
@@ -49,16 +58,18 @@ def _build_messages(
     Returns:
         List of message dicts suitable for ``provider.chat()``.
     """
-    import json
-
     base_prompt = load_system_prompt()
+
+    # Strip any stale hardcoded AVAILABLE COMMANDS section — the LLM
+    # should only see the authoritative list from get_definitions().
+    base_prompt = _AVAILABLE_CMDS_RE.sub("", base_prompt)
+
     defs = get_definitions()
     defs_text = json.dumps(defs, indent=2) if defs else "[]"
 
     system_content = (
         base_prompt
-        + "\n\n"
-        + "CURRENTLY AVAILABLE COMMANDS (machine-readable):\n"
+        + "\n\nAVAILABLE COMMANDS (machine-readable):\n"
         + defs_text
     )
 
@@ -187,7 +198,8 @@ async def chat_stream(data: dict[str, Any]) -> StreamingResponse:
             return
 
         try:
-            result = await provider.chat(message, context=context, stream=True)
+            stream_messages = _build_messages(message, context=context)
+            result = await provider.chat(stream_messages, stream=True)
             if hasattr(result, "__aiter__"):
                 async for token in result:
                     yield f"data: {json.dumps({'token': token})}\n\n"
