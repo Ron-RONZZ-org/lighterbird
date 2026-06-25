@@ -9,25 +9,15 @@ LLM configuration endpoints moved to ``routes/llm.py``.
 from __future__ import annotations
 
 import json
-import re
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
-from lighterbird.core.system_prompt import load_system_prompt
 from lighterbird.server.command.models import CommandResponse
 from lighterbird.server.command.registry import dispatch, get_definitions
 from lighterbird.server.llm.provider import get_provider
 from lighterbird.server.llm.render import render_markdown, render_streaming_markdown
-
-# Matches any "AVAILABLE COMMANDS:" section that may exist in an older
-# system_prompt.md — we strip it to avoid the LLM treating a stale
-# hardcoded list as authoritative.
-_AVAILABLE_CMDS_RE = re.compile(
-    r"\n+AVAILABLE COMMANDS:.*?(?=\n+[A-Z]+:)",
-    re.DOTALL,
-)
 
 router = APIRouter(prefix="/api/v1", tags=["chat"])
 
@@ -40,11 +30,11 @@ def _build_messages(
 ) -> list[dict]:
     """Build a chat messages list with dynamic command definitions injected.
 
-    The user's behavioural instructions from ``system_prompt.md`` are
-    preserved, but any stale hardcoded ``AVAILABLE COMMANDS`` section is
-    stripped and replaced with the authoritative list from
-    :func:`get_definitions` — so the LLM always sees the current set of
-    commands including backup and any future additions.
+    The authoritative command list is always from :func:`get_definitions`
+    — the user's ``system_prompt.md`` is **not** loaded here because it
+    may contain a stale ``AVAILABLE COMMANDS`` section. Users can still
+    edit ``system_prompt.md`` for behavioural instructions; those are
+    picked up by ``generate_command()`` in Phase 1.
 
     Args:
         user_message: The current user input. If empty, only the
@@ -58,18 +48,15 @@ def _build_messages(
     Returns:
         List of message dicts suitable for ``provider.chat()``.
     """
-    base_prompt = load_system_prompt()
-
-    # Strip any stale hardcoded AVAILABLE COMMANDS section — the LLM
-    # should only see the authoritative list from get_definitions().
-    base_prompt = _AVAILABLE_CMDS_RE.sub("", base_prompt)
-
     defs = get_definitions()
     defs_text = json.dumps(defs, indent=2) if defs else "[]"
 
     system_content = (
-        base_prompt
-        + "\n\nAVAILABLE COMMANDS (machine-readable):\n"
+        "You are lighterbird — a command-driven personal information manager (PIM).\n\n"
+        "When the user asks a question in natural language, check the AVAILABLE "
+        "COMMANDS below. If a command matches, tell the user to run it (e.g. "
+        "!backup list) or offer to execute it if you have the required details.\n\n"
+        "AVAILABLE COMMANDS:\n"
         + defs_text
     )
 
