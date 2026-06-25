@@ -75,12 +75,13 @@
     }
 
     // I / i — focus command input on home tab
+    // Direct DOM query avoids race conditions with event listeners.
     if ((e.key === "i" || e.key === "I") && tabStore.isHome) {
       if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) {
         return;
       }
       e.preventDefault();
-      window.dispatchEvent(new CustomEvent("focus-command-input"));
+      document.querySelector(".input-field")?.focus();
       return;
     }
 
@@ -169,7 +170,7 @@
           {#if inputFocused}
             <kbd>Esc</kbd> blur
           {:else}
-            <kbd>i</kbd> focus
+            <kbd>i</kbd> input mode
           {/if}
           <span class="hint-sep">·</span>
         {/if}
@@ -187,7 +188,7 @@
         {#if inputFocused}
           <kbd>Esc</kbd> blur
         {:else}
-          <kbd>i</kbd> focus
+          <kbd>i</kbd> input mode
         {/if}
         <span class="hint-sep">·</span>
         <kbd>h</kbd> help

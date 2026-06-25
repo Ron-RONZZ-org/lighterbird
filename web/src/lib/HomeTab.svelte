@@ -308,16 +308,6 @@
     } catch { /* ignore */ }
   }
 
-  // Listen for focus-command-input event (dispatched from TabView on `i` key)
-  $effect(() => {
-    function handler() {
-      const input = document.querySelector(".input-field");
-      if (input) input.focus();
-    }
-    window.addEventListener("focus-command-input", handler);
-    return () => window.removeEventListener("focus-command-input", handler);
-  });
-
   async function checkLlmAvailable() {
     try {
       const resp = await fetch("/api/v1/llm/config");
