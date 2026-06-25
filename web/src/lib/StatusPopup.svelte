@@ -10,18 +10,11 @@
   // Normalize null to empty object (delete commands return 204 → null)
   let d = $derived(data || {});
 
-  // Dismissible notice banner
+  // Dismissible notice banner — local state only (resets on page reload)
   let noticeDismissed = $state(false);
 
-  async function dismissNotice(id) {
+  function dismissNotice() {
     noticeDismissed = true;
-    try {
-      await fetch("/api/v1/chat/dismiss-notice", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
-    } catch { /* best-effort */ }
   }
 
   // ── Form overlay state ──────────────────────────────────────────────
@@ -111,7 +104,7 @@
   {#if d._notice && !noticeDismissed}
     <div class="notice-banner" role="alert">
       <span class="notice-text">{d._notice.message}</span>
-      <button class="notice-close" onclick={() => dismissNotice(d._notice.id)} aria-label="Dismiss notice">✕</button>
+      <button class="notice-close" onclick={dismissNotice} aria-label="Dismiss notice">✕</button>
     </div>
   {/if}
   {#if d.accounts !== undefined}

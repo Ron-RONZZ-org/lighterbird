@@ -11,13 +11,11 @@ from __future__ import annotations
 import json
 import logging
 import re
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
-from lighterbird.core.paths import config_dir
 from lighterbird.core.system_prompt import load_system_prompt
 from lighterbird.server.command.models import CommandResponse
 from lighterbird.server.command.registry import dispatch, get_definitions
@@ -29,67 +27,30 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["chat"])
 
-# Matches lines in system_prompt.md that look like a manual command listing
-# (e.g. "- !email list — description").  Used to detect stale AVAILABLE
-# COMMANDS sections and show a dismissible notice to the user.
-_COMMAND_LISTING_RE = re.compile(
-    r"^- +(![a-z][\w-]*(?: [a-z][\w.-]*)*)", re.MULTILINE
-)
+# Matches any `!command` mention in system_prompt.md — used to detect a
+# stale manual command listing and show a dismissible notice (per page
+# load) letting the user know they can remove it.
+_COMMAND_LISTING_RE = re.compile(r"![a-z][\w-]*")
 
-# ── Notice system (dismissible banners) ─────────────────────────────────
-
-_NOTICE_DISMISSED_FILE = "dismissed_notices.json"
-
-
-def _dismissed_path() -> Path:
-    return config_dir() / _NOTICE_DISMISSED_FILE
-
-
-def _is_notice_dismissed(notice_id: str) -> bool:
-    """Check if a notice has been dismissed by the user."""
-    path = _dismissed_path()
-    if not path.exists():
-        return False
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return notice_id in data.get("dismissed", [])
-    except (OSError, json.JSONDecodeError):
-        return False
-
-
-def _dismiss_notice(notice_id: str) -> None:
-    """Persistently dismiss a notice so it never shows again."""
-    path = _dismissed_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        if path.exists():
-            data = json.loads(path.read_text(encoding="utf-8"))
-        else:
-            data = {}
-        dismissed = set(data.get("dismissed", []))
-        dismissed.add(notice_id)
-        data["dismissed"] = sorted(dismissed)
-        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-    except (OSError, json.JSONDecodeError):
-        pass
+# ── Notice system (dismissible banners, no persistence) ─────────────────
 
 
 def _check_notice() -> dict | None:
-    """Check if the user's ``system_prompt.md`` has stale command listings
-    and return notice data for the frontend banner if not yet dismissed."""
+    """Check if the user's ``system_prompt.md`` mentions any ``!command``
+    and return notice data for the frontend banner.
+    The notice is always returned when stale commands are detected —
+    dismissal is handled client-side (per page load)."""
     base_prompt = load_system_prompt()
     if not _COMMAND_LISTING_RE.search(base_prompt):
         return None
-    if _is_notice_dismissed("stale-commands"):
-        return None
     logger.info(
-        "system_prompt.md has a manual command listing — "
-        "showing dismissible notice to user."
+        "system_prompt.md mentions !commands — "
+        "showing dismissible notice (per page load)."
     )
     return {
         "id": "stale-commands",
         "message": (
-            "ℹ️ Your ``system_prompt.md`` contains a manual list of "
+            "ℹ️ Your ``system_prompt.md`` mentions specific ``!`` "
             "commands. The authoritative, up-to-date command list is "
             "auto-injected into the LLM context. You can safely remove "
             "the ``AVAILABLE COMMANDS`` section from the file."
@@ -242,15 +203,6 @@ def _with_notice(response: dict) -> dict:
     if notice:
         response["_notice"] = notice
     return response
-
-
-@router.post("/chat/dismiss-notice")
-def dismiss_notice(data: dict[str, Any]) -> dict:
-    """Persistently dismiss a notice by its ID."""
-    notice_id = data.get("id", "")
-    if notice_id:
-        _dismiss_notice(notice_id)
-    return {"status": "ok"}
 
 
 @router.post("/chat/stream")
