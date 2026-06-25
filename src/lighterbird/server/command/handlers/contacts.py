@@ -20,6 +20,26 @@ from lighterbird.server.deps import get_contact_service
 from lighterbird.contacts.services import ContactService
 
 
+@command("contacts")
+def contacts_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!contacts — Show available contacts subcommands."""
+    return {
+        "type": "status",
+        "title": "Contacts Commands",
+        "data": {
+            "_summary": (
+                "Available !contacts commands:\n"
+                "  !contacts list       — List contacts\n"
+                "  !contacts add        — Add a contact\n"
+                "  !contacts view       — View a contact\n"
+                "  !contacts modify     — Modify a contact\n"
+                "  !contacts remove     — Remove a contact\n"
+                "  !contacts search     — Search contacts"
+            ),
+        },
+    }
+
+
 @command("contacts.list")
 def contacts_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!contacts list [--limit N]"""

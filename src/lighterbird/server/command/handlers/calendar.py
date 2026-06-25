@@ -27,6 +27,30 @@ from lighterbird.calendar.service import CalendarService
 # ── Handlers ────────────────────────────────────────────────────────────
 
 
+@command("calendar")
+def calendar_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!calendar — Show available calendar subcommands."""
+    return {
+        "type": "status",
+        "title": "Calendar Commands",
+        "data": {
+            "_summary": (
+                "Available !calendar commands:\n"
+                "  !calendar list              — List events\n"
+                "  !calendar event add         — Add an event\n"
+                "  !calendar event view        — View an event\n"
+                "  !calendar event modify      — Modify an event\n"
+                "  !calendar event remove      — Remove an event\n"
+                "  !calendar event search      — Search events\n"
+                "  !calendar account list      — List calendars\n"
+                "  !calendar account add       — Add a calendar\n"
+                "  !calendar account modify    — Modify a calendar\n"
+                "  !calendar account remove    — Remove a calendar"
+            ),
+        },
+    }
+
+
 @command("calendar.list")
 def calendar_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar list [start] [end] [--calendar uuid] [--query TEXT]"""

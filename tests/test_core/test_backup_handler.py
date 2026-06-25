@@ -173,6 +173,13 @@ def test_backup_now_with_external(tmp_data_dir: Path, tmp_path: Path, monkeypatc
     assert len(list(ext_dir.iterdir())) >= 1
 
 
+def test_backup_root_shows_subcommands():
+    """!backup (no subcommand) shows available subcommands."""
+    result = dispatch(["backup"], {})
+    assert result["type"] == "status"
+    assert "Available !backup commands" in result.get("data", {}).get("_summary", "")
+
+
 def test_backup_export_import_roundtrip(tmp_data_dir: Path, tmp_path: Path):
     """Full export → delete → import roundtrip preserves data."""
     # Create several DB files
