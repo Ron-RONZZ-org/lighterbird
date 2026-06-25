@@ -44,6 +44,21 @@ def _resolve_base_url(provider_type: str, base_url: str) -> str:
     return _DEFAULT_BASE_URLS.get(provider_type, "https://api.openai.com/v1")
 
 
+async def _response_error_detail(response: httpx.Response) -> str:
+    """Extract a human-readable error detail from an API error response."""
+    try:
+        body = response.json()
+        # OpenAI-compatible format: {"error": {"message": "..."}}
+        if isinstance(body, dict):
+            err = body.get("error", body)
+            if isinstance(err, dict):
+                return err.get("message", str(err))
+            return str(err)
+        return str(body)
+    except (json.JSONDecodeError, ValueError):
+        return response.text or "(no detail)"
+
+
 # ── OpenAI-compatible provider ─────────────────────────────────────────────
 
 
