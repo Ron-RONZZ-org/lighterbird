@@ -14,12 +14,65 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
+from lighterbird.core.system_prompt import load_system_prompt
 from lighterbird.server.command.models import CommandResponse
 from lighterbird.server.command.registry import dispatch, get_definitions
 from lighterbird.server.llm.provider import get_provider
 from lighterbird.server.llm.render import render_markdown, render_streaming_markdown
 
 router = APIRouter(prefix="/api/v1", tags=["chat"])
+
+
+def _build_messages(
+    user_message: str = "",
+    *,
+    context: list[dict] | None = None,
+    system_extra: str = "",
+) -> list[dict]:
+    """Build a chat messages list with dynamic command definitions injected.
+
+    The system prompt is loaded from ``system_prompt.md`` (or the shipped
+    default). The up-to-date command definitions from
+    ``GET /api/v1/command/definitions`` are appended dynamically so the
+    LLM always knows about all available commands — including backup and
+    any future additions.
+
+    Args:
+        user_message: The current user input. If empty, only the
+            ``system_extra`` content is used as the user message (for
+            Phase 2 summarization).
+        context: Optional conversation history
+            ``[{"role": "user"|"assistant", "content": "..."}]``.
+        system_extra: Additional context appended to the user message
+            (used in Phase 2 to describe the command result).
+
+    Returns:
+        List of message dicts suitable for ``provider.chat()``.
+    """
+    import json
+
+    base_prompt = load_system_prompt()
+    defs = get_definitions()
+    defs_text = json.dumps(defs, indent=2) if defs else "[]"
+
+    system_content = (
+        base_prompt
+        + "\n\n"
+        + "CURRENTLY AVAILABLE COMMANDS (machine-readable):\n"
+        + defs_text
+    )
+
+    messages: list[dict] = [{"role": "system", "content": system_content}]
+
+    if context:
+        messages.extend(context)
+
+    if system_extra:
+        messages.append({"role": "user", "content": system_extra})
+    elif user_message:
+        messages.append({"role": "user", "content": user_message})
+
+    return messages
 
 
 @router.post("/chat", response_model=CommandResponse)
@@ -72,16 +125,17 @@ async def chat_endpoint(data: dict[str, Any]) -> dict[str, Any]:
         import json as _json
 
         result_summary = _json.dumps(raw_result.get("data", raw_result), indent=2, default=str)
-        summary = await provider.chat(
-            message=(
-                f"I executed this command based on your request '{message}':\n"
-                f"Command: !{' '.join(cmd['tokens'])}\n"
+        summary_messages = _build_messages(
+            system_extra=(
+                f"The user's request was: '{message}'\n"
+                f"You executed: !{' '.join(cmd['tokens'])}\n"
                 f"Result:\n{result_summary}\n\n"
                 f"Please summarize the result for the user in a helpful, "
                 f"friendly way. Be concise but include all relevant details. "
                 f"Use natural language, not JSON."
             ),
         )
+        summary = await provider.chat(summary_messages)
         if isinstance(summary, str) and summary.strip():
             return {
                 "type": "chat",
@@ -92,7 +146,8 @@ async def chat_endpoint(data: dict[str, Any]) -> dict[str, Any]:
         return raw_result
 
     # ── Phase 3: No command — respond as plain chat ───────────────────
-        response = await provider.chat(message, context=context)
+    messages = _build_messages(message, context=context)
+    response = await provider.chat(messages)
     if isinstance(response, str):
         html = render_markdown(response)
         return {
