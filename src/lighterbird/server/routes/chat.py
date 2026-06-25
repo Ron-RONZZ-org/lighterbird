@@ -53,7 +53,7 @@ def _check_notice() -> dict | None:
             "ℹ️ Your ``system_prompt.md`` mentions specific ``!`` "
             "commands. The authoritative, up-to-date command list is "
             "auto-injected into the LLM context. You can safely remove "
-            "the ``AVAILABLE COMMANDS`` section from the file."
+            "the manual tool-usage instructions from the file."
         ),
     }
 
