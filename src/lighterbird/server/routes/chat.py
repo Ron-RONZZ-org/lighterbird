@@ -9,6 +9,8 @@ LLM configuration endpoints moved to ``routes/llm.py``.
 from __future__ import annotations
 
 import json
+import re
+import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -19,6 +21,13 @@ from lighterbird.server.command.models import CommandResponse
 from lighterbird.server.command.registry import dispatch, get_definitions
 from lighterbird.server.llm.provider import get_provider
 from lighterbird.server.llm.render import render_markdown, render_streaming_markdown
+
+logger = logging.getLogger(__name__)
+
+# Matches lines in system_prompt.md that look like a manual command listing
+# (e.g. "- !email list — description" or "!backup now").  Used to detect
+# stale AVAILABLE COMMANDS sections and show a gentle reminder.
+_COMMAND_LISTING_RE = re.compile(r"^- +(![a-z][\w-]*(?: [a-z][\w.-]*)*)", re.MULTILINE)
 
 router = APIRouter(prefix="/api/v1", tags=["chat"])
 
@@ -32,11 +41,11 @@ def _build_messages(
     """Build a chat messages list with dynamic command definitions injected.
 
     The user's behavioural instructions from ``system_prompt.md`` are
-    loaded and included. Any stale ``AVAILABLE COMMANDS`` section was
-    already stripped by :func:`load_system_prompt` (one-time rewrite).
-    The authoritative command list is then appended from
-    :func:`get_definitions` so the LLM always sees the current set of
-    commands — including backup and any future additions.
+    loaded and included as-is (never modified). If the prompt contains
+    what looks like a manual ``AVAILABLE COMMANDS`` listing, a gentle
+    reminder is appended noting that the authoritative list is
+    auto-injected below — the user can safely remove the section from
+    their file.
 
     Args:
         user_message: The current user input. If empty, only the
@@ -55,11 +64,33 @@ def _build_messages(
     defs = get_definitions()
     defs_text = json.dumps(defs, indent=2) if defs else "[]"
 
-    system_content = (
-        base_prompt
-        + "\n\nAVAILABLE COMMANDS (machine-readable):\n"
-        + defs_text
-    )
+    # Detect stale command listings in the user's prompt and add a
+    # gentle reminder (only once per server start via logger, always in
+    # the LLM context so the user sees it).
+    has_stale_cmds = bool(_COMMAND_LISTING_RE.search(base_prompt))
+    if has_stale_cmds:
+        logger.info(
+            "system_prompt.md contains what looks like a manual command "
+            "listing — the authoritative list is auto-injected by the "
+            "server.  The AVAILABLE COMMANDS section in the file can be "
+            "safely removed."
+        )
+
+    parts = [base_prompt]
+
+    if has_stale_cmds:
+        parts.append(
+            "\n---\n"
+            "ℹ️ **Note**: The system automatically injects the complete, "
+            "up-to-date command list below. The manual ``AVAILABLE "
+            "COMMANDS`` section in your ``system_prompt.md`` is redundant "
+            "and can be safely removed.\n"
+            "---"
+        )
+
+    parts.append("\n\nAVAILABLE COMMANDS (machine-readable):\n" + defs_text)
+
+    system_content = "".join(parts)
 
     messages: list[dict] = [{"role": "system", "content": system_content}]
 
