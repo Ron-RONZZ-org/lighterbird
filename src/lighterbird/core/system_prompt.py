@@ -7,16 +7,30 @@ Users can customise the system prompt by placing a file at::
 On first run (when no file exists) a shipped default is automatically
 copied to that location so the user can edit it.
 
+**Migration**: Any ``AVAILABLE COMMANDS`` section in the file is
+auto-removed on load and the file rewritten. The authoritative command
+list is always injected dynamically by the chat endpoint, so these
+sections would be stale and misleading.
+
 Pattern inspired by A-kunpiloto's config.py.
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from lighterbird.core.paths import config_dir
 
 _SYSTEM_PROMPT_FILENAME = "system_prompt.md"
+
+# Matches any "AVAILABLE COMMANDS" section (old detailed list or new
+# summary) — the authoritative list is always injected dynamically by
+# the chat endpoint, so keeping it in the file risks staleness.
+_AVAILABLE_CMDS_RE = re.compile(
+    r"\n*AVAILABLE COMMANDS[^\n]*\n.*?(?=\n[A-Z ]+:)",
+    re.DOTALL,
+)
 
 # ── Shipped default ─────────────────────────────────────────────────────────
 
@@ -76,7 +90,8 @@ def load_system_prompt() -> str:
 
     Resolution order:
     1. If ``~/.config/lighterbird/system_prompt.md`` exists and is
-       non-empty → return its content.
+       non-empty → return its content, with any stale
+       ``AVAILABLE COMMANDS`` section stripped (one-time rewrite).
     2. Otherwise, write the shipped default to that location and
        return its content.
     3. Fall back to :data:`DEFAULT_SYSTEM_PROMPT`.
@@ -84,12 +99,20 @@ def load_system_prompt() -> str:
     Returns:
         The system prompt string.
     """
-    # 1. User-customised file
     path = system_prompt_path()
+
     if path.exists():
         content = path.read_text(encoding="utf-8").strip()
         if content:
-            return content
+            # One-time migration: strip any stale AVAILABLE COMMANDS
+            # section so the file stays clean going forward.
+            cleaned = _AVAILABLE_CMDS_RE.sub("", content).strip()
+            if cleaned != content and cleaned:
+                try:
+                    path.write_text(cleaned, encoding="utf-8")
+                except OSError:
+                    pass  # Non-critical
+            return cleaned or content
 
     # 2. Auto-seed on first run
     path.parent.mkdir(parents=True, exist_ok=True)

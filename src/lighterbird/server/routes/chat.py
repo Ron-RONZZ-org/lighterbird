@@ -14,6 +14,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
+from lighterbird.core.system_prompt import load_system_prompt
 from lighterbird.server.command.models import CommandResponse
 from lighterbird.server.command.registry import dispatch, get_definitions
 from lighterbird.server.llm.provider import get_provider
@@ -30,11 +31,12 @@ def _build_messages(
 ) -> list[dict]:
     """Build a chat messages list with dynamic command definitions injected.
 
-    The authoritative command list is always from :func:`get_definitions`
-    — the user's ``system_prompt.md`` is **not** loaded here because it
-    may contain a stale ``AVAILABLE COMMANDS`` section. Users can still
-    edit ``system_prompt.md`` for behavioural instructions; those are
-    picked up by ``generate_command()`` in Phase 1.
+    The user's behavioural instructions from ``system_prompt.md`` are
+    loaded and included. Any stale ``AVAILABLE COMMANDS`` section was
+    already stripped by :func:`load_system_prompt` (one-time rewrite).
+    The authoritative command list is then appended from
+    :func:`get_definitions` so the LLM always sees the current set of
+    commands — including backup and any future additions.
 
     Args:
         user_message: The current user input. If empty, only the
@@ -48,15 +50,14 @@ def _build_messages(
     Returns:
         List of message dicts suitable for ``provider.chat()``.
     """
+    base_prompt = load_system_prompt()
+
     defs = get_definitions()
     defs_text = json.dumps(defs, indent=2) if defs else "[]"
 
     system_content = (
-        "You are lighterbird — a command-driven personal information manager (PIM).\n\n"
-        "When the user asks a question in natural language, check the AVAILABLE "
-        "COMMANDS below. If a command matches, tell the user to run it (e.g. "
-        "!backup list) or offer to execute it if you have the required details.\n\n"
-        "AVAILABLE COMMANDS:\n"
+        base_prompt
+        + "\n\nAVAILABLE COMMANDS (machine-readable):\n"
         + defs_text
     )
 
