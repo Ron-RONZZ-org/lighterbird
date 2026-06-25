@@ -2,10 +2,11 @@
 
 Backup location::
 
-    ~/.local/share/lighterbird/.backups/{timestamp}.db
+    ~/.local/share/lighterbird/.backups/{stem}_{strategy}_{timestamp}.db
 
-This directory lives directly under the data root so it survives
-``rm -rf`` of per-module directories (all DBs are at the top level).
+Multiple backup strategies are supported — each strategy defines a
+retention limit (max copies per stem) and an optional external target
+directory. Strategies are stored in the backup config file.
 
 Typical usage::
 
@@ -27,8 +28,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import time
+from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any
 
@@ -38,7 +41,36 @@ from lighterbird.core.paths import config_dir, data_dir
 
 _BACKUP_SUBDIR = ".backups"
 _BACKUP_CONFIG_FILE = "backup.json"
-_DEFAULT_RETENTION = 10
+_DEFAULT_MAX_COPIES = 10
+_CONFIG_VERSION = 2
+
+VALID_SCHEDULES = frozenset({"manual", "hourly", "daily", "weekly"})
+
+# ── Strategy dataclass ─────────────────────────────────────────────────────
+
+
+@dataclass
+class BackupStrategy:
+    """A named backup policy.
+
+    Attributes:
+        id: Unique kebab-case identifier (e.g. ``"daily"``, ``"hourly"``).
+        label: Human-readable name for display.
+        schedule: When this strategy runs — ``"manual"``, ``"hourly"``,
+            ``"daily"``, or ``"weekly"``.  Used by the auto-scheduler;
+            ``"manual"`` means only via ``!backup now``.
+        max_copies: Maximum number of backups to keep per database stem.
+        target: ``"local"`` (default backup dir) or an absolute path to
+            an external/synced directory.
+        enabled: Whether this strategy is active.
+    """
+    id: str
+    label: str
+    schedule: str = "manual"
+    max_copies: int = _DEFAULT_MAX_COPIES
+    target: str = "local"
+    enabled: bool = True
+
 
 # ── Internal helpers ───────────────────────────────────────────────────────
 
@@ -123,28 +155,292 @@ def _known_config_files() -> list[Path]:
     return files
 
 
-# ── Public API: Backup ─────────────────────────────────────────────────────
+# ── Backup file naming / parsing ───────────────────────────────────────────
+
+# Filename patterns:
+#   New: {stem}_{strategy}_{timestamp}.db      (strategy-aware)
+#   Old: {stem}_{timestamp}.db                  (legacy, no strategy)
+_BACKUP_FILE_RE = re.compile(
+    r"^(.+?)_([a-z][a-z0-9-]*?)_(\d{8}T\d{15})\.(db|bak)$"
+)
+_LEGACY_BACKUP_FILE_RE = re.compile(
+    r"^(.+?)_(\d{8}T\d{15})\.(db|bak)$"
+)
 
 
-def backup_database(db_path: Path, *, retention: int = _DEFAULT_RETENTION) -> Path | None:
-    """Create a timestamped, checksum-verified backup of *db_path*.
+def _parse_backup_filename(name: str) -> dict[str, str] | None:
+    """Parse a backup filename into its components.
 
-    The backup is stored at::
+    Returns ``None`` if the name doesn't match expected patterns.
+    """
+    m = _BACKUP_FILE_RE.match(name)
+    if m:
+        return {
+            "stem": m.group(1),
+            "strategy": m.group(2),
+            "timestamp": m.group(3),
+            "suffix": m.group(4),
+        }
+    m = _LEGACY_BACKUP_FILE_RE.match(name)
+    if m:
+        return {
+            "stem": m.group(1),
+            "strategy": "legacy",
+            "timestamp": m.group(2),
+            "suffix": m.group(3),
+        }
+    return None
 
-        {backup_dir}/{timestamp}.db
+
+def _backup_filename(stem: str, strategy_id: str, ts: str, suffix: str = ".db") -> str:
+    """Build a strategy-aware backup filename."""
+    return f"{stem}_{strategy_id}_{ts}{suffix}"
+
+
+# ── Strategy CRUD ──────────────────────────────────────────────────────────
+
+
+def _config_path() -> Path:
+    """Return path to the backup config JSON file."""
+    return config_dir() / _BACKUP_CONFIG_FILE
+
+
+def _migrate_old_config(raw: dict[str, Any]) -> dict[str, Any]:
+    """Migrate v1 flat config to v2 strategy-based config."""
+    ext_dir = raw.get("external_dir", "")
+    retention = raw.get("retention", _DEFAULT_MAX_COPIES)
+    strategy = BackupStrategy(
+        id="default",
+        label="Default",
+        schedule="manual",
+        max_copies=int(retention),
+        target=ext_dir if ext_dir else "local",
+        enabled=True,
+    )
+    return {"version": _CONFIG_VERSION, "strategies": [asdict(strategy)]}
+
+
+def load_config() -> dict[str, Any]:
+    """Load backup configuration.
+
+    Returns:
+        Dict with keys:
+
+        - **version** (:class:`int`) — Config format version.
+        - **strategies** (:class:`list`) — List of strategy dicts.
+    """
+    defaults: dict[str, Any] = {
+        "version": _CONFIG_VERSION,
+        "strategies": [asdict(BackupStrategy(id="default", label="Default"))],
+    }
+    path = _config_path()
+    if not path.exists():
+        return dict(defaults)
+    try:
+        raw: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return dict(defaults)
+
+    # Detect and migrate v1 (flat) config
+    if "external_dir" in raw or "retention" in raw or raw.get("version", 1) < 2:
+        raw = _migrate_old_config(raw)
+        # Persist migrated config
+        save_config(raw)
+        return raw
+
+    # Ensure all strategies have valid fields
+    for s in raw.get("strategies", []):
+        s.setdefault("schedule", "manual")
+        s.setdefault("max_copies", _DEFAULT_MAX_COPIES)
+        s.setdefault("target", "local")
+        s.setdefault("enabled", True)
+
+    return raw
+
+
+def save_config(cfg: dict[str, Any]) -> None:
+    """Save backup configuration to disk.
 
     Args:
-        db_path:   Path to the database file to back up.
-        retention: Maximum number of backups to keep. Older backups are
-                   pruned after a successful copy. Set to 0 to disable.
+        cfg: Dict with ``version`` and ``strategies`` keys.
+
+    Raises:
+        ValueError: If the config is malformed.
+    """
+    strategies = cfg.get("strategies", [])
+    if not isinstance(strategies, list):
+        raise ValueError("'strategies' must be a list")
+
+    seen_ids: set[str] = set()
+    for s in strategies:
+        if not isinstance(s, dict):
+            raise ValueError(f"Each strategy must be a dict, got {type(s).__name__}")
+        sid = s.get("id", "")
+        if not sid or not isinstance(sid, str):
+            raise ValueError("Each strategy must have a non-empty string 'id'")
+        if not re.match(r"^[a-z][a-z0-9-]*$", sid):
+            raise ValueError(
+                f"Strategy id '{sid}' must match [a-z][a-z0-9-]*"
+            )
+        if sid in seen_ids:
+            raise ValueError(f"Duplicate strategy id: {sid}")
+        seen_ids.add(sid)
+
+        # Validate types
+        if not isinstance(s.get("label", ""), str):
+            raise ValueError(f"Strategy '{sid}': 'label' must be a string")
+        if s.get("schedule", "manual") not in VALID_SCHEDULES:
+            raise ValueError(
+                f"Strategy '{sid}': 'schedule' must be one of {sorted(VALID_SCHEDULES)}"
+            )
+        try:
+            max_copies = int(s.get("max_copies", _DEFAULT_MAX_COPIES))
+        except (TypeError, ValueError):
+            raise ValueError(f"Strategy '{sid}': 'max_copies' must be an integer")
+        if max_copies < 1:
+            raise ValueError(f"Strategy '{sid}': 'max_copies' must be >= 1")
+        s["max_copies"] = max_copies
+        s.setdefault("target", "local")
+        if not isinstance(s["target"], str):
+            raise ValueError(f"Strategy '{sid}': 'target' must be a string")
+        s["enabled"] = bool(s.get("enabled", True))
+
+    cfg["version"] = _CONFIG_VERSION
+    cfg["strategies"] = strategies
+
+    path = _config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+
+
+def list_strategies() -> list[dict[str, Any]]:
+    """Return the list of strategy dicts (from config)."""
+    cfg = load_config()
+    return cfg.get("strategies", [])
+
+
+def get_strategy(strategy_id: str) -> dict[str, Any] | None:
+    """Return a single strategy dict by id, or ``None``."""
+    for s in list_strategies():
+        if s["id"] == strategy_id:
+            return s
+    return None
+
+
+def add_strategy(strategy: BackupStrategy) -> dict[str, Any]:
+    """Add a new backup strategy.
+
+    Args:
+        strategy: The strategy to add.
+
+    Returns:
+        The saved strategy dict.
+
+    Raises:
+        ValueError: If the id already exists.
+    """
+    cfg = load_config()
+    for s in cfg["strategies"]:
+        if s["id"] == strategy.id:
+            raise ValueError(f"Strategy '{strategy.id}' already exists")
+    s_dict = asdict(strategy)
+    cfg["strategies"].append(s_dict)
+    save_config(cfg)
+    return s_dict
+
+
+def update_strategy(strategy_id: str, updates: dict[str, Any]) -> dict[str, Any]:
+    """Update fields on an existing strategy.
+
+    Args:
+        strategy_id: The strategy id to update.
+        updates: Dict of fields to change (``label``, ``schedule``,
+            ``max_copies``, ``target``, ``enabled``).
+
+    Returns:
+        The updated strategy dict.
+
+    Raises:
+        ValueError: If the strategy is not found, or updates are invalid.
+    """
+    cfg = load_config()
+    for s in cfg["strategies"]:
+        if s["id"] == strategy_id:
+            # Apply validated updates
+            if "label" in updates:
+                if not isinstance(updates["label"], str) or not updates["label"].strip():
+                    raise ValueError("'label' must be a non-empty string")
+                s["label"] = updates["label"].strip()
+            if "schedule" in updates:
+                if updates["schedule"] not in VALID_SCHEDULES:
+                    raise ValueError(
+                        f"'schedule' must be one of {sorted(VALID_SCHEDULES)}"
+                    )
+                s["schedule"] = updates["schedule"]
+            if "max_copies" in updates:
+                try:
+                    mc = int(updates["max_copies"])
+                except (TypeError, ValueError):
+                    raise ValueError("'max_copies' must be an integer")
+                if mc < 1:
+                    raise ValueError("'max_copies' must be >= 1")
+                s["max_copies"] = mc
+            if "target" in updates:
+                if not isinstance(updates["target"], str):
+                    raise ValueError("'target' must be a string")
+                s["target"] = updates["target"]
+            if "enabled" in updates:
+                s["enabled"] = bool(updates["enabled"])
+            save_config(cfg)
+            return s
+    raise ValueError(f"Strategy '{strategy_id}' not found")
+
+
+def remove_strategy(strategy_id: str) -> None:
+    """Remove a backup strategy by id.
+
+    Args:
+        strategy_id: The strategy id to remove.
+
+    Raises:
+        ValueError: If the strategy is not found.
+    """
+    cfg = load_config()
+    before = len(cfg["strategies"])
+    cfg["strategies"] = [s for s in cfg["strategies"] if s["id"] != strategy_id]
+    if len(cfg["strategies"]) == before:
+        raise ValueError(f"Strategy '{strategy_id}' not found")
+    save_config(cfg)
+
+
+# ── Public API: Strategy-aware Backup ──────────────────────────────────────
+
+
+def backup_with_strategy(
+    db_path: Path,
+    strategy: dict[str, Any],
+    *,
+    suffix: str = ".db",
+) -> Path | None:
+    """Create a backup tagged with *strategy*.
+
+    The backup file is stored at::
+
+        {backup_dir}/{stem}_{strategy[id]}_{timestamp}{suffix}
+
+    After a successful copy, old backups for this (stem, strategy) are
+    pruned according to the strategy's ``max_copies``.  If the strategy
+    has a ``target`` other than ``"local"``, the backup is also copied
+    there.
+
+    Args:
+        db_path:   Path to the source file.
+        strategy:  Strategy dict (from config).
+        suffix:    File extension (``.db`` or ``.bak``).
 
     Returns:
         Path to the created backup file, or ``None`` if *db_path* does
         not exist.
-
-    Raises:
-        OSError: If the source is unreadable, the backup dir cannot be
-            written, or the checksum of the copy does not match.
     """
     if not db_path.exists():
         return None
@@ -153,54 +449,127 @@ def backup_database(db_path: Path, *, retention: int = _DEFAULT_RETENTION) -> Pa
     backup_dir.mkdir(parents=True, exist_ok=True)
 
     ts = _timestamp()
-    stem = db_path.stem  # e.g. "email" from "email.db"
-    backup_path = backup_dir / f"{stem}_{ts}.db"
+    stem = db_path.stem
+    strategy_id = strategy["id"]
+    backup_path = backup_dir / _backup_filename(stem, strategy_id, ts, suffix)
 
     _copy_with_verify(db_path, backup_path)
 
-    if retention > 0:
-        _prune_for_stem(stem, retention=retention)
+    # Prune old backups for this (stem, strategy)
+    _prune_for_stem_and_strategy(stem, strategy_id, retention=strategy["max_copies"], suffix=suffix)
+
+    # Copy to external target if configured
+    target = strategy.get("target", "local")
+    if target and target != "local":
+        try:
+            dst_root = Path(target).expanduser().resolve()
+            dst_root.mkdir(parents=True, exist_ok=True)
+            dst = dst_root / backup_path.name
+            shutil.copy2(str(backup_path), str(dst))
+        except OSError:
+            pass  # best-effort external copy
 
     return backup_path
 
 
-def backup_all(*, retention: int = _DEFAULT_RETENTION) -> list[Path]:
-    """Backup all known lighterbird databases.
-
-    Args:
-        retention: Max backups per database stem to keep.
+def backup_all_strategies() -> list[Path]:
+    """Backup all known databases for every enabled strategy.
 
     Returns:
         List of backup file paths created.
     """
     created: list[Path] = []
+    strategies = list_strategies()
+    enabled = [s for s in strategies if s.get("enabled", True)]
+
     for db_path in _known_db_paths():
-        result = backup_database(db_path, retention=retention)
+        for strategy in enabled:
+            result = backup_with_strategy(db_path, strategy)
+            if result is not None:
+                created.append(result)
+
+    return created
+
+
+def backup_database(db_path: Path, *, retention: int | None = None) -> Path | None:
+    """Create a backup of *db_path* using the default strategy.
+
+    This is a backward-compatible wrapper around
+    :func:`backup_with_strategy`.  It uses a default strategy with the
+    given *retention* (or ``_DEFAULT_MAX_COPIES`` if not specified).
+
+    Args:
+        db_path:   Path to the database file to back up.
+        retention: Max backups to keep for this stem.  Uses the
+            configured default if ``None``.
+
+    Returns:
+        Path to the created backup, or ``None`` if *db_path* does not
+        exist.
+    """
+    strategies = list_strategies()
+    if strategies:
+        # Use the first enabled strategy, or default
+        s = next((s for s in strategies if s.get("enabled", True)), strategies[0])
+    else:
+        s = {"id": "default", "max_copies": retention or _DEFAULT_MAX_COPIES, "target": "local"}
+    return backup_with_strategy(db_path, s)
+
+
+def backup_all(*, retention: int | None = None) -> list[Path]:
+    """Backup all known databases (compatibility wrapper).
+
+    If strategies are configured, delegates to
+    :func:`backup_all_strategies`.  Otherwise creates a single backup
+    with the default strategy.
+
+    Args:
+        retention: Ignored when strategies are configured.  Kept for
+            backward compat.
+
+    Returns:
+        List of backup file paths created.
+    """
+    cfg = load_config()
+    if cfg.get("strategies"):
+        return backup_all_strategies()
+
+    # No strategies — backward-compat single backup
+    default_strategy = {
+        "id": "default",
+        "max_copies": retention or _DEFAULT_MAX_COPIES,
+        "target": "local",
+    }
+    created: list[Path] = []
+    for db_path in _known_db_paths():
+        result = backup_with_strategy(db_path, default_strategy)
         if result is not None:
             created.append(result)
     return created
 
 
-def backup_config_files(*, retention: int = _DEFAULT_RETENTION) -> list[Path]:
+def backup_config_files(*, retention: int | None = None) -> list[Path]:
     """Backup user configuration files (system_prompt.md, etc.).
 
     Args:
-        retention: Max backups per config stem to keep.
+        retention: Max backups per config stem (per-strategy when
+            strategies configured).
 
     Returns:
         List of backup file paths created.
     """
     created: list[Path] = []
+    cfg = load_config()
+    strategies = cfg.get("strategies", [])
+    enabled = [s for s in strategies if s.get("enabled", True)] if strategies else [{"id": "default", "max_copies": retention or _DEFAULT_MAX_COPIES, "target": "local"}]
+
     for cfg_path in _known_config_files():
-        backup_dir = _backup_dir()
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        ts = _timestamp()
-        stem = cfg_path.stem
-        backup_path = backup_dir / f"{stem}_{ts}.bak"
-        _copy_with_verify(cfg_path, backup_path)
-        if retention > 0:
-            _prune_for_stem(stem, retention=retention, suffix=".bak")
-        created.append(backup_path)
+        for strategy in enabled:
+            result = backup_with_strategy(
+                cfg_path, strategy, suffix=".bak"
+            )
+            if result is not None:
+                created.append(result)
     return created
 
 
@@ -228,7 +597,8 @@ def copy_to_external(target_dir: str | Path, *, backup_paths: list[Path] | None 
     dst_root.mkdir(parents=True, exist_ok=True)
 
     if backup_paths is None:
-        backup_paths = list_backups()
+        backups = list_backups()
+        backup_paths = [b["path"] for b in backups]
 
     copied: list[Path] = []
     for bp in backup_paths:
@@ -238,90 +608,52 @@ def copy_to_external(target_dir: str | Path, *, backup_paths: list[Path] | None 
     return copied
 
 
-# ── Public API: Backup config ──────────────────────────────────────────────
+# ── Public API: Test strategy ──────────────────────────────────────────────
 
 
-def _config_path() -> Path:
-    """Return path to the backup config JSON file."""
-    return config_dir() / _BACKUP_CONFIG_FILE
+def verify_strategy_target(strategy_id: str) -> dict[str, Any]:
+    """Test a backup strategy by attempting to create a backup.
 
+    Creates a temporary backup file to verify the target is writable,
+    then removes it.
 
-_VALID_KEYS = frozenset({"external_dir", "retention", "auto_interval_minutes"})
-
-
-def load_config() -> dict[str, Any]:
-    """Load backup configuration.
+    Args:
+        strategy_id: The strategy id to test.
 
     Returns:
         Dict with keys:
-
-        - **external_dir** (:class:`str`) — Path to external backup
-          directory, or ``""`` if not configured.
-        - **retention** (:class:`int`) — Number of backups to keep.
-        - **auto_interval_minutes** (:class:`int`) — Minutes between
-          automatic backups (0 = disabled).
-    """
-    defaults = {"external_dir": "", "retention": _DEFAULT_RETENTION, "auto_interval_minutes": 0}
-    path = _config_path()
-    if not path.exists():
-        return dict(defaults)
-    try:
-        raw: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return dict(defaults)
-
-    # Sanitize: strip unknown keys, fill defaults, coerce types
-    cleaned: dict[str, Any] = {}
-    for k, default_val in defaults.items():
-        val = raw.get(k, default_val)
-        # Coerce to the expected type
-        if isinstance(default_val, int):
-            try:
-                val = int(val)
-            except (TypeError, ValueError):
-                val = default_val
-        elif isinstance(default_val, str):
-            val = str(val) if not isinstance(val, str) else val
-        cleaned[k] = val
-    return cleaned
-
-
-def save_config(cfg: dict[str, Any]) -> None:
-    """Save backup configuration to disk.
-
-    Validates that *cfg* contains only recognised keys with correct types.
-
-    Args:
-        cfg: Dict with keys ``external_dir`` (:class:`str`),
-            ``retention`` (:class:`int`),
-            ``auto_interval_minutes`` (:class:`int`).
+        - **success** (:class:`bool`)
+        - **message** (:class:`str`) — Human-readable result.
+        - **error** (:class:`str`, optional) — Error detail on failure.
 
     Raises:
-        ValueError: If *cfg* contains unknown keys or values of the
-            wrong type.
+        ValueError: If the strategy is not found.
     """
-    unknown = set(cfg) - _VALID_KEYS
-    if unknown:
-        raise ValueError(
-            f"Unknown backup config key(s): {', '.join(sorted(unknown))}. "
-            f"Valid keys: {', '.join(sorted(_VALID_KEYS))}"
-        )
+    strategy = get_strategy(strategy_id)
+    if strategy is None:
+        raise ValueError(f"Strategy '{strategy_id}' not found")
 
-    expected_types: dict[str, type] = {
-        "external_dir": str,
-        "retention": int,
-        "auto_interval_minutes": int,
-    }
-    for key, expected in expected_types.items():
-        if key in cfg and not isinstance(cfg[key], expected):
-            raise ValueError(
-                f"Backup config key '{key}' must be {expected.__name__}, "
-                f"got {type(cfg[key]).__name__}"
-            )
+    target = strategy.get("target", "local")
+    try:
+        if target == "local":
+            # Verify .backups/ is writable
+            bdir = _backup_dir()
+            bdir.mkdir(parents=True, exist_ok=True)
+            probe = bdir / f".probe_{_timestamp()}.tmp"
+            probe.write_text("probe")
+            probe.unlink()
+            location = str(bdir)
+        else:
+            dst = Path(target).expanduser().resolve()
+            dst.mkdir(parents=True, exist_ok=True)
+            probe = dst / f".probe_{_timestamp()}.tmp"
+            probe.write_text("probe")
+            probe.unlink()
+            location = str(dst)
 
-    path = _config_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+        return {"success": True, "message": f"Target is writable: {location}"}
+    except OSError as e:
+        return {"success": False, "message": f"Target is NOT writable: {target}", "error": str(e)}
 
 
 # ── Public API: List, Restore, Prune ───────────────────────────────────────
@@ -333,7 +665,7 @@ def list_backups() -> list[dict[str, Any]]:
     Returns:
         A list of dicts, each with keys: **path** (:class:`Path`),
         **timestamp** (:class:`str`), **size_bytes** (:class:`int`),
-        **stem** (:class:`str`) — the original file stem (e.g. ``"email"``).
+        **stem** (:class:`str`), **strategy** (:class:`str`).
     """
     bdir = _backup_dir()
     if not bdir.is_dir():
@@ -343,15 +675,15 @@ def list_backups() -> list[dict[str, Any]]:
     for p in sorted(bdir.iterdir(), reverse=True):
         if p.suffix not in (".db", ".bak"):
             continue
-        # Parse stem_YYYYMMDDTHHMMSS... → stem, timestamp
-        parts = p.stem.rsplit("_", 1)
-        stem = parts[0] if len(parts) == 2 else p.stem
-        ts = parts[1] if len(parts) == 2 else p.stem
+        parsed = _parse_backup_filename(p.name)
+        if parsed is None:
+            continue
         backups.append({
             "path": p,
-            "timestamp": ts,
+            "timestamp": parsed["timestamp"],
             "size_bytes": p.stat().st_size,
-            "stem": stem,
+            "stem": parsed["stem"],
+            "strategy": parsed["strategy"],
         })
 
     return backups
@@ -367,6 +699,16 @@ def list_backups_for(stem: str) -> list[dict[str, Any]]:
         List of backup dicts, newest first.
     """
     return [b for b in list_backups() if b["stem"] == stem]
+
+
+def _resolve_backup_target_path(backup: dict[str, Any], dst_dir: Path) -> Path:
+    """Determine the restore target path for a backup entry."""
+    stem = backup["stem"]
+    if backup["path"].suffix == ".db":
+        original_name = f"{stem}.db"
+    else:
+        original_name = f"{stem}.md" if stem == "system_prompt" else f"{stem}.bak"
+    return dst_dir / original_name
 
 
 def restore_latest(target_dir: str | Path) -> list[Path]:
@@ -394,12 +736,7 @@ def restore_latest(target_dir: str | Path) -> list[Path]:
         if stem in seen_stems:
             continue
         seen_stems.add(stem)
-        # Determine original filename
-        if b["path"].suffix == ".db":
-            original_name = f"{stem}.db"
-        else:
-            original_name = f"{stem}.md" if stem == "system_prompt" else f"{stem}.bak"
-        target_path = dst_dir / original_name
+        target_path = _resolve_backup_target_path(b, dst_dir)
         _copy_with_verify(b["path"], target_path)
         restored.append(target_path)
 
@@ -437,23 +774,19 @@ def restore_by_timestamp(timestamp_prefix: str, target_dir: str | Path) -> list[
 
     restored: list[Path] = []
     for b in matches:
-        if b["path"].suffix == ".db":
-            original_name = f"{b['stem']}.db"
-        else:
-            original_name = f"{b['stem']}.md" if b["stem"] == "system_prompt" else f"{b['stem']}.bak"
-        target_path = dst_dir / original_name
+        target_path = _resolve_backup_target_path(b, dst_dir)
         _copy_with_verify(b["path"], target_path)
         restored.append(target_path)
 
     return restored
 
 
-def prune_backups(*, retention: int = _DEFAULT_RETENTION) -> int:
-    """Prune old backups, keeping the newest *retention* per stem.
+def prune_backups(*, retention: int | None = None) -> int:
+    """Prune old backups, keeping the newest *retention* per (stem, strategy).
 
     Args:
-        retention: Number of newest backups to keep per stem. Must
-            be >= 1.
+        retention: Number of newest backups to keep per (stem, strategy)
+            group.  If ``None``, uses each strategy's ``max_copies``.
 
     Returns:
         Number of backup files deleted.
@@ -461,27 +794,33 @@ def prune_backups(*, retention: int = _DEFAULT_RETENTION) -> int:
     Raises:
         ValueError: If *retention* is less than 1.
     """
-    if retention < 1:
-        raise ValueError(f"retention must be >= 1, got {retention}")
-
     bdir = _backup_dir()
     if not bdir.is_dir():
         return 0
 
-    # Group backup files by stem
-    by_stem: dict[str, list[Path]] = {}
+    # Group by (stem, strategy)
+    by_group: dict[tuple[str, str], list[Path]] = {}
     for p in sorted(bdir.iterdir(), reverse=True):
         if p.suffix not in (".db", ".bak"):
             continue
-        parts = p.stem.rsplit("_", 1)
-        stem = parts[0] if len(parts) == 2 else p.stem
-        by_stem.setdefault(stem, []).append(p)
+        parsed = _parse_backup_filename(p.name)
+        if parsed is None:
+            continue
+        key = (parsed["stem"], parsed["strategy"])
+        by_group.setdefault(key, []).append(p)
+
+    # Determine retention per group based on strategy config
+    strategies = {s["id"]: s["max_copies"] for s in list_strategies()}
+    default_retention = _DEFAULT_MAX_COPIES
 
     deleted = 0
-    for stem, files in by_stem.items():
-        if len(files) <= retention:
+    for (stem, sid), files in by_group.items():
+        max_keep = retention
+        if max_keep is None:
+            max_keep = strategies.get(sid, default_retention)
+        if len(files) <= max_keep:
             continue
-        for p in files[retention:]:
+        for p in files[max_keep:]:
             try:
                 p.unlink()
                 deleted += 1
@@ -491,14 +830,21 @@ def prune_backups(*, retention: int = _DEFAULT_RETENTION) -> int:
     return deleted
 
 
-def _prune_for_stem(stem: str, *, retention: int, suffix: str = ".db") -> int:
-    """Prune backups for a single stem (used internally after backup)."""
+def _prune_for_stem_and_strategy(
+    stem: str,
+    strategy_id: str,
+    *,
+    retention: int,
+    suffix: str = ".db",
+) -> int:
+    """Prune backups for a specific (stem, strategy) combination."""
     bdir = _backup_dir()
     if not bdir.is_dir():
         return 0
 
+    prefix = f"{stem}_{strategy_id}_"
     files = sorted(
-        [p for p in bdir.iterdir() if p.suffix == suffix and p.stem.startswith(f"{stem}_")],
+        [p for p in bdir.iterdir() if p.suffix == suffix and p.stem.startswith(prefix)],
         reverse=True,
     )
     if len(files) <= retention:
@@ -520,7 +866,7 @@ def _prune_for_stem(stem: str, *, retention: int, suffix: str = ".db") -> int:
 def export_data(output_dir: str | Path) -> Path:
     """Export all DB files + config files to a portable directory.
 
-    Creates a timestamped directory containing:
+    Creates a timestamped directory containing::
 
         export-{timestamp}/
             manifest.json       # Metadata + SHA-256 checksums
@@ -639,19 +985,28 @@ def import_data(export_dir: str | Path, *, force: bool = False) -> dict[str, Any
 
 
 __all__ = [
-    "backup_database",
+    "BackupStrategy",
+    "add_strategy",
     "backup_all",
+    "backup_all_strategies",
     "backup_config_files",
+    "backup_database",
+    "backup_with_strategy",
     "copy_to_external",
+    "export_data",
+    "get_strategy",
+    "import_data",
     "list_backups",
     "list_backups_for",
-    "restore_latest",
-    "restore_by_timestamp",
-    "prune_backups",
-    "export_data",
-    "import_data",
+    "list_strategies",
     "load_config",
+    "prune_backups",
+    "remove_strategy",
+    "restore_by_timestamp",
+    "restore_latest",
     "save_config",
+    "verify_strategy_target",
+    "update_strategy",
     "_known_db_paths",
     "_known_config_files",
 ]

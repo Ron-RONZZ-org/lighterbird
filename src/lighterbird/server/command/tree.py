@@ -461,6 +461,7 @@ def get_command_tree() -> list[CommandNode]:
                     "description": "List available backup snapshots",
                     "flags": [
                         {"name": "stem", "type": "string", "help": "Filter by database (email|calendar|contacts|todo|journal)"},
+                        {"name": "strategy", "type": "string", "help": "Filter by strategy id"},
                     ],
                 },
                 {
@@ -479,11 +480,52 @@ def get_command_tree() -> list[CommandNode]:
                 },
                 {
                     "name": "config",
-                    "description": "View or change backup settings",
-                    "flags": [
-                        {"name": "external-dir", "type": "string", "help": "External/synced backup directory path"},
-                        {"name": "retention", "type": "number", "help": "Backups to keep per database"},
-                        {"name": "auto-interval", "type": "number", "help": "Auto-backup interval in minutes (0 = disabled, 15-30 recommended)"},
+                    "description": "View backup config summary",
+                    "children": [
+                        {
+                            "name": "list",
+                            "description": "List backup strategies",
+                        },
+                        {
+                            "name": "add",
+                            "description": "Add a backup strategy",
+                            "flags": [
+                                {"name": "id", "type": "string", "help": "Strategy identifier (kebab-case)"},
+                                {"name": "label", "type": "string", "help": "Human-readable name"},
+                                {"name": "schedule", "type": "string", "help": "manual|hourly|daily|weekly"},
+                                {"name": "max-copies", "short": "m", "type": "number", "help": "Max backups to keep"},
+                                {"name": "target", "type": "string", "help": "local or absolute path"},
+                                {"name": "enabled", "type": "string", "help": "true|false"},
+                            ],
+                        },
+                        {
+                            "name": "modify",
+                            "description": "Modify a backup strategy",
+                            "params": [
+                                {"name": "id", "required": True, "type": "string", "placeholder": "strategy-id"},
+                            ],
+                            "flags": [
+                                {"name": "label", "type": "string"},
+                                {"name": "schedule", "type": "string", "help": "manual|hourly|daily|weekly"},
+                                {"name": "max-copies", "type": "number", "help": "Max backups to keep"},
+                                {"name": "target", "type": "string", "help": "local or absolute path"},
+                                {"name": "enabled", "type": "string", "help": "true|false"},
+                            ],
+                        },
+                        {
+                            "name": "remove",
+                            "description": "Remove a backup strategy",
+                            "params": [
+                                {"name": "id", "required": True, "type": "string", "placeholder": "strategy-id"},
+                            ],
+                        },
+                        {
+                            "name": "test",
+                            "description": "Test a strategy's target directory",
+                            "params": [
+                                {"name": "id", "required": True, "type": "string", "placeholder": "strategy-id"},
+                            ],
+                        },
                     ],
                 },
                 {
