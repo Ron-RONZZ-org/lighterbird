@@ -201,17 +201,53 @@ class TestBackupConfig:
         cfg = load_config()
         assert cfg["external_dir"] == ""
         assert cfg["retention"] == 10
-        assert cfg["auto_interval_hours"] == 0
+        assert cfg["auto_interval_minutes"] == 0
 
     def test_save_and_load(self, tmp_data_dir: Path, monkeypatch):
         """save_config persists and load_config retrieves."""
         monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
-        cfg = {"external_dir": "/some/path", "retention": 5, "auto_interval_hours": 24}
+        cfg = {"external_dir": "/some/path", "retention": 5, "auto_interval_minutes": 30}
         save_config(cfg)
         loaded = load_config()
         assert loaded["external_dir"] == "/some/path"
         assert loaded["retention"] == 5
-        assert loaded["auto_interval_hours"] == 24
+        assert loaded["auto_interval_minutes"] == 30
+
+    def test_save_config_rejects_unknown_keys(self, tmp_data_dir: Path, monkeypatch):
+        """save_config raises ValueError on unknown keys."""
+        monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+        with pytest.raises(ValueError, match="Unknown backup config key"):
+            save_config({"external_dir": "/x", "bogus": "y"})
+
+    def test_save_config_rejects_wrong_type(self, tmp_data_dir: Path, monkeypatch):
+        """save_config raises ValueError on wrong value type."""
+        monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+        with pytest.raises(ValueError, match="must be int"):
+            save_config({"retention": "not-a-number"})
+
+    def test_load_config_sanitizes_corrupt_json(self, tmp_data_dir: Path, monkeypatch):
+        """load_config returns defaults on corrupt JSON."""
+        monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+        cfg_path = tmp_data_dir / "backup.json"
+        cfg_path.write_text("{invalid json}", encoding="utf-8")
+        cfg = load_config()
+        assert cfg["external_dir"] == ""
+        assert cfg["retention"] == 10
+        assert cfg["auto_interval_minutes"] == 0
+
+    def test_load_config_strips_unknown_keys(self, tmp_data_dir: Path, monkeypatch):
+        """load_config strips unknown keys and fills defaults."""
+        monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+        cfg_path = tmp_data_dir / "backup.json"
+        cfg_path.write_text(
+            json.dumps({"external_dir": "/path", "nonsense": 42, "retention": 3}),
+            encoding="utf-8",
+        )
+        cfg = load_config()
+        assert "nonsense" not in cfg
+        assert cfg["external_dir"] == "/path"
+        assert cfg["retention"] == 3
+        assert cfg["auto_interval_minutes"] == 0  # default filled
 
 
 class TestExportImport:
