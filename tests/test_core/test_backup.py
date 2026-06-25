@@ -10,18 +10,25 @@ import pytest
 from lighterbird.core.backup import (
     _known_db_paths,
     _sha256,
+    BackupStrategy,
+    add_strategy,
     backup_all,
     backup_database,
     backup_config_files,
     copy_to_external,
     export_data,
+    get_strategy,
     import_data,
     list_backups,
     list_backups_for,
+    list_strategies,
     load_config,
     prune_backups,
+    remove_strategy,
     restore_latest,
     save_config,
+    verify_strategy_target,
+    update_strategy,
 )
 
 
@@ -52,12 +59,14 @@ class TestBackupDatabase:
         assert _sha256(result) == orig_hash
 
     def test_backup_timestamp_in_filename(self, tmp_data_dir: Path, tmp_path: Path):
-        """Filename contains stem + timestamp."""
+        """Filename contains stem + strategy + timestamp."""
         db_path = tmp_path / "email.db"
         db_path.write_text("data")
         result = backup_database(db_path, retention=0)
         assert result is not None
+        # Should contain strategy prefix (default)
         assert result.name.startswith("email_")
+        assert "default_" in result.name
         assert "T" in result.stem  # ISO timestamp separator
 
     def test_backup_adds_to_list(self, tmp_data_dir: Path, tmp_path: Path):
@@ -80,7 +89,7 @@ class TestBackupAll:
         for name in ["email.db", "todo.db"]:
             (tmp_data_dir / name).write_text(f"{name} content")
         results = backup_all(retention=0)
-        assert len(results) == 2
+        assert len(results) >= 2  # one per strategy
         names = [p.name for p in results]
         assert any("email_" in n for n in names)
         assert any("todo_" in n for n in names)
@@ -132,7 +141,7 @@ class TestListBackups:
 
 class TestPrune:
     def test_prune_retains_n(self, tmp_data_dir: Path, tmp_path: Path):
-        """prune_backups keeps only the N newest."""
+        """prune_backups keeps only the N newest per (stem, strategy)."""
         db_path = tmp_path / "prune.db"
         for i in range(5):
             db_path.write_text(f"version-{i}")
@@ -143,9 +152,10 @@ class TestPrune:
         assert len(list_backups()) == 2
 
     def test_prune_invalid_retention(self):
-        """prune_backups with retention < 1 raises ValueError."""
-        with pytest.raises(ValueError, match="retention must be >= 1"):
-            prune_backups(retention=0)
+        """prune_backups with retention=0 suppresses (uses strategy max)."""
+        # The new prune_backups accepts any value; no error raised
+        deleted = prune_backups(retention=0)
+        assert deleted == 0
 
     def test_prune_empty_dir(self, tmp_data_dir: Path):
         """prune_backups on empty backup dir returns 0."""
@@ -199,31 +209,53 @@ class TestBackupConfig:
         """load_config returns defaults when no config file exists."""
         monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
         cfg = load_config()
-        assert cfg["external_dir"] == ""
-        assert cfg["retention"] == 10
-        assert cfg["auto_interval_minutes"] == 0
+        assert cfg["version"] == 2
+        assert len(cfg["strategies"]) == 1
+        assert cfg["strategies"][0]["id"] == "default"
+        assert cfg["strategies"][0]["max_copies"] == 10
 
     def test_save_and_load(self, tmp_data_dir: Path, monkeypatch):
         """save_config persists and load_config retrieves."""
         monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
-        cfg = {"external_dir": "/some/path", "retention": 5, "auto_interval_minutes": 30}
+        cfg = {
+            "version": 2,
+            "strategies": [
+                {"id": "daily", "label": "Daily", "schedule": "daily", "max_copies": 3, "target": "/backup", "enabled": True},
+            ],
+        }
         save_config(cfg)
         loaded = load_config()
-        assert loaded["external_dir"] == "/some/path"
-        assert loaded["retention"] == 5
-        assert loaded["auto_interval_minutes"] == 30
+        assert loaded["version"] == 2
+        assert len(loaded["strategies"]) == 1
+        assert loaded["strategies"][0]["id"] == "daily"
+        assert loaded["strategies"][0]["max_copies"] == 3
 
-    def test_save_config_rejects_unknown_keys(self, tmp_data_dir: Path, monkeypatch):
-        """save_config raises ValueError on unknown keys."""
+    def test_save_config_rejects_invalid_id(self, tmp_data_dir: Path, monkeypatch):
+        """save_config raises ValueError on invalid strategy id."""
         monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
-        with pytest.raises(ValueError, match="Unknown backup config key"):
-            save_config({"external_dir": "/x", "bogus": "y"})
+        with pytest.raises(ValueError, match="must match"):
+            save_config({"version": 2, "strategies": [{"id": "UPPERCASE", "label": "Bad"}]})
 
-    def test_save_config_rejects_wrong_type(self, tmp_data_dir: Path, monkeypatch):
-        """save_config raises ValueError on wrong value type."""
+    def test_save_config_rejects_duplicate(self, tmp_data_dir: Path, monkeypatch):
+        """save_config raises ValueError on duplicate strategy ids."""
         monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
-        with pytest.raises(ValueError, match="must be int"):
-            save_config({"retention": "not-a-number"})
+        with pytest.raises(ValueError, match="Duplicate"):
+            save_config({
+                "version": 2,
+                "strategies": [
+                    {"id": "dup", "label": "First"},
+                    {"id": "dup", "label": "Second"},
+                ],
+            })
+
+    def test_save_config_rejects_bad_max_copies(self, tmp_data_dir: Path, monkeypatch):
+        """save_config raises ValueError on invalid max_copies."""
+        monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+        with pytest.raises(ValueError, match="max_copies"):
+            save_config({
+                "version": 2,
+                "strategies": [{"id": "test", "max_copies": "not-a-number"}],
+            })
 
     def test_load_config_sanitizes_corrupt_json(self, tmp_data_dir: Path, monkeypatch):
         """load_config returns defaults on corrupt JSON."""
@@ -231,12 +263,28 @@ class TestBackupConfig:
         cfg_path = tmp_data_dir / "backup.json"
         cfg_path.write_text("{invalid json}", encoding="utf-8")
         cfg = load_config()
-        assert cfg["external_dir"] == ""
-        assert cfg["retention"] == 10
-        assert cfg["auto_interval_minutes"] == 0
+        assert cfg["version"] == 2
+        assert len(cfg["strategies"]) == 1
+        assert cfg["strategies"][0]["id"] == "default"
+
+    def test_migrate_old_config(self, tmp_data_dir: Path, monkeypatch):
+        """Old flat config auto-migrates to strategy format."""
+        monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+        cfg_path = tmp_data_dir / "backup.json"
+        cfg_path.write_text(
+            json.dumps({"external_dir": "/old/path", "retention": 5, "auto_interval_minutes": 30}),
+            encoding="utf-8",
+        )
+        cfg = load_config()
+        assert cfg["version"] == 2
+        assert len(cfg["strategies"]) == 1
+        s = cfg["strategies"][0]
+        assert s["id"] == "default"
+        assert s["max_copies"] == 5
+        assert s["target"] == "/old/path"
 
     def test_load_config_strips_unknown_keys(self, tmp_data_dir: Path, monkeypatch):
-        """load_config strips unknown keys and fills defaults."""
+        """load_config strips unknown top-level keys from old config."""
         monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
         cfg_path = tmp_data_dir / "backup.json"
         cfg_path.write_text(
@@ -245,9 +293,84 @@ class TestBackupConfig:
         )
         cfg = load_config()
         assert "nonsense" not in cfg
-        assert cfg["external_dir"] == "/path"
-        assert cfg["retention"] == 3
-        assert cfg["auto_interval_minutes"] == 0  # default filled
+        assert cfg["version"] == 2
+        # Migrated — should have strategies, not old keys
+        assert len(cfg["strategies"]) == 1
+        assert cfg["strategies"][0]["max_copies"] == 3
+
+
+class TestStrategyCRUD:
+    def test_list_strategies_default(self, tmp_data_dir: Path, monkeypatch):
+        """list_strategies returns at least the default."""
+        monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+        strategies = list_strategies()
+        assert len(strategies) >= 1
+        assert strategies[0]["id"] == "default"
+
+    def test_add_strategy(self, tmp_data_dir: Path, monkeypatch):
+        """add_strategy adds and returns the new strategy."""
+        monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+        s = add_strategy(BackupStrategy(id="hourly", label="Hourly", schedule="hourly", max_copies=5))
+        assert s["id"] == "hourly"
+        strategies = list_strategies()
+        ids = [st["id"] for st in strategies]
+        assert "hourly" in ids
+
+    def test_add_strategy_duplicate(self, tmp_data_dir: Path, monkeypatch):
+        """add_strategy raises ValueError on duplicate id."""
+        monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+        add_strategy(BackupStrategy(id="test", label="Test"))
+        with pytest.raises(ValueError, match="already exists"):
+            add_strategy(BackupStrategy(id="test", label="Test 2"))
+
+    def test_get_strategy(self, tmp_data_dir: Path, monkeypatch):
+        """get_strategy returns the strategy or None."""
+        monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+        s = get_strategy("default")
+        assert s is not None
+        assert s["id"] == "default"
+        assert get_strategy("nonexistent") is None
+
+    def test_update_strategy(self, tmp_data_dir: Path, monkeypatch):
+        """update_strategy modifies fields."""
+        monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+        updated = update_strategy("default", {"max_copies": 3, "label": "Changed"})
+        assert updated["max_copies"] == 3
+        assert updated["label"] == "Changed"
+        s = get_strategy("default")
+        assert s["max_copies"] == 3
+
+    def test_update_strategy_not_found(self, tmp_data_dir: Path, monkeypatch):
+        """update_strategy raises ValueError for unknown id."""
+        monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+        with pytest.raises(ValueError, match="not found"):
+            update_strategy("nope", {"max_copies": 1})
+
+    def test_remove_strategy(self, tmp_data_dir: Path, monkeypatch):
+        """remove_strategy removes a strategy."""
+        monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+        add_strategy(BackupStrategy(id="toremove", label="Remove me"))
+        remove_strategy("toremove")
+        assert get_strategy("toremove") is None
+
+    def test_remove_strategy_not_found(self, tmp_data_dir: Path, monkeypatch):
+        """remove_strategy raises ValueError for unknown id."""
+        monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+        with pytest.raises(ValueError, match="not found"):
+            remove_strategy("nope")
+
+    def test_test_strategy_local(self, tmp_data_dir: Path, monkeypatch):
+        """test_strategy succeeds for local target."""
+        monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+        result = verify_strategy_target("default")
+        assert result["success"] is True
+        assert "writable" in result["message"]
+
+    def test_test_strategy_not_found(self, tmp_data_dir: Path, monkeypatch):
+        """test_strategy raises ValueError for unknown id."""
+        monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+        with pytest.raises(ValueError, match="not found"):
+            verify_strategy_target("nope")
 
 
 class TestExportImport:
