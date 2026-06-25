@@ -14,6 +14,26 @@
   import KeyboardShortcutOverlay from "./KeyboardShortcutOverlay.svelte";
 
   let showGlobalHelp = $state(false);
+  let inputFocused = $state(false);
+
+  // Track command input focus state for context-sensitive hints
+  $effect(() => {
+    function handler(e) {
+      inputFocused = e.detail.focused;
+    }
+    window.addEventListener("input-focus-changed", handler);
+    return () => window.removeEventListener("input-focus-changed", handler);
+  });
+
+  // Auto-focus command input when switching to home tab
+  $effect(() => {
+    if (tabStore.isHome) {
+      // Small delay to let the DOM settle
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new CustomEvent("focus-command-input"));
+      });
+    }
+  });
 
   function handleKeydown(e) {
     // Escape — close current tab
@@ -25,6 +45,8 @@
         showGlobalHelp = false;
         return;
       }
+      // When command input is focused on home tab, let ChatInput handle Escape (blur)
+      if (tabStore.isHome && inputFocused) return;
       const type = tabStore.active?.type;
       if (type === "email-list") return; // self-managed Escape (dialogs, search, selection)
       if (tabStore.active && tabStore.active.closable && !tabStore.isHome) {
@@ -143,9 +165,18 @@
       {/each}
       <span class="tab-bar-spacer"></span>
       <span class="tab-hint" title="Keyboard shortcuts">
+        {#if tabStore.isHome && !inputFocused}
+          <kbd>i</kbd> focus
+          <span class="hint-sep">·</span>
+        {:else if tabStore.isHome && inputFocused}
+          <kbd>Esc</kbd> blur
+          <span class="hint-sep">·</span>
+        {/if}
         <kbd>h</kbd> help
-        <span class="hint-sep">·</span>
-        <kbd>q</kbd> <kbd>Esc</kbd> close
+        {#if !tabStore.isHome}
+          <span class="hint-sep">·</span>
+          <kbd>q</kbd> <kbd>Esc</kbd> close
+        {/if}
       </span>
     </div>
   {/if}
