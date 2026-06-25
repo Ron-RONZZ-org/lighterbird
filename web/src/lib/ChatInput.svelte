@@ -286,6 +286,7 @@
 
 <div class="chat-input" class:centered>
   <div class="input-area">
+    <!-- svelte-ignore a11y_autofocus -->
     <textarea
       bind:this={textareaEl}
       class="input-field"
