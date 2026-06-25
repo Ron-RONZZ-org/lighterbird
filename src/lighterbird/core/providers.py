@@ -102,7 +102,11 @@ class OpenAICompatibleProvider:
                 headers=headers,
                 json=payload,
             )
-            response.raise_for_status()
+            if response.is_error:
+                detail = await _response_error_detail(response)
+                raise RuntimeError(
+                    f"LLM API error (HTTP {response.status_code}): {detail}"
+                ) from None
             data = response.json()
             choice = data.get("choices", [{}])[0]
             return choice.get("message", {}).get("content", "")
@@ -202,7 +206,11 @@ class OpenAICompatibleProvider:
                 headers=headers,
                 json=payload,
             ) as response:
-                response.raise_for_status()
+                if response.is_error:
+                    detail = await _response_error_detail(response)
+                    raise RuntimeError(
+                        f"LLM API error (HTTP {response.status_code}): {detail}"
+                    ) from None
                 async for line in response.aiter_lines():
                     if line.startswith("data: "):
                         data_str = line[6:].strip()
