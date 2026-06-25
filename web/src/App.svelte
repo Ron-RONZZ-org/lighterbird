@@ -12,6 +12,21 @@
   let isLoading = $state(false);
   let activeForm = $state(null);
 
+  // ── Notice banner (fetched on page load, dismissible per session) ────
+  let noticeMessage = $state("");
+  let noticeDismissed = $state(false);
+
+  async function fetchNotice() {
+    try {
+      const resp = await fetch("/api/v1/chat/notice");
+      const data = await resp.json();
+      if (data?.notice?.message) {
+        noticeMessage = data.notice.message;
+      }
+    } catch { /* best-effort */ }
+  }
+  fetchNotice();
+
   /** Global keyboard shortcuts. */
   function handleGlobalKeydown(e) {
     // Alt+1/2/3/4 — switch tabs
@@ -100,6 +115,12 @@
 <svelte:window onkeydown={handleGlobalKeydown} />
 
 <main>
+  {#if noticeMessage && !noticeDismissed}
+    <div class="notice-banner" role="alert">
+      <span class="notice-text">{noticeMessage}</span>
+      <button class="notice-close" onclick={() => { noticeDismissed = true; }} aria-label="Dismiss notice">✕</button>
+    </div>
+  {/if}
   {#if isLoading}
     <div class="loading-bar" aria-label="Loading"></div>
   {/if}
@@ -133,6 +154,35 @@
     flex-direction: column;
     height: 100vh;
     width: 100%;
+  }
+  .notice-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    background: #2a2a3e;
+    border-bottom: 1px solid #4a4a6e;
+    font-size: 0.82rem;
+    color: #c0c0d0;
+    line-height: 1.5;
+  }
+  .notice-text {
+    flex: 1;
+    white-space: pre-wrap;
+  }
+  .notice-close {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .notice-close:hover {
+    color: #e0e0e0;
+    background: #3a3a4e;
   }
   .loading-bar {
     position: fixed;
