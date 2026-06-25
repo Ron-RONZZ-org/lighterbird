@@ -483,7 +483,7 @@ def get_command_tree() -> list[CommandNode]:
                     "flags": [
                         {"name": "external-dir", "type": "string", "help": "External/synced backup directory path"},
                         {"name": "retention", "type": "number", "help": "Backups to keep per database"},
-                        {"name": "auto-interval", "type": "number", "help": "Auto-backup interval in hours (0 = disabled)"},
+                        {"name": "auto-interval", "type": "number", "help": "Auto-backup interval in minutes (0 = disabled, 15-30 recommended)"},
                     ],
                 },
                 {

@@ -9,6 +9,7 @@ import pytest
 
 # Import to register handlers via side-effects
 from lighterbird.server.command.handlers import backup  # noqa: F401
+from lighterbird.core.backup import load_config
 from lighterbird.server.command.registry import dispatch
 
 
@@ -100,6 +101,45 @@ def test_backup_config_set(tmp_data_dir: Path, monkeypatch):
     assert cfg["external_dir"] == "/tmp/test-backups"
 
 
+def test_backup_config_set_retention(tmp_data_dir: Path, monkeypatch):
+    """!backup config --retention N validates."""
+    monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+    # Valid
+    result = dispatch(["backup", "config"], {"retention": "5"})
+    assert result["type"] == "status"
+    assert "retention" in result["data"]["changed"]
+    # Invalid: not a number
+    with pytest.raises(Exception, match="Invalid --retention"):
+        dispatch(["backup", "config"], {"retention": "abc"})
+    # Invalid: < 1
+    with pytest.raises(Exception, match="--retention must be >= 1"):
+        dispatch(["backup", "config"], {"retention": "0"})
+
+
+def test_backup_config_set_auto_interval(tmp_data_dir: Path, monkeypatch):
+    """!backup config --auto-interval N validates."""
+    monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+    # Valid: 30 minutes
+    result = dispatch(["backup", "config"], {"auto_interval": "30"})
+    assert result["type"] == "status"
+    assert "auto_interval_minutes" in result["data"]["changed"]
+    cfg = load_config()
+    assert cfg["auto_interval_minutes"] == 30
+    # Invalid: not a number
+    with pytest.raises(Exception, match="Invalid --auto-interval"):
+        dispatch(["backup", "config"], {"auto_interval": "abc"})
+    # Invalid: negative
+    with pytest.raises(Exception, match="--auto-interval must be >= 0"):
+        dispatch(["backup", "config"], {"auto_interval": "-5"})
+
+
+def test_backup_config_set_external_dir_empty(tmp_data_dir: Path, monkeypatch):
+    """!backup config --external-dir '' is rejected."""
+    monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+    with pytest.raises(Exception, match="--external-dir must not be empty"):
+        dispatch(["backup", "config"], {"external_dir": ""})
+
+
 def test_backup_export(tmp_data_dir: Path, tmp_path: Path):
     """!backup export --output PATH exports data to a directory."""
     (tmp_data_dir / "email.db").write_text("test data")
@@ -164,7 +204,7 @@ def test_backup_now_with_external(tmp_data_dir: Path, tmp_path: Path, monkeypatc
 
     # Configure external dir
     from lighterbird.core.backup import save_config
-    save_config({"external_dir": str(ext_dir), "retention": 10, "auto_interval_hours": 0})
+    save_config({"external_dir": str(ext_dir), "retention": 10, "auto_interval_minutes": 0})
 
     result = dispatch(["backup", "now"], {})
     data = result.get("data", {})
