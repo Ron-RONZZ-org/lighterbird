@@ -21,6 +21,7 @@ from lighterbird.core.paths import config_dir
 from lighterbird.core.system_prompt import load_system_prompt
 from lighterbird.server.command.models import CommandResponse
 from lighterbird.server.command.registry import dispatch, get_definitions
+from lighterbird.core.ai import get_provider as _create_core_provider
 from lighterbird.server.llm.provider import get_provider
 from lighterbird.server.llm.render import render_markdown, render_streaming_markdown
 
@@ -176,6 +177,10 @@ async def chat_endpoint(data: dict[str, Any]) -> dict[str, Any]:
     defs = get_definitions()
     cmd = await provider.generate_command(message, defs)
 
+    # Core provider for direct chat calls (bypasses LLMProviderWrapper which
+    # would double-wrap our pre-built messages).
+    core = _create_core_provider(provider.config)
+
     if cmd and cmd.get("tokens"):
         # Execute the command
         try:
@@ -204,7 +209,7 @@ async def chat_endpoint(data: dict[str, Any]) -> dict[str, Any]:
                 f"Use natural language, not JSON."
             ),
         )
-        summary = await provider.chat(summary_messages)
+        summary = await core.chat(summary_messages)
         if isinstance(summary, str) and summary.strip():
             return _with_notice({
                 "type": "chat",
@@ -216,7 +221,7 @@ async def chat_endpoint(data: dict[str, Any]) -> dict[str, Any]:
 
     # ── Phase 3: No command — respond as plain chat ───────────────────
     messages = _build_messages(message, context=context)
-    response = await provider.chat(messages)
+    response = await core.chat(messages)
     if isinstance(response, str):
         html = render_markdown(response)
         return _with_notice({
@@ -274,7 +279,8 @@ async def chat_stream(data: dict[str, Any]) -> StreamingResponse:
 
         try:
             stream_messages = _build_messages(message, context=context)
-            result = await provider.chat(stream_messages, stream=True)
+            core = _create_core_provider(provider.config)
+            result = await core.chat(stream_messages, stream=True)
             if hasattr(result, "__aiter__"):
                 async for token in result:
                     yield f"data: {json.dumps({'token': token})}\n\n"

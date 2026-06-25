@@ -108,6 +108,18 @@ class OpenAICompatibleProvider:
             "stream": stream,
         }
 
+        # DeepSeek API validates both `role` and `type` depending on the
+        # message index.  Send both to satisfy whichever check fires.
+        normalized: list[dict[str, Any]] = []
+        for m in messages:
+            entry = dict(m)  # shallow copy — keep original fields
+            if "role" in entry and "type" not in entry:
+                entry["type"] = entry["role"]
+            elif "type" in entry and "role" not in entry:
+                entry["role"] = entry["type"]
+            normalized.append(entry)
+        payload["messages"] = normalized
+
         if stream:
             return self._stream_chat(headers, payload)
 
