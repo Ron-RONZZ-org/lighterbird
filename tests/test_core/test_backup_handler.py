@@ -9,7 +9,7 @@ import pytest
 
 # Import to register handlers via side-effects
 from lighterbird.server.command.handlers import backup  # noqa: F401
-from lighterbird.core.backup import load_config
+from lighterbird.core.backup import get_strategy, list_strategies, load_config, save_config
 from lighterbird.server.command.registry import dispatch
 
 
@@ -66,6 +66,17 @@ def test_backup_list_filtered(tmp_data_dir: Path, tmp_path: Path):
     assert all(e["database"] == "email" for e in entries)
 
 
+def test_backup_list_filtered_by_strategy(tmp_data_dir: Path, tmp_path: Path, monkeypatch):
+    """!backup list --strategy ID shows only matching backups."""
+    monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+    (tmp_data_dir / "email.db").write_text("data")
+    dispatch(["backup", "now"], {})
+    result = dispatch(["backup", "list"], {"strategy": "default"})
+    entries = result.get("data", {}).get("entries", [])
+    assert len(entries) >= 1
+    assert all(e["strategy"] == "default" for e in entries)
+
+
 def test_backup_prune(tmp_data_dir: Path, tmp_path: Path):
     """!backup prune --keep N prunes old backups."""
     (tmp_data_dir / "email.db").write_text("data")
@@ -77,67 +88,115 @@ def test_backup_prune(tmp_data_dir: Path, tmp_path: Path):
     assert result["type"] == "status"
 
 
+# ── Strategy config tests ────────────────────────────────────────────────
+
+
 def test_backup_config_show(tmp_data_dir: Path, monkeypatch):
-    """!backup config shows current config."""
+    """!backup config shows summary with strategy count."""
     monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
     result = dispatch(["backup", "config"], {})
     assert result["type"] == "status"
     data = result.get("data", {})
     assert data is not None
-    assert "external_dir" in data
-    assert "retention" in data
+    assert "strategies" in data.get("_summary", "")
 
 
-def test_backup_config_set(tmp_data_dir: Path, monkeypatch):
-    """!backup config --external-dir PATH updates config."""
+def test_backup_config_list(tmp_data_dir: Path, monkeypatch):
+    """!backup config list returns strategies."""
     monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
-    result = dispatch(["backup", "config"], {"external_dir": "/tmp/test-backups"})
+    result = dispatch(["backup", "config", "list"], {})
     assert result["type"] == "status"
     data = result.get("data", {})
-    assert "external_dir" in data.get("changed", [])
-    # Verify persisted
-    from lighterbird.core.backup import load_config
-    cfg = load_config()
-    assert cfg["external_dir"] == "/tmp/test-backups"
+    assert "strategies" in data
+    assert len(data["strategies"]) >= 1
 
 
-def test_backup_config_set_retention(tmp_data_dir: Path, monkeypatch):
-    """!backup config --retention N validates."""
+def test_backup_config_add(tmp_data_dir: Path, monkeypatch):
+    """!backup config add adds a strategy."""
     monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
-    # Valid
-    result = dispatch(["backup", "config"], {"retention": "5"})
+    result = dispatch(
+        ["backup", "config", "add"],
+        {"id": "daily", "label": "Daily backups", "schedule": "daily", "max_copies": "3"},
+    )
     assert result["type"] == "status"
-    assert "retention" in result["data"]["changed"]
-    # Invalid: not a number
-    with pytest.raises(Exception, match="Invalid --retention"):
-        dispatch(["backup", "config"], {"retention": "abc"})
-    # Invalid: < 1
-    with pytest.raises(Exception, match="--retention must be >= 1"):
-        dispatch(["backup", "config"], {"retention": "0"})
+    assert result["data"]["strategy"] == "daily"
+    s = get_strategy("daily")
+    assert s is not None
+    assert s["max_copies"] == 3
 
 
-def test_backup_config_set_auto_interval(tmp_data_dir: Path, monkeypatch):
-    """!backup config --auto-interval N validates."""
+def test_backup_config_add_missing_id(tmp_data_dir: Path, monkeypatch):
+    """!backup config add without --id raises error."""
     monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
-    # Valid: 30 minutes
-    result = dispatch(["backup", "config"], {"auto_interval": "30"})
+    with pytest.raises(Exception, match="Missing --id"):
+        dispatch(["backup", "config", "add"], {})
+
+
+def test_backup_config_add_duplicate(tmp_data_dir: Path, monkeypatch):
+    """!backup config add with existing id raises error."""
+    monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+    dispatch(["backup", "config", "add"], {"id": "dup", "label": "First"})
+    with pytest.raises(Exception, match="already exists"):
+        dispatch(["backup", "config", "add"], {"id": "dup", "label": "Second"})
+
+
+def test_backup_config_modify(tmp_data_dir: Path, monkeypatch):
+    """!backup config modify updates a strategy."""
+    monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+    result = dispatch(["backup", "config", "modify", "default"], {"max_copies": "5"})
     assert result["type"] == "status"
-    assert "auto_interval_minutes" in result["data"]["changed"]
-    cfg = load_config()
-    assert cfg["auto_interval_minutes"] == 30
-    # Invalid: not a number
-    with pytest.raises(Exception, match="Invalid --auto-interval"):
-        dispatch(["backup", "config"], {"auto_interval": "abc"})
-    # Invalid: negative
-    with pytest.raises(Exception, match="--auto-interval must be >= 0"):
-        dispatch(["backup", "config"], {"auto_interval": "-5"})
+    assert "max_copies" in result["data"]["changed"]
+    s = get_strategy("default")
+    assert s["max_copies"] == 5
 
 
-def test_backup_config_set_external_dir_empty(tmp_data_dir: Path, monkeypatch):
-    """!backup config --external-dir '' is rejected."""
+def test_backup_config_modify_not_found(tmp_data_dir: Path, monkeypatch):
+    """!backup config modify with unknown id raises error."""
     monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
-    with pytest.raises(Exception, match="--external-dir must not be empty"):
-        dispatch(["backup", "config"], {"external_dir": ""})
+    with pytest.raises(Exception, match="not found"):
+        dispatch(["backup", "config", "modify", "nope"], {"max_copies": "1"})
+
+
+def test_backup_config_modify_empty_flags(tmp_data_dir: Path, monkeypatch):
+    """!backup config modify without change flags raises error."""
+    monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+    with pytest.raises(Exception, match="No changes"):
+        dispatch(["backup", "config", "modify", "default"], {})
+
+
+def test_backup_config_remove(tmp_data_dir: Path, monkeypatch):
+    """!backup config remove deletes a strategy."""
+    monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+    dispatch(["backup", "config", "add"], {"id": "torm", "label": "Remove me"})
+    result = dispatch(["backup", "config", "remove", "torm"], {})
+    assert result["type"] == "status"
+    assert result["data"]["strategy"] == "torm"
+    assert get_strategy("torm") is None
+
+
+def test_backup_config_remove_not_found(tmp_data_dir: Path, monkeypatch):
+    """!backup config remove with unknown id raises error."""
+    monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+    with pytest.raises(Exception, match="not found"):
+        dispatch(["backup", "config", "remove", "nope"], {})
+
+
+def test_backup_config_test(tmp_data_dir: Path, monkeypatch):
+    """!backup config test succeeds for local target."""
+    monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+    result = dispatch(["backup", "config", "test", "default"], {})
+    assert result["type"] == "status"
+    assert "Test Passed" in result.get("title", "")
+
+
+def test_backup_config_test_not_found(tmp_data_dir: Path, monkeypatch):
+    """!backup config test with unknown id raises error."""
+    monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
+    with pytest.raises(Exception, match="not found"):
+        dispatch(["backup", "config", "test", "nope"], {})
+
+
+# ── Export / import / restore tests ──────────────────────────────────────
 
 
 def test_backup_export(tmp_data_dir: Path, tmp_path: Path):
@@ -197,18 +256,15 @@ def test_backup_restore(tmp_data_dir: Path):
 
 
 def test_backup_now_with_external(tmp_data_dir: Path, tmp_path: Path, monkeypatch):
-    """!backup now copies to external dir if configured."""
+    """!backup now copies to external dir if configured on strategy."""
     monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
     ext_dir = tmp_path / "nextcloud-backups"
     (tmp_data_dir / "email.db").write_text("data")
 
-    # Configure external dir
-    from lighterbird.core.backup import save_config
-    save_config({"external_dir": str(ext_dir), "retention": 10, "auto_interval_minutes": 0})
+    # Update default strategy target to external dir
+    dispatch(["backup", "config", "modify", "default"], {"target": str(ext_dir)})
 
     result = dispatch(["backup", "now"], {})
-    data = result.get("data", {})
-    assert data.get("external_copies") is not None
     # External dir should have the backup
     assert len(list(ext_dir.iterdir())) >= 1
 

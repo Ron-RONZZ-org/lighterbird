@@ -5,6 +5,8 @@
   import LlmProfileForm from "./LlmProfileForm.svelte";
   import EmailAccountForm from "./EmailAccountForm.svelte";
   import CalendarAccountForm from "./CalendarAccountForm.svelte";
+  import BackupStrategyList from "./BackupStrategyList.svelte";
+  import BackupStrategyForm from "./BackupStrategyForm.svelte";
 
   let { data = {} } = $props();
   // Normalize null to empty object (delete commands return 204 → null)
@@ -12,8 +14,12 @@
 
   // ── Form overlay state ──────────────────────────────────────────────
 
-  let activeForm = $state(null); // null | "llm" | "email" | "calendar"
+  let activeForm = $state(null); // null | "llm" | "email" | "calendar" | "backup-strategy"
   let editingItem = $state(null);
+
+  // Backup strategy testing state
+  let testingStrategies = $state(new Set());
+  let testResults = $state({});
 
   function openForm(type, item = null) {
     activeForm = type;
@@ -63,12 +69,47 @@
         await calendarApi.deleteCalendar(item.uuid);
       } else if (type === "llm") {
         await llmApi.deleteProfile(item.name);
+      } else if (type === "backup-strategy") {
+        await fetch("/api/v1/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tokens: ["backup", "config", "remove", item.id], flags: {} }),
+        });
       }
       closeForm();
       // Re-fetch data by issuing the same command
       await refetchCurrentTab();
     } catch (err) {
       alert(`Failed to remove: ${err.message}`);
+    }
+  }
+
+  /** Test a backup strategy's target. */
+  async function testStrategy(item) {
+    const sid = item.id;
+    testingStrategies = new Set([...testingStrategies, sid]);
+    // Clear previous result
+    testResults = { ...testResults, [sid]: null };
+    try {
+      const resp = await fetch("/api/v1/command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tokens: ["backup", "config", "test", sid], flags: {} }),
+      });
+      const result = await resp.json();
+      if (resp.ok) {
+        testResults = { ...testResults, [sid]: { success: true, message: result.data?.message || "Target is writable." } };
+      } else {
+        const detail = result.detail || {};
+        const msg = typeof detail === "string" ? detail : detail.error || "Test failed";
+        testResults = { ...testResults, [sid]: { success: false, message: msg } };
+      }
+    } catch (err) {
+      testResults = { ...testResults, [sid]: { success: false, message: err.message || "Network error" } };
+    } finally {
+      const next = new Set(testingStrategies);
+      next.delete(sid);
+      testingStrategies = next;
     }
   }
 
@@ -84,6 +125,20 @@
         result = await calendarApi.listCalendars();
       } else if (d.profiles !== undefined) {
         result = await llmApi.listProfiles();
+      } else if (d.strategies !== undefined) {
+        const resp = await fetch("/api/v1/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tokens: ["backup", "config", "list"], flags: {} }),
+        });
+        const cmdResult = await resp.json();
+        if (resp.ok) {
+          result = cmdResult.data;
+          if (cmdResult.title) {
+            tabStore.update(active.id, result, cmdResult.title);
+            return;
+          }
+        }
       }
       if (result) {
         tabStore.update(active.id, result);
@@ -142,6 +197,24 @@
       onModify={(item) => openForm("llm", item)}
       onRemove={(item) => removeItem("llm", item)}
       onActivate={(item) => activateProfile(item)}
+    />
+
+  {:else if d.strategies !== undefined}
+    {#if activeForm === "backup-strategy"}
+      <BackupStrategyForm
+        strategy={editingItem}
+        onSaved={() => { closeForm(); refetchCurrentTab(); }}
+        onDismiss={closeForm}
+      />
+    {/if}
+    <BackupStrategyList
+      items={d.strategies}
+      {testingStrategies}
+      {testResults}
+      onAdd={() => openForm("backup-strategy")}
+      onModify={(item) => openForm("backup-strategy", item)}
+      onRemove={(item) => removeItem("backup-strategy", item)}
+      onTest={(item) => testStrategy(item)}
     />
 
   {:else if d.todos}
