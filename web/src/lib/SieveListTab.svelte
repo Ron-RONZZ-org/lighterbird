@@ -2,6 +2,7 @@
   import { tabStore } from "./tabStore.svelte.js";
   import { email as emailApi, sieve as sieveApi } from "./api.js";
   import ConfirmDialog from "./ConfirmDialog.svelte";
+  import ActivationModal from "./ActivationModal.svelte";
 
   let { data = {} } = $props();
   let scripts = $derived(data?.scripts || []);
@@ -19,6 +20,13 @@
 
   let copiedUuid = $state("");
   let highlightActive = $state(false);
+  let activationTarget = $state(null);
+  let showActivation = $state(false);
+
+  function openActivation(script) {
+    activationTarget = script;
+    showActivation = true;
+  }
 
   let numSelected = $derived(selectedNames.size);
 
@@ -237,15 +245,8 @@
           {#if !script.system}
             <button class="btn small" onclick={(e) => { e.stopPropagation(); openEditor(script); }}
               title="Edit script">✎ Edit</button>
-            {#if accountFilter}
-              {#if isActivated(script)}
-                <button class="btn small" onclick={(e) => { e.stopPropagation(); deactivateScript(script.name, accountFilter); }}
-                  title="Deactivate on this account">★ Deactivate</button>
-              {:else}
-                <button class="btn small primary" onclick={(e) => { e.stopPropagation(); activateScript(script.name, accountFilter); }}
-                  title="Activate on this account">★ Activate</button>
-              {/if}
-            {/if}
+            <button class="btn small" onclick={(e) => { e.stopPropagation(); openActivation(script); }}
+              title="Manage activation on accounts">★ Activation</button>
             <button class="btn small danger" onclick={(e) => { e.stopPropagation(); deleteTarget = script.name; confirmDelete = true; }}
               title="Delete script globally">✕</button>
           {/if}
@@ -256,6 +257,15 @@
     {/each}
   </div>
 </div>
+
+{#if showActivation}
+  <ActivationModal
+    script={activationTarget}
+    {accounts}
+    show={showActivation}
+    onClose={() => { showActivation = false; refreshList(); }}
+  />
+{/if}
 
 {#if confirmDelete}
   <ConfirmDialog
