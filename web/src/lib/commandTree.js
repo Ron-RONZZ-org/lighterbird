@@ -107,10 +107,13 @@ export let commandTree = [
           },
           {
             name: "add",
-            description: "Create a new global Sieve script (not tied to any account)",
+            description: "Create a new global Sieve script",
             interactive: true,
             params: [
               { name: "name", required: true, type: "string", placeholder: "script-name" },
+            ],
+            flags: [
+              { name: "file", short: "f", type: "string", help: "Path to .sieve file" },
             ],
           },
           {
@@ -122,6 +125,7 @@ export let commandTree = [
             ],
             flags: [
               { name: "name", type: "string", help: "Rename to" },
+              { name: "file", short: "f", type: "string", help: "Path to .sieve file with new content" },
             ],
           },
           {

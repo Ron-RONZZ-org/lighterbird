@@ -126,10 +126,13 @@ def get_command_tree() -> list[CommandNode]:
                         },
                         {
                             "name": "add",
-                            "description": "Create a new global Sieve script (not tied to any account)",
+                            "description": "Create a new global Sieve script",
                             "interactive": True,
                             "params": [
                                 {"name": "name", "required": True, "type": "string", "placeholder": "script-name"},
+                            ],
+                            "flags": [
+                                {"name": "file", "short": "f", "type": "string", "help": "Path to .sieve file (recommended over inline content)"},
                             ],
                         },
                         {
@@ -141,6 +144,7 @@ def get_command_tree() -> list[CommandNode]:
                             ],
                             "flags": [
                                 {"name": "name", "type": "string", "help": "Rename to"},
+                                {"name": "file", "short": "f", "type": "string", "help": "Path to .sieve file with new content"},
                             ],
                         },
                         {
