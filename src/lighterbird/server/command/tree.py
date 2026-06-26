@@ -51,7 +51,8 @@ def get_command_tree() -> list[CommandNode]:
                     "params": [],
                     "flags": [
                         {"name": "limit", "short": "l", "type": "number", "help": "Max messages (default 20)"},
-                        {"name": "folder", "short": "f", "type": "string", "help": "Filter by folder (email/folder)", "repeatable": True, "uuidSource": "email.folders"},
+                        {"name": "folder", "short": "f", "type": "string", "help": "Filter by folder(s); comma-separated", "uuidSource": "email.folders"},
+                        {"name": "not-folder", "type": "string", "help": "Exclude folder(s); comma-separated"},
                         {"name": "all", "type": "flag", "help": "Include trash folder"},
                     ],
                 },
@@ -625,6 +626,52 @@ def get_command_tree() -> list[CommandNode]:
                             "description": "Delete a saved profile",
                             "params": [
                                 {"name": "name", "required": True, "type": "string", "placeholder": "profile-name"},
+                            ],
+                        },
+                    ],
+                },
+            ],
+        },
+
+        # ── User (saved commands) ──────────────────────────────────────────
+        {
+            "name": "user",
+            "description": "User settings and saved commands",
+            "children": [
+                {
+                    "name": "saved-commands",
+                    "description": "Manage saved command aliases",
+                    "children": [
+                        {
+                            "name": "list",
+                            "description": "List all saved commands",
+                        },
+                        {
+                            "name": "add",
+                            "description": "Add a saved command alias",
+                            "flags": [
+                                {"name": "alias", "type": "string", "help": "Short alias name (e.g. ronzz)", "required": True},
+                                {"name": "command", "type": "string", "help": "Command template (without !)", "required": True},
+                                {"name": "hint", "type": "string", "help": "Description shown in autocomplete"},
+                            ],
+                        },
+                        {
+                            "name": "modify",
+                            "description": "Modify a saved command",
+                            "params": [
+                                {"name": "alias", "required": True, "type": "string", "placeholder": "current-alias"},
+                            ],
+                            "flags": [
+                                {"name": "command", "type": "string", "help": "New command template"},
+                                {"name": "alias", "type": "string", "help": "Rename to new alias"},
+                                {"name": "hint", "type": "string", "help": "New description"},
+                            ],
+                        },
+                        {
+                            "name": "remove",
+                            "description": "Remove saved command(s)",
+                            "params": [
+                                {"name": "alias", "required": True, "type": "string", "placeholder": "alias", "repeatable": True},
                             ],
                         },
                     ],
