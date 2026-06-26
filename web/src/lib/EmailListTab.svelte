@@ -14,6 +14,14 @@
   let selectedUuids = $state(new Set());
   let focusedIndex = $state(-1);
   let anchorIndex = $state(-1);
+  let copiedUuid = $state("");
+
+  function copyUuid(uuid) {
+    navigator.clipboard.writeText(uuid).then(() => {
+      copiedUuid = uuid;
+      setTimeout(() => { if (copiedUuid === uuid) copiedUuid = ""; }, 1200);
+    }).catch(() => {});
+  }
 
   let showMoveDialog = $state(false);
   let showShortcutHelp = $state(false);
@@ -388,6 +396,10 @@
         </span>
 
         <!-- Message data -->
+        <span class="msg-uuid" onclick={(e) => { e.stopPropagation(); copyUuid(msg.uuid); }}
+              title="Click to copy UUID">
+          {copiedUuid === msg.uuid ? "Copied!" : msg.uuid.slice(0, 8)}
+        </span>
         <span class="from" class:unread={!msg.is_read}>{truncate(msg.from || "", 24)}</span>
         <span class="subject" class:unread={!msg.is_read}>{truncate(msg.subject || "(no subject)", 40)}</span>
         <span class="date">{formatDate(msg.received_at)}</span>
@@ -486,6 +498,14 @@
     border-color: #4a6fa5;
   }
 
+  .msg-uuid {
+    color: var(--clr-muted);
+    font-size: 0.72rem;
+    min-width: 5rem;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .msg-uuid:hover { color: #7c7c9a; text-decoration: underline; }
   .from {
     color: #e0e0e0;
     min-width: 10rem;

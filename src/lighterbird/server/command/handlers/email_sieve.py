@@ -210,10 +210,16 @@ def sieve_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     except ValueError as e:
         raise CommandValidationError(str(e))
 
+    # Navigate to sieve-list tab with highlight
+    all_scripts = svc.sieve.list_scripts()
     return {
-        "type": "status",
-        "title": "Script Created",
-        "data": _script_to_dict(script),
+        "type": "sieve-list",
+        "title": "Sieve Scripts",
+        "data": {
+            "scripts": [_script_to_dict(s) for s in all_scripts],
+            "total": len(all_scripts),
+            "highlight": name,
+        },
     }
 
 
@@ -249,10 +255,17 @@ def sieve_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
             f"Sieve script '{name}' not found.",
             "List available scripts: !email sieve list",
         )
+    # Navigate to sieve-list tab with highlight
+    highlight_name = new_name or name
+    all_scripts = svc.sieve.list_scripts()
     return {
-        "type": "status",
-        "title": "Script Modified",
-        "data": _script_to_dict(script),
+        "type": "sieve-list",
+        "title": "Sieve Scripts",
+        "data": {
+            "scripts": [_script_to_dict(s) for s in all_scripts],
+            "total": len(all_scripts),
+            "highlight": highlight_name,
+        },
     }
 
 
