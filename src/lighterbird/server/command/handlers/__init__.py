@@ -4,6 +4,7 @@ Each module is imported for its ``@command`` / ``@alias`` side effects.
 """
 
 from lighterbird.server.command.handlers import email  # noqa: F401
+from lighterbird.server.command.handlers import email_sieve  # noqa: F401
 from lighterbird.server.command.handlers import calendar  # noqa: F401
 from lighterbird.server.command.handlers import sync  # noqa: F401
 from lighterbird.server.command.handlers import help  # noqa: F401

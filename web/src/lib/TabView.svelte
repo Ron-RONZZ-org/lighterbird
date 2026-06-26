@@ -10,6 +10,8 @@
   import HelpPopup from "./HelpPopup.svelte";
   import EmailListTab from "./EmailListTab.svelte";
   import JournalListTab from "./JournalListTab.svelte";
+  import SieveListTab from "./SieveListTab.svelte";
+  import SieveEditorForm from "./SieveEditorForm.svelte";
   import FormTab from "./FormTab.svelte";
   import KeyboardShortcutOverlay from "./KeyboardShortcutOverlay.svelte";
   import SavedCommandsTab from "./SavedCommandsTab.svelte";
@@ -122,6 +124,10 @@
         <EmailListTab data={tabStore.active.data} />
       {:else if tabStore.active.type === "journal-list"}
         <JournalListTab data={tabStore.active.data} />
+      {:else if tabStore.active.type === "sieve-list"}
+        <SieveListTab data={tabStore.active.data} />
+      {:else if tabStore.active.type === "sieve-editor"}
+        <SieveEditorForm data={tabStore.active.data} />
       {:else if tabStore.active.type === "saved-commands"}
         <SavedCommandsTab data={tabStore.active.data} />
       {:else if tabStore.active.type === "help"}
@@ -212,6 +218,8 @@
       email: "✉",
       "email-list": "✉",
       "journal-list": "📓",
+      "sieve-list": "🔍",
+      "sieve-editor": "✏",
       "saved-commands": "⚡",
       events: "📅",
       error: "⚠",

@@ -5,7 +5,7 @@ Composes AccountService, MessageService, and MessageOpsService.
 
 from __future__ import annotations
 
-from lighterbird.email.services import AccountService, MessageService, MessageOpsService
+from lighterbird.email.services import AccountService, MessageService, MessageOpsService, SieveService
 from lighterbird.email.db import get_db
 
 
@@ -17,6 +17,7 @@ class EmailService:
         self.accounts = AccountService(self.db)
         self.messages = MessageService(self.db)
         self.msg_ops = MessageOpsService(self.db, self.accounts)
+        self.sieve = SieveService(self.db)
 
     # ── Account operations ───────────────────────────────────────────────
 

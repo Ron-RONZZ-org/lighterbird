@@ -96,6 +96,34 @@ CREATE TABLE IF NOT EXISTS spam_blockoj (
 );
 """
 
+_CREATE_SIEVE_SKRIPTOJ = """
+CREATE TABLE IF NOT EXISTS sieve_skriptoj (
+    uuid        TEXT PRIMARY KEY,
+    konto_id    TEXT NOT NULL REFERENCES kontoj(uuid) ON DELETE CASCADE,
+    nomo        TEXT NOT NULL,
+    content     TEXT NOT NULL DEFAULT '',
+    active      INTEGER NOT NULL DEFAULT 0,
+    system      INTEGER NOT NULL DEFAULT 0,
+    man_sync    INTEGER NOT NULL DEFAULT 1,
+    kreita_je   TEXT NOT NULL,
+    modifita_je TEXT NOT NULL,
+    UNIQUE(konto_id, nomo)
+);
+"""
+
+# ManageSieve columns added to kontoj
+_MIGRATE_KONTOJ_MANAGESIEVE = """
+ALTER TABLE kontoj ADD COLUMN managesieve_host TEXT NOT NULL DEFAULT '';
+"""
+_MIGRATE_KONTOJ_MANAGESIEVE_PORT = """
+ALTER TABLE kontoj ADD COLUMN managesieve_port INTEGER NOT NULL DEFAULT 4190;
+"""
+_MIGRATE_KONTOJ_MANAGESIEVE_TLS = """
+ALTER TABLE kontoj ADD COLUMN managesieve_use_tls INTEGER NOT NULL DEFAULT 1;
+"""
+
+_IDX_SIEVE_KONTO = "CREATE INDEX IF NOT EXISTS idx_sieve_konto ON sieve_skriptoj(konto_id);"
+
 _IDX_MESAGOJ_KONTO = "CREATE INDEX IF NOT EXISTS idx_mesagoj_konto ON mesagoj(konto_id);"
 _IDX_MESAGOJ_DOSIERUJO = "CREATE INDEX IF NOT EXISTS idx_mesagoj_dosierujo ON mesagoj(dosierujo_id);"
 _IDX_MESAGOJ_IMAP_UID = """
@@ -112,11 +140,16 @@ _SCHEMA_STATEMENTS: list[str] = [
     _CREATE_MESAGOJ,
     _CREATE_ALDONAĴOJ,
     _CREATE_SPAM_BLOKOJ,
+    _CREATE_SIEVE_SKRIPTOJ,
+    _MIGRATE_KONTOJ_MANAGESIEVE,
+    _MIGRATE_KONTOJ_MANAGESIEVE_PORT,
+    _MIGRATE_KONTOJ_MANAGESIEVE_TLS,
     _IDX_MESAGOJ_KONTO,
     _IDX_MESAGOJ_DOSIERUJO,
     _IDX_MESAGOJ_IMAP_UID,
     _IDX_MESAGOJ_DATO,
     _IDX_ALDONAĴOJ_MESAGO,
+    _IDX_SIEVE_KONTO,
 ]
 
 # ── Database path ───────────────────────────────────────────────────────────
@@ -128,8 +161,17 @@ def _email_db_path() -> Path:
 
 def get_db(path: Path | str | None = None) -> LighterbirdDB:
     """Get the email database connection with schema initialized."""
+    from sqlite3 import OperationalError
+
     resolved = Path(path) if path else _email_db_path()
     db = LighterbirdDB(resolved)
     for stmt in _SCHEMA_STATEMENTS:
-        db.execute(stmt)
+        try:
+            db.execute(stmt)
+        except OperationalError:
+            # ALTER TABLE ADD COLUMN may fail if column already exists
+            # on an existing database. Other statements use IF NOT EXISTS
+            # and are idempotent — re-raise unexpected errors.
+            if not stmt.strip().upper().startswith("ALTER"):
+                raise
     return db

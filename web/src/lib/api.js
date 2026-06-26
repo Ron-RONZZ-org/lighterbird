@@ -230,6 +230,36 @@ export const llm = {
   loadProfile: (name) => request("POST", `/llm/profiles/${encodeURIComponent(name)}/load`),
 };
 
+// ── Sieve API ─────────────────────────────────────────────────────────
+
+export const sieve = {
+  list: (accountUuid) => {
+    const q = accountUuid ? `?account_uuid=${encodeURIComponent(accountUuid)}` : "";
+    return request("GET", `/email/sieve${q}`);
+  },
+
+  get: (name, accountUuid) => {
+    const q = accountUuid ? `?account_uuid=${encodeURIComponent(accountUuid)}` : "";
+    return request("GET", `/email/sieve/${encodeURIComponent(name)}${q}`);
+  },
+
+  create: (data) => request("POST", "/email/sieve", data),
+
+  update: (name, data) => request("PUT", `/email/sieve/${encodeURIComponent(name)}`, data),
+
+  delete: (name, accountUuid) => {
+    const q = accountUuid ? `?account_uuid=${encodeURIComponent(accountUuid)}` : "";
+    return request("DELETE", `/email/sieve/${encodeURIComponent(name)}${q}`);
+  },
+
+  activate: (name, accountUuid) => {
+    const q = accountUuid ? `?account_uuid=${encodeURIComponent(accountUuid)}` : "";
+    return request("POST", `/email/sieve/${encodeURIComponent(name)}/activate${q}`);
+  },
+
+  validate: (content) => request("POST", "/email/sieve/validate", { content }),
+};
+
 // ── Admin API ─────────────────────────────────────────────────────────
 
 export const admin = {
