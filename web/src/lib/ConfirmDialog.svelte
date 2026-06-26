@@ -1,15 +1,35 @@
 <script>
+  import { tick } from "svelte";
+
   let { message = "Confirm?", onConfirm = () => {}, onDismiss = () => {} } = $props();
+  let confirmBtn;
+
+  // Steal focus from whatever was focused (e.g. the Delete button that triggered this dialog)
+  $effect(() => {
+    tick().then(() => confirmBtn?.focus());
+  });
+
+  function handleKeydown(e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
+      onConfirm();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      onDismiss();
+    }
+  }
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
-<div class="confirm-overlay" role="alertdialog" aria-label="Confirm" onclick={onDismiss} tabindex="0">
+<div class="confirm-overlay" role="alertdialog" aria-label="Confirm" onclick={onDismiss} onkeydown={handleKeydown} tabindex="0">
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div class="confirm-box" onclick={(e) => e.stopPropagation()}>
     <p>{message}</p>
     <div class="actions">
-      <button class="btn danger" onclick={onConfirm}>Confirm</button>
+      <button class="btn danger" onclick={onConfirm} bind:this={confirmBtn}>Confirm</button>
       <button class="btn" onclick={onDismiss}>Cancel</button>
     </div>
   </div>

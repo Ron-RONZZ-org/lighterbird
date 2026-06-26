@@ -66,7 +66,17 @@
 
   function handleRowClick(e, entry) {
     if (selectionMode) {
-      toggleEntry(entry.uuid);
+      if (e.shiftKey && anchorIndex >= 0) {
+        const idx = entries.findIndex((en) => en.uuid === entry.uuid);
+        if (idx >= 0) {
+          selectRange(anchorIndex, idx);
+          anchorIndex = idx;
+        }
+      } else {
+        toggleEntry(entry.uuid);
+        const idx = entries.findIndex((en) => en.uuid === entry.uuid);
+        if (idx >= 0 && anchorIndex < 0) anchorIndex = idx;
+      }
     } else {
       openEntry(entry.uuid);
     }
@@ -160,6 +170,13 @@
     const tag = e.target.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || e.target.isContentEditable) return;
 
+    // When confirm dialog is open, block all keyboard events
+    if (confirmDelete) {
+      if (e.key === "Escape") { confirmDelete = false; e.preventDefault(); return; }
+      if (e.key === "Enter") { e.preventDefault(); return; }
+      return;
+    }
+
     const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
     switch (e.key) {
       case "v":
@@ -174,7 +191,6 @@
         }
         return;
       case "Escape":
-        if (confirmDelete) { confirmDelete = false; e.preventDefault(); return; }
         if (showSearch) { closeSearch(); e.preventDefault(); return; }
         if (selectionMode) { toggleSelectionMode(); e.preventDefault(); return; }
         return;
@@ -286,7 +302,7 @@
       </div>
     {:else if selectionMode}
       <div class="toolbar-left">
-        <button class="tool-btn" onclick={toggleSelectionMode}>Exit Select</button>
+        <button class="tool-btn" title="Exit selection mode (V)" onclick={toggleSelectionMode}>Exit <kbd>V</kbd></button>
       </div>
       <div class="toolbar-center">
         {#if numSelected > 0}
@@ -296,11 +312,11 @@
         {/if}
       </div>
       <div class="toolbar-right">
-        <button class="tool-btn danger" disabled={numSelected === 0} onclick={() => { confirmDelete = true; }}>Delete</button>
+        <button class="tool-btn danger" disabled={numSelected === 0} title="Delete selected (Delete key)" onclick={() => { confirmDelete = true; }}>Delete <kbd>Del</kbd></button>
       </div>
     {:else}
       <div class="toolbar-left">
-        <button class="tool-btn" onclick={toggleSelectionMode}>Select</button>
+        <button class="tool-btn" title="Toggle selection mode (V)" onclick={toggleSelectionMode}>Select <kbd>V</kbd></button>
       </div>
       <div class="toolbar-center">
         <span class="search-hint"><kbd>f</kbd> search</span>
@@ -394,6 +410,18 @@
     font-family: monospace;
     font-size: 0.8rem;
     transition: background 0.1s;
+  }
+  .tool-btn kbd {
+    display: inline-block;
+    padding: 0 3px;
+    margin-left: 2px;
+    font-family: monospace;
+    font-size: 0.68rem;
+    background: #222;
+    border: 1px solid #555;
+    border-radius: 3px;
+    color: #999;
+    line-height: 1.3;
   }
   .tool-btn:hover:not(:disabled) { background: #3a3a5e; }
   .tool-btn:disabled { opacity: 0.4; cursor: default; }
