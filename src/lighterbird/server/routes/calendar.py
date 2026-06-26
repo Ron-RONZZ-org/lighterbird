@@ -126,6 +126,14 @@ def create_event(
     data: EventCreate,
     cal_svc: CalendarService = Depends(get_calendar_service),
 ):
+    # Validate calendar exists
+    calendars = cal_svc.list_calendars()
+    if not any(c["uuid"] == data.calendar_uuid for c in calendars):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Calendar '{data.calendar_uuid[:8]}' not found. "
+                   f"Use !calendar account list to see available calendars.",
+        )
     evt_data = {
         "kalendaro_uuid": data.calendar_uuid,
         "titolo": data.title,

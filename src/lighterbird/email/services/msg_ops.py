@@ -53,8 +53,16 @@ class MessageOpsService:
 
         acct = self._account_service.get_account_with_password(account_uuid)
         if not acct:
+            # Check if account exists at all vs just missing password
+            exists = self._account_service.get(account_uuid)
+            if not exists:
+                raise ValueError(
+                    f"Account '{account_uuid[:8]}' not found. "
+                    f"Use !email account list to see available accounts."
+                )
             raise ValueError(
-                f"No password configured for account {account_uuid[:8]}"
+                f"No password configured for account {account_uuid[:8]}. "
+                f"Set it with: !email account modify {account_uuid[:8]} --password <pw>"
             )
         sender_email = acct.get("retposto", "")
         cc = cc or []

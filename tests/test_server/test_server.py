@@ -104,7 +104,7 @@ class TestEmailAPI:
             "subject": "Test",
             "body": "Hello",
         })
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
     def test_messages_empty(self, client):
         resp = client.get("/api/v1/email/messages")

@@ -284,7 +284,10 @@ def send_email(
     req: SendRequest,
     email_svc: EmailService = Depends(get_email_service),
 ):
-    email_svc.send_email(req.account_uuid, req.to, req.subject, req.body, cc=req.cc)
+    try:
+        email_svc.send_email(req.account_uuid, req.to, req.subject, req.body, cc=req.cc)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     return {"status": "sent"}
 
 
@@ -325,6 +328,17 @@ def batch_move(
     email_svc: EmailService = Depends(get_email_service),
 ):
     """Move multiple messages to a destination folder."""
+    # Validate destination folder exists
+    folder = email_svc.db.execute_one(
+        "SELECT uuid FROM dosierujoj WHERE uuid = ?",
+        (req.destination_folder_uuid,),
+    )
+    if not folder:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Destination folder '{req.destination_folder_uuid[:8]}' not found. "
+                   f"Sync your email accounts first with !sync --email.",
+        )
     for uuid in req.uuids:
         email_svc.move_message(uuid, req.destination_folder_uuid)
     return BatchResultResponse(status="ok", count=len(req.uuids))
