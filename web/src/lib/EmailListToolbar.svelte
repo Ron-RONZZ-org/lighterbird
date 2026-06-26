@@ -44,11 +44,11 @@
         <button class="search-clear" onclick={onSearchClear} aria-label="Clear search">✕</button>
       {/if}
     </div>
-  {:else if selectionMode}
+    {:else if selectionMode}
     <!-- Selection mode: action toolbar -->
     <div class="left">
       <button class="tool-btn" title="Exit selection mode (V)" onclick={onToggleMode}>
-        Exit Select
+        Exit <kbd>V</kbd>
       </button>
     </div>
     <div class="center">
@@ -59,13 +59,13 @@
       {/if}
     </div>
     <div class="right">
-      <button class="tool-btn" disabled={numSelected === 0} onclick={onMove} title="Move selected (Ctrl+M)">Move</button>
-      <button class="tool-btn danger" disabled={numSelected === 0} onclick={onDelete} title="Delete selected (Delete key)">Delete</button>
+      <button class="tool-btn" disabled={numSelected === 0} onclick={onMove} title="Move selected (Ctrl+M)">Move <kbd>⌃M</kbd></button>
+      <button class="tool-btn danger" disabled={numSelected === 0} onclick={onDelete} title="Delete selected (Delete key)">Delete <kbd>Del</kbd></button>
     </div>
   {:else}
     <!-- View mode: minimal toolbar -->
     <div class="left">
-      <button class="tool-btn" title="Toggle selection mode (V)" onclick={onToggleMode}>Select</button>
+      <button class="tool-btn" title="Toggle selection mode (V)" onclick={onToggleMode}>Select <kbd>V</kbd></button>
     </div>
     <div class="center">
       <span class="search-hint"><kbd>f</kbd> search</span>
@@ -114,6 +114,18 @@
     font-family: monospace;
     font-size: 0.8rem;
     transition: background 0.1s;
+  }
+  .tool-btn kbd {
+    display: inline-block;
+    padding: 0 3px;
+    margin-left: 2px;
+    font-family: monospace;
+    font-size: 0.68rem;
+    background: #222;
+    border: 1px solid #555;
+    border-radius: 3px;
+    color: #999;
+    line-height: 1.3;
   }
   .tool-btn:hover:not(:disabled) { background: #3a3a5e; }
   .tool-btn:disabled { opacity: 0.4; cursor: default; }

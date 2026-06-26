@@ -74,7 +74,17 @@
 
   function handleRowClick(e, msg) {
     if (selectionMode) {
-      toggleMessage(msg.uuid);
+      if (e.shiftKey && anchorIndex >= 0) {
+        const idx = messages.findIndex((m) => m.uuid === msg.uuid);
+        if (idx >= 0) {
+          selectRange(anchorIndex, idx);
+          anchorIndex = idx;
+        }
+      } else {
+        toggleMessage(msg.uuid);
+        const idx = messages.findIndex((m) => m.uuid === msg.uuid);
+        if (idx >= 0 && anchorIndex < 0) anchorIndex = idx;
+      }
     } else {
       openMessage(msg.uuid);
     }
@@ -209,6 +219,19 @@
     const tag = e.target.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || e.target.isContentEditable) return;
 
+    // When confirm dialog is open, only let it handle Enter/Escape; block everything else
+    if (confirmDelete) {
+      if (e.key === "Escape") { confirmDelete = false; e.preventDefault(); return; }
+      if (e.key === "Enter") { /* dialog handles it */ e.preventDefault(); return; }
+      return;
+    }
+
+    // When move dialog is open, only let it handle Escape
+    if (showMoveDialog) {
+      if (e.key === "Escape") { showMoveDialog = false; e.preventDefault(); return; }
+      return;
+    }
+
     const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
     switch (e.key) {
       case "v":
@@ -223,9 +246,7 @@
         }
         return;
       case "Escape":
-        if (showMoveDialog) { showMoveDialog = false; e.preventDefault(); return; }
         if (showShortcutHelp) { showShortcutHelp = false; e.preventDefault(); return; }
-        if (confirmDelete) { confirmDelete = false; e.preventDefault(); return; }
         if (showSearch) { closeSearch(); e.preventDefault(); return; }
         if (selectionMode) { toggleSelectionMode(); e.preventDefault(); return; }
         return;
