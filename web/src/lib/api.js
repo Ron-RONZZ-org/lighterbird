@@ -251,11 +251,16 @@ export const sieve = {
 
   delete: (name) => request("DELETE", `/email/sieve/${encodeURIComponent(name)}`),
 
-  activate: (name, accountUuid) =>
-    request("POST", `/email/sieve/${encodeURIComponent(name)}/activate`, { account_uuid: accountUuid }),
+  activate: (name, accountUuid, priority = 0) =>
+    request("POST", `/email/sieve/${encodeURIComponent(name)}/activate`, { account_uuid: accountUuid, priority }),
 
   deactivate: (name, accountUuid) =>
     request("POST", `/email/sieve/${encodeURIComponent(name)}/deactivate`, { account_uuid: accountUuid }),
+
+  setPriority: (name, accountUuid, priority) =>
+    request("POST", `/email/sieve/${encodeURIComponent(name)}/priority`, { account_uuid: accountUuid, priority }),
+
+  analyze: (scripts) => request("POST", "/email/sieve/analyze", { scripts }),
 
   validate: (content) => request("POST", "/email/sieve/validate", { content }),
 };

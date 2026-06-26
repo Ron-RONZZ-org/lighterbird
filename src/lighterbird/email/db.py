@@ -113,11 +113,17 @@ CREATE TABLE IF NOT EXISTS sieve_aktivadoj (
     skripto_uuid TEXT NOT NULL REFERENCES sieve_skriptoj(uuid) ON DELETE CASCADE,
     konto_id     TEXT NOT NULL REFERENCES kontoj(uuid) ON DELETE CASCADE,
     active       INTEGER NOT NULL DEFAULT 0,
+    priority     INTEGER NOT NULL DEFAULT 0,
     man_sync     INTEGER NOT NULL DEFAULT 1,
     kreita_je    TEXT NOT NULL,
     modifita_je  TEXT NOT NULL,
     UNIQUE(skripto_uuid, konto_id)
 );
+"""
+
+# Priority column migration for existing databases
+_MIGRATE_SIEVE_AKTIVADOJ_PRIORITY = """
+ALTER TABLE sieve_aktivadoj ADD COLUMN priority INTEGER NOT NULL DEFAULT 0;
 """
 
 # ManageSieve columns added to kontoj
@@ -168,6 +174,7 @@ _SCHEMA_STATEMENTS: list[str] = [
     _MIGRATE_KONTOJ_MANAGESIEVE,
     _MIGRATE_KONTOJ_MANAGESIEVE_PORT,
     _MIGRATE_KONTOJ_MANAGESIEVE_TLS,
+    _MIGRATE_SIEVE_AKTIVADOJ_PRIORITY,
     _IDX_MESAGOJ_KONTO,
     _IDX_MESAGOJ_DOSIERUJO,
     _IDX_MESAGOJ_IMAP_UID,
