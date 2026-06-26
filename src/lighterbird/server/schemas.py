@@ -220,6 +220,55 @@ class LLMProfileUpdate(BaseModel):
 
 # ── Account Updates ──────────────────────────────────────────────────────
 
+# ── Sieve ─────────────────────────────────────────────────────────────────
+
+class SieveScriptCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=128, description="Script name")
+    content: str = Field(default="", description="Sieve script source")
+    active: bool = Field(default=False, description="Activate immediately")
+    account_uuid: str = Field(default="", description="Account UUID (default: first with ManageSieve)")
+
+    model_config = {"extra": "forbid"}
+
+
+class SieveScriptUpdate(BaseModel):
+    name: str | None = Field(default=None, description="New script name (rename)")
+    content: str | None = Field(default=None, description="New script content")
+    active: bool | None = Field(default=None, description="Activate/deactivate")
+    account_uuid: str | None = Field(default=None, description="Account UUID")
+
+    model_config = {"extra": "forbid"}
+
+
+class SieveScriptResponse(BaseModel):
+    uuid: str
+    account_uuid: str
+    name: str
+    content: str
+    active: bool
+    system: bool
+    man_sync: bool
+    created_at: str
+    modified_at: str
+
+
+class SieveScriptListResponse(BaseModel):
+    scripts: list[SieveScriptResponse]
+
+
+class SieveValidateRequest(BaseModel):
+    content: str = Field(..., description="Sieve script source to validate")
+
+    model_config = {"extra": "forbid"}
+
+
+class SieveValidateResponse(BaseModel):
+    is_valid: bool
+    error: str = ""
+
+
+# ── Account Updates ──────────────────────────────────────────────────────
+
 class AccountUpdate(BaseModel):
     name: str | None = Field(default=None, description="Display name")
     password: str | None = Field(default=None, description="Account password")

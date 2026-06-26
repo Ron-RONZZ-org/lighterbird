@@ -45,7 +45,11 @@ def email_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "  !email account list      — List email accounts\n"
                 "  !email account add       — Add an email account\n"
                 "  !email account modify    — Modify an email account\n"
-                "  !email account remove    — Remove an email account"
+                "  !email account remove    — Remove an email account\n"
+                "  !email sieve list        — List Sieve filters\n"
+                "  !email sieve add         — Add a Sieve filter\n"
+                "  !email sieve modify      — Modify a Sieve filter\n"
+                "  !email sieve delete      — Delete a Sieve filter"
             ),
         },
     }
@@ -311,6 +315,10 @@ def account_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
         updates["imap_servilo"] = flags["imap_server"]
     if "smtp_server" in flags:
         updates["smtp_servilo"] = flags["smtp_server"]
+    if "managesieve_host" in flags:
+        updates["managesieve_host"] = flags["managesieve_host"]
+    if "managesieve_port" in flags:
+        updates["managesieve_port"] = int(flags["managesieve_port"])
     if updates:
         # Use CRUD update directly
         svc.accounts.update(uuid, updates)

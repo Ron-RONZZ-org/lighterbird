@@ -104,6 +104,74 @@ def get_command_tree() -> list[CommandNode]:
                     ],
                 },
                 {
+                    "name": "sieve",
+                    "description": "Manage Sieve email filters",
+                    "children": [
+                        {
+                            "name": "list",
+                            "description": "List Sieve scripts",
+                            "flags": [
+                                {"name": "account", "short": "a", "type": "uuid", "help": "Account UUID", "uuidSource": "email.listAccounts"},
+                            ],
+                        },
+                        {
+                            "name": "view",
+                            "description": "View a Sieve script",
+                            "params": [
+                                {"name": "name", "required": True, "type": "string", "placeholder": "script-name"},
+                            ],
+                            "flags": [
+                                {"name": "account", "short": "a", "type": "uuid", "help": "Account UUID", "uuidSource": "email.listAccounts"},
+                            ],
+                        },
+                        {
+                            "name": "add",
+                            "description": "Create a new Sieve script (opens editor in GUI)",
+                            "interactive": True,
+                            "params": [
+                                {"name": "name", "required": True, "type": "string", "placeholder": "script-name"},
+                            ],
+                            "flags": [
+                                {"name": "account", "short": "a", "type": "uuid", "help": "Account UUID", "uuidSource": "email.listAccounts"},
+                                {"name": "active", "type": "flag", "help": "Activate immediately"},
+                            ],
+                        },
+                        {
+                            "name": "modify",
+                            "description": "Modify a Sieve script (opens editor in GUI)",
+                            "interactive": True,
+                            "params": [
+                                {"name": "name", "required": True, "type": "string", "placeholder": "script-name"},
+                            ],
+                            "flags": [
+                                {"name": "name", "type": "string", "help": "Rename to"},
+                                {"name": "active", "type": "flag", "help": "Activate"},
+                                {"name": "account", "short": "a", "type": "uuid", "help": "Account UUID", "uuidSource": "email.listAccounts"},
+                            ],
+                        },
+                        {
+                            "name": "delete",
+                            "description": "Delete Sieve script(s)",
+                            "params": [
+                                {"name": "name", "required": True, "type": "string", "placeholder": "script-name", "repeatable": True},
+                            ],
+                            "flags": [
+                                {"name": "account", "short": "a", "type": "uuid", "help": "Account UUID", "uuidSource": "email.listAccounts"},
+                            ],
+                        },
+                        {
+                            "name": "activate",
+                            "description": "Activate a Sieve script",
+                            "params": [
+                                {"name": "name", "required": True, "type": "string", "placeholder": "script-name"},
+                            ],
+                            "flags": [
+                                {"name": "account", "short": "a", "type": "uuid", "help": "Account UUID", "uuidSource": "email.listAccounts"},
+                            ],
+                        },
+                    ],
+                },
+                {
                     "name": "account",
                     "description": "Manage email accounts",
                     "children": [
@@ -135,6 +203,8 @@ def get_command_tree() -> list[CommandNode]:
                                 {"name": "password", "type": "string", "help": "New password"},
                                 {"name": "imap_server", "type": "string", "help": "New IMAP server"},
                                 {"name": "smtp_server", "type": "string", "help": "New SMTP server"},
+                                {"name": "managesieve_host", "type": "string", "help": "ManageSieve server hostname"},
+                                {"name": "managesieve_port", "type": "number", "help": "ManageSieve port (default 4190)"},
                             ],
                         },
                         {
