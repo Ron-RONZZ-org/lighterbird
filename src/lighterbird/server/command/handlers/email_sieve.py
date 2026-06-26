@@ -86,10 +86,10 @@ def sieve_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "      List all scripts (with activation status per account)\n"
                 "  !email sieve view <name> [--account <email>]\n"
                 "      View script content (with activation status)\n"
-                "  !email sieve add <name> [content]\n"
-                "      Create a new global script\n"
-                "  !email sieve modify <name> [content] [--name NEW_NAME]\n"
-                "      Modify a script\n"
+                "  !email sieve add <name> --file <path>\n"
+                "      Create a script from a local file\n"
+                "  !email sieve modify <name> --file <path> [--name NEW_NAME]\n"
+                "      Update a script from a local file\n"
                 "  !email sieve delete <name> [name...]\n"
                 "      Delete script(s) globally\n"
                 "  !email sieve activate <name> --account <email>\n"
@@ -158,21 +158,52 @@ def sieve_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
+def _read_file_content(file_path: str) -> str:
+    """Read content from a file path, with clear error on failure."""
+    try:
+        with open(file_path, "r") as f:
+            return f.read()
+    except FileNotFoundError:
+        raise CommandValidationError(
+            f"File not found: {file_path}",
+            "Check the path and try again.",
+        )
+    except IsADirectoryError:
+        raise CommandValidationError(
+            f"Path is a directory, not a file: {file_path}",
+        )
+    except PermissionError:
+        raise CommandValidationError(
+            f"Permission denied: {file_path}",
+        )
+    except UnicodeDecodeError:
+        raise CommandValidationError(
+            f"File is not valid UTF-8 text: {file_path}",
+        )
+
+
 @command("email.sieve.add")
 def sieve_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email sieve add <name> [content]
+    """!email sieve add <name> [--file /path/to/script.sieve]
 
-    Creates a new global script (not tied to any account).
-    Use ``!email sieve activate`` to activate it on an account.
+    Creates a new global script. Provide the Sieve source via ``--file``
+    (recommended) or use the GUI editor (``!email sieve add <name>`` with
+    no ``--file`` opens the interactive editor).
     """
     if not remaining:
         raise CommandValidationError(
             "Missing script name.",
-            "Usage: !email sieve add <name> [content]",
+            "Usage: !email sieve add <name> --file /path/to/script.sieve",
         )
     name = remaining[0]
-    content = " ".join(remaining[1:]) if len(remaining) > 1 else ""
     svc: EmailService = get_email_service()
+
+    if "file" in flags:
+        content = _read_file_content(flags["file"])
+    else:
+        # In CLI mode, empty content is fine — user can edit via GUI later.
+        # The interactive flag in the command tree will open the editor.
+        content = ""
 
     try:
         script = svc.sieve.create_script(nomo=name, content=content)
@@ -188,16 +219,22 @@ def sieve_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 @command("email.sieve.modify")
 def sieve_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email sieve modify <name> [content] [--name NEW_NAME]"""
+    """!email sieve modify <name> [--file /path/to/script.sieve] [--name NEW_NAME]
+
+    Updates a script. Use ``--file`` to load new content from a file,
+    or omit it to keep the current content (open GUI editor to edit).
+    """
     if not remaining:
         raise CommandValidationError(
             "Missing script name.",
-            "Usage: !email sieve modify <name> [content] [--name NEW_NAME]",
+            "Usage: !email sieve modify <name> [--file /path/to/script.sieve] [--name NEW_NAME]",
         )
     name = remaining[0]
     svc: EmailService = get_email_service()
 
-    content = " ".join(remaining[1:]) if len(remaining) > 1 else None
+    content: str | None = None
+    if "file" in flags:
+        content = _read_file_content(flags["file"])
     new_name = flags.get("name", None)
 
     try:
