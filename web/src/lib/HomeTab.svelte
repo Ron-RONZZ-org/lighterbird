@@ -321,11 +321,10 @@
     return null;
   }
 
-  // Refresh data cache periodically
+  // Refresh data cache on mount (and when messages change — triggers re-cache
+  // so autocomplete data stays fresh).
   $effect(() => {
-    if (messages.length > 0) {
-      refreshDataCache();
-    }
+    refreshDataCache();
   });
 
   async function refreshDataCache() {

@@ -8,6 +8,12 @@
 
   let { isLoading = false, oncommand } = $props();
 
+  // Pre-populate data cache on mount so folder/account/etc. suggestions
+  // are available immediately — not just after the first command execution.
+  $effect(() => {
+    refreshDataCache();
+  });
+
   let inputValue = $state("");
   let suggestions = $state([]);
   let hints = $state([]);
@@ -93,13 +99,49 @@
         }
       }
 
-      // 2. Check flags for uuidSource — user just typed a --flag and needs a value
+      // 2. Check flags for uuidSource — user is typing or has completed a flag
+      //    that expects a value from the cache (e.g. --folder).
+      const localFlags = flags; // from the re-parse above
+      const localPartial = partial;
       if (dataCompletions.length === 0 && result.node.flags) {
-        for (const f of result.node.flags) {
-          if (f.uuidSource && f.name in flags && flags[f.name] === "") {
-            // User completed --folder and now needs a value suggestion
-            dataCompletions = getDataCompletionsFromCache(popup.cache, f.uuidSource);
-            break;
+        // 2a. Partial flag name: user typed "--fol" — match flag name via partial
+        if (localPartial.startsWith("--")) {
+          const partialFlagName = localPartial.slice(2);
+          for (const f of result.node.flags) {
+            if (f.uuidSource && f.name.startsWith(partialFlagName)) {
+              dataCompletions = getDataCompletionsFromCache(popup.cache, f.uuidSource);
+              break;
+            }
+          }
+        }
+        // 2b. Completed flag: user typed "--folder " (trailing space) and is now
+        //     about to enter a value. Show available options.
+        if (dataCompletions.length === 0) {
+          for (const f of result.node.flags) {
+            if (f.uuidSource && f.name in localFlags && localFlags[f.name] === "") {
+              dataCompletions = getDataCompletionsFromCache(popup.cache, f.uuidSource);
+              break;
+            }
+          }
+        }
+        // 2c. Comma continuation: user typed "--folder INBOX," and wants to add
+        //     another folder. Show remaining options.
+        if (dataCompletions.length === 0) {
+          for (const f of result.node.flags) {
+            if (f.uuidSource && f.name in localFlags && localFlags[f.name].endsWith(",")) {
+              const allItems = getDataCompletionsFromCache(popup.cache, f.uuidSource);
+              if (allItems.length > 0) {
+                // Filter out already-selected values
+                const enteredValues = localFlags[f.name]
+                  .split(",")
+                  .map((v) => v.trim().toLowerCase())
+                  .filter((v) => v.length > 0);
+                dataCompletions = allItems.filter(
+                  (dc) => !enteredValues.includes((dc.value || "").toLowerCase()),
+                );
+              }
+              break;
+            }
           }
         }
       }
