@@ -57,9 +57,10 @@ export const popup = {
 
   show(type, title, data) {
     _closeLoadingTabs();
-    tabStore.open(type, title, data, {
-      idKey: type === "email" ? `email-${data?.uuid}` : null,
-    });
+    const idKey = type.endsWith("-list") ? type
+                : type === "email" ? `email-${data?.uuid}`
+                : null;
+    tabStore.open(type, title, data, { idKey });
     _persistentDataType = null;
     _cacheData(data);
   },

@@ -7,6 +7,7 @@
   let scripts = $derived(data?.scripts || []);
   let total = $derived(data?.total || 0);
   let initialAccountFilter = $derived(data?.account_filter || "");
+  let highlight = $derived(data?.highlight || "");
 
   let selectionMode = $state(false);
   let selectedNames = $state(new Set());
@@ -16,7 +17,26 @@
   let confirmDelete = $state(false);
   let deleteTarget = $state("");
 
+  let copiedUuid = $state("");
+  let highlightActive = $state(false);
+
   let numSelected = $derived(selectedNames.size);
+
+  // Highlight animation — auto-clears after 2s
+  $effect(() => {
+    if (highlight) {
+      highlightActive = true;
+      const timer = setTimeout(() => { highlightActive = false; }, 2000);
+      return () => clearTimeout(timer);
+    }
+  });
+
+  function copyUuid(uuid) {
+    navigator.clipboard.writeText(uuid).then(() => {
+      copiedUuid = uuid;
+      setTimeout(() => { if (copiedUuid === uuid) copiedUuid = ""; }, 1200);
+    }).catch(() => {});
+  }
 
   // Load accounts for the activation account selector
   let accounts = $state([]);
@@ -175,6 +195,7 @@
         class:selected={isSelected(script.name)}
         class:system={script.system}
         class:activated={isActivated(script)}
+        class:highlight={script.name === highlight && highlightActive}
         class:selection-mode={selectionMode}
         role="option"
         aria-selected={isSelected(script.name)}
@@ -188,6 +209,10 @@
               {isSelected(script.name) ? "✓" : ""}
             </span>
           {/if}
+        </span>
+        <span class="uuid" onclick={(e) => { e.stopPropagation(); copyUuid(script.uuid); }}
+              title="Click to copy UUID">
+          {copiedUuid === script.uuid ? "Copied!" : script.uuid.slice(0, 8)}
         </span>
         <span class="name" class:activated={isActivated(script)}>
           {script.system ? "⚙ " : ""}{script.name}
@@ -313,7 +338,12 @@
   .row.selected { background: #2a2a50; }
   .row.system { opacity: 0.8; }
   .row.activated { background: #1a2a1e; }
+  .row.highlight { animation: highlight-fade 2s ease-out; }
   .row.selection-mode { cursor: pointer; }
+  @keyframes highlight-fade {
+    0% { background: rgba(42, 90, 42, 0.6); }
+    100% { background: transparent; }
+  }
   .checkbox-cell {
     display: flex;
     align-items: center;
@@ -334,6 +364,14 @@
     background: transparent;
   }
   .checkbox.checked { background: #4a6fa5; border-color: #4a6fa5; }
+  .uuid {
+    color: var(--clr-muted);
+    font-size: 0.72rem;
+    min-width: 5.5rem;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .uuid:hover { color: #7c7c9a; text-decoration: underline; }
   .name {
     flex: 1;
     color: #e0e0e0;

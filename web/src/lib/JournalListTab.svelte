@@ -13,6 +13,14 @@
   let selectedUuids = $state(new Set());
   let selectionMode = $state(false);
   let anchorIndex = $state(-1);
+  let copiedUuid = $state("");
+
+  function copyUuid(uuid) {
+    navigator.clipboard.writeText(uuid).then(() => {
+      copiedUuid = uuid;
+      setTimeout(() => { if (copiedUuid === uuid) copiedUuid = ""; }, 1200);
+    }).catch(() => {});
+  }
 
   let numSelected = $derived(selectedUuids.size);
 
@@ -354,6 +362,10 @@
         </span>
 
         <!-- Entry data -->
+        <span class="journal-uuid" onclick={(e) => { e.stopPropagation(); copyUuid(entry.uuid); }}
+              title="Click to copy UUID">
+          {copiedUuid === entry.uuid ? "Copied!" : entry.uuid.slice(0, 8)}
+        </span>
         <span class="date">{formatDate(entry.date || entry.created_at)}</span>
         <span class="title">{truncate(entry.title || "(untitled)", 32)}</span>
         <span class="preview">{preview(entry.text || "")}</span>
@@ -485,6 +497,14 @@
   }
   .checkbox.checked { background: #4a6fa5; border-color: #4a6fa5; }
 
+  .journal-uuid {
+    color: var(--clr-muted);
+    font-size: 0.72rem;
+    min-width: 5rem;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .journal-uuid:hover { color: #7c7c9a; text-decoration: underline; }
   .date {
     color: var(--clr-muted);
     min-width: 6rem;
