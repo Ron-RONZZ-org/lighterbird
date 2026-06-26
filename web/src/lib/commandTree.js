@@ -90,9 +90,9 @@ export let commandTree = [
         children: [
           {
             name: "list",
-            description: "List Sieve scripts",
+            description: "List Sieve scripts (with optional per-account activation)",
             flags: [
-              { name: "account", short: "a", type: "uuid", help: "Account UUID", uuidSource: "email.listAccounts" },
+              { name: "account", short: "a", type: "string", help: "Account email or UUID" },
             ],
           },
           {
@@ -102,52 +102,53 @@ export let commandTree = [
               { name: "name", required: true, type: "string", placeholder: "script-name" },
             ],
             flags: [
-              { name: "account", short: "a", type: "uuid", help: "Account UUID", uuidSource: "email.listAccounts" },
+              { name: "account", short: "a", type: "string", help: "Account email or UUID" },
             ],
           },
           {
             name: "add",
-            description: "Create a new Sieve script (opens editor in GUI)",
+            description: "Create a new global Sieve script (not tied to any account)",
             interactive: true,
             params: [
               { name: "name", required: true, type: "string", placeholder: "script-name" },
             ],
-            flags: [
-              { name: "account", short: "a", type: "uuid", help: "Account UUID", uuidSource: "email.listAccounts" },
-              { name: "active", type: "flag", help: "Activate immediately" },
-            ],
           },
           {
             name: "modify",
-            description: "Modify a Sieve script (opens editor in GUI)",
+            description: "Modify a Sieve script",
             interactive: true,
             params: [
               { name: "name", required: true, type: "string", placeholder: "script-name" },
             ],
             flags: [
               { name: "name", type: "string", help: "Rename to" },
-              { name: "active", type: "flag", help: "Activate" },
-              { name: "account", short: "a", type: "uuid", help: "Account UUID", uuidSource: "email.listAccounts" },
             ],
           },
           {
             name: "delete",
-            description: "Delete Sieve script(s)",
+            description: "Delete Sieve script(s) globally",
             params: [
               { name: "name", required: true, type: "string", placeholder: "script-name", repeatable: true },
-            ],
-            flags: [
-              { name: "account", short: "a", type: "uuid", help: "Account UUID", uuidSource: "email.listAccounts" },
             ],
           },
           {
             name: "activate",
-            description: "Activate a Sieve script",
+            description: "Activate a script on a specific account (requires --account)",
             params: [
               { name: "name", required: true, type: "string", placeholder: "script-name" },
             ],
             flags: [
-              { name: "account", short: "a", type: "uuid", help: "Account UUID", uuidSource: "email.listAccounts" },
+              { name: "account", short: "a", type: "string", help: "Account email or UUID (required)" },
+            ],
+          },
+          {
+            name: "deactivate",
+            description: "Deactivate a script on a specific account (requires --account)",
+            params: [
+              { name: "name", required: true, type: "string", placeholder: "script-name" },
+            ],
+            flags: [
+              { name: "account", short: "a", type: "string", help: "Account email or UUID (required)" },
             ],
           },
         ],

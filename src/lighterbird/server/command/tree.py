@@ -109,9 +109,9 @@ def get_command_tree() -> list[CommandNode]:
                     "children": [
                         {
                             "name": "list",
-                            "description": "List Sieve scripts",
+                            "description": "List Sieve scripts (with optional per-account activation status)",
                             "flags": [
-                                {"name": "account", "short": "a", "type": "uuid", "help": "Account UUID", "uuidSource": "email.listAccounts"},
+                                {"name": "account", "short": "a", "type": "string", "help": "Account email or UUID to show activation status"},
                             ],
                         },
                         {
@@ -121,52 +121,53 @@ def get_command_tree() -> list[CommandNode]:
                                 {"name": "name", "required": True, "type": "string", "placeholder": "script-name"},
                             ],
                             "flags": [
-                                {"name": "account", "short": "a", "type": "uuid", "help": "Account UUID", "uuidSource": "email.listAccounts"},
+                                {"name": "account", "short": "a", "type": "string", "help": "Account email or UUID to show activation"},
                             ],
                         },
                         {
                             "name": "add",
-                            "description": "Create a new Sieve script (opens editor in GUI)",
+                            "description": "Create a new global Sieve script (not tied to any account)",
                             "interactive": True,
                             "params": [
                                 {"name": "name", "required": True, "type": "string", "placeholder": "script-name"},
                             ],
-                            "flags": [
-                                {"name": "account", "short": "a", "type": "uuid", "help": "Account UUID", "uuidSource": "email.listAccounts"},
-                                {"name": "active", "type": "flag", "help": "Activate immediately"},
-                            ],
                         },
                         {
                             "name": "modify",
-                            "description": "Modify a Sieve script (opens editor in GUI)",
+                            "description": "Modify a Sieve script",
                             "interactive": True,
                             "params": [
                                 {"name": "name", "required": True, "type": "string", "placeholder": "script-name"},
                             ],
                             "flags": [
                                 {"name": "name", "type": "string", "help": "Rename to"},
-                                {"name": "active", "type": "flag", "help": "Activate"},
-                                {"name": "account", "short": "a", "type": "uuid", "help": "Account UUID", "uuidSource": "email.listAccounts"},
                             ],
                         },
                         {
                             "name": "delete",
-                            "description": "Delete Sieve script(s)",
+                            "description": "Delete Sieve script(s) globally",
                             "params": [
                                 {"name": "name", "required": True, "type": "string", "placeholder": "script-name", "repeatable": True},
-                            ],
-                            "flags": [
-                                {"name": "account", "short": "a", "type": "uuid", "help": "Account UUID", "uuidSource": "email.listAccounts"},
                             ],
                         },
                         {
                             "name": "activate",
-                            "description": "Activate a Sieve script",
+                            "description": "Activate a script on a specific account (requires --account)",
                             "params": [
                                 {"name": "name", "required": True, "type": "string", "placeholder": "script-name"},
                             ],
                             "flags": [
-                                {"name": "account", "short": "a", "type": "uuid", "help": "Account UUID", "uuidSource": "email.listAccounts"},
+                                {"name": "account", "short": "a", "type": "string", "help": "Account email or UUID (required)", "required": True},
+                            ],
+                        },
+                        {
+                            "name": "deactivate",
+                            "description": "Deactivate a script on a specific account (requires --account)",
+                            "params": [
+                                {"name": "name", "required": True, "type": "string", "placeholder": "script-name"},
+                            ],
+                            "flags": [
+                                {"name": "account", "short": "a", "type": "string", "help": "Account email or UUID (required)", "required": True},
                             ],
                         },
                     ],

@@ -1,4 +1,7 @@
-"""Sieve filter REST API routes."""
+"""Sieve filter REST API routes.
+
+Scripts are global; per-account activation is tracked separately.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +11,7 @@ from lighterbird.server.deps import get_email_service
 from lighterbird.server.schemas import (
     SieveScriptCreate,
     SieveScriptUpdate,
+    SieveActivateRequest,
     SieveScriptResponse,
     SieveScriptListResponse,
     SieveValidateRequest,
@@ -20,31 +24,16 @@ router = APIRouter(prefix="/api/v1/email/sieve", tags=["email", "sieve"])
 
 
 def _row_to_response(row: dict) -> SieveScriptResponse:
+    """Convert a script dict to the Pydantic response model."""
     return SieveScriptResponse(
-        uuid=row["uuid"],
-        account_uuid=row["konto_id"],
-        name=row["nomo"],
+        uuid=row["uuid"] if "uuid" in row else row.get("uuid", ""),
+        name=row["name"],
         content=row.get("content", ""),
-        active=bool(row.get("active", 0)),
         system=bool(row.get("system", 0)),
-        man_sync=bool(row.get("man_sync", 1)),
-        created_at=row.get("kreita_je", ""),
-        modified_at=row.get("modifita_je", ""),
+        created_at=row.get("created_at", ""),
+        modified_at=row.get("modified_at", ""),
+        aktivado=row.get("aktivado"),
     )
-
-
-def _resolve_account(email_svc: EmailService, account_uuid: str = "") -> str:
-    """Resolve an account UUID, defaulting to the first account with ManageSieve."""
-    if account_uuid:
-        return account_uuid
-    accounts = email_svc.list_accounts()
-    if not accounts:
-        raise HTTPException(status_code=404, detail="No email accounts configured.")
-    # Prefer account with ManageSieve
-    for acct in accounts:
-        if acct.get("managesieve_host", ""):
-            return acct["uuid"]
-    return accounts[0]["uuid"]
 
 
 @router.get("", response_model=SieveScriptListResponse)
@@ -53,11 +42,10 @@ def list_scripts(
     account_uuid: str | None = Query(default=None, alias="account_uuid"),
     email_svc: EmailService = Depends(get_email_service),
 ):
-    """List Sieve scripts, optionally filtered by account."""
-    if account_uuid:
-        scripts = email_svc.sieve.list_scripts(konto_id=account_uuid)
-    else:
-        scripts = email_svc.sieve.list_scripts()
+    """List Sieve scripts. When ``account_uuid`` is given, includes
+    per-account activation status and the virtual ``_spam_blocks`` script.
+    """
+    scripts = email_svc.sieve.list_scripts(konto_id=account_uuid)
     return SieveScriptListResponse(
         scripts=[_row_to_response(s) for s in scripts]
     )
@@ -69,9 +57,11 @@ def get_script(
     account_uuid: str | None = Query(default=None, alias="account_uuid"),
     email_svc: EmailService = Depends(get_email_service),
 ):
-    """Get a single Sieve script by name."""
-    konto_id = _resolve_account(email_svc, account_uuid or "")
-    script = email_svc.sieve.get_script(name, konto_id=konto_id)
+    """Get a script by name. With ``account_uuid``, includes activation info."""
+    if account_uuid:
+        script = email_svc.sieve.get_script_with_activation(name, konto_id=account_uuid)
+    else:
+        script = email_svc.sieve.get_script(name)
     if not script:
         raise HTTPException(status_code=404, detail=f"Sieve script '{name}' not found.")
     return _row_to_response(script)
@@ -83,14 +73,11 @@ def create_script(
     data: SieveScriptCreate,
     email_svc: EmailService = Depends(get_email_service),
 ):
-    """Create a new Sieve script."""
-    konto_id = _resolve_account(email_svc, data.account_uuid)
+    """Create a new global Sieve script."""
     try:
         script = email_svc.sieve.create_script(
-            konto_id=konto_id,
             nomo=data.name,
             content=data.content,
-            active=data.active,
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
@@ -103,15 +90,12 @@ def update_script(
     data: SieveScriptUpdate,
     email_svc: EmailService = Depends(get_email_service),
 ):
-    """Update a Sieve script."""
-    konto_id = _resolve_account(email_svc, data.account_uuid or "")
+    """Update a global Sieve script."""
     try:
         script = email_svc.sieve.update_script(
             nomo=name,
-            konto_id=konto_id,
             new_name=data.name,
             content=data.content,
-            active=data.active,
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
@@ -123,13 +107,11 @@ def update_script(
 @router.delete("/{name}")
 def delete_script(
     name: str,
-    account_uuid: str | None = Query(default=None, alias="account_uuid"),
     email_svc: EmailService = Depends(get_email_service),
 ):
-    """Delete a Sieve script."""
-    konto_id = _resolve_account(email_svc, account_uuid or "")
+    """Delete a global Sieve script (removes activations on all accounts)."""
     try:
-        deleted = email_svc.sieve.delete_script(name, konto_id=konto_id)
+        deleted = email_svc.sieve.delete_script(name)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     if not deleted:
@@ -140,12 +122,28 @@ def delete_script(
 @router.post("/{name}/activate", response_model=SieveScriptResponse)
 def activate_script(
     name: str,
-    account_uuid: str | None = Query(default=None, alias="account_uuid"),
+    data: SieveActivateRequest,
     email_svc: EmailService = Depends(get_email_service),
 ):
-    """Activate a Sieve script."""
-    konto_id = _resolve_account(email_svc, account_uuid or "")
-    script = email_svc.sieve.activate_script(name, konto_id=konto_id)
+    """Activate a script on a specific account."""
+    if not data.account_uuid:
+        raise HTTPException(status_code=422, detail="account_uuid is required")
+    script = email_svc.sieve.activate_script(name, konto_id=data.account_uuid)
+    if not script:
+        raise HTTPException(status_code=404, detail=f"Sieve script '{name}' not found.")
+    return _row_to_response(script)
+
+
+@router.post("/{name}/deactivate", response_model=SieveScriptResponse)
+def deactivate_script(
+    name: str,
+    data: SieveActivateRequest,
+    email_svc: EmailService = Depends(get_email_service),
+):
+    """Deactivate a script on a specific account."""
+    if not data.account_uuid:
+        raise HTTPException(status_code=422, detail="account_uuid is required")
+    script = email_svc.sieve.deactivate_script(name, konto_id=data.account_uuid)
     if not script:
         raise HTTPException(status_code=404, detail=f"Sieve script '{name}' not found.")
     return _row_to_response(script)

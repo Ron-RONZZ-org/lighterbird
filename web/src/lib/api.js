@@ -233,9 +233,11 @@ export const llm = {
 // ── Sieve API ─────────────────────────────────────────────────────────
 
 export const sieve = {
-  list: (accountUuid) => {
-    const q = accountUuid ? `?account_uuid=${encodeURIComponent(accountUuid)}` : "";
-    return request("GET", `/email/sieve${q}`);
+  list: (params = {}) => {
+    const q = new URLSearchParams();
+    if (params.account_uuid) q.set("account_uuid", params.account_uuid);
+    const qs = q.toString();
+    return request("GET", `/email/sieve${qs ? `?${qs}` : ""}`);
   },
 
   get: (name, accountUuid) => {
@@ -247,15 +249,13 @@ export const sieve = {
 
   update: (name, data) => request("PUT", `/email/sieve/${encodeURIComponent(name)}`, data),
 
-  delete: (name, accountUuid) => {
-    const q = accountUuid ? `?account_uuid=${encodeURIComponent(accountUuid)}` : "";
-    return request("DELETE", `/email/sieve/${encodeURIComponent(name)}${q}`);
-  },
+  delete: (name) => request("DELETE", `/email/sieve/${encodeURIComponent(name)}`),
 
-  activate: (name, accountUuid) => {
-    const q = accountUuid ? `?account_uuid=${encodeURIComponent(accountUuid)}` : "";
-    return request("POST", `/email/sieve/${encodeURIComponent(name)}/activate${q}`);
-  },
+  activate: (name, accountUuid) =>
+    request("POST", `/email/sieve/${encodeURIComponent(name)}/activate`, { account_uuid: accountUuid }),
+
+  deactivate: (name, accountUuid) =>
+    request("POST", `/email/sieve/${encodeURIComponent(name)}/deactivate`, { account_uuid: accountUuid }),
 
   validate: (content) => request("POST", "/email/sieve/validate", { content }),
 };

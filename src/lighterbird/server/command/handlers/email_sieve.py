@@ -7,6 +7,7 @@ Registered paths:
     - email.sieve.modify
     - email.sieve.delete
     - email.sieve.activate
+    - email.sieve.deactivate
 """
 
 from __future__ import annotations
@@ -21,36 +22,55 @@ from lighterbird.email.service import EmailService
 
 def _resolve_account(
     svc: EmailService,
-    account_uuid: str = "",
+    identifier: str = "",
 ) -> str:
-    """Resolve account UUID, defaulting to first with ManageSieve."""
-    if account_uuid:
-        return account_uuid
+    """Resolve an account by UUID prefix or email address.
+
+    Raises CommandValidationError if not found or no accounts exist.
+    """
+    if not identifier:
+        raise CommandValidationError(
+            "Missing --account flag. Specify an account UUID or email address:\n"
+            "  !email sieve activate <name> --account user@example.com",
+        )
     accounts = svc.list_accounts()
     if not accounts:
         raise CommandValidationError(
             "No email accounts configured.",
             "Add one with: !email account add",
         )
+    # Try exact UUID match
     for acct in accounts:
-        if acct.get("managesieve_host", ""):
+        if acct["uuid"] == identifier:
             return acct["uuid"]
-    return accounts[0]["uuid"]
+    # Try email match
+    identifier_lower = identifier.lower().strip()
+    for acct in accounts:
+        if acct.get("retposto", "").lower() == identifier_lower:
+            return acct["uuid"]
+    # Try UUID prefix
+    for acct in accounts:
+        if acct["uuid"].startswith(identifier):
+            return acct["uuid"]
+    raise CommandValidationError(
+        f"Account '{identifier}' not found.",
+        "Use !email account list to see available accounts.",
+    )
 
 
 def _script_to_dict(script: dict) -> dict:
-    """Normalize a DB script row to a response dict."""
-    return {
+    """Normalize a script row to a response dict."""
+    result = {
         "uuid": script["uuid"],
-        "account_uuid": script["konto_id"],
-        "name": script["nomo"],
+        "name": script["name"],
         "content": script.get("content", ""),
-        "active": bool(script.get("active", 0)),
         "system": bool(script.get("system", 0)),
-        "man_sync": bool(script.get("man_sync", 1)),
-        "created_at": script.get("kreita_je", ""),
-        "modified_at": script.get("modifita_je", ""),
+        "created_at": script.get("created_at", ""),
+        "modified_at": script.get("modified_at", ""),
     }
+    if script.get("aktivado"):
+        result["aktivado"] = script["aktivado"]
+    return result
 
 
 @command("email.sieve")
@@ -62,15 +82,23 @@ def sieve_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         "data": {
             "_summary": (
                 "Available !email sieve commands:\n"
-                "  !email sieve list                  — List Sieve scripts\n"
-                "  !email sieve view <name>           — View script content\n"
-                "  !email sieve add <name> [content]  — Create a new script\n"
-                "  !email sieve modify <name>         — Modify a script\n"
-                "  !email sieve delete <name> [...]   — Delete script(s)\n"
-                "  !email sieve activate <name>       — Activate a script\n"
+                "  !email sieve list [--account <email>]\n"
+                "      List all scripts (with activation status per account)\n"
+                "  !email sieve view <name> [--account <email>]\n"
+                "      View script content (with activation status)\n"
+                "  !email sieve add <name> [content]\n"
+                "      Create a new global script\n"
+                "  !email sieve modify <name> [content] [--name NEW_NAME]\n"
+                "      Modify a script\n"
+                "  !email sieve delete <name> [name...]\n"
+                "      Delete script(s) globally\n"
+                "  !email sieve activate <name> --account <email>\n"
+                "      Activate a script on a specific account\n"
+                "  !email sieve deactivate <name> --account <email>\n"
+                "      Deactivate a script on a specific account\n"
                 "\n"
-                "Use --account <uuid> to scope to a specific email account.\n"
-                "Use --active flag with add/modify to activate immediately."
+                "Scripts are stored globally and can be activated on multiple accounts.\n"
+                "Use --account with an email address or UUID."
             ),
         },
     }
@@ -78,36 +106,50 @@ def sieve_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 @command("email.sieve.list")
 def sieve_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email sieve list [--account <uuid>]"""
+    """!email sieve list [--account <email>]
+
+    Lists all global scripts. When ``--account`` is given, shows per-account
+    activation status and appends the virtual ``_spam_blocks`` script.
+    """
     svc: EmailService = get_email_service()
-    account_uuid = _resolve_account(svc, flags.get("account", ""))
-    scripts = svc.sieve.list_scripts(konto_id=account_uuid)
+    account_id = flags.get("account", "")
+    resolved_id = _resolve_account(svc, account_id) if account_id else ""
+    scripts = svc.sieve.list_scripts(konto_id=resolved_id or None)
     return {
         "type": "sieve-list",
         "title": "Sieve Scripts",
         "data": {
             "scripts": [_script_to_dict(s) for s in scripts],
             "total": len(scripts),
+            "account_filter": resolved_id,
         },
     }
 
 
 @command("email.sieve.view")
 def sieve_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email sieve view <name> [--account <uuid>]"""
+    """!email sieve view <name> [--account <email>]
+
+    Views a script. With ``--account``, shows activation status for that account.
+    """
     if not remaining:
         raise CommandValidationError(
             "Missing script name.",
-            "Usage: !email sieve view <name> [--account <uuid>]",
+            "Usage: !email sieve view <name> [--account <email>]",
         )
     name = remaining[0]
     svc: EmailService = get_email_service()
-    account_uuid = _resolve_account(svc, flags.get("account", ""))
-    script = svc.sieve.get_script(name, konto_id=account_uuid)
+    account_id = flags.get("account", "")
+    resolved_id = _resolve_account(svc, account_id) if account_id else ""
+
+    if resolved_id:
+        script = svc.sieve.get_script_with_activation(name, konto_id=resolved_id)
+    else:
+        script = svc.sieve.get_script(name)
     if not script:
         raise CommandValidationError(
             f"Sieve script '{name}' not found.",
-            f"List available scripts: !email sieve list --account {account_uuid[:8]}",
+            "List available scripts: !email sieve list",
         )
     return {
         "type": "status",
@@ -118,25 +160,22 @@ def sieve_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 @command("email.sieve.add")
 def sieve_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email sieve add <name> [content] [--account <uuid>] [--active]"""
+    """!email sieve add <name> [content]
+
+    Creates a new global script (not tied to any account).
+    Use ``!email sieve activate`` to activate it on an account.
+    """
     if not remaining:
         raise CommandValidationError(
             "Missing script name.",
-            "Usage: !email sieve add <name> [content] [--account <uuid>] [--active]",
+            "Usage: !email sieve add <name> [content]",
         )
     name = remaining[0]
     content = " ".join(remaining[1:]) if len(remaining) > 1 else ""
-    active = "active" in flags
     svc: EmailService = get_email_service()
-    account_uuid = _resolve_account(svc, flags.get("account", ""))
 
     try:
-        script = svc.sieve.create_script(
-            konto_id=account_uuid,
-            nomo=name,
-            content=content,
-            active=active,
-        )
+        script = svc.sieve.create_script(nomo=name, content=content)
     except ValueError as e:
         raise CommandValidationError(str(e))
 
@@ -149,37 +188,21 @@ def sieve_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 @command("email.sieve.modify")
 def sieve_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email sieve modify <name> [content] [--account <uuid>] [--active] [--name NEW_NAME] [--man-sync yes|no]"""
+    """!email sieve modify <name> [content] [--name NEW_NAME]"""
     if not remaining:
         raise CommandValidationError(
             "Missing script name.",
-            "Usage: !email sieve modify <name> [content] [--account <uuid>] [--active] [--name NEW_NAME]",
+            "Usage: !email sieve modify <name> [content] [--name NEW_NAME]",
         )
     name = remaining[0]
     svc: EmailService = get_email_service()
-    account_uuid = _resolve_account(svc, flags.get("account", ""))
 
     content = " ".join(remaining[1:]) if len(remaining) > 1 else None
-    active: bool | None = None
-    if "active" in flags:
-        active = True
-    man_sync: bool | None = None
-    if "man-sync" in flags:
-        val = flags["man-sync"].lower()
-        if val in ("yes", "true", "1"):
-            man_sync = True
-        elif val in ("no", "false", "0"):
-            man_sync = False
     new_name = flags.get("name", None)
 
     try:
         script = svc.sieve.update_script(
-            nomo=name,
-            konto_id=account_uuid,
-            new_name=new_name,
-            content=content,
-            active=active,
-            man_sync=man_sync,
+            nomo=name, new_name=new_name, content=content,
         )
     except ValueError as e:
         raise CommandValidationError(str(e))
@@ -187,9 +210,8 @@ def sieve_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     if not script:
         raise CommandValidationError(
             f"Sieve script '{name}' not found.",
-            f"List available scripts: !email sieve list --account {account_uuid[:8]}",
+            "List available scripts: !email sieve list",
         )
-
     return {
         "type": "status",
         "title": "Script Modified",
@@ -199,25 +221,26 @@ def sieve_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 @command("email.sieve.delete")
 def sieve_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email sieve delete <name> [name...] [--account <uuid>]"""
+    """!email sieve delete <name> [name...]
+
+    Deletes script(s) globally (removes from all accounts).
+    """
     if not remaining:
         raise CommandValidationError(
             "Missing script name(s).",
-            "Usage: !email sieve delete <name> [name...] [--account <uuid>]",
+            "Usage: !email sieve delete <name> [name...]",
         )
     svc: EmailService = get_email_service()
-    account_uuid = _resolve_account(svc, flags.get("account", ""))
     succeeded = []
     failed = []
     for name in remaining:
         try:
-            if svc.sieve.delete_script(name, konto_id=account_uuid):
+            if svc.sieve.delete_script(name):
                 succeeded.append(name)
             else:
                 failed.append(name)
         except ValueError as e:
             failed.append(f"{name} ({e})")
-
     return {
         "type": "status",
         "title": "Script(s) Deleted",
@@ -227,23 +250,69 @@ def sieve_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 @command("email.sieve.activate")
 def sieve_activate(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email sieve activate <name> [--account <uuid>]"""
+    """!email sieve activate <name> --account <email>
+
+    Activates a script on a specific account.
+    ``--account`` accepts an email address or account UUID.
+    """
     if not remaining:
         raise CommandValidationError(
             "Missing script name.",
-            "Usage: !email sieve activate <name> [--account <uuid>]",
+            "Usage: !email sieve activate <name> --account <email>",
         )
     name = remaining[0]
+    account_id = flags.get("account", "")
+    if not account_id:
+        raise CommandValidationError(
+            "Missing --account flag.",
+            "Usage: !email sieve activate <name> --account user@example.com",
+        )
     svc: EmailService = get_email_service()
-    account_uuid = _resolve_account(svc, flags.get("account", ""))
-    script = svc.sieve.activate_script(name, konto_id=account_uuid)
+    resolved_id = _resolve_account(svc, account_id)
+
+    script = svc.sieve.activate_script(name, konto_id=resolved_id)
     if not script:
         raise CommandValidationError(
             f"Sieve script '{name}' not found.",
-            f"List available scripts: !email sieve list --account {account_uuid[:8]}",
+            "List available scripts: !email sieve list",
         )
     return {
         "type": "status",
         "title": "Script Activated",
+        "data": _script_to_dict(script),
+    }
+
+
+@command("email.sieve.deactivate")
+def sieve_deactivate(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!email sieve deactivate <name> --account <email>
+
+    Deactivates a script on a specific account.
+    ``--account`` accepts an email address or account UUID.
+    """
+    if not remaining:
+        raise CommandValidationError(
+            "Missing script name.",
+            "Usage: !email sieve deactivate <name> --account <email>",
+        )
+    name = remaining[0]
+    account_id = flags.get("account", "")
+    if not account_id:
+        raise CommandValidationError(
+            "Missing --account flag.",
+            "Usage: !email sieve deactivate <name> --account user@example.com",
+        )
+    svc: EmailService = get_email_service()
+    resolved_id = _resolve_account(svc, account_id)
+
+    script = svc.sieve.deactivate_script(name, konto_id=resolved_id)
+    if not script:
+        raise CommandValidationError(
+            f"Sieve script '{name}' not found.",
+            "List available scripts: !email sieve list",
+        )
+    return {
+        "type": "status",
+        "title": "Script Deactivated",
         "data": _script_to_dict(script),
     }

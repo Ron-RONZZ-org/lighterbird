@@ -6,22 +6,28 @@
   let { data = {} } = $props();
   let scripts = $derived(data?.scripts || []);
   let total = $derived(data?.total || 0);
+  let initialAccountFilter = $derived(data?.account_filter || "");
 
   let selectionMode = $state(false);
   let selectedNames = $state(new Set());
   let focusedIndex = $state(-1);
 
-  let accountFilter = $state("");
+  let accountFilter = $state(initialAccountFilter);
   let confirmDelete = $state(false);
   let deleteTarget = $state("");
 
   let numSelected = $derived(selectedNames.size);
 
-  // Load accounts for filter
+  // Load accounts for the activation account selector
   let accounts = $state([]);
   $effect(() => {
     emailApi.listAccounts().then((r) => {
       accounts = r?.accounts || [];
+      // If no account filter set but accounts exist, default to first
+      if (!accountFilter && accounts.length > 0) {
+        accountFilter = accounts[0].email;
+        refreshList();
+      }
     }).catch(() => {});
   });
 
@@ -47,20 +53,20 @@
   }
 
   function openEditor(script) {
-    tabStore.open("sieve-editor", `Edit: ${script.name}`, { script, accounts, accountFilter }, {
+    tabStore.open("sieve-editor", `Edit: ${script.name}`, { script, accounts }, {
       idKey: `sieve-${script.name}`,
     });
   }
 
   function addNew() {
-    tabStore.open("sieve-editor", "New Sieve Script", { script: null, accounts, accountFilter }, {
+    tabStore.open("sieve-editor", "New Sieve Script", { script: null, accounts }, {
       idKey: "sieve-new",
     });
   }
 
   async function deleteScript(name) {
     try {
-      await sieveApi.delete(name, accountFilter);
+      await sieveApi.delete(name);
       await refreshList();
     } catch (err) {
       tabStore.open("error", "Delete Failed", { message: err.message || "Failed to delete script" });
@@ -72,7 +78,7 @@
     if (names.length === 0) return;
     try {
       for (const name of names) {
-        await sieveApi.delete(name, accountFilter);
+        await sieveApi.delete(name);
       }
       await refreshList();
     } catch (err) {
@@ -80,18 +86,28 @@
     }
   }
 
-  async function activateScript(name) {
+  async function activateScript(name, acctEmail) {
     try {
-      await sieveApi.activate(name, accountFilter);
+      await sieveApi.activate(name, acctEmail);
       await refreshList();
     } catch (err) {
       tabStore.open("error", "Activate Failed", { message: err.message || "Failed to activate script" });
     }
   }
 
+  async function deactivateScript(name, acctEmail) {
+    try {
+      await sieveApi.deactivate(name, acctEmail);
+      await refreshList();
+    } catch (err) {
+      tabStore.open("error", "Deactivate Failed", { message: err.message || "Failed to deactivate script" });
+    }
+  }
+
   async function refreshList() {
     try {
-      const result = await sieveApi.list(accountFilter);
+      const params = accountFilter ? { account_uuid: accountFilter } : {};
+      const result = await sieveApi.list(params);
       tabStore.update(tabStore.active.id, result);
       selectedNames = new Set();
     } catch { /* silent */ }
@@ -115,6 +131,16 @@
     if (!s) return "";
     return s.length > max ? s.slice(0, max - 1) + "…" : s;
   }
+
+  /** Resolve an account email to UUID (for API calls). */
+  function emailToUuid(email) {
+    const acct = accounts.find((a) => a.email === email);
+    return acct ? acct.uuid : email;
+  }
+
+  function isActivated(script) {
+    return script.aktivado?.active === true;
+  }
 </script>
 
 <div class="sieve-list">
@@ -131,8 +157,9 @@
       <button class="btn" onclick={refreshList} title="Refresh list">⟳</button>
     </div>
     <div class="right">
+      <label class="act-label">Show activation for:</label>
       <select class="account-select" onchange={handleAccountChange} value={accountFilter}>
-        <option value="">All accounts</option>
+        <option value="">(global view — no activation info)</option>
         {#each accounts as acct}
           <option value={acct.uuid}>{acct.email}</option>
         {/each}
@@ -147,6 +174,7 @@
         class="row"
         class:selected={isSelected(script.name)}
         class:system={script.system}
+        class:activated={isActivated(script)}
         class:selection-mode={selectionMode}
         role="option"
         aria-selected={isSelected(script.name)}
@@ -161,28 +189,40 @@
             </span>
           {/if}
         </span>
-        <span class="name" class:active={script.active}>
+        <span class="name" class:activated={isActivated(script)}>
           {script.system ? "⚙ " : ""}{script.name}
         </span>
-        <span class="status-badge" class:active={script.active}>
-          {script.active ? "ACTIVE" : ""}
+        <span class="activation-status">
+          {#if script.aktivado}
+            {#if script.aktivado.active}
+              <span class="badge active">ACTIVE</span>
+            {:else}
+              <span class="badge inactive">inactive</span>
+            {/if}
+          {:else if accountFilter}
+            <span class="badge none">not activated</span>
+          {/if}
         </span>
         <span class="meta">
           {#if script.system}
             <span class="tag system">system</span>
           {/if}
-          {#if script.man_sync}
-            <span class="tag sync">sync</span>
-          {/if}
         </span>
         <span class="actions">
           {#if !script.system}
-            <button class="btn small" onclick={(e) => { e.stopPropagation(); activateScript(script.name); }}
-              title="Activate this script">★ Activate</button>
             <button class="btn small" onclick={(e) => { e.stopPropagation(); openEditor(script); }}
               title="Edit script">✎ Edit</button>
+            {#if accountFilter}
+              {#if isActivated(script)}
+                <button class="btn small" onclick={(e) => { e.stopPropagation(); deactivateScript(script.name, accountFilter); }}
+                  title="Deactivate on this account">★ Deactivate</button>
+              {:else}
+                <button class="btn small primary" onclick={(e) => { e.stopPropagation(); activateScript(script.name, accountFilter); }}
+                  title="Activate on this account">★ Activate</button>
+              {/if}
+            {/if}
             <button class="btn small danger" onclick={(e) => { e.stopPropagation(); deleteTarget = script.name; confirmDelete = true; }}
-              title="Delete script">✕</button>
+              title="Delete script globally">✕</button>
           {/if}
         </span>
       </div>
@@ -194,7 +234,7 @@
 
 {#if confirmDelete}
   <ConfirmDialog
-    message="Delete script '{deleteTarget}'?"
+    message="Delete script '{deleteTarget}' globally (removes from all accounts)?"
     onConfirm={async () => { confirmDelete = false; await deleteScript(deleteTarget); }}
     onDismiss={() => { confirmDelete = false; }}
   />
@@ -223,6 +263,11 @@
     align-items: center;
     gap: 0.3rem;
   }
+  .act-label {
+    color: var(--clr-muted);
+    font-size: 0.72rem;
+    white-space: nowrap;
+  }
   .btn {
     padding: 0.2rem 0.5rem;
     border: 1px solid #4a4a6a;
@@ -235,6 +280,8 @@
     white-space: nowrap;
   }
   .btn:hover { background: #3a3a5a; }
+  .btn.primary { border-color: #3a6a3a; color: #7fdb7f; }
+  .btn.primary:hover { background: #1e3a1e; }
   .btn.danger { border-color: #8a3a3a; color: #e07070; }
   .btn.danger:hover { background: #3a2020; }
   .btn.small { padding: 0.1rem 0.3rem; font-size: 0.72rem; }
@@ -265,6 +312,7 @@
   .row:hover { background: #2a2a44; }
   .row.selected { background: #2a2a50; }
   .row.system { opacity: 0.8; }
+  .row.activated { background: #1a2a1e; }
   .row.selection-mode { cursor: pointer; }
   .checkbox-cell {
     display: flex;
@@ -293,19 +341,16 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .name.active { font-weight: 700; color: #7fdb7f; }
-  .status-badge {
-    font-size: 0.65rem;
+  .name.activated { font-weight: 700; color: #7fdb7f; }
+  .activation-status { flex-shrink: 0; }
+  .badge {
+    font-size: 0.62rem;
     padding: 1px 5px;
     border-radius: 3px;
-    color: #555;
-    flex-shrink: 0;
   }
-  .status-badge.active {
-    background: #1e3a1e;
-    color: #7fdb7f;
-    border: 1px solid #2a5a2a;
-  }
+  .badge.active { background: #1e3a1e; color: #7fdb7f; border: 1px solid #2a5a2a; }
+  .badge.inactive { background: #2a2a1e; color: #baba7f; border: 1px solid #4a4a2a; }
+  .badge.none { background: #2a1e1e; color: #ba7f7f; border: 1px solid #4a2a2a; }
   .meta {
     display: flex;
     gap: 0.3rem;
@@ -317,7 +362,6 @@
     border-radius: 3px;
   }
   .tag.system { background: #3a2a1e; color: #dba87f; }
-  .tag.sync { background: #1e2a3a; color: #7fa8db; }
   .actions {
     display: flex;
     gap: 0.3rem;
