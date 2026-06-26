@@ -12,13 +12,17 @@ from lighterbird.server.schemas import (
     SieveScriptCreate,
     SieveScriptUpdate,
     SieveActivateRequest,
+    SievePriorityUpdate,
     SieveScriptResponse,
     SieveScriptListResponse,
+    SieveAnalyzeRequest,
+    SieveAnalyzeResponse,
     SieveValidateRequest,
     SieveValidateResponse,
 )
 from lighterbird.email.service import EmailService
 from lighterbird.email.filters.sieve import validate_sieve
+from lighterbird.email.filters.combiner import combine_scripts
 
 router = APIRouter(prefix="/api/v1/email/sieve", tags=["email", "sieve"])
 
@@ -145,7 +149,9 @@ def activate_script(
 ):
     """Activate a script on a specific account."""
     konto_id = _resolve_account(email_svc, data.account_uuid)
-    script = email_svc.sieve.activate_script(name, konto_id=konto_id)
+    script = email_svc.sieve.activate_script(
+        name, konto_id=konto_id, priority=data.priority,
+    )
     if not script:
         raise HTTPException(status_code=404, detail=f"Sieve script '{name}' not found.")
     return _row_to_response(script)
@@ -163,6 +169,60 @@ def deactivate_script(
     if not script:
         raise HTTPException(status_code=404, detail=f"Sieve script '{name}' not found.")
     return _row_to_response(script)
+
+
+@router.post("/{name}/priority", response_model=SieveScriptResponse)
+def set_script_priority(
+    name: str,
+    data: SievePriorityUpdate,
+    email_svc: EmailService = Depends(get_email_service),
+):
+    """Set execution priority for a script on an account."""
+    konto_id = _resolve_account(email_svc, data.account_uuid)
+    script = email_svc.sieve.set_priority(name, konto_id=konto_id, priority=data.priority)
+    if not script:
+        raise HTTPException(status_code=404, detail=f"Sieve script '{name}' not found.")
+    return _row_to_response(script)
+
+
+@router.post("/{name}/activate-all")
+def activate_on_all(
+    name: str,
+    email_svc: EmailService = Depends(get_email_service),
+):
+    """Activate a script on all accounts with ManageSieve configured."""
+    result = email_svc.sieve.activate_all(name)
+    return {"status": "ok", **result}
+
+
+@router.post("/{name}/deactivate-all")
+def deactivate_on_all(
+    name: str,
+    email_svc: EmailService = Depends(get_email_service),
+):
+    """Deactivate a script on all accounts where it is active."""
+    result = email_svc.sieve.deactivate_all(name)
+    return {"status": "ok", **result}
+
+
+@router.post("/analyze", response_model=SieveAnalyzeResponse)
+def analyze_scripts(data: SieveAnalyzeRequest):
+    """Analyze scripts for conflicts and return combined version.
+
+    Unlike ``/validate`` which checks a single script, this endpoint
+    accepts multiple scripts and returns the combined result with
+    conflict warnings.
+    """
+    scripts_list = [{"name": s.name, "content": s.content} for s in data.scripts]
+    combined, warnings = combine_scripts(scripts_list)
+    is_valid, error = validate_sieve(combined)
+    return SieveAnalyzeResponse(
+        combined=combined,
+        warnings=[{"type": w["type"], "message": w["message"], "scripts": w["scripts"]}
+                  for w in warnings],
+        is_valid=is_valid,
+        error=error,
+    )
 
 
 @router.post("/validate", response_model=SieveValidateResponse)

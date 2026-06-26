@@ -162,6 +162,7 @@ def get_command_tree() -> list[CommandNode]:
                             ],
                             "flags": [
                                 {"name": "account", "short": "a", "type": "string", "help": "Account email or UUID (required)", "required": True},
+                                {"name": "priority", "short": "p", "type": "number", "help": "Execution priority (0=lowest)"},
                             ],
                         },
                         {
@@ -169,6 +170,17 @@ def get_command_tree() -> list[CommandNode]:
                             "description": "Deactivate a script on a specific account (requires --account)",
                             "params": [
                                 {"name": "name", "required": True, "type": "string", "placeholder": "script-name"},
+                            ],
+                            "flags": [
+                                {"name": "account", "short": "a", "type": "string", "help": "Account email or UUID (required)", "required": True},
+                            ],
+                        },
+                        {
+                            "name": "priority",
+                            "description": "Set execution priority for a script on an account",
+                            "params": [
+                                {"name": "name", "required": True, "type": "string", "placeholder": "script-name"},
+                                {"name": "priority", "required": True, "type": "number", "placeholder": "0-999"},
                             ],
                             "flags": [
                                 {"name": "account", "short": "a", "type": "string", "help": "Account email or UUID (required)", "required": True},

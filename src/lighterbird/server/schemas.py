@@ -238,6 +238,7 @@ class SieveScriptUpdate(BaseModel):
 
 class SieveActivateRequest(BaseModel):
     account_uuid: str = Field(..., description="Account UUID to activate/deactivate on")
+    priority: int = Field(default=0, ge=0, le=999, description="Execution priority (0=lowest)")
 
     model_config = {"extra": "forbid"}
 
@@ -245,9 +246,42 @@ class SieveActivateRequest(BaseModel):
 class SieveActivationInfo(BaseModel):
     uuid: str
     active: bool
+    priority: int = 0
     man_sync: bool
     created_at: str
     modified_at: str
+
+
+class SievePriorityUpdate(BaseModel):
+    account_uuid: str = Field(..., description="Account UUID")
+    priority: int = Field(..., ge=0, le=999, description="New priority (0=lowest)")
+
+    model_config = {"extra": "forbid"}
+
+
+class SieveScriptEntry(BaseModel):
+    name: str = Field(..., description="Script name")
+    content: str = Field(default="", description="Script content")
+
+
+class SieveCombineWarning(BaseModel):
+    type: str
+    message: str
+    scripts: list[str] = []
+
+
+class SieveAnalyzeRequest(BaseModel):
+    account_uuid: str = Field(default="", description="Account UUID (for _spam_blocks injection)")
+    scripts: list[SieveScriptEntry] = Field(..., description="Ordered list of scripts to combine")
+
+    model_config = {"extra": "forbid"}
+
+
+class SieveAnalyzeResponse(BaseModel):
+    combined: str = ""
+    warnings: list[SieveCombineWarning] = []
+    is_valid: bool = True
+    error: str = ""
 
 
 class SieveScriptResponse(BaseModel):

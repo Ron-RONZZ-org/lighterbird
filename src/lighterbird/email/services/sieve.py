@@ -227,8 +227,8 @@ class SieveService:
         """
         rows = list(self.db.execute(
             "SELECT s.*, a.uuid as akt_uuid, a.active as akt_active, "
-            "a.man_sync as akt_man_sync, a.kreita_je as akt_kreita_je, "
-            "a.modifita_je as akt_modifita_je "
+            "a.priority as akt_priority, a.man_sync as akt_man_sync, "
+            "a.kreita_je as akt_kreita_je, a.modifita_je as akt_modifita_je "
             "FROM sieve_skriptoj s "
             "LEFT JOIN sieve_aktivadoj a ON a.skripto_uuid = s.uuid "
             "AND a.konto_id = ? "
@@ -236,7 +236,8 @@ class SieveService:
             (konto_id,) if konto_id else (None,),
         )) if konto_id else list(self.db.execute(
             "SELECT s.*, NULL as akt_uuid, NULL as akt_active, "
-            "NULL as akt_man_sync, NULL as akt_kreita_je, NULL as akt_modifita_je "
+            "NULL as akt_priority, NULL as akt_man_sync, "
+            "NULL as akt_kreita_je, NULL as akt_modifita_je "
             "FROM sieve_skriptoj s ORDER BY s.system DESC, s.nomo ASC"
         ))
 
@@ -282,8 +283,8 @@ class SieveService:
 
         row = self.db.execute_one(
             "SELECT s.*, a.uuid as akt_uuid, a.active as akt_active, "
-            "a.man_sync as akt_man_sync, a.kreita_je as akt_kreita_je, "
-            "a.modifita_je as akt_modifita_je "
+            "a.priority as akt_priority, a.man_sync as akt_man_sync, "
+            "a.kreita_je as akt_kreita_je, a.modifita_je as akt_modifita_je "
             "FROM sieve_skriptoj s "
             "LEFT JOIN sieve_aktivadoj a ON a.skripto_uuid = s.uuid "
             "AND a.konto_id = ? "
@@ -371,18 +372,74 @@ class SieveService:
 
     # ── Activation management ─────────────────────────────────────────────
 
+    def _combine_and_sync(self, konto_id: str) -> None:
+        """Combine all active scripts for an account and sync to ManageSieve.
+
+        Fetches all active scripts, combines them via ``combine_scripts()``,
+        validates the combined result, and uploads to the remote server.
+        Failures are non-fatal — local state is authoritative.
+        """
+        from lighterbird.email.filters.combiner import combine_scripts
+        from lighterbird.email.filters.sieve import validate_sieve
+
+        rows = list(self.db.execute(
+            "SELECT s.nomo, s.content FROM sieve_aktivadoj a "
+            "JOIN sieve_skriptoj s ON s.uuid = a.skripto_uuid "
+            "WHERE a.konto_id = ? AND a.active = 1 AND a.man_sync = 1 "
+            "ORDER BY a.priority ASC, s.nomo ASC",
+            (konto_id,),
+        ))
+        if not rows:
+            return
+
+        scripts = [{"name": r["nomo"], "content": r["content"]} for r in rows]
+        combined, _warnings = combine_scripts(scripts)
+
+        is_valid, err = validate_sieve(combined)
+        if not is_valid and err:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Combined sieve script validation failed for %s: %s",
+                konto_id[:8], err,
+            )
+            return
+
+        cfg = self._get_managesieve_config(konto_id)
+        if not cfg:
+            return
+        password = self._get_account_password(konto_id)
+        if not password:
+            return
+
+        try:
+            mgr = SieveManager(cfg["host"], port=cfg["port"], use_tls=cfg["use_tls"])
+            mgr.connect(konto_id, password)
+            try:
+                mgr.put_script("_combined", combined)
+                mgr.activate_script("_combined")
+            finally:
+                mgr.disconnect()
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning(
+                "ManageSieve combine-sync failed for %s", konto_id[:8],
+            )
+
     def activate_script(
-        self, nomo: str, konto_id: str, man_sync: bool = True
+        self, nomo: str, konto_id: str,
+        man_sync: bool = True, priority: int = 0,
     ) -> dict[str, Any] | None:
         """Activate a script for a specific account.
 
-        Deactivates any previously active script for that account first.
-        Creates an activation record if none exists, otherwise updates it.
+        Multiple scripts can be active for the same account — they are
+        combined into one script before ManageSieve upload (see
+        :meth:`_combine_and_sync`).
 
         Args:
             nomo: Script name.
             konto_id: Account UUID.
-            man_sync: Whether to sync to remote ManageSieve.
+            man_sync: Whether to include in combined remote sync.
+            priority: Execution priority (lower = evaluated first).
 
         Returns:
             Script dict with activation info, or None if script not found.
@@ -392,45 +449,44 @@ class SieveService:
             return None
 
         now = self._now()
+        script_uuid = self.db.execute_one(
+            "SELECT uuid FROM sieve_skriptoj WHERE nomo = ?", (nomo,)
+        )["uuid"]
 
-        # Deactivate any other activation for this account
-        self.db.execute(
-            "UPDATE sieve_aktivadoj SET active = 0, modifita_je = ? "
-            "WHERE konto_id = ? AND active = 1",
-            (now, konto_id),
-        )
-
-        # Upsert activation
+        # Upsert activation (no longer deactivates others)
         existing = self.db.execute_one(
             "SELECT uuid FROM sieve_aktivadoj "
             "WHERE skripto_uuid = ? AND konto_id = ?",
-            (script["uuid"], konto_id),
+            (script_uuid, konto_id),
         )
         if existing:
             self.db.execute(
-                "UPDATE sieve_aktivadoj SET active = 1, man_sync = ?, "
-                "modifita_je = ? WHERE uuid = ?",
-                (1 if man_sync else 0, now, existing["uuid"]),
+                "UPDATE sieve_aktivadoj SET active = 1, priority = ?, "
+                "man_sync = ?, modifita_je = ? WHERE uuid = ?",
+                (priority, 1 if man_sync else 0, now, existing["uuid"]),
             )
         else:
             akt_uuid = str(uuid.uuid4())
             self.db.execute(
                 "INSERT INTO sieve_aktivadoj "
-                "(uuid, skripto_uuid, konto_id, active, man_sync, kreita_je, modifita_je) "
-                "VALUES (?, ?, ?, 1, ?, ?, ?)",
-                (akt_uuid, script["uuid"], konto_id, 1 if man_sync else 0, now, now),
+                "(uuid, skripto_uuid, konto_id, active, priority, man_sync, "
+                "kreita_je, modifita_je) "
+                "VALUES (?, ?, ?, 1, ?, ?, ?, ?)",
+                (akt_uuid, script_uuid, konto_id, priority,
+                 1 if man_sync else 0, now, now),
             )
 
+        # Sync combined scripts to remote
         if man_sync:
-            self._sync_to_remote(konto_id, nomo, script["content"])
-            self._activate_on_remote(konto_id, nomo)
+            self._combine_and_sync(konto_id)
 
         return self.get_script_with_activation(nomo, konto_id)
 
     def deactivate_script(self, nomo: str, konto_id: str) -> dict[str, Any] | None:
         """Deactivate a script for a specific account.
 
-        Removes the activation record and deletes from remote if synced.
+        Removes the activation record. If the account has other active
+        scripts, re-syncs the combined result.
 
         Args:
             nomo: Script name.
@@ -443,7 +499,6 @@ class SieveService:
         if not script:
             return None
 
-        # Find the script's UUID from the DB (get_script returns formatted dict)
         db_row = self.db.execute_one(
             "SELECT uuid FROM sieve_skriptoj WHERE nomo = ?", (nomo,)
         )
@@ -451,31 +506,90 @@ class SieveService:
             return None
         script_uuid = db_row["uuid"]
 
+        had_sync = False
         activation = self.db.execute_one(
             "SELECT uuid, man_sync FROM sieve_aktivadoj "
             "WHERE skripto_uuid = ? AND konto_id = ?",
             (script_uuid, konto_id),
         )
         if activation:
-            if activation.get("man_sync"):
-                self._delete_from_remote(konto_id, nomo)
+            had_sync = activation.get("man_sync", False)
             self.db.execute(
                 "DELETE FROM sieve_aktivadoj WHERE uuid = ?",
                 (activation["uuid"],),
             )
 
+        # Re-sync combined if there are other active scripts
+        if had_sync:
+            self._combine_and_sync(konto_id)
+
         script["aktivado"] = None
         return script
 
+    def set_priority(
+        self, nomo: str, konto_id: str, priority: int,
+    ) -> dict[str, Any] | None:
+        """Set execution priority for a script on an account.
+
+        Args:
+            nomo: Script name.
+            konto_id: Account UUID.
+            priority: New priority (0=lowest).
+
+        Returns:
+            Updated activation info, or None if activation not found.
+        """
+        now = self._now()
+        self.db.execute(
+            "UPDATE sieve_aktivadoj SET priority = ?, modifita_je = ? "
+            "WHERE skripto_uuid = (SELECT uuid FROM sieve_skriptoj WHERE nomo = ?) "
+            "AND konto_id = ?",
+            (priority, now, nomo, konto_id),
+        )
+        return self.get_script_with_activation(nomo, konto_id)
+
+    def activate_all(self, nomo: str) -> dict[str, list[str]]:
+        """Activate a script on all accounts that have ManageSieve configured."""
+        accounts = list(self.db.execute(
+            "SELECT uuid FROM kontoj WHERE managesieve_host != ''"
+        ))
+        succeeded = []
+        failed = []
+        for acct in accounts:
+            try:
+                self.activate_script(nomo, konto_id=acct["uuid"])
+                succeeded.append(acct["uuid"][:8])
+            except Exception:
+                failed.append(acct["uuid"][:8])
+        return {"succeeded": succeeded, "failed": failed}
+
+    def deactivate_all(self, nomo: str) -> dict[str, list[str]]:
+        """Deactivate a script on all accounts where it is active."""
+        activations = list(self.db.execute(
+            "SELECT a.konto_id FROM sieve_aktivadoj a "
+            "JOIN sieve_skriptoj s ON s.uuid = a.skripto_uuid "
+            "WHERE s.nomo = ? AND a.active = 1",
+            (nomo,),
+        ))
+        succeeded = []
+        failed = []
+        for act in activations:
+            try:
+                self.deactivate_script(nomo, konto_id=act["konto_id"])
+                succeeded.append(act["konto_id"][:8])
+            except Exception:
+                failed.append(act["konto_id"][:8])
+        return {"succeeded": succeeded, "failed": failed}
+
     def list_activations(self, konto_id: str) -> list[dict[str, Any]]:
-        """List all activations for an account."""
+        """List all activations for an account, ordered by priority."""
         return list(self.db.execute(
             "SELECT a.*, s.nomo as script_name, s.content as script_content, "
             "s.system as script_system "
             "FROM sieve_aktivadoj a "
             "JOIN sieve_skriptoj s ON s.uuid = a.skripto_uuid "
             "WHERE a.konto_id = ? "
-            "ORDER BY a.active DESC, s.nomo ASC",
+            "ORDER BY a.priority ASC, s.nomo ASC",
             (konto_id,),
         ))
 
@@ -502,7 +616,8 @@ class SieveService:
             akt = {
                 "uuid": row["akt_uuid"],
                 "active": bool(row["akt_active"]),
-                "man_sync": bool(row["akt_man_sync"]),
+                "priority": row.get("akt_priority", 0),
+                "man_sync": bool(row.get("akt_man_sync", 1)),
                 "created_at": row.get("akt_kreita_je", ""),
                 "modified_at": row.get("akt_modifita_je", ""),
             }
