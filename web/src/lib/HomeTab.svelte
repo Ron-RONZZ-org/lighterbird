@@ -119,7 +119,7 @@
       const node = findNode(effectiveTokens);
 
       if (node?.interactive && effectiveTokens.length > 0) {
-        const consumed = effectiveTokens.length - countCmdTokens(effectiveTokens) - 1;
+        const consumed = effectiveTokens.length - countCmdTokens(effectiveTokens);
         const missingRequired = node.params?.some((p, i) => p.required && i >= consumed);
         if (missingRequired) {
           openFormTab(node, trimmed);
