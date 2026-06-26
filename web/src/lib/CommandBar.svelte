@@ -67,26 +67,40 @@
     // Only show data completions (UUIDs) when cursor is at a param position
     // that expects a UUID (has uuidSource).
     dataCompletions = [];
-    if (result.node && result.node.params && result.level === "params") {
+    if (result.node && result.level === "params") {
       const { tokens, partial } = parseCommand(inputValue);
       const trailing = hasTrailingSpace(inputValue);
       const effectiveTokens = trailing && partial ? [...tokens, partial] : tokens;
       const cmdTokens = countCommandTokens(effectiveTokens);
       const consumed = effectiveTokens.length - cmdTokens;
 
-      for (let i = consumed; i < result.node.params.length; i++) {
-        const p = result.node.params[i];
-        if (p.uuidSource) {
-          dataCompletions = getDataCompletionsFromCache(popup.cache, p.uuidSource);
-          break;
+      // 1. Check positional params for uuidSource
+      if (result.node.params) {
+        for (let i = consumed; i < result.node.params.length; i++) {
+          const p = result.node.params[i];
+          if (p.uuidSource) {
+            dataCompletions = getDataCompletionsFromCache(popup.cache, p.uuidSource);
+            break;
+          }
+        }
+
+        // Repeatable params: keep showing completions after all consumed
+        if (dataCompletions.length === 0 && result.node.params.length > 0) {
+          const lastParam = result.node.params[result.node.params.length - 1];
+          if (lastParam.repeatable && lastParam.uuidSource && consumed >= result.node.params.length) {
+            dataCompletions = getDataCompletionsFromCache(popup.cache, lastParam.uuidSource);
+          }
         }
       }
 
-      // Repeatable params: keep showing completions after all consumed
-      if (dataCompletions.length === 0 && result.node.params.length > 0) {
-        const lastParam = result.node.params[result.node.params.length - 1];
-        if (lastParam.repeatable && lastParam.uuidSource && consumed >= result.node.params.length) {
-          dataCompletions = getDataCompletionsFromCache(popup.cache, lastParam.uuidSource);
+      // 2. Check flags for uuidSource — user just typed a --flag and needs a value
+      if (dataCompletions.length === 0 && result.node.flags) {
+        for (const f of result.node.flags) {
+          if (f.uuidSource && f.name in flags && flags[f.name] === "") {
+            // User completed --folder and now needs a value suggestion
+            dataCompletions = getDataCompletionsFromCache(popup.cache, f.uuidSource);
+            break;
+          }
         }
       }
 
@@ -173,7 +187,8 @@
         applyCompletion(displaySuggestions[idx]);
       } else if (dataCompletions.length > 0) {
         const idx = selectedDataIndex >= 0 ? selectedDataIndex : 0;
-        applyCompletion(dataCompletions[idx].uuid.slice(0, 8));
+        const dc = dataCompletions[idx];
+        applyCompletion(dc.value || dc.uuid.slice(0, 8));
       }
       return;
     }
@@ -242,11 +257,13 @@
       if (dataCompletions.length > 0) {
         const lastToken = cmd.split(/\s+/).pop() || "";
         if (selectedDataIndex >= 0) {
-          applyCompletion(dataCompletions[selectedDataIndex].uuid.slice(0, 8));
+          const dc = dataCompletions[selectedDataIndex];
+          applyCompletion(dc.value || dc.uuid.slice(0, 8));
           return;
         }
         if (!/^[0-9a-f]{8,}$/i.test(lastToken)) {
-          applyCompletion(dataCompletions[0].uuid.slice(0, 8));
+          const dc = dataCompletions[0];
+          applyCompletion(dc.value || dc.uuid.slice(0, 8));
           return;
         }
       }
@@ -314,15 +331,15 @@
         </li>
       {/each}
 
-      <!-- Data completions (UUIDs) -->
+      <!-- Data completions (UUIDs or value-based like folders) -->
       {#each dataCompletions as dc, i}
         <li
           role="option"
           class="suggestion"
           class:selected={i === selectedDataIndex}
-          onmousedown={(e) => { e.preventDefault(); applyCompletion(dc.uuid.slice(0, 8)); }}
+          onmousedown={(e) => { e.preventDefault(); applyCompletion(dc.value || dc.uuid.slice(0, 8)); }}
         >
-          <span class="suggestion-text">{dc.uuid.slice(0, 8)}</span>
+          <span class="suggestion-text">{dc.value || dc.uuid.slice(0, 8)}</span>
           <span class="hint-text">{dc.label}</span>
         </li>
       {/each}

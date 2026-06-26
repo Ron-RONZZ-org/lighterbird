@@ -73,6 +73,40 @@ def _resolve_aliases(tokens: list[str]) -> list[str]:
     return tokens
 
 
+def _resolve_user_aliases(
+    tokens: list[str],
+    flags: dict[str, str],
+) -> tuple[list[str], dict[str, str]]:
+    """Expand user-defined saved commands (``!ronzz INBOX`` → ``!email list --folder …``).
+
+    Runs before built-in alias resolution so user aliases take priority
+    (by design — the user explicitly created them).
+
+    Args:
+        tokens: Command tokens from the frontend.
+        flags: Flag dict from the frontend.
+
+    Returns:
+        ``(tokens, flags)`` — possibly expanded if the first token matched
+        a user alias.
+    """
+    try:
+        from lighterbird.server.deps import get_user_commands_service
+
+        svc = get_user_commands_service()
+    except Exception:
+        return tokens, flags  # graceful degradation
+
+    result = svc.resolve_and_expand(tokens)
+    if result is None:
+        return tokens, flags
+
+    new_tokens, new_flags = result
+    # Merge: caller's explicit flags override expanded template flags
+    merged = {**new_flags, **flags}
+    return new_tokens, merged
+
+
 def dispatch(
     tokens: list[str],
     flags: dict[str, str],
@@ -91,6 +125,7 @@ def dispatch(
     Raises:
         CommandNotFound: If no handler matches the path.
     """
+    tokens, flags = _resolve_user_aliases(tokens, flags)
     resolved = _resolve_aliases(tokens)
 
     # Try from full path down to single token

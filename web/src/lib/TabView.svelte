@@ -12,6 +12,7 @@
   import JournalListTab from "./JournalListTab.svelte";
   import FormTab from "./FormTab.svelte";
   import KeyboardShortcutOverlay from "./KeyboardShortcutOverlay.svelte";
+  import SavedCommandsTab from "./SavedCommandsTab.svelte";
 
   let showGlobalHelp = $state(false);
   let inputFocused = $state(false);
@@ -121,6 +122,8 @@
         <EmailListTab data={tabStore.active.data} />
       {:else if tabStore.active.type === "journal-list"}
         <JournalListTab data={tabStore.active.data} />
+      {:else if tabStore.active.type === "saved-commands"}
+        <SavedCommandsTab data={tabStore.active.data} />
       {:else if tabStore.active.type === "help"}
         <HelpPopup data={tabStore.active.data} />
       {:else if tabStore.active.type === "form"}
@@ -209,6 +212,7 @@
       email: "✉",
       "email-list": "✉",
       "journal-list": "📓",
+      "saved-commands": "⚡",
       events: "📅",
       error: "⚠",
       help: "?",
