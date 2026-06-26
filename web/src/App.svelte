@@ -105,6 +105,7 @@
     if (/^!todo\s+list\s*$/i.test(t)) return "todos";
     if (/^!journal\s+list\s*$/i.test(t)) return "journal";
     if (/^!email\s+(list|search)\b/i.test(t)) return "email-list";
+    if (/^!user\s+saved-commands\s+list\s*$/i.test(t)) return "saved-commands";
     return null;
   }
 

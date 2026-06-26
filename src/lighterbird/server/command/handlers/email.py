@@ -53,11 +53,12 @@ def email_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 @command("email.list")
 def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email list [--limit N] [--folder NAME] [--all]
+    """!email list [--limit N] [--folder NAME] [--not-folder NAME] [--all]
 
     By default excludes Trash, Spam, and Junk folders.
     Use ``--all`` to include all folders (including trash).
-    Use ``--folder`` to filter to specific folder(s); repeatable.
+    Use ``--folder`` to filter to specific folder(s); comma-separated.
+    Use ``--not-folder`` to exclude specific folder(s); comma-separated.
     Folder names use the ``{email}/{folder}`` convention, e.g.
     ``user@gmail.com/INBOX``.
     """
@@ -65,31 +66,52 @@ def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     limit = int(flags.get("limit", 20))
     include_all = "all" in flags
     folder_filter = flags.get("folder", "")
+    not_folder_filter = flags.get("not-folder", "")
 
     filters = {}
     if folder_filter:
-        # --folder can specify {email}/{folder} or just {folder}
-        parts = folder_filter.split("/", 1)
-        if len(parts) == 2:
-            # Resolve by account email
-            acct_email, folder_name = parts
-            accounts = svc.list_accounts()
-            for acct in accounts:
-                if acct.get("retposto", "").lower() == acct_email.lower():
-                    filters["account"] = acct["uuid"]
-                    filters["folder"] = [folder_name]
-                    break
+        # --folder can specify comma-separated: INBOX,Sent or email/folder format
+        folder_names = [f.strip() for f in folder_filter.split(",") if f.strip()]
+        resolved_folders: list[str] = []
+        resolved_account: str | None = None
+
+        for folder_name in folder_names:
+            parts = folder_name.split("/", 1)
+            if len(parts) == 2:
+                acct_email, fname = parts
+                accounts = svc.list_accounts()
+                for acct in accounts:
+                    if acct.get("retposto", "").lower() == acct_email.lower():
+                        if resolved_account is None:
+                            resolved_account = acct["uuid"]
+                        resolved_folders.append(fname)
+                        break
+                else:
+                    # Account not found; use folder name as-is
+                    resolved_folders.append(folder_name)
             else:
-                # Account not found; try folder name only
-                filters["folder"] = [folder_filter]
-        else:
-            filters["folder"] = [folder_filter]
-    elif not include_all:
+                resolved_folders.append(folder_name)
+
+        if resolved_account:
+            filters["account"] = resolved_account
+        if resolved_folders:
+            filters["folder"] = resolved_folders
+
+    if not_folder_filter:
+        exclude_names = [f.strip() for f in not_folder_filter.split(",") if f.strip()]
+        filters["exclude_folder"] = exclude_names
+
+    if not folder_filter and not include_all:
         # Default: exclude trash-like folders
-        filters["exclude_folder"] = ["Trash", "Spam", "Junk", "Bin"]
+        existing_exclude = filters.get("exclude_folder", [])
+        filters["exclude_folder"] = existing_exclude + ["Trash", "Spam", "Junk", "Bin"]
 
     messages = [normalize_message(m) for m in svc.search_messages(filters, limit=limit)]
     title_suffix = f" ({folder_filter})" if folder_filter else ""
+    if not_folder_filter:
+        title_suffix += f" (excl. {not_folder_filter})"
+    if not folder_filter and not include_all:
+        title_suffix = "" if title_suffix else " (no trash)"
 
     # Build frontend-compatible filter params for in-tab search bar
     frontend_filters = {}

@@ -11,6 +11,7 @@ from lighterbird.todo.services import TodoService
 from lighterbird.todo.db import get_db as get_todo_db
 from lighterbird.journal.services import JournalService
 from lighterbird.journal.db import get_db as get_journal_db
+from lighterbird.user_commands.service import UserCommandsService
 
 _email_service: EmailService | None = None
 _calendar_service: CalendarService | None = None
@@ -18,6 +19,7 @@ _contact_service: ContactService | None = None
 _todo_service: TodoService | None = None
 _journal_service: JournalService | None = None
 _attachment_store: AttachmentStore | None = None
+_user_commands_service: UserCommandsService | None = None
 
 
 def get_email_service() -> EmailService:
@@ -63,6 +65,14 @@ def get_journal_service() -> JournalService:
     return _journal_service
 
 
+def get_user_commands_service() -> UserCommandsService:
+    """Get the singleton UserCommandsService."""
+    global _user_commands_service
+    if _user_commands_service is None:
+        _user_commands_service = UserCommandsService()
+    return _user_commands_service
+
+
 def get_attachment_store() -> AttachmentStore:
     """Get the singleton AttachmentStore."""
     global _attachment_store
@@ -75,10 +85,11 @@ def reset_services() -> None:
     """Reset all service singletons (useful for testing)."""
     global _email_service, _calendar_service
     global _contact_service, _todo_service, _journal_service
-    global _attachment_store
+    global _attachment_store, _user_commands_service
     _email_service = None
     _calendar_service = None
     _contact_service = None
     _todo_service = None
     _journal_service = None
     _attachment_store = None
+    _user_commands_service = None

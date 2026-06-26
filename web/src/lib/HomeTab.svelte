@@ -16,6 +16,10 @@
   let messages = $state([]);
   let convoEl = $state(null);
   let isLoadingLlm = $state(false);
+  let saveDialogIndex = $state(-1); // index of message with open save dialog, -1 = closed
+  let saveAlias = $state("");
+  let saveCommand = $state("");
+  let saveHint = $state("");
 
   /** Build conversation context from message history (last 20 messages). */
   function buildContext() {
@@ -231,6 +235,42 @@
     scrollToBottom();
   }
 
+  /** Open save command dialog for a user !command message. */
+  function openSaveDialog(index, text) {
+    // Strip leading ! for the template
+    const cmdText = text.replace(/^!/, "").trim();
+    saveCommand = cmdText;
+    saveAlias = "";
+    saveHint = "";
+    saveDialogIndex = index;
+  }
+
+  /** Save the command via backend. */
+  async function handleSaveCommand() {
+    if (!saveAlias.trim() || !saveCommand.trim()) return;
+    const alias = saveAlias.trim();
+    const cmdTemplate = saveCommand.trim();
+    const hint = saveHint.trim();
+    try {
+      const result = await execute(
+        `!user saved-commands add --alias ${alias} --command "${cmdTemplate}"${hint ? ` --hint "${hint}"` : ""}`
+      );
+      if (result.type === "status") {
+        saveDialogIndex = -1;
+        // Add a confirmation message
+        messages = [...messages, {
+          role: "assistant",
+          html: `<p><em>Saved command <strong>!${alias}</strong> → <code>${cmdTemplate}</code></em></p>`,
+        }];
+      } else {
+        const errMsg = result.data?.message || "Failed to save command";
+        tabStore.open("error", "Error", { message: errMsg });
+      }
+    } catch (err) {
+      tabStore.open("error", "Error", { message: err.message || "Failed to save" });
+    }
+  }
+
   function scrollToBottom() {
     requestAnimationFrame(() => {
       if (convoEl) convoEl.scrollTop = convoEl.scrollHeight;
@@ -277,6 +317,7 @@
     if (/^!todo\s+list\s*$/i.test(t)) return "todos";
     if (/^!journal\s+(list|search)\b/i.test(t)) return "journal-list";
     if (/^!email\s+(list|search)\b/i.test(t)) return "email-list";
+    if (/^!user\s+saved-commands\s+list\s*$/i.test(t)) return "saved-commands";
     return null;
   }
 
@@ -363,6 +404,39 @@
                   </div>
                 </div>
               {/each}
+            </div>
+          {/if}
+          {#if msg.role === "user" && msg.text && msg.text.trim().startsWith("!") && !msg.text.trim().startsWith("!user")}
+            <div class="msg-actions">
+              <button class="btn-save-cmd" onclick={() => openSaveDialog(i, msg.text)}>Save Command</button>
+            </div>
+          {/if}
+          {#if i === saveDialogIndex}
+            <div class="save-dialog">
+              <div class="save-dialog-inner">
+                <div class="save-row">
+                  <label>
+                    <span class="save-label">Alias</span>
+                    <input type="text" bind:value={saveAlias} placeholder="e.g. ronzz" />
+                  </label>
+                </div>
+                <div class="save-row">
+                  <label>
+                    <span class="save-label">Command <em>(without !)</em></span>
+                    <input type="text" bind:value={saveCommand} placeholder="email list --folder X" />
+                  </label>
+                </div>
+                <div class="save-row">
+                  <label>
+                    <span class="save-label">Hint</span>
+                    <input type="text" bind:value={saveHint} placeholder="Short description" />
+                  </label>
+                </div>
+                <div class="save-actions">
+                  <button class="btn-save" onclick={handleSaveCommand}>Save</button>
+                  <button class="btn-cancel-save" onclick={() => { saveDialogIndex = -1; }}>Cancel</button>
+                </div>
+              </div>
             </div>
           {/if}
         </div>
@@ -506,4 +580,37 @@
     border-top: 1px solid #333;
     background: #1a1a2e;
   }
+  .msg-actions { margin-top: 0.35rem; display: flex; gap: 0.3rem; }
+  .btn-save-cmd {
+    background: transparent; border: 1px solid #4a4a6a; border-radius: 4px;
+    padding: 0.15rem 0.5rem; font-family: monospace; font-size: 0.72rem;
+    color: #7c7c9a; cursor: pointer; transition: all 0.1s;
+  }
+  .btn-save-cmd:hover { background: #2a2a44; color: #b0b0c0; border-color: #6a6a8a; }
+  .save-dialog {
+    margin-top: 0.4rem; padding: 0.5rem; background: #1e1e32;
+    border: 1px solid #4a4a6a; border-radius: 8px;
+  }
+  .save-dialog-inner { display: flex; flex-direction: column; gap: 0.3rem; }
+  .save-row label {
+    display: flex; flex-direction: column; gap: 0.15rem;
+  }
+  .save-label { font-size: 0.72rem; color: #7c7c9a; }
+  .save-label em { font-style: normal; color: #5a5a7a; }
+  .save-row input {
+    background: #16162a; border: 1px solid #333; border-radius: 4px;
+    padding: 0.25rem 0.4rem; color: #e0e0e0; font-family: monospace; font-size: 0.82rem; outline: none;
+  }
+  .save-row input:focus { border-color: #5a5a8a; }
+  .save-actions { display: flex; gap: 0.3rem; margin-top: 0.3rem; }
+  .btn-save {
+    background: #2a4a2a; color: #6aaa6a; border: 1px solid #3a6a3a;
+    border-radius: 4px; padding: 0.2rem 0.6rem; font-family: monospace; font-size: 0.78rem; cursor: pointer;
+  }
+  .btn-save:hover { background: #3a5a3a; }
+  .btn-cancel-save {
+    background: transparent; color: #7c7c9a; border: 1px solid #444;
+    border-radius: 4px; padding: 0.2rem 0.6rem; font-family: monospace; font-size: 0.78rem; cursor: pointer;
+  }
+  .btn-cancel-save:hover { background: #2a2a3e; }
 </style>
