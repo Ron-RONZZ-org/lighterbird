@@ -35,17 +35,18 @@
         });
       }
       tabStore.close(tabStore.active.id);
-      // Re-fetch the list tab if it's open
-      for (const t of tabStore.tabs) {
-        if (t.type === "sieve-list") {
-          tabStore.setActive(t.id);
-          try {
-            const result = await sieveApi.list({});
-            tabStore.update(t.id, result);
-          } catch { /* silent */ }
-          break;
+      // Re-fetch the list tab if it's open, or create one
+      const finalName = isNew ? name : (name !== existingScript.name ? name : existingScript.name);
+      try {
+        const result = await sieveApi.list({});
+        const listTab = tabStore.tabs.find((t) => t.type === "sieve-list");
+        if (listTab) {
+          tabStore.setActive(listTab.id);
+          tabStore.update(listTab.id, { ...result, highlight: finalName });
+        } else {
+          tabStore.open("sieve-list", "Sieve Scripts", { ...result, highlight: finalName });
         }
-      }
+      } catch { /* silent */ }
     } catch (err) {
       validationResult = { is_valid: false, error: err.message || "Save failed" };
     } finally {
