@@ -46,10 +46,12 @@ def email_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "  !email account add       — Add an email account\n"
                 "  !email account modify    — Modify an email account\n"
                 "  !email account remove    — Remove an email account\n"
-                "  !email sieve list        — List Sieve filters\n"
-                "  !email sieve add         — Add a Sieve filter\n"
-                "  !email sieve modify      — Modify a Sieve filter\n"
-                "  !email sieve delete      — Delete a Sieve filter"
+                "  !email sieve list        — List Sieve scripts\n"
+                "  !email sieve add         — Add a Sieve script\n"
+                "  !email sieve modify      — Modify a Sieve script\n"
+                "  !email sieve delete      — Delete a Sieve script\n"
+                "  !email sieve activate    — Activate on an account\n"
+                "  !email sieve deactivate  — Deactivate on an account"
             ),
         },
     }

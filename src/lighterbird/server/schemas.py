@@ -223,10 +223,8 @@ class LLMProfileUpdate(BaseModel):
 # ── Sieve ─────────────────────────────────────────────────────────────────
 
 class SieveScriptCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=128, description="Script name")
+    name: str = Field(..., min_length=1, max_length=128, description="Script name (unique)")
     content: str = Field(default="", description="Sieve script source")
-    active: bool = Field(default=False, description="Activate immediately")
-    account_uuid: str = Field(default="", description="Account UUID (default: first with ManageSieve)")
 
     model_config = {"extra": "forbid"}
 
@@ -234,22 +232,32 @@ class SieveScriptCreate(BaseModel):
 class SieveScriptUpdate(BaseModel):
     name: str | None = Field(default=None, description="New script name (rename)")
     content: str | None = Field(default=None, description="New script content")
-    active: bool | None = Field(default=None, description="Activate/deactivate")
-    account_uuid: str | None = Field(default=None, description="Account UUID")
 
     model_config = {"extra": "forbid"}
 
 
-class SieveScriptResponse(BaseModel):
+class SieveActivateRequest(BaseModel):
+    account_uuid: str = Field(..., description="Account UUID to activate/deactivate on")
+
+    model_config = {"extra": "forbid"}
+
+
+class SieveActivationInfo(BaseModel):
     uuid: str
-    account_uuid: str
-    name: str
-    content: str
     active: bool
-    system: bool
     man_sync: bool
     created_at: str
     modified_at: str
+
+
+class SieveScriptResponse(BaseModel):
+    uuid: str
+    name: str
+    content: str
+    system: bool
+    created_at: str
+    modified_at: str
+    aktivado: SieveActivationInfo | None = None
 
 
 class SieveScriptListResponse(BaseModel):

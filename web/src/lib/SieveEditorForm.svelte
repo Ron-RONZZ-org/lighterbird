@@ -4,15 +4,10 @@
 
   let { data = {} } = $props();
   let existingScript = $derived(data?.script || null);
-  let accounts = $derived(data?.accounts || []);
-  let preselectedAccount = $derived(data?.accountFilter || "");
-
   let isNew = $derived(!existingScript);
 
   let name = $state(existingScript?.name || "");
   let content = $state(existingScript?.content || "");
-  let active = $state(existingScript?.active || false);
-  let accountUuid = $state(existingScript?.account_uuid || preselectedAccount || "");
   let validationResult = $state(null);
   let saving = $state(false);
 
@@ -32,18 +27,11 @@
     saving = true;
     try {
       if (isNew) {
-        await sieveApi.create({
-          name,
-          content,
-          active,
-          account_uuid: accountUuid,
-        });
+        await sieveApi.create({ name, content });
       } else {
         await sieveApi.update(existingScript.name, {
           name: name !== existingScript.name ? name : undefined,
           content: content !== existingScript.content ? content : undefined,
-          active: active !== existingScript.active ? active : undefined,
-          account_uuid: accountUuid || undefined,
         });
       }
       tabStore.close(tabStore.active.id);
@@ -51,10 +39,8 @@
       for (const t of tabStore.tabs) {
         if (t.type === "sieve-list") {
           tabStore.setActive(t.id);
-          // Refresh the list data
           try {
-            const account = t.data?.accountFilter || "";
-            const result = await sieveApi.list(account);
+            const result = await sieveApi.list({});
             tabStore.update(t.id, result);
           } catch { /* silent */ }
           break;
@@ -75,6 +61,9 @@
 <div class="sieve-editor">
   <div class="header">
     <h2>{isNew ? "New Sieve Script" : `Edit: ${existingScript.name}`}</h2>
+    {#if !isNew}
+      <p class="subtitle">Global script — activate per-account via !email sieve activate</p>
+    {/if}
   </div>
 
   {#if isSystem}
@@ -93,24 +82,8 @@
       />
     </div>
 
-    <div class="field">
-      <label for="sieve-account">Account</label>
-      <select id="sieve-account" bind:value={accountUuid} disabled={!isNew}>
-        {#each accounts as acct}
-          <option value={acct.uuid}>{acct.email}</option>
-        {/each}
-      </select>
-    </div>
-
-    <div class="field checkbox-field">
-      <label>
-        <input type="checkbox" bind:checked={active} disabled={isSystem} />
-        Activate immediately
-      </label>
-    </div>
-
     <div class="field content-field">
-      <label for="sieve-content">Sieve Script</label>
+      <label for="sieve-content">Sieve Script Content</label>
       <textarea
         id="sieve-content"
         bind:value={content}
@@ -155,9 +128,14 @@
     overflow-y: auto;
   }
   .header h2 {
-    margin: 0 0 1rem 0;
+    margin: 0 0 0.2rem 0;
     font-size: 1rem;
     color: #e0e0e0;
+  }
+  .subtitle {
+    margin: 0 0 0.8rem 0;
+    color: var(--clr-muted);
+    font-size: 0.75rem;
   }
   .notice {
     background: #2a2a1e;
@@ -183,8 +161,7 @@
     color: #7c7c9a;
     font-size: 0.78rem;
   }
-  .field input[type="text"],
-  .field select {
+  .field input[type="text"] {
     padding: 0.3rem 0.5rem;
     border: 1px solid #4a4a6a;
     border-radius: 3px;
@@ -194,20 +171,8 @@
     font-size: 0.85rem;
   }
   .field input:disabled,
-  .field select:disabled,
   .field textarea:disabled {
     opacity: 0.6;
-  }
-  .checkbox-field label {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    cursor: pointer;
-    color: #e0e0e0;
-  }
-  .checkbox-field input[type="checkbox"] {
-    width: 1rem;
-    height: 1rem;
   }
   .content-field textarea {
     padding: 0.5rem;
