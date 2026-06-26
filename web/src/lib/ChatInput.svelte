@@ -93,12 +93,42 @@
         }
       }
 
-      // 2. Check flags that have uuidSource (e.g. --folder)
+      // 2. Check flags for uuidSource — user is typing or has completed a flag
+      //    that expects a value from the cache (e.g. --folder).
       if (dataCompletions.length === 0 && result.node.flags) {
-        for (const f of result.node.flags) {
-          if (f.uuidSource) {
-            if (f.name in flags) {
+        // 2a. Partial flag name: user typed "--fol" — match via partial
+        if (partial.startsWith("--")) {
+          const partialFlagName = partial.slice(2);
+          for (const f of result.node.flags) {
+            if (f.uuidSource && f.name.startsWith(partialFlagName)) {
               dataCompletions = getDataCompletionsFromCache(popup.cache, f.uuidSource);
+              break;
+            }
+          }
+        }
+        // 2b. Completed flag with empty value: "--folder " → needs a value
+        if (dataCompletions.length === 0) {
+          for (const f of result.node.flags) {
+            if (f.uuidSource && f.name in flags && flags[f.name] === "") {
+              dataCompletions = getDataCompletionsFromCache(popup.cache, f.uuidSource);
+              break;
+            }
+          }
+        }
+        // 2c. Comma continuation: "--folder INBOX," → add another
+        if (dataCompletions.length === 0) {
+          for (const f of result.node.flags) {
+            if (f.uuidSource && f.name in flags && flags[f.name].endsWith(",")) {
+              const allItems = getDataCompletionsFromCache(popup.cache, f.uuidSource);
+              if (allItems.length > 0) {
+                const enteredValues = flags[f.name]
+                  .split(",")
+                  .map((v) => v.trim().toLowerCase())
+                  .filter((v) => v.length > 0);
+                dataCompletions = allItems.filter(
+                  (dc) => !enteredValues.includes((dc.value || "").toLowerCase()),
+                );
+              }
               break;
             }
           }
