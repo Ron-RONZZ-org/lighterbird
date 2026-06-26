@@ -23,6 +23,24 @@ from lighterbird.email.filters.sieve import validate_sieve
 router = APIRouter(prefix="/api/v1/email/sieve", tags=["email", "sieve"])
 
 
+def _resolve_account(email_svc: EmailService, account_uuid: str) -> str:
+    """Validate that an account UUID exists and return it.
+    
+    Raises HTTPException(404) if not found, providing a clear error
+    instead of a raw FOREIGN KEY constraint failure.
+    """
+    if not account_uuid:
+        raise HTTPException(status_code=422, detail="account_uuid is required")
+    acct = email_svc.get_account(account_uuid)
+    if not acct:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Account '{account_uuid[:8]}' not found. "
+                   f"Use !email account list to see available accounts.",
+        )
+    return account_uuid
+
+
 def _row_to_response(row: dict) -> SieveScriptResponse:
     """Convert a script dict to the Pydantic response model."""
     return SieveScriptResponse(
@@ -126,9 +144,8 @@ def activate_script(
     email_svc: EmailService = Depends(get_email_service),
 ):
     """Activate a script on a specific account."""
-    if not data.account_uuid:
-        raise HTTPException(status_code=422, detail="account_uuid is required")
-    script = email_svc.sieve.activate_script(name, konto_id=data.account_uuid)
+    konto_id = _resolve_account(email_svc, data.account_uuid)
+    script = email_svc.sieve.activate_script(name, konto_id=konto_id)
     if not script:
         raise HTTPException(status_code=404, detail=f"Sieve script '{name}' not found.")
     return _row_to_response(script)
@@ -141,9 +158,8 @@ def deactivate_script(
     email_svc: EmailService = Depends(get_email_service),
 ):
     """Deactivate a script on a specific account."""
-    if not data.account_uuid:
-        raise HTTPException(status_code=422, detail="account_uuid is required")
-    script = email_svc.sieve.deactivate_script(name, konto_id=data.account_uuid)
+    konto_id = _resolve_account(email_svc, data.account_uuid)
+    script = email_svc.sieve.deactivate_script(name, konto_id=konto_id)
     if not script:
         raise HTTPException(status_code=404, detail=f"Sieve script '{name}' not found.")
     return _row_to_response(script)
