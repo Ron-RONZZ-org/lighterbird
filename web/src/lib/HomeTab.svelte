@@ -20,6 +20,7 @@
   let saveAlias = $state("");
   let saveCommand = $state("");
   let saveHint = $state("");
+  let copiedIndex = $state(-1); // index of message just copied, -1 = none
 
   /** Build conversation context from message history (last 20 messages). */
   function buildContext() {
@@ -235,6 +236,30 @@
     scrollToBottom();
   }
 
+  /** Copy message text to clipboard and show brief feedback. */
+  function copyMessage(index) {
+    const msg = messages[index];
+    if (!msg) return;
+    const text = msg.text || (msg.html ? stripHtml(msg.html) : "");
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      copiedIndex = index;
+      setTimeout(() => { if (copiedIndex === index) copiedIndex = -1; }, 1500);
+    }).catch(() => {
+      // Fallback for older browsers
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      copiedIndex = index;
+      setTimeout(() => { if (copiedIndex === index) copiedIndex = -1; }, 1500);
+    });
+  }
+
   /** Open save command dialog for a user !command message. */
   function openSaveDialog(index, text) {
     // Strip leading ! for the template
@@ -384,6 +409,17 @@
         <div class="message" class:user={msg.role === "user"} class:assistant={msg.role === "assistant"}>
           <div class="msg-header">
             <span class="msg-role">{msg.role === "user" ? "You" : "lighterbird"}</span>
+            <button
+              class="btn-copy"
+              title="Copy message"
+              onclick={() => copyMessage(i)}
+            >
+              {#if copiedIndex === i}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              {:else}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              {/if}
+            </button>
           </div>
           {#if msg.html}
             <div class="msg-body">{@html msg.html}</div>
@@ -524,7 +560,32 @@
     border: 1px solid #333;
     color: #d0d0e0;
   }
-  .msg-header { margin-bottom: 0.3rem; }
+  .msg-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.3rem;
+  }
+  .btn-copy {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: #5a5a7a;
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s, background 0.15s;
+  }
+  .message:hover .btn-copy {
+    opacity: 1;
+  }
+  .btn-copy:hover {
+    color: #b0b0c0;
+    background: #3a3a5a;
+  }
   .msg-role {
     font-size: 0.7rem;
     font-weight: 600;
