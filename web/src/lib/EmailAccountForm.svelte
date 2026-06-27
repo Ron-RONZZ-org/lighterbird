@@ -10,15 +10,15 @@
 
   import { email as emailApi } from "./api.js";
 
-  let { account = null, onSaved = () => {}, onDismiss = () => {} } = $props();
+  let { account = null, initialData = null, onSaved = () => {}, onDismiss = () => {} } = $props();
 
   let isEdit = $derived(account !== null);
 
-  // Capture initial values from the `account` prop at mount time.
+  // Capture initial values from the `account` (edit) or `initialData` (new with prefill) prop.
   // Form fields are intentionally $state (not $derived) — the user
   // edits them and we do NOT re-initialize on prop changes.
   // svelte-ignore state_referenced_locally
-  const _init = account || {};
+  const _init = account || initialData || {};
   let email = $state(_init.email || _init.retposto || "");
   let name = $state(_init.name || _init.nomo || "");
   let password = $state("");

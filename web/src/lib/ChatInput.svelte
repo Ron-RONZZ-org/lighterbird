@@ -3,6 +3,7 @@
   import { getCompletions, getDataCompletionsFromCache } from "./commandEngine.js";
   import { parseCommand, hasTrailingSpace } from "./parser.js";
   import { popup } from "./popupStore.svelte.js";
+  import { history } from "./commandHistory.svelte.js";
 
   let {
     onSubmit,
@@ -229,24 +230,44 @@
       return;
     }
 
-    // Arrow keys for suggestion navigation (skip positional tracker)
-    if (e.key === "ArrowUp" && hasInteractiveItems) {
+    // Arrow keys: navigate suggestions OR command history
+    if (e.key === "ArrowUp") {
+      if (hasInteractiveItems) {
+        e.preventDefault();
+        if (dataCompletions.length > 0 && displaySuggestions.length === 0) {
+          selectedDataIndex = Math.max(0, selectedDataIndex - 1);
+        } else if (displaySuggestions.length > 0) {
+          selectedSuggestion = Math.max(0, selectedSuggestion - 1);
+        }
+        return;
+      }
+      // No suggestions → navigate command history
       e.preventDefault();
-      if (dataCompletions.length > 0 && displaySuggestions.length === 0) {
-        selectedDataIndex = Math.max(0, selectedDataIndex - 1);
-      } else if (displaySuggestions.length > 0) {
-        selectedSuggestion = Math.max(0, selectedSuggestion - 1);
+      const cmd = history.back();
+      if (cmd) {
+        value = cmd;
+        checkCommandMode();
+        requestAnimationFrame(() => updateSuggestions());
       }
       return;
     }
 
-    if (e.key === "ArrowDown" && hasInteractiveItems) {
-      e.preventDefault();
-      if (dataCompletions.length > 0 && displaySuggestions.length === 0) {
-        selectedDataIndex = Math.min(dataCompletions.length - 1, selectedDataIndex + 1);
-      } else if (displaySuggestions.length > 0) {
-        selectedSuggestion = Math.min(displaySuggestions.length - 1, selectedSuggestion + 1);
+    if (e.key === "ArrowDown") {
+      if (hasInteractiveItems) {
+        e.preventDefault();
+        if (dataCompletions.length > 0 && displaySuggestions.length === 0) {
+          selectedDataIndex = Math.min(dataCompletions.length - 1, selectedDataIndex + 1);
+        } else if (displaySuggestions.length > 0) {
+          selectedSuggestion = Math.min(displaySuggestions.length - 1, selectedSuggestion + 1);
+        }
+        return;
       }
+      // No suggestions → navigate command history
+      e.preventDefault();
+      const cmd = history.forward();
+      value = cmd;
+      checkCommandMode();
+      requestAnimationFrame(() => updateSuggestions());
       return;
     }
 
@@ -287,6 +308,7 @@
       }
 
       // Submit
+      history.push(cmd);
       value = "";
       suggestions = [];
       hints = [];
