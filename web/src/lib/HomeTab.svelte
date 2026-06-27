@@ -8,6 +8,7 @@
   import { email as emailApi, calendar, contacts, todo, journal } from "./api.js";
   import { parseCommand } from "./parser.js";
   import { commandTree, findNode } from "./commandTree.js";
+  import { shouldIntercept } from "./commandRouter.js";
 
   let hasSentLlmMessage = $state(false);
   let showLlmSetup = $state(false);
@@ -45,51 +46,6 @@
     return div.textContent || div.innerText || "";
   }
 
-  /** Count command-path tokens (excluding params). */
-  function countCmdTokens(tokens) {
-    let current = commandTree;
-    for (let i = 0; i < tokens.length; i++) {
-      const found = current.find((n) => n.name.toLowerCase() === tokens[i].toLowerCase());
-      if (!found) return i;
-      if (!found.children || found.children.length === 0) return i + 1;
-      current = found.children;
-    }
-    return tokens.length;
-  }
-
-  /** Open an interactive form tab for a command node with missing params. */
-  function openFormTab(node, input) {
-    const cmdPath = node.name; // leaf node name
-    // Detect parent domain from input
-    const parts = input.replace(/^!/, "").trim().split(/\s+/);
-    const parents = parts.slice(0, -1); // everything before the leaf command
-    const domain = parents[0] || "";
-    const parentStr = parents.join(".");
-
-    let formType = "";
-    let formTitle = "";
-    let FormComponent = null;
-
-    if (cmdPath === "write" && domain === "journal") {
-      formType = "journal-write";
-      formTitle = "Write Journal Entry";
-    } else if (cmdPath === "add" && parentStr === "todo") {
-      formType = "todo-add";
-      formTitle = "Add Todo";
-    } else if (cmdPath === "send" && domain === "email") {
-      formType = "email-send";
-      formTitle = "Compose Email";
-    } else if (cmdPath === "add" && parentStr === "calendar event") {
-      formType = "calendar-event-add";
-      formTitle = "Add Calendar Event";
-    } else {
-      // Unknown interactive command — let it fall through to backend error
-      return;
-    }
-
-    tabStore.open("form", formTitle, { form: formType, initialData: {} });
-  }
-
   /** Handle submission from ChatInput. */
   async function handleSubmit(input) {
     const trimmed = input.trim();
@@ -100,36 +56,41 @@
     hasSentLlmMessage = true;
 
     if (trimmed.startsWith("!")) {
-      // ── Interactive form detection ─────────────────────────────────
-      // Check if the command tree says this is interactive AND the user
-      // hasn't provided all required positional params.
-      // If the user provided CLI flags (e.g. --file), they intend CLI
-      // execution, not the form — let the command execute (backend will
-      // return a clear error if required params are missing).
-      const { tokens, flags, partial } = parseCommand(trimmed);
-      const trailing = trimmed.endsWith(" ");
-      // Build effective tokens: when there's no trailing space, the partial
-      // might be a complete command token (not a partial). Try resolving it.
-      let effectiveTokens = trailing && partial ? [...tokens, partial] : tokens;
-      if (!trailing && partial) {
-        // The partial might be the leaf command name — check if tokens +
-        // partial resolves to a deeper node.
-        const nodeWithPartial = findNode([...tokens, partial]);
-        if (nodeWithPartial) {
-          effectiveTokens = [...tokens, partial];
+      // ── Smart add-command routing ─────────────────────────────────
+      // Check if this is an "add"/"write" command with missing required
+      // params. If so, open the relevant list tab + interactive add form
+      // instead of sending to the backend (which would return an error).
+      const routing = shouldIntercept(trimmed);
+      if (routing.intercept) {
+        try {
+          // Execute the list command to get current data
+          const listInput = "!" + routing.listTokens.join(" ");
+          const listResult = await execute(listInput);
+          if (listResult.type === "error") {
+            popup.show("error", "Error", listResult.data);
+          } else {
+            // Open the persistent list tab with autoAdd flag
+            popup.showPersistent(
+              listResult.type,
+              listResult.title,
+              {
+                ...(listResult.data || {}),
+                autoAdd: true,
+                addFormType: routing.addFormType,
+                addTitle: routing.addTitle,
+                addInitialData: routing.initialData,
+              },
+              routing.listIdKey,
+            );
+            popup.updateCache(listResult.data || {});
+          }
+        } catch (err) {
+          popup.show("error", "Routing Error", {
+            message: err.message || "Failed to open add form",
+          });
         }
-      }
-      const node = findNode(effectiveTokens);
-      const hasFlags = Object.keys(flags).length > 0;
-
-      if (node?.interactive && effectiveTokens.length > 0 && !hasFlags) {
-        const consumed = effectiveTokens.length - countCmdTokens(effectiveTokens);
-        const missingRequired = node.params?.some((p, i) => p.required && i >= consumed);
-        if (missingRequired) {
-          openFormTab(node, trimmed);
-          scrollToBottom();
-          return;
-        }
+        scrollToBottom();
+        return;
       }
 
       // ── Normal command execution → result opens in new tab ─────────

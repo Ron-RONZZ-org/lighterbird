@@ -10,12 +10,12 @@
 
   import { calendar as calendarApi } from "./api.js";
 
-  let { calendar = null, onSaved = () => {}, onDismiss = () => {} } = $props();
+  let { calendar = null, initialData = null, onSaved = () => {}, onDismiss = () => {} } = $props();
 
   let isEdit = $derived(calendar !== null);
 
   // svelte-ignore state_referenced_locally
-  const _init = calendar || {};
+  const _init = calendar || initialData || {};
   let url = $state(_init.url || "");
   let username = $state(_init.username || "");
   let password = $state("");
