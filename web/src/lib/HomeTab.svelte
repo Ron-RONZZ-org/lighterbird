@@ -103,7 +103,10 @@
       // ── Interactive form detection ─────────────────────────────────
       // Check if the command tree says this is interactive AND the user
       // hasn't provided all required positional params.
-      const { tokens, partial } = parseCommand(trimmed);
+      // If the user provided CLI flags (e.g. --file), they intend CLI
+      // execution, not the form — let the command execute (backend will
+      // return a clear error if required params are missing).
+      const { tokens, flags, partial } = parseCommand(trimmed);
       const trailing = trimmed.endsWith(" ");
       // Build effective tokens: when there's no trailing space, the partial
       // might be a complete command token (not a partial). Try resolving it.
@@ -117,8 +120,9 @@
         }
       }
       const node = findNode(effectiveTokens);
+      const hasFlags = Object.keys(flags).length > 0;
 
-      if (node?.interactive && effectiveTokens.length > 0) {
+      if (node?.interactive && effectiveTokens.length > 0 && !hasFlags) {
         const consumed = effectiveTokens.length - countCmdTokens(effectiveTokens);
         const missingRequired = node.params?.some((p, i) => p.required && i >= consumed);
         if (missingRequired) {
