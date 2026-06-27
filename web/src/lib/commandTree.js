@@ -109,6 +109,7 @@ export let commandTree = [
             name: "add",
             description: "Create a new global Sieve script",
             interactive: true,
+            listCommand: ["email", "sieve", "list"],
             params: [
               { name: "name", required: true, type: "string", placeholder: "script-name" },
             ],
@@ -164,6 +165,7 @@ export let commandTree = [
           {
             name: "add",
             description: "Add a new email account (IMAP/SMTP auto-detected for common providers)",
+            listCommand: ["email", "account", "list"],
             params: [
               { name: "email", required: true, type: "string", placeholder: "user@example.com" },
             ],
@@ -285,6 +287,7 @@ export let commandTree = [
           {
             name: "add",
             description: "Add a CalDAV calendar",
+            listCommand: ["calendar", "account", "list"],
             params: [
               { name: "url", required: true, type: "string", placeholder: "https://..." },
             ],
@@ -336,6 +339,7 @@ export let commandTree = [
       {
         name: "add",
         description: "Add a contact",
+        listCommand: ["contacts", "list"],
         params: [
           { name: "name", required: true, type: "string", placeholder: "Full name" },
         ],
@@ -400,6 +404,7 @@ export let commandTree = [
         name: "add",
         description: "Add a new todo",
         interactive: true,
+        listCommand: ["todo", "list"],
         params: [
           { name: "title", required: true, type: "string" },
         ],
@@ -474,6 +479,7 @@ export let commandTree = [
         name: "write",
         description: "Write a journal entry",
         interactive: true,
+        listCommand: ["journal", "list"],
         params: [
           { name: "title", required: true, type: "string" },
         ],
