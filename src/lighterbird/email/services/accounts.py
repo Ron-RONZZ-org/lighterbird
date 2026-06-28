@@ -19,29 +19,29 @@ from lighterbird.email.keyring import (
 class AccountService(CRUDService):
     """Email account CRUD with keyring password storage.
 
-    Uses ``retposto`` (email) as primary key instead of UUID.
+    Uses ``email`` (email) as primary key instead of UUID.
     """
 
     def __init__(self, db):
-        super().__init__(db, "kontoj")
+        super().__init__(db, "accounts")
 
-    # ── PK overrides (kontoj uses retposto, not uuid) ────────────────────
+    # ── PK overrides (accounts uses email, not uuid) ────────────────────
 
     def get(self, email: str) -> dict[str, Any] | None:
         """Get an account by email (lowercased)."""
         return self.db.execute_one(
-            "SELECT * FROM kontoj WHERE retposto = ?", (email.lower().strip(),)
+            "SELECT * FROM accounts WHERE email = ?", (email.lower().strip(),)
         )
 
     def update(self, email: str, data: dict[str, Any]) -> dict[str, Any]:
         """Update an account by email, preserving creation timestamp."""
         old_data = self.get(email)
-        data["modifita_je"] = datetime.now(timezone.utc).isoformat()
+        data["updated_at"] = datetime.now(timezone.utc).isoformat()
 
         set_clauses = [f"{k} = ?" for k in data]
         values = list(data.values()) + [email.lower().strip()]
         self.db.execute(
-            f"UPDATE {self.table} SET {', '.join(set_clauses)} WHERE retposto = ?",
+            f"UPDATE {self.table} SET {', '.join(set_clauses)} WHERE email = ?",
             values,
         )
         self._post_update(email, old_data, data)
@@ -53,19 +53,19 @@ class AccountService(CRUDService):
         if not old_data:
             return False
         self.db.execute(
-            "DELETE FROM kontoj WHERE retposto = ?", (email.lower().strip(),)
+            "DELETE FROM accounts WHERE email = ?", (email.lower().strip(),)
         )
         self._post_delete(email, old_data)
         return True
 
     def create(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Create a new account with retposto as PK (no UUID)."""
+        """Create a new account with email as PK (no UUID)."""
         now = datetime.now(timezone.utc).isoformat()
         # Normalize email to lowercase
-        if "retposto" in data:
-            data["retposto"] = data["retposto"].lower().strip()
-        data.setdefault("kreita_je", now)
-        data["modifita_je"] = now
+        if "email" in data:
+            data["email"] = data["email"].lower().strip()
+        data.setdefault("created_at", now)
+        data["updated_at"] = now
 
         columns = [k for k in data if k != "uuid"]
         values = [data[k] for k in columns]
@@ -113,9 +113,9 @@ class AccountService(CRUDService):
             data.pop("uuid")
         account = self.create(data)
         if password:
-            if not self.set_password(account["retposto"], password):
+            if not self.set_password(account["email"], password):
                 # Roll back the created account since we can't store the password
-                self.delete(account["retposto"])
+                self.delete(account["email"])
                 raise RuntimeError(
                     "System keyring is unavailable — cannot store account password. "
                     "Install a keyring backend (e.g. 'sudo apt install gnome-keyring' "
@@ -127,7 +127,7 @@ class AccountService(CRUDService):
 
     def list_accounts(self) -> list[dict[str, Any]]:
         """List all accounts (password never included)."""
-        return self.list(order_by="ordo", desc=False)
+        return self.list(order_by="sort_order", desc=False)
 
     def get_account_with_password(self, email: str) -> dict[str, Any] | None:
         """Get account config with password from keyring.
@@ -155,7 +155,7 @@ class AccountService(CRUDService):
         if "@" in email:
             return None  # No prefix matching with full email
         matches = self.db.execute(
-            "SELECT * FROM kontoj WHERE retposto LIKE ? ORDER BY retposto LIMIT 10",
+            "SELECT * FROM accounts WHERE email LIKE ? ORDER BY email LIMIT 10",
             (f"{email}%",),
         )
         if len(matches) == 1:

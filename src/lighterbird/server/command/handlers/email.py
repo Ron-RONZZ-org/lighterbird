@@ -85,9 +85,9 @@ def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 acct_email, fname = parts
                 accounts = svc.list_accounts()
                 for acct in accounts:
-                    if acct.get("retposto", "").lower() == acct_email.lower():
+                    if acct.get("email", "").lower() == acct_email.lower():
                         if resolved_account is None:
-                            resolved_account = acct["retposto"]
+                            resolved_account = acct["email"]
                         filters["folder"] = [fname]
                         break
                 else:
@@ -138,7 +138,7 @@ def email_read(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     msg = svc.get_message(uuid)
     if not msg:
         raise CommandValidationError(f"Message not found: {uuid[:8]}")
-    return {"type": "email", "title": msg.get("subjekto", "(no subject)"), "data": normalize_message(msg)}
+    return {"type": "email", "title": msg.get("subject", "(no subject)"), "data": normalize_message(msg)}
 
 
 @command("email.send")
@@ -162,7 +162,7 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         accounts = svc.list_accounts()
         if not accounts:
             raise CommandValidationError("No email accounts configured.", "Add one with: !email account add")
-        account_email = accounts[0]["retposto"]
+        account_email = accounts[0]["email"]
 
     svc.send_email(account_email, [to_str], subject, body, cc=[cc_str] if cc_str else None)
     return {"type": "status", "title": "Sent", "data": {"to": to_str, "subject": subject}}
@@ -270,23 +270,23 @@ def account_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
     detected = detect_servers(email_addr, imap_server=imap_server, smtp_server=smtp_server)
     acct_data = {
-        "nomo": name or email_addr.split("@")[0],
-        "retposto": email_addr.lower().strip(),
-        "imap_servilo": detected["imap"],
-        "imap_haveno": 993,
-        "imap_ssl": 1,
-        "smtp_servilo": detected["smtp"],
-        "smtp_haveno": 587,
-        "smtp_tls": 1,
-        "imap_uzantonomo": email_addr,
-        "smtp_uzantonomo": email_addr,
+        "name": name or email_addr.split("@")[0],
+        "email": email_addr.lower().strip(),
+        "imap_server": detected["imap"],
+        "imap_port": 993,
+        "imap_use_ssl": 1,
+        "smtp_server": detected["smtp"],
+        "smtp_port": 587,
+        "smtp_use_tls": 1,
+        "imap_username": email_addr,
+        "smtp_username": email_addr,
     }
     svc: EmailService = get_email_service()
     acct = svc.create_account(acct_data, password)
     return {
         "type": "status",
         "title": "Account Added",
-        "data": {"email": acct["retposto"]},
+        "data": {"email": acct["email"]},
     }
 
 
@@ -303,11 +303,11 @@ def account_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
 
     updates = {}
     if "name" in flags:
-        updates["nomo"] = flags["name"]
+        updates["name"] = flags["name"]
     if "imap_server" in flags:
-        updates["imap_servilo"] = flags["imap_server"]
+        updates["imap_server"] = flags["imap_server"]
     if "smtp_server" in flags:
-        updates["smtp_servilo"] = flags["smtp_server"]
+        updates["smtp_server"] = flags["smtp_server"]
     if "managesieve_host" in flags:
         updates["managesieve_host"] = flags["managesieve_host"]
     if "managesieve_port" in flags:

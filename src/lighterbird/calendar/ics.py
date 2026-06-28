@@ -71,19 +71,19 @@ def events_to_ics(rows: list[dict[str, Any]]) -> str:
         "PRODID:-//lighterbird//calendar//EN",
     ]
     for row in rows:
-        start_dt = datetime.fromisoformat(str(row["komenco"]).replace("Z", "+00:00"))
-        end_dt = datetime.fromisoformat(str(row["fino"]).replace("Z", "+00:00"))
+        start_dt = datetime.fromisoformat(str(row["start"]).replace("Z", "+00:00"))
+        end_dt = datetime.fromisoformat(str(row["end"]).replace("Z", "+00:00"))
         start = start_dt.strftime("%Y%m%dT%H%M%SZ")
         end = end_dt.strftime("%Y%m%dT%H%M%SZ")
         out.extend([
             "BEGIN:VEVENT",
             f"UID:{row['uuid']}",
-            f"SUMMARY:{str(row.get('titolo') or '')}",
+            f"SUMMARY:{str(row.get('title') or '')}",
             f"DTSTART:{start}",
             f"DTEND:{end}",
-            f"LOCATION:{str(row.get('loko') or '')}",
-            f"CATEGORIES:{str(row.get('kategorio') or '')}",
-            f"DESCRIPTION:{str(row.get('priskribo') or '')}",
+            f"LOCATION:{str(row.get('location') or '')}",
+            f"CATEGORIES:{str(row.get('category') or '')}",
+            f"DESCRIPTION:{str(row.get('description') or '')}",
             "END:VEVENT",
         ])
     out.append("END:VCALENDAR")
@@ -95,8 +95,8 @@ def event_exists(
 ) -> bool:
     """Check if an event with the same details already exists."""
     row = db.execute_one(
-        "SELECT 1 FROM eventoj "
-        "WHERE kalendaro_uuid = ? AND titolo = ? AND komenco = ? AND fino = ?",
+        "SELECT 1 FROM events "
+        "WHERE calendar_uuid = ? AND title = ? AND start = ? AND end = ?",
         (calendar_uuid, title, start_iso, end_iso),
     )
     return row is not None
@@ -107,7 +107,7 @@ def insert_ics_events(
 ) -> list[str]:
     """Parse ICS text and insert events into the database.
 
-    Skips duplicates (same calendar_uuid + titolo + komenco + fino).
+    Skips duplicates (same calendar_uuid + title + start + end).
 
     Returns:
         List of newly inserted event UUIDs.
@@ -124,9 +124,9 @@ def insert_ics_events(
         uid = str(uuid_mod.uuid4())
         with db.transaction() as conn:
             conn.execute(
-                "INSERT INTO eventoj ("
-                "uuid, kalendaro_uuid, titolo, komenco, fino, "
-                "kategorio, loko, priskribo, kreita_je, modifita_je"
+                "INSERT INTO events ("
+                "uuid, calendar_uuid, title, start, end, "
+                "category, location, description, created_at, updated_at"
                 ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     uid, calendar_uuid, title, start, end,

@@ -42,7 +42,7 @@ Email and contacts module, forked from [A-lien](../../A-lien). Provides IMAP syn
 
 1. **Fork the service layer, not the CLI.** A-lien's CLI code (Typer commands) stays behind. The services are what matter — they expose the `RetpostoService` and `KontaktoService` APIs.
 2. **Rename to English.** `retposto` → `email`, `kontakto` → `contacts`, `mesagoj` → `messages`, `dosierujoj` → `folders`. Update all variable names and comments accordingly.
-3. **DB column names stay Esperanto** for compatibility with existing user data if migration occurs (e.g., `subjekto`, `ricevita_je`, `konto_id`). New tables may use English.
+3. **DB column names use English** — migrated from Esperanto in v0.3.0 (e.g., `subject`, `received_at`, `account_email`).
 4. **Simplify the mixin hierarchy.** A-lien uses 7+ mixins composed into a single class. Consider flattening to 2-3 service classes (`EmailService`, `ContactsService`, `AccountService`).
 5. **Strip keyring.py** — lighterbird already has one in `core/keyring.py`.
 6. **OAuth2 must be added** for modern email providers (Gmail, Outlook). Design the auth interface now even if only password auth is implemented initially.

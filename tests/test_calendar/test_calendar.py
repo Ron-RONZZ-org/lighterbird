@@ -29,8 +29,8 @@ class TestCalendarDB:
     def test_get_db_creates_tables(self, tmp_path: Path):
         db_path = tmp_path / "test_cal.db"
         db = get_db(db_path)
-        assert db.table_exists("kalendaroj")
-        assert db.table_exists("eventoj")
+        assert db.table_exists("calendars")
+        assert db.table_exists("events")
 
     def test_get_db_idempotent(self, tmp_path: Path):
         db_path = tmp_path / "idemp.db"
@@ -60,8 +60,8 @@ class TestCalendarCRUD:
         cal_svc = CalendarCRUD(db)
         evt_svc = EventService(db)
         cal = cal_svc.create({"url": "https://cal.example.com/cal", "username": "u", "remote": 1})
-        evt_svc.create({"kalendaro_uuid": cal["uuid"], "titolo": "Test Event",
-                        "komenco": "2024-01-01T00:00:00+00:00", "fino": "2024-01-02T00:00:00+00:00"})
+        evt_svc.create({"calendar_uuid": cal["uuid"], "title": "Test Event",
+                        "start": "2024-01-01T00:00:00+00:00", "end": "2024-01-02T00:00:00+00:00"})
         assert evt_svc.count() == 1
         cal_svc.delete(cal["uuid"])
         assert evt_svc.count() == 0
@@ -79,12 +79,12 @@ class TestEventService:
         evt_svc = EventService(db)
         cal = cal_svc.create({"url": "https://cal.example.com/cal", "username": "u", "remote": 1})
         evt = evt_svc.create({
-            "kalendaro_uuid": cal["uuid"],
-            "titolo": "Meeting",
-            "komenco": "2024-06-01T10:00:00+00:00",
-            "fino": "2024-06-01T11:00:00+00:00",
+            "calendar_uuid": cal["uuid"],
+            "title": "Meeting",
+            "start": "2024-06-01T10:00:00+00:00",
+            "end": "2024-06-01T11:00:00+00:00",
         })
-        assert evt["titolo"] == "Meeting"
+        assert evt["title"] == "Meeting"
 
         events = evt_svc.list_by_date_range("2024-01-01", "2024-12-31")
         assert len(events) == 1
@@ -107,10 +107,10 @@ class TestCalendarService:
         assert cal["uuid"] is not None
 
         evt = calendar_service.create_event({
-            "kalendaro_uuid": cal["uuid"],
-            "titolo": "Test Event",
-            "komenco": "2024-06-15T14:00:00+00:00",
-            "fino": "2024-06-15T15:00:00+00:00",
+            "calendar_uuid": cal["uuid"],
+            "title": "Test Event",
+            "start": "2024-06-15T14:00:00+00:00",
+            "end": "2024-06-15T15:00:00+00:00",
         })
         assert evt["uuid"] is not None
 
@@ -134,8 +134,8 @@ class TestCalendarService:
         cal = calendar_service.create_calendar({"url": "https://cal.example.com/cal",
                                                  "username": "u", "remote": 0})
         evt = calendar_service.create_event({
-            "kalendaro_uuid": cal["uuid"], "titolo": "T", "komenco": "2024-01-01T00:00:00+00:00",
-            "fino": "2024-01-02T00:00:00+00:00",
+            "calendar_uuid": cal["uuid"], "title": "T", "start": "2024-01-01T00:00:00+00:00",
+            "end": "2024-01-02T00:00:00+00:00",
         })
         assert calendar_service.delete_event(evt["uuid"]) is True
         assert calendar_service.get_event(evt["uuid"]) is None
@@ -178,12 +178,12 @@ END:VCALENDAR"""
     def test_events_to_ics(self):
         rows = [{
             "uuid": "test-uuid",
-            "titolo": "Meeting",
-            "komenco": "2024-06-01T10:00:00+00:00",
-            "fino": "2024-06-01T11:00:00+00:00",
-            "loko": "Office",
-            "kategorio": "Work",
-            "priskribo": "Discuss project",
+            "title": "Meeting",
+            "start": "2024-06-01T10:00:00+00:00",
+            "end": "2024-06-01T11:00:00+00:00",
+            "location": "Office",
+            "category": "Work",
+            "description": "Discuss project",
         }]
         ics = events_to_ics(rows)
         assert "SUMMARY:Meeting" in ics
@@ -193,7 +193,7 @@ END:VCALENDAR"""
 
     def test_event_exists(self, tmp_path: Path):
         db = get_db(tmp_path / "exists.db")
-        db.execute("INSERT INTO eventoj (uuid, kalendaro_uuid, titolo, komenco, fino, kreita_je, modifita_je) "
+        db.execute("INSERT INTO events (uuid, calendar_uuid, title, start, end, created_at, updated_at) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?)",
                     ("evt-1", "cal-1", "Test", "2024-01-01T00:00:00+00:00",
                      "2024-01-02T00:00:00+00:00", "now", "now"))
@@ -204,7 +204,7 @@ END:VCALENDAR"""
 
     def test_insert_ics_events(self, tmp_path: Path):
         db = get_db(tmp_path / "insert.db")
-        db.execute("INSERT INTO kalendaroj (uuid, url, username, remote, kreita_je, modifita_je) "
+        db.execute("INSERT INTO calendars (uuid, url, username, remote, created_at, updated_at) "
                     "VALUES ('cal-1', 'https://cal.example.com/cal', 'u', 1, 'now', 'now')")
         added = insert_ics_events(db, "cal-1", self.SIMPLE_ICS)
         assert len(added) == 1

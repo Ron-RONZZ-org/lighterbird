@@ -148,7 +148,7 @@ class EmailSyncWorker(BackgroundWorker):
             svc.sync_account(account_email)
         else:
             for account in svc.list_accounts():
-                svc.sync_account(account["retposto"])
+                svc.sync_account(account["email"])
 
 
 class CalDAVWorker(BackgroundWorker):

@@ -1,7 +1,6 @@
 """Calendar database schema and initialization.
 
-Forked from A-organizi's data storage, simplified for MVP.
-Only essential tables: kalendaroj (calendars), eventoj (events).
+Schema includes: calendars, events.
 """
 
 from __future__ import annotations
@@ -11,38 +10,38 @@ from pathlib import Path
 from lighterbird.core.db import LighterbirdDB
 from lighterbird.core.paths import data_dir
 
-_CREATE_KALENDAROJ = """
-CREATE TABLE IF NOT EXISTS kalendaroj (
+_CREATE_CALENDARS = """
+CREATE TABLE IF NOT EXISTS calendars (
     uuid        TEXT PRIMARY KEY,
     url         TEXT NOT NULL,
     username    TEXT NOT NULL DEFAULT '',
     remote      INTEGER NOT NULL DEFAULT 1,
-    kreita_je   TEXT NOT NULL,
-    modifita_je TEXT NOT NULL
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
 );
 """
 
-_CREATE_EVENTOJ = """
-CREATE TABLE IF NOT EXISTS eventoj (
+_CREATE_EVENTS = """
+CREATE TABLE IF NOT EXISTS events (
     uuid           TEXT PRIMARY KEY,
-    kalendaro_uuid TEXT NOT NULL,
-    titolo         TEXT NOT NULL DEFAULT '',
-    komenco        TEXT NOT NULL,
-    fino           TEXT NOT NULL,
-    kategorio      TEXT NOT NULL DEFAULT '',
-    loko           TEXT NOT NULL DEFAULT '',
-    priskribo      TEXT NOT NULL DEFAULT '',
+    calendar_uuid  TEXT NOT NULL,
+    title          TEXT NOT NULL DEFAULT '',
+    start          TEXT NOT NULL,
+    end            TEXT NOT NULL,
+    category       TEXT NOT NULL DEFAULT '',
+    location       TEXT NOT NULL DEFAULT '',
+    description    TEXT NOT NULL DEFAULT '',
     remote_href    TEXT,
-    kreita_je      TEXT NOT NULL,
-    modifita_je    TEXT NOT NULL
+    created_at     TEXT NOT NULL,
+    updated_at     TEXT NOT NULL
 );
 """
 
 _CREATE_STMTS: list[str] = [
-    _CREATE_KALENDAROJ,
-    _CREATE_EVENTOJ,
-    "CREATE INDEX IF NOT EXISTS idx_eventoj_kalendaro ON eventoj(kalendaro_uuid);",
-    "CREATE INDEX IF NOT EXISTS idx_eventoj_komenco ON eventoj(komenco);",
+    _CREATE_CALENDARS,
+    _CREATE_EVENTS,
+    "CREATE INDEX IF NOT EXISTS idx_events_calendar ON events(calendar_uuid);",
+    "CREATE INDEX IF NOT EXISTS idx_events_start ON events(start);",
 ]
 
 

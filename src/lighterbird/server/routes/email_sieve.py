@@ -63,7 +63,7 @@ def list_scripts(
 ):
     """List Sieve scripts. When ``account_email`` is given, includes
     per-account activation info."""
-    scripts = email_svc.sieve.list_scripts(konto_id=account_email)
+    scripts = email_svc.sieve.list_scripts(account_email=account_email)
     return SieveScriptListResponse(
         scripts=[_script_to_response(s) for s in scripts]
     )
@@ -75,7 +75,7 @@ def create_script(
     email_svc: EmailService = Depends(get_email_service),
 ):
     try:
-        script = email_svc.sieve.create_script(nomo=data.name, content=data.content)
+        script = email_svc.sieve.create_script(name=data.name, content=data.content)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     return _script_to_response(script)
@@ -89,7 +89,7 @@ def get_script(
 ):
     """Get a script by name. With ``account_email``, includes activation info."""
     if account_email:
-        script = email_svc.sieve.get_script_with_activation(name, konto_id=account_email)
+        script = email_svc.sieve.get_script_with_activation(name, account_email=account_email)
     else:
         script = email_svc.sieve.get_script(name)
     if not script:
@@ -126,9 +126,9 @@ def activate_script(
     data: SieveActivateRequest,
     email_svc: EmailService = Depends(get_email_service),
 ):
-    konto_id = _resolve_account(email_svc, data.account_email)
+    account_email = _resolve_account(email_svc, data.account_email)
     script = email_svc.sieve.activate_script(
-        name, konto_id=konto_id, priority=data.priority,
+        name, account_email=account_email, priority=data.priority,
     )
     if not script:
         raise HTTPException(status_code=404, detail=f"Script not found: {name}")
@@ -141,8 +141,8 @@ def deactivate_script(
     data: SieveActivateRequest,
     email_svc: EmailService = Depends(get_email_service),
 ):
-    konto_id = _resolve_account(email_svc, data.account_email)
-    script = email_svc.sieve.deactivate_script(name, konto_id=konto_id)
+    account_email = _resolve_account(email_svc, data.account_email)
+    script = email_svc.sieve.deactivate_script(name, account_email=account_email)
     if not script:
         raise HTTPException(status_code=404, detail=f"Script not found: {name}")
     return _script_to_response(script)
@@ -154,8 +154,8 @@ def set_priority(
     data: SievePriorityUpdate,
     email_svc: EmailService = Depends(get_email_service),
 ):
-    konto_id = _resolve_account(email_svc, data.account_email)
-    script = email_svc.sieve.set_priority(name, konto_id=konto_id, priority=data.priority)
+    account_email = _resolve_account(email_svc, data.account_email)
+    script = email_svc.sieve.set_priority(name, account_email=account_email, priority=data.priority)
     if not script:
         raise HTTPException(status_code=404, detail=f"Script not found: {name}")
     return _script_to_response(script)

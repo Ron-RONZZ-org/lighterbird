@@ -51,13 +51,13 @@ def create_todo(
     svc: TodoService = Depends(get_todo_service),
 ):
     todo_data = {
-        "titolo": data.get("title", ""),
-        "priskribo": data.get("description", ""),
-        "prioritato": data.get("priority", 5),
-        "stato": "pending",
-        "limdato": data.get("due", ""),
+        "title": data.get("title", ""),
+        "description": data.get("description", ""),
+        "priority": data.get("priority", 5),
+        "status": "pending",
+        "due_date": data.get("due", ""),
         "parent_uuid": data.get("parent_uuid"),
-        "shablono_uuid": data.get("template_uuid"),
+        "template_uuid": data.get("template_uuid"),
     }
     todo = svc.create(todo_data)
     return normalize_todo(todo)
@@ -91,11 +91,11 @@ def update_todo(
 ):
     updates: dict = {}
     field_map = {
-        "title": "titolo",
-        "description": "priskribo",
-        "priority": "prioritato",
-        "status": "stato",
-        "due": "limdato",
+        "title": "title",
+        "description": "description",
+        "priority": "priority",
+        "status": "status",
+        "due": "due_date",
         "parent_uuid": "parent_uuid",
     }
     for json_key, db_key in field_map.items():
@@ -169,11 +169,11 @@ def add_todo_attachment(
     attachment = svc.add_attachment(
         uuid,
         origina_nomo=data.get("name", "file"),
-        origina_vojo=data.get("source", ""),
-        kasko_vojo=data.get("cache_path", ""),
-        dosier_peco=data.get("mime_type", ""),
-        grandeco=data.get("size", 0),
-        md5_cheksumo=data.get("md5", ""),
+        original_path=data.get("source", ""),
+        cache_path=data.get("cache_path", ""),
+        mime_type=data.get("mime_type", ""),
+        size=data.get("size", 0),
+        md5_checksum=data.get("md5", ""),
     )
     return attachment
 

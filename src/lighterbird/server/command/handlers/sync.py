@@ -65,7 +65,7 @@ def _sync_todo_attachments(force: bool = False) -> dict[str, Any]:
     skipped_large: list[str] = []
 
     for att in attachments:
-        source = att.get("origina_vojo", "")
+        source = att.get("original_path", "")
         todo_uuid = att.get("todo_uuid", "")
         att_uuid = att.get("uuid", "")
 
@@ -84,15 +84,15 @@ def _sync_todo_attachments(force: bool = False) -> dict[str, Any]:
                 # Size check
                 if size > 5 * 1024 * 1024 and not force:
                     skipped_large.append(
-                        f"{att.get('origina_nomo', 'file')} "
+                        f"{att.get('original_name', 'file')} "
                         f"({size / 1024 / 1024:.1f} MB)",
                     )
                     continue
 
                 md5 = hashlib.md5(content).hexdigest()
                 # Update attachment record
-                svc.mark_attachment_synced(att_uuid, md5_cheksumo=md5)
-                svc.update(todo_uuid, {})  # Touch modifita_je
+                svc.mark_attachment_synced(att_uuid, md5_checksum=md5)
+                svc.update(todo_uuid, {})  # Touch updated_at
                 synced += 1
             except Exception as e:
                 errors.append(
@@ -106,7 +106,7 @@ def _sync_todo_attachments(force: bool = False) -> dict[str, Any]:
                     for chunk in iter(lambda: f.read(8192), b""):
                         md5.update(chunk)
                 size = os.path.getsize(source)
-                svc.mark_attachment_synced(att_uuid, md5_cheksumo=md5.hexdigest())
+                svc.mark_attachment_synced(att_uuid, md5_checksum=md5.hexdigest())
                 synced += 1
             except Exception as e:
                 errors.append(f"{source}: {e}")
