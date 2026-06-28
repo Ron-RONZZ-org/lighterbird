@@ -233,28 +233,28 @@ export const sieve = {
     const q = new URLSearchParams();
     if (params.account_email) q.set("account_email", params.account_email);
     const qs = q.toString();
-    return request("GET", `/email/sieve${qs ? `?${qs}` : ""}`);
+    return request("GET", `/email/sieve/scripts${qs ? `?${qs}` : ""}`);
   },
 
   get: (name, accountEmail) => {
     const q = accountEmail ? `?account_email=${encodeURIComponent(accountEmail)}` : "";
-    return request("GET", `/email/sieve/${encodeURIComponent(name)}${q}`);
+    return request("GET", `/email/sieve/scripts/${encodeURIComponent(name)}${q}`);
   },
 
-  create: (data) => request("POST", "/email/sieve", data),
+  create: (data) => request("POST", "/email/sieve/scripts", data),
 
-  update: (name, data) => request("PUT", `/email/sieve/${encodeURIComponent(name)}`, data),
+  update: (name, data) => request("PATCH", `/email/sieve/scripts/${encodeURIComponent(name)}`, data),
 
-  delete: (name) => request("DELETE", `/email/sieve/${encodeURIComponent(name)}`),
+  delete: (name) => request("DELETE", `/email/sieve/scripts/${encodeURIComponent(name)}`),
 
   activate: (name, accountEmail, priority = 0) =>
-    request("POST", `/email/sieve/${encodeURIComponent(name)}/activate`, { account_email: accountEmail, priority }),
+    request("POST", `/email/sieve/scripts/${encodeURIComponent(name)}/activate`, { account_email: accountEmail, priority }),
 
   deactivate: (name, accountEmail) =>
-    request("POST", `/email/sieve/${encodeURIComponent(name)}/deactivate`, { account_email: accountEmail }),
+    request("POST", `/email/sieve/scripts/${encodeURIComponent(name)}/deactivate`, { account_email: accountEmail }),
 
   setPriority: (name, accountEmail, priority) =>
-    request("POST", `/email/sieve/${encodeURIComponent(name)}/priority`, { account_email: accountEmail, priority }),
+    request("POST", `/email/sieve/scripts/${encodeURIComponent(name)}/priority`, { account_email: accountEmail, priority }),
 
   analyze: (scripts) => request("POST", "/email/sieve/analyze", { scripts }),
 
