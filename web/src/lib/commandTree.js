@@ -733,8 +733,8 @@ export let commandTree = [
             name: "add",
             description: "Add a saved command alias",
             flags: [
-              { name: "alias", type: "string", help: "Short alias name (e.g. ronzz)" },
-              { name: "command", type: "string", help: "Command template (without !)" },
+              { name: "alias", type: "string", help: "Short alias name (e.g. ronzz)", required: true },
+              { name: "command", type: "string", help: "Command template (without !)", required: true },
               { name: "hint", type: "string", help: "Description shown in autocomplete" },
             ],
           },

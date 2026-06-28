@@ -56,16 +56,21 @@ export function shouldIntercept(input) {
   // Only intercept "add"/"write" commands (including interactive ones)
   if (!isAddOrWrite && !isInteractive) return { intercept: false };
 
-  // ── Check for missing required params ────────────────────────────
+  // ── Check for missing required params or flags ──────────────────
   const cmdTokenCount = countCommandTokens(effectiveTokens);
   const consumed = effectiveTokens.length - cmdTokenCount;
 
-  const missingRequired = node.params?.some(
+  const missingRequiredParam = node.params?.some(
     (p, i) => p.required && i >= consumed,
   );
 
-  // Only intercept if required params are missing
-  if (!missingRequired) return { intercept: false };
+  // Also check for required flags (e.g. user.saved-commands.add --alias)
+  const missingRequiredFlag = node.flags?.some(
+    (f) => f.required && !(f.name in flags),
+  );
+
+  // Only intercept if required params or flags are missing
+  if (!missingRequiredParam && !missingRequiredFlag) return { intercept: false };
 
   // ── Resolve the list command for this add command ─────────────────
   const listTokens = resolveListCommand(node, effectiveTokens);
@@ -118,7 +123,7 @@ function countCommandTokens(tokens) {
  * @returns {string[]|null} — token path for the list command, or null
  */
 function resolveListCommand(node, tokens) {
-  // 1. Explicit listCommand on the node
+  // 1. Explicit listCommand on the node (highest priority)
   if (node.listCommand && Array.isArray(node.listCommand)) {
     return node.listCommand;
   }
@@ -128,7 +133,16 @@ function resolveListCommand(node, tokens) {
   if (leafName === "add" || leafName === "write") {
     const listTokens = tokens.slice(0, -1);
     listTokens.push("list");
-    // Verify the resolved list node exists
+    const listNode = findNode(listTokens);
+    if (listNode) return listTokens;
+  }
+
+  // 3. For interactive commands that aren't add/write (e.g. "send", "modify"),
+  // try replacing action verb with "list" using the parent domain as root
+  if (node.interactive && tokens.length >= 2) {
+    // Try "domain list" e.g. ["email", "list"] for ["email", "send"]
+    const domain = tokens[0];
+    const listTokens = [domain, "list"];
     const listNode = findNode(listTokens);
     if (listNode) return listTokens;
   }
@@ -194,6 +208,14 @@ function resolveAddFormType(tokens, leafName) {
   if (/^email\s+sieve\s+add$/i.test(path)) return "email-sieve-add";
   if (/^email\s+send$/i.test(path)) return "email-send";
   if (/^calendar\s+event\s+add$/i.test(path)) return "calendar-event-add";
+  if (/^user\s+saved-commands\s+add$/i.test(path)) return "user-saved-commands-add";
+  if (/^user\s+saved-commands\s+modify$/i.test(path)) return "user-saved-commands-modify";
+  if (/^todo\s+template\s+add$/i.test(path)) return "todo-template-add";
+  if (/^todo\s+template\s+modify$/i.test(path)) return "todo-template-modify";
+  if (/^llm\s+profile\s+new$/i.test(path)) return "llm-profile-new";
+  if (/^llm\s+profile\s+set$/i.test(path)) return "llm-profile-set";
+  if (/^backup\s+config\s+add$/i.test(path)) return "backup-config-add";
+  if (/^backup\s+config\s+modify$/i.test(path)) return "backup-config-modify";
 
   // Fallback: use leaf name
   return leafName;
@@ -212,6 +234,14 @@ function resolveAddTitle(addFormType) {
     "email-sieve-add": "Add Sieve Script",
     "email-send": "Compose Email",
     "calendar-event-add": "Add Calendar Event",
+    "user-saved-commands-add": "New Saved Command",
+    "user-saved-commands-modify": "Edit Saved Command",
+    "todo-template-add": "New Todo Template",
+    "todo-template-modify": "Edit Todo Template",
+    "llm-profile-new": "New LLM Profile",
+    "llm-profile-set": "Set LLM Profile",
+    "backup-config-add": "Add Backup Strategy",
+    "backup-config-modify": "Modify Backup Strategy",
   };
   return titles[addFormType] || "Add";
 }
