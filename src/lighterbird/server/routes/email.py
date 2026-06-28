@@ -23,14 +23,14 @@ router = APIRouter(prefix="/api/v1/email", tags=["email"])
 
 def _account_to_response(acct: dict) -> AccountResponse:
     return AccountResponse(
-        email=acct.get("retposto", ""),
-        name=acct.get("nomo", ""),
-        imap_server=acct.get("imap_servilo", ""),
-        imap_port=acct.get("imap_haveno", 993),
-        smtp_server=acct.get("smtp_servilo", ""),
-        smtp_port=acct.get("smtp_haveno", 587),
-        created_at=acct.get("kreita_je", ""),
-        modified_at=acct.get("modifita_je", ""),
+        email=acct.get("email", ""),
+        name=acct.get("name", ""),
+        imap_server=acct.get("imap_server", ""),
+        imap_port=acct.get("imap_port", 993),
+        smtp_server=acct.get("smtp_server", ""),
+        smtp_port=acct.get("smtp_port", 587),
+        created_at=acct.get("created_at", ""),
+        modified_at=acct.get("updated_at", ""),
     )
 
 
@@ -54,16 +54,16 @@ def create_account(
         smtp_server=data.smtp_server,
     )
     acct_data = {
-        "nomo": data.name or data.email.split("@")[0],
-        "retposto": data.email.lower().strip(),
-        "imap_servilo": detected["imap"],
-        "imap_haveno": data.imap_port,
-        "imap_ssl": 1 if data.imap_ssl else 0,
-        "smtp_servilo": detected["smtp"],
-        "smtp_haveno": data.smtp_port,
-        "smtp_tls": 1 if data.smtp_tls else 0,
-        "imap_uzantonomo": data.email,
-        "smtp_uzantonomo": data.email,
+        "name": data.name or data.email.split("@")[0],
+        "email": data.email.lower().strip(),
+        "imap_server": detected["imap"],
+        "imap_port": data.imap_port,
+        "imap_use_ssl": 1 if data.imap_ssl else 0,
+        "smtp_server": detected["smtp"],
+        "smtp_port": data.smtp_port,
+        "smtp_use_tls": 1 if data.smtp_tls else 0,
+        "imap_username": data.email,
+        "smtp_username": data.email,
     }
     acct = email_svc.create_account(acct_data, data.password)
     return _account_to_response(acct)
@@ -82,11 +82,11 @@ def update_account(
 
     updates = {}
     if data.name is not None:
-        updates["nomo"] = data.name
+        updates["name"] = data.name
     if data.imap_server is not None:
-        updates["imap_servilo"] = data.imap_server
+        updates["imap_server"] = data.imap_server
     if data.smtp_server is not None:
-        updates["smtp_servilo"] = data.smtp_server
+        updates["smtp_server"] = data.smtp_server
     if updates:
         email_svc.accounts.update(email, updates)
     if data.password is not None:
@@ -127,17 +127,17 @@ def sync_email(
 def list_folders(email_svc: EmailService = Depends(get_email_service)):
     """List all known folders with account info."""
     from lighterbird.server.command.response import normalize_account
-    accounts = {a["retposto"]: normalize_account(a) for a in email_svc.list_accounts()}
+    accounts = {a["email"]: normalize_account(a) for a in email_svc.list_accounts()}
     rows = list(email_svc.db.execute(
-        "SELECT konto_id, nomo FROM dosierujoj ORDER BY konto_id, nomo"
+        "SELECT account_email, name FROM folders ORDER BY account_email, name"
     ))
     folders = []
     for row in rows:
-        acct_email = row["konto_id"]
+        acct_email = row["account_email"]
         folders.append({
-            "folder_name": row["nomo"],
+            "folder_name": row["name"],
             "account_email": acct_email,
-            "label": f"{acct_email}/{row['nomo']}",
+            "label": f"{acct_email}/{row['name']}",
         })
     return {"folders": folders}
 
@@ -239,7 +239,7 @@ def view_message_html(uuid: str, email_svc: EmailService = Depends(get_email_ser
         raise HTTPException(status_code=404, detail=f"Message not found: {uuid[:8]}")
 
     # Parse JSON list fields
-    for field in ("al", "kc"):
+    for field in ("to_recipients", "cc_recipients"):
         raw = msg.get(field, "[]")
         if isinstance(raw, str):
             try:
@@ -247,14 +247,14 @@ def view_message_html(uuid: str, email_svc: EmailService = Depends(get_email_ser
             except (json_mod.JSONDecodeError, TypeError):
                 msg[field] = []
 
-    to_raw = msg.get("al", [])
+    to_raw = msg.get("to_recipients", [])
     to_str = ", ".join(to_raw) if isinstance(to_raw, list) else str(to_raw)
 
-    subject = html_mod.escape(msg.get("subjekto", "(no subject)"))
-    from_addr = html_mod.escape(msg.get("de", ""))
+    subject = html_mod.escape(msg.get("subject", "(no subject)"))
+    from_addr = html_mod.escape(msg.get("from_addr", ""))
     to_addr = html_mod.escape(to_str)
-    date = html_mod.escape(msg.get("ricevita_je", ""))
-    body = html_mod.escape(msg.get("korpo", "(no body)"))
+    date = html_mod.escape(msg.get("received_at", ""))
+    body = html_mod.escape(msg.get("body", "(no body)"))
 
     return HTMLResponse(
         _EMAIL_HTML_TMPL.format(

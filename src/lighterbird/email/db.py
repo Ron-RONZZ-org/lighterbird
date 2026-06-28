@@ -1,8 +1,6 @@
 """Email database schema and initialization.
 
-Forked from A-lien's data storage, simplified for MVP.
-Schema includes: kontoj (accounts), dosierujoj (folders), mesagoj (messages),
-aldonajxoj (attachments).
+Schema includes: accounts, folders, messages, attachments.
 """
 
 from __future__ import annotations
@@ -12,166 +10,160 @@ from pathlib import Path
 from lighterbird.core.db import LighterbirdDB
 from lighterbird.core.paths import data_dir
 
-# ── DDL ─────────────────────────────────────────────────────────────────────
-
-_CREATE_KONTOJ = """
-CREATE TABLE IF NOT EXISTS kontoj (
-    retposto        TEXT PRIMARY KEY COLLATE NOCASE
-                    CHECK(retposto LIKE '%_@%_.__%'),
-    ordo            INTEGER NOT NULL DEFAULT 0,
-    nomo            TEXT NOT NULL,
-    imap_servilo    TEXT NOT NULL,
-    imap_haveno     INTEGER NOT NULL DEFAULT 993,
-    imap_ssl        INTEGER NOT NULL DEFAULT 1,
-    smtp_servilo    TEXT NOT NULL,
-    smtp_haveno     INTEGER NOT NULL DEFAULT 587,
-    smtp_tls        INTEGER NOT NULL DEFAULT 1,
-    imap_uzantonomo TEXT,
-    smtp_uzantonomo TEXT,
-    subskribo       TEXT NOT NULL DEFAULT '',
-    auth_type       TEXT NOT NULL DEFAULT 'password',
-    kreita_je       TEXT NOT NULL,
-    modifita_je     TEXT NOT NULL
+_CREATE_ACCOUNTS = """
+CREATE TABLE IF NOT EXISTS accounts (
+    email            TEXT PRIMARY KEY COLLATE NOCASE
+                     CHECK(email LIKE '%_@%_.__%'),
+    sort_order       INTEGER NOT NULL DEFAULT 0,
+    name             TEXT NOT NULL,
+    imap_server      TEXT NOT NULL,
+    imap_port        INTEGER NOT NULL DEFAULT 993,
+    imap_use_ssl     INTEGER NOT NULL DEFAULT 1,
+    smtp_server      TEXT NOT NULL,
+    smtp_port        INTEGER NOT NULL DEFAULT 587,
+    smtp_use_tls     INTEGER NOT NULL DEFAULT 1,
+    imap_username    TEXT,
+    smtp_username    TEXT,
+    signature        TEXT NOT NULL DEFAULT '',
+    auth_type        TEXT NOT NULL DEFAULT 'password',
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL
 );
 """
 
-_CREATE_DOSIERUJOJ = """
-CREATE TABLE IF NOT EXISTS dosierujoj (
-    konto_id    TEXT NOT NULL REFERENCES kontoj(retposto) ON DELETE CASCADE,
-    nomo        TEXT NOT NULL,
-    kreita_je   TEXT NOT NULL,
-    modifita_je TEXT NOT NULL,
-    PRIMARY KEY (konto_id, nomo)
+_CREATE_FOLDERS = """
+CREATE TABLE IF NOT EXISTS folders (
+    account_email TEXT NOT NULL REFERENCES accounts(email) ON DELETE CASCADE,
+    name          TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL,
+    PRIMARY KEY (account_email, name)
 );
 """
 
-_CREATE_MESAGOJ = """
-CREATE TABLE IF NOT EXISTS mesagoj (
-    uuid           TEXT PRIMARY KEY,
-    konto_id       TEXT NOT NULL REFERENCES kontoj(retposto) ON DELETE CASCADE,
-    dosierujo_nomo TEXT,
-    message_id     TEXT,
-    in_reply_to    TEXT,
-    imap_uid       INTEGER,
-    de             TEXT,
-    al             TEXT NOT NULL DEFAULT '[]',
-    kc             TEXT NOT NULL DEFAULT '[]',
-    subjekto       TEXT,
-    korpo          TEXT,
-    html_korpo     TEXT,
-    prioritato     INTEGER DEFAULT 5,
-    legita         INTEGER NOT NULL DEFAULT 0,
-    stelo          INTEGER NOT NULL DEFAULT 0,
-    forigita       INTEGER NOT NULL DEFAULT 0,
-    ricevita_je    TEXT,
-    kreita_je      TEXT NOT NULL,
-    modifita_je    TEXT NOT NULL,
-    FOREIGN KEY (konto_id, dosierujo_nomo) REFERENCES dosierujoj(konto_id, nomo) ON DELETE SET NULL
+_CREATE_MESSAGES = """
+CREATE TABLE IF NOT EXISTS messages (
+    uuid              TEXT PRIMARY KEY,
+    account_email     TEXT NOT NULL REFERENCES accounts(email) ON DELETE CASCADE,
+    folder_name       TEXT,
+    message_id        TEXT,
+    in_reply_to       TEXT,
+    imap_uid          INTEGER,
+    from_addr         TEXT,
+    to_recipients     TEXT NOT NULL DEFAULT '[]',
+    cc_recipients     TEXT NOT NULL DEFAULT '[]',
+    subject           TEXT,
+    body              TEXT,
+    html_body         TEXT,
+    priority          INTEGER DEFAULT 5,
+    is_read           INTEGER NOT NULL DEFAULT 0,
+    is_starred        INTEGER NOT NULL DEFAULT 0,
+    is_deleted        INTEGER NOT NULL DEFAULT 0,
+    received_at       TEXT,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    FOREIGN KEY (account_email, folder_name) REFERENCES folders(account_email, name) ON DELETE SET NULL
 );
 """
 
-_CREATE_ALDONAĴOJ = """
-CREATE TABLE IF NOT EXISTS aldonajxoj (
+_CREATE_ATTACHMENTS = """
+CREATE TABLE IF NOT EXISTS email_attachments (
     uuid            TEXT PRIMARY KEY,
-    mesago_uuid     TEXT NOT NULL REFERENCES mesagoj(uuid) ON DELETE CASCADE,
+    message_uuid    TEXT NOT NULL REFERENCES messages(uuid) ON DELETE CASCADE,
     filename        TEXT NOT NULL,
     mime_type       TEXT NOT NULL DEFAULT 'application/octet-stream',
     size            INTEGER NOT NULL DEFAULT 0,
     content_id      TEXT NOT NULL,
     storage_path    TEXT NOT NULL,
-    kreita_je       TEXT NOT NULL,
-    modifita_je     TEXT NOT NULL
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL
 );
 """
 
-_CREATE_SPAM_BLOKOJ = """
-CREATE TABLE IF NOT EXISTS spam_blockoj (
+_CREATE_SPAM_BLOCKS = """
+CREATE TABLE IF NOT EXISTS spam_blocks (
     uuid        TEXT PRIMARY KEY,
     type        TEXT NOT NULL,
     pattern     TEXT NOT NULL,
-    kreita_je   TEXT NOT NULL,
-    modifita_je TEXT NOT NULL
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
 );
 """
 
-_CREATE_SIEVE_SKRIPTOJ = """
-CREATE TABLE IF NOT EXISTS sieve_skriptoj (
-    nomo        TEXT PRIMARY KEY,
+_CREATE_SIEVE_SCRIPTS = """
+CREATE TABLE IF NOT EXISTS sieve_scripts (
+    name        TEXT PRIMARY KEY,
     content     TEXT NOT NULL DEFAULT '',
     system      INTEGER NOT NULL DEFAULT 0,
-    kreita_je   TEXT NOT NULL,
-    modifita_je TEXT NOT NULL
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
 );
 """
 
-_CREATE_SIEVE_AKTIVADOJ = """
-CREATE TABLE IF NOT EXISTS sieve_aktivadoj (
-    skripto_nomo TEXT NOT NULL REFERENCES sieve_skriptoj(nomo) ON DELETE CASCADE,
-    konto_id     TEXT NOT NULL REFERENCES kontoj(retposto) ON DELETE CASCADE,
+_CREATE_SIEVE_ACTIVATIONS = """
+CREATE TABLE IF NOT EXISTS sieve_activations (
+    script_name TEXT NOT NULL REFERENCES sieve_scripts(name) ON DELETE CASCADE,
+    account_email TEXT NOT NULL REFERENCES accounts(email) ON DELETE CASCADE,
     active       INTEGER NOT NULL DEFAULT 0,
     priority     INTEGER NOT NULL DEFAULT 0,
     man_sync     INTEGER NOT NULL DEFAULT 1,
-    kreita_je    TEXT NOT NULL,
-    modifita_je  TEXT NOT NULL,
-    PRIMARY KEY (skripto_nomo, konto_id)
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL,
+    PRIMARY KEY (script_name, account_email)
 );
 """
 
-# Priority column migration for existing databases
-_MIGRATE_SIEVE_AKTIVADOJ_PRIORITY = """
-ALTER TABLE sieve_aktivadoj ADD COLUMN priority INTEGER NOT NULL DEFAULT 0;
+_MIGRATE_SIEVE_ACTIVATIONS_PRIORITY = """
+ALTER TABLE sieve_activations ADD COLUMN priority INTEGER NOT NULL DEFAULT 0;
 """
 
-# ManageSieve columns added to kontoj
-_MIGRATE_KONTOJ_MANAGESIEVE = """
-ALTER TABLE kontoj ADD COLUMN managesieve_host TEXT NOT NULL DEFAULT '';
+_MIGRATE_ACCOUNTS_MANAGESIEVE = """
+ALTER TABLE accounts ADD COLUMN managesieve_host TEXT NOT NULL DEFAULT '';
 """
-_MIGRATE_KONTOJ_MANAGESIEVE_PORT = """
-ALTER TABLE kontoj ADD COLUMN managesieve_port INTEGER NOT NULL DEFAULT 4190;
+_MIGRATE_ACCOUNTS_MANAGESIEVE_PORT = """
+ALTER TABLE accounts ADD COLUMN managesieve_port INTEGER NOT NULL DEFAULT 4190;
 """
-_MIGRATE_KONTOJ_MANAGESIEVE_TLS = """
-ALTER TABLE kontoj ADD COLUMN managesieve_use_tls INTEGER NOT NULL DEFAULT 1;
+_MIGRATE_ACCOUNTS_MANAGESIEVE_TLS = """
+ALTER TABLE accounts ADD COLUMN managesieve_use_tls INTEGER NOT NULL DEFAULT 1;
 """
 
-_IDX_SIEVE_AKTIVADOJ_KONTO = "CREATE INDEX IF NOT EXISTS idx_sieve_aktivadoj_konto ON sieve_aktivadoj(konto_id);"
+_IDX_SIEVE_ACTIVATIONS_ACCOUNT = "CREATE INDEX IF NOT EXISTS idx_sieve_activations_account ON sieve_activations(account_email);"
 
-_IDX_MESAGOJ_KONTO = "CREATE INDEX IF NOT EXISTS idx_mesagoj_konto ON mesagoj(konto_id);"
-_IDX_MESAGOJ_DOSIERUJO = "CREATE INDEX IF NOT EXISTS idx_mesagoj_dosierujo ON mesagoj(konto_id, dosierujo_nomo);"
-_IDX_MESAGOJ_IMAP_UID = """
-CREATE UNIQUE INDEX IF NOT EXISTS idx_mesagoj_imap_uid
-    ON mesagoj(konto_id, dosierujo_nomo, imap_uid)
+_IDX_MESSAGES_ACCOUNT = "CREATE INDEX IF NOT EXISTS idx_messages_account ON messages(account_email);"
+_IDX_MESSAGES_FOLDER = "CREATE INDEX IF NOT EXISTS idx_messages_folder ON messages(account_email, folder_name);"
+_IDX_MESSAGES_IMAP_UID = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_imap_uid
+    ON messages(account_email, folder_name, imap_uid)
     WHERE imap_uid IS NOT NULL;
 """
-_IDX_MESAGOJ_MESSAGE_ID = """
-CREATE UNIQUE INDEX IF NOT EXISTS idx_mesagoj_message_id
-    ON mesagoj(konto_id, message_id)
+_IDX_MESSAGES_MESSAGE_ID = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_message_id
+    ON messages(account_email, message_id)
     WHERE message_id IS NOT NULL;
 """
-_IDX_MESAGOJ_DATO = "CREATE INDEX IF NOT EXISTS idx_mesagoj_dato ON mesagoj(ricevita_je);"
-_IDX_ALDONAĴOJ_MESAGO = "CREATE INDEX IF NOT EXISTS idx_aldonajxoj_mesago ON aldonajxoj(mesago_uuid);"
+_IDX_MESSAGES_DATE = "CREATE INDEX IF NOT EXISTS idx_messages_date ON messages(received_at);"
+_IDX_ATTACHMENTS_MESSAGE = "CREATE INDEX IF NOT EXISTS idx_email_attachments_message ON email_attachments(message_uuid);"
 
 _SCHEMA_STATEMENTS: list[str] = [
-    _CREATE_KONTOJ,
-    _CREATE_DOSIERUJOJ,
-    _CREATE_MESAGOJ,
-    _CREATE_ALDONAĴOJ,
-    _CREATE_SPAM_BLOKOJ,
-    _CREATE_SIEVE_SKRIPTOJ,
-    _CREATE_SIEVE_AKTIVADOJ,
-    _MIGRATE_KONTOJ_MANAGESIEVE,
-    _MIGRATE_KONTOJ_MANAGESIEVE_PORT,
-    _MIGRATE_KONTOJ_MANAGESIEVE_TLS,
-    _MIGRATE_SIEVE_AKTIVADOJ_PRIORITY,
-    _IDX_MESAGOJ_KONTO,
-    _IDX_MESAGOJ_DOSIERUJO,
-    _IDX_MESAGOJ_IMAP_UID,
-    _IDX_MESAGOJ_MESSAGE_ID,
-    _IDX_MESAGOJ_DATO,
-    _IDX_ALDONAĴOJ_MESAGO,
-    _IDX_SIEVE_AKTIVADOJ_KONTO,
+    _CREATE_ACCOUNTS,
+    _CREATE_FOLDERS,
+    _CREATE_MESSAGES,
+    _CREATE_ATTACHMENTS,
+    _CREATE_SPAM_BLOCKS,
+    _CREATE_SIEVE_SCRIPTS,
+    _CREATE_SIEVE_ACTIVATIONS,
+    _MIGRATE_ACCOUNTS_MANAGESIEVE,
+    _MIGRATE_ACCOUNTS_MANAGESIEVE_PORT,
+    _MIGRATE_ACCOUNTS_MANAGESIEVE_TLS,
+    _MIGRATE_SIEVE_ACTIVATIONS_PRIORITY,
+    _IDX_MESSAGES_ACCOUNT,
+    _IDX_MESSAGES_FOLDER,
+    _IDX_MESSAGES_IMAP_UID,
+    _IDX_MESSAGES_MESSAGE_ID,
+    _IDX_MESSAGES_DATE,
+    _IDX_ATTACHMENTS_MESSAGE,
+    _IDX_SIEVE_ACTIVATIONS_ACCOUNT,
 ]
-
-# ── Database path ───────────────────────────────────────────────────────────
 
 
 def _email_db_path() -> Path:
@@ -188,9 +180,6 @@ def get_db(path: Path | str | None = None) -> LighterbirdDB:
         try:
             db.execute(stmt)
         except OperationalError:
-            # ALTER TABLE ADD COLUMN may fail if column already exists
-            # on an existing database. Other statements use IF NOT EXISTS
-            # and are idempotent — re-raise unexpected errors.
             if not stmt.strip().upper().startswith("ALTER"):
                 raise
 

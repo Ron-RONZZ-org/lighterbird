@@ -63,7 +63,7 @@ def journal_write(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     text = flags.get("text", " ".join(remaining[1:]) if len(remaining) > 1 else "")
     date_str = flags.get("date", date.today().isoformat())
     svc: JournalService = get_journal_service()
-    data = {"titolo": title, "teksto": text, "dato": date_str}
+    data = {"title": title, "text": text, "dato": date_str}
     entry = svc.create(data)
     return {"type": "status", "title": "Journal Entry Written", "data": {"uuid": entry["uuid"], "title": title}}
 
@@ -77,7 +77,7 @@ def journal_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     entry = svc.get(remaining[0])
     if not entry:
         raise CommandValidationError(f"Journal entry not found: {remaining[0][:8]}")
-    return {"type": "status", "title": entry.get("titolo", "(untitled)"), "data": normalize_journal_entry(entry)}
+    return {"type": "status", "title": entry.get("title", "(untitled)"), "data": normalize_journal_entry(entry)}
 
 
 @command("journal.search")

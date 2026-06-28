@@ -16,28 +16,28 @@ class MessageOpsService:
         self.db = db
         self._account_service = account_service
 
-    def mark_read(self, msg_uuid: str, legita: bool = True) -> None:
+    def mark_read(self, msg_uuid: str, is_read: bool = True) -> None:
         """Mark a message as read or unread locally."""
         now = datetime.now(timezone.utc).isoformat()
         self.db.execute(
-            "UPDATE mesagoj SET legita = ?, modifita_je = ? WHERE uuid = ?",
-            (1 if legita else 0, now, msg_uuid),
+            "UPDATE messages SET is_read = ?, updated_at = ? WHERE uuid = ?",
+            (1 if is_read else 0, now, msg_uuid),
         )
 
     def trash_message(self, msg_uuid: str) -> None:
         """Soft-delete a message."""
         now = datetime.now(timezone.utc).isoformat()
         self.db.execute(
-            "UPDATE mesagoj SET forigita = 1, modifita_je = ? WHERE uuid = ?",
+            "UPDATE messages SET is_deleted = 1, updated_at = ? WHERE uuid = ?",
             (now, msg_uuid),
         )
 
-    def move_message(self, msg_uuid: str, destination_folder_nomo: str) -> None:
+    def move_message(self, msg_uuid: str, destination_folder_name: str) -> None:
         """Move a message to a different folder (by folder name)."""
         now = datetime.now(timezone.utc).isoformat()
         self.db.execute(
-            "UPDATE mesagoj SET dosierujo_nomo = ?, modifita_je = ? WHERE uuid = ?",
-            (destination_folder_nomo, now, msg_uuid),
+            "UPDATE messages SET folder_name = ?, updated_at = ? WHERE uuid = ?",
+            (destination_folder_name, now, msg_uuid),
         )
 
     def send_email(
@@ -64,9 +64,9 @@ class MessageOpsService:
                 f"No password configured for account {account_email}. "
                 f"Set it with: !email account modify {account_email} --password <pw>"
             )
-        sender_email = acct.get("retposto", "")
+        sender_email = acct.get("email", "")
         cc = cc or []
-        smtp_port = acct.get("smtp_haveno", 587)
+        smtp_port = acct.get("smtp_port", 587)
 
         # Generate Message-ID before sending so it's used both in the SMTP
         # envelope and in the local store — enabling IMAP dedup via Message-ID.
@@ -75,14 +75,14 @@ class MessageOpsService:
         message_id = str(uuid_mod.uuid4())
 
         client = SMTPClient(
-            host=acct.get("smtp_servilo", ""),
+            host=acct.get("smtp_server", ""),
             port=smtp_port,
-            use_tls=acct.get("smtp_tls", 1) == 1,
+            use_tls=acct.get("smtp_use_tls", 1) == 1,
             use_ssl=smtp_port == 465,
         )
         try:
             client.connect(
-                username=acct.get("smtp_uzantonomo", "") or sender_email,
+                username=acct.get("smtp_username", "") or sender_email,
                 password=acct["password"],
             )
             client.send_email(
@@ -96,9 +96,9 @@ class MessageOpsService:
 
         now = datetime.now(timezone.utc).isoformat()
         self.db.execute(
-            """INSERT INTO mesagoj
-               (uuid, konto_id, dosierujo_nomo, message_id, de, al, kc,
-                subjekto, korpo, legita, ricevita_je, kreita_je, modifita_je)
+            """INSERT INTO messages
+               (uuid, account_email, folder_name, message_id, de, al, kc,
+                subject, body, is_read, received_at, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)""",
             (
                 str(uuid_mod.uuid4()),

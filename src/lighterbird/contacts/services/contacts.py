@@ -8,10 +8,10 @@ from lighterbird.core.crud import CRUDService
 
 
 class ContactService(CRUDService):
-    """CRUD service for kontaktoj (contacts)."""
+    """CRUD service for contacts (contacts)."""
 
     def __init__(self, db):
-        super().__init__(db, "kontaktoj")
+        super().__init__(db, "contacts")
 
     def search(self, query: str, limit: int = 50) -> list[dict[str, Any]]:
         """Search contacts by name, email, or organization using FTS5.
@@ -26,8 +26,8 @@ class ContactService(CRUDService):
         if len(query) >= 2:
             try:
                 return self.db.execute(
-                    "SELECT kontaktoj.* FROM kontaktoj "
-                    "JOIN kontaktoj_fts ON kontaktoj.rowid = kontaktoj_fts.rowid "
+                    "SELECT contacts.* FROM contacts "
+                    "JOIN kontaktoj_fts ON contacts.rowid = kontaktoj_fts.rowid "
                     "WHERE kontaktoj_fts MATCH ? "
                     "ORDER BY rank LIMIT ?",
                     (query, limit),
@@ -36,16 +36,16 @@ class ContactService(CRUDService):
                 pass  # fall through to LIKE search
         # Fallback: LIKE search
         return self.db.execute(
-            "SELECT * FROM kontaktoj WHERE "
-            "LOWER(nomo) LIKE LOWER(?) OR LOWER(retposto) LIKE LOWER(?) "
-            "OR LOWER(organizo) LIKE LOWER(?) "
-            "ORDER BY nomo ASC LIMIT ?",
+            "SELECT * FROM contacts WHERE "
+            "LOWER(given_name) LIKE LOWER(?) OR LOWER(email) LIKE LOWER(?) "
+            "OR LOWER(organization) LIKE LOWER(?) "
+            "ORDER BY given_name ASC LIMIT ?",
             (f"%{query}%", f"%{query}%", f"%{query}%", limit),
         )
 
     def find_by_email(self, email: str) -> dict[str, Any] | None:
         return self.db.execute_one(
-            "SELECT * FROM kontaktoj WHERE LOWER(retposto) = LOWER(?)",
+            "SELECT * FROM contacts WHERE LOWER(email) = LOWER(?)",
             (email.strip(),),
         )
 
@@ -84,7 +84,7 @@ class ContactService(CRUDService):
         count = 0
         for vcard in vobject.readComponents(content):
             contact = self._vcard_to_contact(vcard)
-            if contact and contact.get("plena_nomo"):
+            if contact and contact.get("full_name"):
                 self.create(contact)
                 count += 1
         return count
@@ -128,8 +128,8 @@ class ContactService(CRUDService):
         now = datetime.now(timezone.utc).isoformat()
         contact: dict[str, Any] = {
             "uuid": str(uuid.uuid4()),
-            "kreita_je": now,
-            "modifita_je": now,
+            "created_at": now,
+            "updated_at": now,
         }
 
         given = ""
@@ -137,43 +137,43 @@ class ContactService(CRUDService):
         if hasattr(vcard, "n"):
             given = str(vcard.n.value.given) if vcard.n.value.given else ""
             family = str(vcard.n.value.family) if vcard.n.value.family else ""
-            contact["nomo"] = given
-            contact["familia_nomo"] = family
-            contact["plena_nomo"] = f"{given} {family}".strip()
+            contact["given_name"] = given
+            contact["family_name"] = family
+            contact["full_name"] = f"{given} {family}".strip()
 
         if hasattr(vcard, "fn"):
             fn_val = str(vcard.fn.value) if vcard.fn.value else ""
-            if not contact.get("plena_nomo"):
-                contact["plena_nomo"] = fn_val
-            if not contact.get("nomo") and not contact.get("familia_nomo"):
-                contact["nomo"] = fn_val
+            if not contact.get("full_name"):
+                contact["full_name"] = fn_val
+            if not contact.get("given_name") and not contact.get("family_name"):
+                contact["given_name"] = fn_val
 
         if hasattr(vcard, "email"):
             for email in vcard.contents.get("email", []):
                 addr = str(email.value) if email.value else ""
-                if addr and not contact.get("retposto"):
-                    contact["retposto"] = addr
+                if addr and not contact.get("email"):
+                    contact["email"] = addr
 
         if hasattr(vcard, "tel"):
             for tel in vcard.contents.get("tel", []):
                 num = str(tel.value) if tel.value else ""
-                if num and not contact.get("telefonnumero"):
-                    contact["telefonnumero"] = num
+                if num and not contact.get("phone"):
+                    contact["phone"] = num
 
         if hasattr(vcard, "org"):
             org_val = str(vcard.org.value) if vcard.org.value else ""
             if org_val:
-                contact["organizo"] = org_val
+                contact["organization"] = org_val
 
         if hasattr(vcard, "categories"):
             cats = str(vcard.categories.value) if vcard.categories.value else ""
             if cats:
-                contact["kategorio"] = ",".join(c.strip() for c in cats.split(","))
+                contact["category"] = ",".join(c.strip() for c in cats.split(","))
 
         if hasattr(vcard, "note"):
             note_val = str(vcard.note.value) if vcard.note.value else ""
             if note_val:
-                contact["notoj"] = note_val
+                contact["notes"] = note_val
 
         return contact
 
@@ -187,36 +187,36 @@ class ContactService(CRUDService):
 
         card = vobject.vCard()
         card.add("n")
-        family = contact.get("familia_nomo", "")
-        given = contact.get("nomo", "")
+        family = contact.get("family_name", "")
+        given = contact.get("given_name", "")
         card.n.value = vobject.vcard.Name(family=family, given=given)
 
         card.add("fn")
-        card.fn.value = contact.get("plena_nomo", "") or f"{given} {family}".strip()
+        card.fn.value = contact.get("full_name", "") or f"{given} {family}".strip()
 
-        email = contact.get("retposto", "")
+        email = contact.get("email", "")
         if email:
             card.add("email")
             card.email.value = email
             card.email.type_param = "INTERNET"
 
-        phone = contact.get("telefonnumero", "")
+        phone = contact.get("phone", "")
         if phone:
             card.add("tel")
             card.tel.value = phone
             card.tel.type_param = "VOICE"
 
-        org = contact.get("organizo", "")
+        org = contact.get("organization", "")
         if org:
             card.add("org")
             card.org.value = [org]
 
-        categories = contact.get("kategorio", "")
+        categories = contact.get("category", "")
         if categories:
             card.add("categories")
             card.categories.value = categories
 
-        note = contact.get("notoj", "")
+        note = contact.get("notes", "")
         if note:
             card.add("note")
             card.note.value = note

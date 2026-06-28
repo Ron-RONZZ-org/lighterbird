@@ -42,7 +42,7 @@ Calendar, todo (tasks), and journal module, forked from [A-organizi](../../A-org
 
 1. **Fork the service layer, not the CLI.** A-organizi's Typer CLI code stays behind. The service layer (`KalendaroService`, `TodoService`, `TaglibroService`) is what to carry forward.
 2. **Rename to English.** `kalendaro` → `calendar`, `okazajo` → `events`, `taglibro` → `journal`, `etikedoj` → `labels`.
-3. **DB column names stay Esperanto** for compatibility with existing user data (e.g., `komenco`, `fino`, `titolo`, `prioritato`).
+3. **DB column names use English** — migrated from Esperanto in v0.3.0 (e.g., `start`, `end`, `title`, `priority`).
 4. **Simplify the sync worker.** A-organizi's `sync_worker()` is a thread with polling loop (`time.sleep(5)`). Consider using an async pattern or a simpler polling model in lighterbird.
 5. **Strip duplicates from A-core.** A-organizi has its own `keyring.py` copy — use `core/keyring.py` instead.
 6. **Keep the RRULE shorthand system** — it's a genuine UX improvement over raw RFC 5545 syntax.

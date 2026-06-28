@@ -25,7 +25,7 @@ class SyncResult:
 def sync_account(
     host: str, port: int, use_ssl: bool,
     username: str, password: str,
-    konto_id: str,
+    account_email: str,
     db_store: Any,
     folders: list[str] | None = None,
     force: bool = False,
@@ -38,7 +38,7 @@ def sync_account(
         use_ssl: Use SSL
         username: Login username
         password: Login password
-        konto_id: Account email (primary key)
+        account_email: Account email (primary key)
         db_store: Object with .db (LighterbirdDB)
         folders: Specific folders to sync (None = sync all discovered)
         force: If True, re-download all messages
@@ -54,10 +54,10 @@ def sync_account(
         target_folders = folders or [f["name"] for f in available]
 
         for folder_name in target_folders:
-            client.ensure_folder(konto_id, folder_name, db_store)
+            client.ensure_folder(account_email, folder_name, db_store)
             fr = client.sync_folder(
-                folder_name, konto_id,
-                dosierujo_nomo=folder_name,
+                folder_name, account_email,
+                folder_name=folder_name,
                 db_store=db_store, force=force,
             )
             result.total += fr["total"]

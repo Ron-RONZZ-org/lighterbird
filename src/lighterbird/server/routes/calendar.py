@@ -26,13 +26,13 @@ def _calendar_to_response(cal: dict) -> CalendarResponse:
 def _event_to_response(evt: dict) -> EventResponse:
     return EventResponse(
         uuid=evt["uuid"],
-        calendar_uuid=evt.get("kalendaro_uuid", ""),
-        title=evt.get("titolo", ""),
-        start=evt.get("komenco", ""),
-        end=evt.get("fino", ""),
-        location=evt.get("loko", ""),
-        description=evt.get("priskribo", ""),
-        category=evt.get("kategorio", ""),
+        calendar_uuid=evt.get("calendar_uuid", ""),
+        title=evt.get("title", ""),
+        start=evt.get("start", ""),
+        end=evt.get("end", ""),
+        location=evt.get("location", ""),
+        description=evt.get("description", ""),
+        category=evt.get("category", ""),
     )
 
 
@@ -115,8 +115,8 @@ def list_events(
         q = query.lower()
         events = [
             e for e in events
-            if q in (e.get("titolo") or "").lower()
-            or q in (e.get("priskribo") or "").lower()
+            if q in (e.get("title") or "").lower()
+            or q in (e.get("description") or "").lower()
         ]
     return EventListResponse(events=[_event_to_response(e) for e in events])
 
@@ -135,13 +135,13 @@ def create_event(
                    f"Use !calendar account list to see available calendars.",
         )
     evt_data = {
-        "kalendaro_uuid": data.calendar_uuid,
-        "titolo": data.title,
-        "komenco": data.start,
-        "fino": data.end,
-        "loko": data.location,
-        "priskribo": data.description,
-        "kategorio": data.category,
+        "calendar_uuid": data.calendar_uuid,
+        "title": data.title,
+        "start": data.start,
+        "end": data.end,
+        "location": data.location,
+        "description": data.description,
+        "category": data.category,
     }
     evt = cal_svc.create_event(evt_data)
     return _event_to_response(evt)

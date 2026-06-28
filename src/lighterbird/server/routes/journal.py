@@ -37,8 +37,8 @@ def create_entry(
     svc: JournalService = Depends(get_journal_service),
 ):
     entry_data = {
-        "titolo": data.get("title", ""),
-        "teksto": data.get("text", ""),
+        "title": data.get("title", ""),
+        "text": data.get("text", ""),
         "dato": data.get("date", date.today().isoformat()),
     }
     entry = svc.create(entry_data)
@@ -61,8 +61,8 @@ def update_entry(
 ):
     updates = {}
     field_map = {
-        "title": "titolo",
-        "text": "teksto",
+        "title": "title",
+        "text": "text",
         "date": "dato",
     }
     for json_key, db_key in field_map.items():

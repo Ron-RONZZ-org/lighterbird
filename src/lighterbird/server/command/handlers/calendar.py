@@ -104,16 +104,16 @@ def event_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         )
 
     evt_data = {
-        "kalendaro_uuid": calendar_uuid,
-        "titolo": remaining[0],
-        "komenco": remaining[1],
-        "fino": remaining[2],
-        "loko": remaining[3] if len(remaining) > 3 else "",
-        "priskribo": "",
-        "kategorio": "",
+        "calendar_uuid": calendar_uuid,
+        "title": remaining[0],
+        "start": remaining[1],
+        "end": remaining[2],
+        "location": remaining[3] if len(remaining) > 3 else "",
+        "description": "",
+        "category": "",
     }
     evt = svc.create_event(evt_data)
-    return {"type": "status", "title": "Event Created", "data": {"uuid": evt["uuid"], "title": evt["titolo"]}}
+    return {"type": "status", "title": "Event Created", "data": {"uuid": evt["uuid"], "title": evt["title"]}}
 
 
 @command("calendar.event.view")
@@ -125,7 +125,7 @@ def event_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     evt = svc.get_event(remaining[0])
     if not evt:
         raise CommandValidationError(f"Event not found: {remaining[0][:8]}")
-    return {"type": "events", "title": evt.get("titolo", "(untitled)"), "data": normalize_event(evt)}
+    return {"type": "events", "title": evt.get("title", "(untitled)"), "data": normalize_event(evt)}
 
 
 @command("calendar.event.modify")
@@ -141,15 +141,15 @@ def event_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
     updates = {}
     if "title" in flags:
-        updates["titolo"] = flags["title"]
+        updates["title"] = flags["title"]
     if "start" in flags:
-        updates["komenco"] = flags["start"]
+        updates["start"] = flags["start"]
     if "end" in flags:
-        updates["fino"] = flags["end"]
+        updates["end"] = flags["end"]
     if "location" in flags:
-        updates["loko"] = flags["location"]
+        updates["location"] = flags["location"]
     if "description" in flags:
-        updates["priskribo"] = flags["description"]
+        updates["description"] = flags["description"]
     if updates:
         svc.events.update(uuid, updates)
     return {"type": "status", "title": "Event Modified", "data": {"uuid": uuid[:8]}}

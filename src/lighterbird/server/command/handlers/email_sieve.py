@@ -26,13 +26,13 @@ def _resolve_account_identifier(identifier: str) -> str | None:
     acct = svc.get_account(identifier)
     if acct:
         return identifier
-    # Try prefix match on retposto
+    # Try prefix match on email
     matches = svc.db.execute(
-        "SELECT retposto FROM kontoj WHERE retposto LIKE ? LIMIT 10",
+        "SELECT email FROM accounts WHERE email LIKE ? LIMIT 10",
         (f"{identifier}%",),
     )
     if len(matches) == 1:
-        return matches[0]["retposto"]
+        return matches[0]["email"]
     return None
 
 
@@ -62,7 +62,7 @@ def sieve_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     svc: EmailService = get_email_service()
     account_id = flags.get("account", "")
     resolved_id = _resolve_account_identifier(account_id) if account_id else None
-    scripts = svc.sieve.list_scripts(konto_id=resolved_id or None)
+    scripts = svc.sieve.list_scripts(account_email=resolved_id or None)
     return {"type": "status", "title": "Sieve Scripts", "data": {"scripts": scripts}}
 
 
@@ -78,7 +78,7 @@ def sieve_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     account_id = flags.get("account", "")
     resolved_id = _resolve_account_identifier(account_id) if account_id else None
     if resolved_id:
-        script = svc.sieve.get_script_with_activation(name, konto_id=resolved_id)
+        script = svc.sieve.get_script_with_activation(name, account_email=resolved_id)
     else:
         script = svc.sieve.get_script(name)
     if not script:
@@ -121,7 +121,7 @@ def sieve_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
     svc: EmailService = get_email_service()
     try:
-        script = svc.sieve.create_script(nomo=name, content=content)
+        script = svc.sieve.create_script(name=name, content=content)
     except ValueError as e:
         raise CommandValidationError(str(e))
     return {"type": "status", "title": "Script Created", "data": {"name": script["name"]}}
@@ -192,7 +192,7 @@ def sieve_activate(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
 
     priority = int(flags.get("priority", 0))
     svc: EmailService = get_email_service()
-    script = svc.sieve.activate_script(name, konto_id=resolved_id, priority=priority)
+    script = svc.sieve.activate_script(name, account_email=resolved_id, priority=priority)
     if not script:
         raise CommandValidationError(f"Script not found: {name}")
     return {"type": "status", "title": "Script Activated", "data": {"name": name, "account": resolved_id}}
@@ -218,7 +218,7 @@ def sieve_deactivate(remaining: list[str], flags: dict[str, str]) -> dict[str, A
         raise CommandValidationError(f"Account not found: {account_id[:20]}")
 
     svc: EmailService = get_email_service()
-    script = svc.sieve.deactivate_script(name, konto_id=resolved_id)
+    script = svc.sieve.deactivate_script(name, account_email=resolved_id)
     if not script:
         raise CommandValidationError(f"Script not found: {name}")
     return {"type": "status", "title": "Script Deactivated", "data": {"name": name, "account": resolved_id}}

@@ -17,7 +17,7 @@ class MessageService:
     def get_message(self, uuid_: str) -> dict[str, Any] | None:
         """Get a non-deleted message by UUID."""
         return self.db.execute_one(
-            "SELECT * FROM mesagoj WHERE uuid = ? AND forigita = 0", (uuid_,)
+            "SELECT * FROM messages WHERE uuid = ? AND is_deleted = 0", (uuid_,)
         )
 
     def find_by_uuid_prefix(self, prefix: str) -> list[dict[str, Any]]:
@@ -26,33 +26,33 @@ class MessageService:
             return []
         return list(
             self.db.execute(
-                "SELECT * FROM mesagoj WHERE uuid LIKE ? AND forigita = 0",
+                "SELECT * FROM messages WHERE uuid LIKE ? AND is_deleted = 0",
                 (f"{prefix}%",),
             )
         )
 
     def list_messages(
         self,
-        konto_id: str | None = None,
+        account_email: str | None = None,
         folder: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
         """List non-deleted messages, optionally filtered."""
-        conditions = ["m.forigita = 0"]
+        conditions = ["m.is_deleted = 0"]
         params: list[Any] = []
-        if konto_id:
-            conditions.append("m.konto_id = ?")
-            params.append(konto_id)
+        if account_email:
+            conditions.append("m.account_email = ?")
+            params.append(account_email)
         if folder:
-            conditions.append("m.dosierujo_nomo = ?")
+            conditions.append("m.folder_name = ?")
             params.append(folder)
         where = " AND ".join(conditions)
         sql = (
-            "SELECT m.*, COALESCE(m.dosierujo_nomo, '') AS dosierujo_nomo"
-            " FROM mesagoj m"
+            "SELECT m.*, COALESCE(m.folder_name, '') AS folder_name"
+            " FROM messages m"
             f" WHERE {where}"
-            " ORDER BY m.ricevita_je DESC LIMIT ? OFFSET ?"
+            " ORDER BY m.received_at DESC LIMIT ? OFFSET ?"
         )
         params.extend([limit, offset])
         return list(self.db.execute(sql, tuple(params)))
@@ -61,10 +61,10 @@ class MessageService:
         self, filters: dict[str, Any], limit: int = 50
     ) -> list[dict[str, Any]]:
         """Search messages with filters."""
-        conditions = ["m.forigita = 0"]
+        conditions = ["m.is_deleted = 0"]
         params: list[Any] = []
         if filters.get("query"):
-            conditions.append("(m.subjekto LIKE ? OR m.korpo LIKE ?)")
+            conditions.append("(m.subject LIKE ? OR m.body LIKE ?)")
             q = f"%{filters['query']}%"
             params.extend([q, q])
         if filters.get("from"):
@@ -74,22 +74,22 @@ class MessageService:
             conditions.append("m.al LIKE ?")
             params.append(f"%{filters['to']}%")
         if filters.get("subject"):
-            conditions.append("m.subjekto LIKE ?")
+            conditions.append("m.subject LIKE ?")
             params.append(f"%{filters['subject']}%")
         if filters.get("body"):
-            conditions.append("m.korpo LIKE ?")
+            conditions.append("m.body LIKE ?")
             params.append(f"%{filters['body']}%")
         if filters.get("after"):
-            conditions.append("m.ricevita_je >= ?")
+            conditions.append("m.received_at >= ?")
             params.append(filters["after"])
         if filters.get("before"):
-            conditions.append("m.ricevita_je <= ?")
+            conditions.append("m.received_at <= ?")
             params.append(filters["before"])
         if filters.get("read") is not None:
-            conditions.append("m.legita = ?")
+            conditions.append("m.is_read = ?")
             params.append(1 if filters["read"] else 0)
         if filters.get("account"):
-            conditions.append("m.konto_id = ?")
+            conditions.append("m.account_email = ?")
             params.append(filters["account"])
         # Folder filtering: list of folders to INCLUDE (by name)
         folder_names = filters.get("folder")
@@ -97,7 +97,7 @@ class MessageService:
             if isinstance(folder_names, str):
                 folder_names = [folder_names]
             placeholders = ",".join("?" for _ in folder_names)
-            conditions.append(f"m.dosierujo_nomo IN ({placeholders})")
+            conditions.append(f"m.folder_name IN ({placeholders})")
             params.extend(folder_names)
         # Exclude specific folders (e.g. Trash)
         exclude_folders = filters.get("exclude_folder")
@@ -106,24 +106,24 @@ class MessageService:
                 exclude_folders = [exclude_folders]
             placeholders = ",".join("?" for _ in exclude_folders)
             conditions.append(
-                f"(m.dosierujo_nomo IS NULL OR m.dosierujo_nomo NOT IN ({placeholders}))"
+                f"(m.folder_name IS NULL OR m.folder_name NOT IN ({placeholders}))"
             )
             params.extend(exclude_folders)
         where = " AND ".join(conditions)
         sql = (
             "SELECT m.*"
-            " FROM mesagoj m"
+            " FROM messages m"
             f" WHERE {where}"
-            " ORDER BY m.ricevita_je DESC LIMIT ?"
+            " ORDER BY m.received_at DESC LIMIT ?"
         )
         params.append(limit)
         try:
             rows = self.db.execute(sql, tuple(params))
         except Exception:
             fallback_sql = (
-                "SELECT m.* FROM mesagoj m"
-                " WHERE m.forigita = 0"
-                " ORDER BY m.ricevita_je DESC LIMIT ?"
+                "SELECT m.* FROM messages m"
+                " WHERE m.is_deleted = 0"
+                " ORDER BY m.received_at DESC LIMIT ?"
             )
             rows = self.db.execute(fallback_sql, (limit,))
         return list(rows)
@@ -152,17 +152,17 @@ class MessageService:
 
         placeholders = ",".join("?" for _ in ids)
         sql = (
-            "SELECT m.* FROM mesagoj m"
-            " WHERE m.forigita = 0"
+            "SELECT m.* FROM messages m"
+            " WHERE m.is_deleted = 0"
             " AND (m.message_id IN ({p}) OR m.in_reply_to IN ({p})"
             "      OR m.references IN ({p})"
             "      OR EXISTS ("
-            "        SELECT 1 FROM mesagoj m2"
+            "        SELECT 1 FROM messages m2"
             "        WHERE m2.message_id IN ({p})"
             "        AND (m.references LIKE '%' || m2.message_id || '%'"
             "             OR m.in_reply_to LIKE '%' || m2.message_id || '%')"
             "      ))"
-            " ORDER BY m.ricevita_je ASC"
+            " ORDER BY m.received_at ASC"
             " LIMIT ?"
         ).format(p=placeholders)
         params = list(ids) * 4 + [limit]

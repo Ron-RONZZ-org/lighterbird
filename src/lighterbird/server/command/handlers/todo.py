@@ -18,7 +18,6 @@ from typing import Any
 
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
-from lighterbird.server.command.response import normalize_todo
 from lighterbird.server.deps import get_todo_service
 from lighterbird.todo.services import TodoService
 
@@ -53,16 +52,12 @@ def todo_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-# ── List / Tree ──────────────────────────────────────────────────────
-
-
 @command("todo.list")
 def todo_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!todo list [--status pending|done]"""
     svc: TodoService = get_todo_service()
     status = flags.get("status")
-    todos = [normalize_todo(t)
-             for t in (svc.search("", status=status) if status else svc.list())]
+    todos = svc.search("", status=status) if status else svc.list()
     return {"type": "todo-list", "title": "Todos", "data": {"todos": todos}}
 
 
@@ -71,13 +66,9 @@ def todo_tree(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!todo tree [--status pending|done]"""
     svc: TodoService = get_todo_service()
     flat = svc.flatten_tree()
-    todos = [normalize_todo(t) for t in flat]
     return {"type": "todo-list", "title": "Todos (Tree)", "data": {
-        "todos": todos, "tree": True,
+        "todos": flat, "tree": True,
     }}
-
-
-# ── Add ──────────────────────────────────────────────────────────────
 
 
 @command("todo.add")
@@ -94,7 +85,6 @@ def todo_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     title = " ".join(remaining)
     svc: TodoService = get_todo_service()
 
-    # Resolve template if specified
     template_data = None
     if "template" in flags:
         tpl = svc.get_template_by_name(flags["template"])
@@ -104,19 +94,17 @@ def todo_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "Use !todo template list to see available templates.",
             )
         template_data = tpl
-        # If title_placeholder is set and no explicit title was given
-        # (remaining came from template processing), use placeholder
         if tpl.get("title_placeholder") and not remaining:
             title = tpl["title_placeholder"]
 
-    data = {
-        "titolo": title,
-        "priskribo": flags.get("description", ""),
-        "prioritato": flags.get("priority", "5"),
-        "limdato": flags.get("due", ""),
+    data: dict[str, Any] = {
+        "title": title,
+        "description": flags.get("description", ""),
+        "priority": flags.get("priority", "5"),
+        "due_date": flags.get("due"),
     }
 
-    # Parent (first comma-separated value is used; a task has one parent)
+    # Parent (first comma-separated value)
     if "parent" in flags:
         parent_uuids = [u.strip() for u in flags["parent"].split(",") if u.strip()]
         if parent_uuids:
@@ -129,14 +117,14 @@ def todo_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
     # Template reference
     if template_data:
-        data["shablono_uuid"] = template_data["uuid"]
+        data["template_uuid"] = template_data["uuid"]
 
-    # Template field values (stored as JSON in priskribo)
+    # Template field values (stored as JSON in description)
     text_fields = [v for k, v in flags.items() if k.startswith("text_")]
     if text_fields:
         tpl_values: dict[str, str] = {}
         try:
-            existing = json.loads(data.get("priskribo") or "{}")
+            existing = json.loads(data.get("description") or "{}")
             if isinstance(existing, dict):
                 tpl_values.update(existing)
         except (json.JSONDecodeError, TypeError):
@@ -147,7 +135,7 @@ def todo_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 tpl_values[key.strip()] = val.strip()
             else:
                 tpl_values[tf] = ""
-        data["priskribo"] = json.dumps(tpl_values)
+        data["description"] = json.dumps(tpl_values)
 
     # Dependency (comma-separated list)
     depends_on_raw = flags.get("dependency")
@@ -171,8 +159,7 @@ def todo_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         for fp in file_paths:
             try:
                 _attach_file(svc, todo["uuid"], fp)
-            except CommandValidationError as e:
-                # Skip invalid files but report them
+            except CommandValidationError:
                 pass
 
     return {
@@ -194,9 +181,8 @@ def _attach_file(svc: TodoService, todo_uuid: str, path_or_url: str) -> None:
         orig_name = os.path.basename(parsed.path) or "remote_file"
         svc.add_attachment(
             todo_uuid,
-            origina_nomo=orig_name,
-            origina_vojo=path_or_url,
-            dosier_peco="",
+            original_name=orig_name,
+            original_path=path_or_url,
         )
     elif os.path.exists(path_or_url):
         orig_name = os.path.basename(path_or_url)
@@ -208,19 +194,16 @@ def _attach_file(svc: TodoService, todo_uuid: str, path_or_url: str) -> None:
                 md5.update(chunk)
         svc.add_attachment(
             todo_uuid,
-            origina_nomo=orig_name,
-            origina_vojo=path_or_url,
-            grandeco=size,
-            md5_cheksumo=md5.hexdigest(),
+            original_name=orig_name,
+            original_path=path_or_url,
+            size=size,
+            md5_checksum=md5.hexdigest(),
         )
     else:
         raise CommandValidationError(
             f"File not found: {path_or_url}",
             "Provide a valid local path or URL.",
         )
-
-
-# ── View ──────────────────────────────────────────────────────────────
 
 
 @command("todo.view")
@@ -236,21 +219,14 @@ def todo_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         raise CommandValidationError(
             f"Todo not found: {remaining[0][:8]}",
         )
-    todo["dependencies"] = [
-        normalize_todo(t) for t in svc.get_dependencies(todo["uuid"])
-    ]
-    todo["blocked_tasks"] = [
-        normalize_todo(t) for t in svc.get_blocked_tasks(todo["uuid"])
-    ]
+    todo["dependencies"] = svc.get_dependencies(todo["uuid"])
+    todo["blocked_tasks"] = svc.get_blocked_tasks(todo["uuid"])
     todo["attachments"] = svc.get_attachments(todo["uuid"])
     return {
         "type": "status",
-        "title": todo.get("titolo", "(untitled)"),
-        "data": normalize_todo(todo),
+        "title": todo.get("title", "(untitled)"),
+        "data": todo,
     }
-
-
-# ── Done / Modify / Remove / Search ──────────────────────────────────
 
 
 @command("todo.done")
@@ -284,16 +260,16 @@ def todo_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     svc: TodoService = get_todo_service()
     updates: dict[str, Any] = {}
     field_map = {
-        "title": "titolo",
-        "description": "priskribo",
-        "due": "limdato",
-        "status": "stato",
+        "title": "title",
+        "description": "description",
+        "due": "due_date",
+        "status": "status",
     }
     for flag_key, db_key in field_map.items():
         if flag_key in flags:
             updates[db_key] = flags[flag_key]
     if "priority" in flags:
-        updates["prioritato"] = flags["priority"]
+        updates["priority"] = flags["priority"]
     if "parent" in flags:
         parent_val = flags["parent"]
         if parent_val.lower() == "none" or parent_val == "":
@@ -346,7 +322,7 @@ def todo_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     svc: TodoService = get_todo_service()
     query = " ".join(remaining) if remaining else flags.get("query", "")
     status = flags.get("status")
-    todos = [normalize_todo(t) for t in svc.search(query, status=status)]
+    todos = svc.search(query, status=status)
     return {
         "type": "todo-list",
         "title": "Todo Search",
@@ -416,14 +392,13 @@ def todo_template_add(remaining: list[str],
     for flag_key in ("text", "file", "markdown"):
         if flag_key in flags:
             raw = flags[flag_key]
-            # Split by comma or space-separated values
             names = [n.strip() for n in raw.replace(",", " ").split()
                      if n.strip()]
             for n in names:
-                fields.append({"nomo": n, "tipo": flag_key})
+                fields.append({"name": n, "type": flag_key})
 
     data = {
-        "nomo": name,
+        "name": name,
         "title_placeholder": flags.get("title-placeholder", ""),
         "fields": fields,
     }
@@ -435,7 +410,7 @@ def todo_template_add(remaining: list[str],
     return {
         "type": "status",
         "title": "Template Created",
-        "data": {"uuid": tpl["uuid"], "name": tpl["nomo"]},
+        "data": {"uuid": tpl["uuid"], "name": tpl["name"]},
     }
 
 
@@ -454,7 +429,7 @@ def todo_template_view(remaining: list[str],
         raise CommandValidationError(
             f"Template not found: {' '.join(remaining)}",
         )
-    return {"type": "status", "title": f"Template: {tpl['nomo']}", "data": tpl}
+    return {"type": "status", "title": f"Template: {tpl['name']}", "data": tpl}
 
 
 @command("todo.template.modify")
@@ -478,7 +453,7 @@ def todo_template_modify(remaining: list[str],
 
     data: dict[str, Any] = {}
     if "new-name" in flags:
-        data["nomo"] = flags["new-name"]
+        data["name"] = flags["new-name"]
     if "title-placeholder" in flags:
         data["title_placeholder"] = flags["title-placeholder"]
 
@@ -489,13 +464,12 @@ def todo_template_modify(remaining: list[str],
                      for n in flags[flag_key].replace(",", " ").split()
                      if n.strip()]
             for n in names:
-                fields.append({"nomo": n, "tipo": flag_key})
+                fields.append({"name": n, "type": flag_key})
     if fields:
-        # Check data loss
         in_use = svc.template_fields_in_use(tpl["uuid"])
         removed_non_empty = {
             fn for fn in in_use
-            if not any(f["nomo"].lstrip("!") == fn for f in fields)
+            if not any(f["name"].lstrip("!") == fn for f in fields)
         }
         if removed_non_empty:
             detail = ", ".join(
@@ -530,7 +504,7 @@ def todo_template_modify(remaining: list[str],
     return {
         "type": "status",
         "title": "Template Modified",
-        "data": {"uuid": updated["uuid"], "name": updated["nomo"]},
+        "data": {"uuid": updated["uuid"], "name": updated["name"]},
     }
 
 
@@ -553,5 +527,5 @@ def todo_template_remove(remaining: list[str],
     return {
         "type": "status",
         "title": "Template Removed",
-        "data": {"name": tpl["nomo"]},
+        "data": {"name": tpl["name"]},
     }

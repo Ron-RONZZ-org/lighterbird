@@ -14,7 +14,7 @@ from lighterbird.core.db import LighterbirdDB
 
 
 class CRUDService:
-    """CRUD operations with auto-timestamps (kreita_je, modifita_je).
+    """CRUD operations with auto-timestamps (created_at, updated_at).
 
     This is a simplified base class. Domain-specific services (accounts,
     messages, calendars, events) subclass this and add their own methods.
@@ -41,7 +41,7 @@ class CRUDService:
 
     def list(
         self,
-        order_by: str = "kreita_je",
+        order_by: str = "created_at",
         desc: bool = False,
         limit: int | None = None,
         offset: int | None = None,
@@ -71,7 +71,7 @@ class CRUDService:
             return []
         return self.db.execute(
             f"SELECT * FROM {self.table} WHERE uuid LIKE ? "
-            f"ORDER BY kreita_je DESC LIMIT ?",
+            f"ORDER BY created_at DESC LIMIT ?",
             (f"{prefix}%", limit),
         )
 
@@ -91,8 +91,8 @@ class CRUDService:
         """Create a new entry with auto-generated UUID and timestamps."""
         now = datetime.now(timezone.utc).isoformat()
         data.setdefault("uuid", str(uuid.uuid4()))
-        data.setdefault("kreita_je", now)
-        data["modifita_je"] = now
+        data.setdefault("created_at", now)
+        data["updated_at"] = now
 
         columns = list(data.keys())
         values = list(data.values())
@@ -109,7 +109,7 @@ class CRUDService:
     def update(self, uuid_: str, data: dict[str, Any]) -> dict[str, Any]:
         """Update an entry, preserving creation timestamp."""
         old_data = self.get(uuid_)
-        data["modifita_je"] = datetime.now(timezone.utc).isoformat()
+        data["updated_at"] = datetime.now(timezone.utc).isoformat()
 
         set_clauses = [f"{k} = ?" for k in data.keys()]
         values = list(data.values()) + [uuid_]

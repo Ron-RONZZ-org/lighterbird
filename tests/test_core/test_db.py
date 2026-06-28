@@ -198,7 +198,7 @@ class TestCRUDService:
         d.execute(
             "CREATE TABLE items ("
             "uuid TEXT PRIMARY KEY, name TEXT, value INTEGER, "
-            "kreita_je TEXT, modifita_je TEXT)"
+            "created_at TEXT, updated_at TEXT)"
         )
         return d
 
@@ -212,8 +212,8 @@ class TestCRUDService:
         entry = service.create({"name": "test", "value": 42})
         assert "uuid" in entry
         assert entry["name"] == "test"
-        assert "kreita_je" in entry
-        assert "modifita_je" in entry
+        assert "created_at" in entry
+        assert "updated_at" in entry
 
         fetched = service.get(entry["uuid"])
         assert fetched is not None

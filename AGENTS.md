@@ -31,7 +31,7 @@ The backend is forked from proven code in [A-lien](../A-lien) (email, contacts),
 - **User-facing strings**: English first (i18n can be added later — unlike the A-ecosystem, lighterbird does not mandate Esperanto)
 - **CLI command names**: English (`account`, `calendar`, `todo`, `search`) — the `!` commands are user-facing
 - **URL paths, route names**: lowercase with hyphens (`/api/email/messages`)
-- **Database columns**: Esperanto column names from A-lien/A-organizi are preserved for compatibility (e.g., `subjekto`, `ricevita_je`, `dosierujo_id`)
+- **Database columns**: English names throughout (e.g., `title`, `subject`, `created_at`, `email`). Migrated from the A-ecosystem's Esperanto convention in v0.3.0.
 
 ---
 
