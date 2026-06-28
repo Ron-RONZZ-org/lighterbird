@@ -60,6 +60,7 @@ def email_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 @command("email.list")
 def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email list [--limit N] [--folder NAME] [--not-folder NAME] [--all]
+                  [--sort newest|oldest|sender] [--group conversation]
 
     By default excludes Trash, Spam, and Junk folders.
     Use ``--all`` to include all folders (including trash).
@@ -67,12 +68,16 @@ def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     Use ``--not-folder`` to exclude specific folder(s); comma-separated.
     Folder names use the ``{email}/{folder}`` convention, e.g.
     ``user@gmail.com/INBOX``.
+    ``--sort`` controls display order: newest (default), oldest, sender.
+    ``--group`` groups by conversation thread.
     """
     svc: EmailService = get_email_service()
     limit = int(flags.get("limit", 20))
     include_all = "all" in flags
     folder_filter = flags.get("folder", "")
     not_folder_filter = flags.get("not-folder", "")
+    sort_by = flags.get("sort", "newest")
+    group_by = flags.get("group", "")
 
     filters = {}
     if folder_filter:
@@ -91,7 +96,6 @@ def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                         filters["folder"] = [fname]
                         break
                 else:
-                    # Account not found; use folder name as-is
                     filters.setdefault("folder", []).append(folder_name)
             else:
                 filters.setdefault("folder", []).append(folder_name)
@@ -120,11 +124,19 @@ def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     if "folder" in filters:
         fld = filters["folder"]
         frontend_filters["folder"] = fld[0] if isinstance(fld, list) else fld
+    if sort_by:
+        frontend_filters["sort"] = sort_by
+    if group_by:
+        frontend_filters["group"] = group_by
 
     return {
         "type": "email-list",
         "title": f"Inbox{title_suffix}",
-        "data": {"messages": messages, "total": len(messages), "filters": frontend_filters},
+        "data": {
+            "messages": messages,
+            "total": len(messages),
+            "filters": frontend_filters,
+        },
     }
 
 

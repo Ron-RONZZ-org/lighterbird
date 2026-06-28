@@ -94,6 +94,10 @@ class SendRequest(BaseModel):
     subject: str
     body: str = ""
     cc: list[str] = []
+    bcc: list[str] = []
+    priority: int = 3
+    body_format: str = "markdown"  # "markdown" | "html" | "plain"
+    attachments: list[str] = []  # base64-encoded file content strings
 
     model_config = {"extra": "forbid"}
 

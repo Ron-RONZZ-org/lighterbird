@@ -125,8 +125,14 @@ class EmailService:
         self.msg_ops.move_message(msg_uuid, destination_folder_name)
 
     def send_email(self, account_email: str, to: list[str], subject: str,
-                   body: str = "", cc: list[str] | None = None):
-        self.msg_ops.send_email(account_email, to, subject, body, cc=cc)
+                   body: str = "", cc: list[str] | None = None,
+                   bcc: list[str] | None = None, priority: int = 3,
+                   body_format: str = "markdown",
+                   attachments: list[str] | None = None):
+        self.msg_ops.send_email(account_email, to, subject, body, cc=cc,
+                                bcc=bcc, priority=priority,
+                                body_format=body_format,
+                                attachments=attachments)
 
     # ── MessageStore protocol (used by IMAP sync) ────────────────────────
 
