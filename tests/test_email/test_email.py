@@ -27,9 +27,9 @@ class TestEmailDB:
     def test_get_db_creates_tables(self, tmp_path: Path):
         db_path = tmp_path / "test_email.db"
         db = get_db(db_path)
-        assert db.table_exists("kontoj")
-        assert db.table_exists("dosierujoj")
-        assert db.table_exists("mesagoj")
+        assert db.table_exists("accounts")
+        assert db.table_exists("folders")
+        assert db.table_exists("messages")
 
     def test_get_db_idempotent(self, tmp_path: Path):
         db_path = tmp_path / "idemp.db"
@@ -48,13 +48,13 @@ class TestAccountService:
     def test_create_and_list(self, db):
         svc = AccountService(db)
         data = {
-            "nomo": "Test Account",
-            "retposto": "test@example.com",
-            "imap_servilo": "imap.example.com",
-            "smtp_servilo": "smtp.example.com",
+            "name": "Test Account",
+            "email": "test@example.com",
+            "imap_server": "imap.example.com",
+            "smtp_server": "smtp.example.com",
         }
         account = svc.create_account(data, "sekret123")
-        assert account["retposto"] == "test@example.com"
+        assert account["email"] == "test@example.com"
 
         accounts = svc.list_accounts()
         assert len(accounts) == 1
@@ -62,13 +62,13 @@ class TestAccountService:
     def test_get_account_with_password(self, db):
         svc = AccountService(db)
         data = {
-            "nomo": "PW Test",
-            "retposto": "pw@example.com",
-            "imap_servilo": "imap.example.com",
-            "smtp_servilo": "smtp.example.com",
+            "name": "PW Test",
+            "email": "pw@example.com",
+            "imap_server": "imap.example.com",
+            "smtp_server": "smtp.example.com",
         }
         account = svc.create_account(data, "mypassword")
-        # Account uses retposto (email) as PK
+        # Account uses email (email) as PK
         result = svc.get_account_with_password("pw@example.com")
         # Since keyring is unavailable in test, password may be empty
         svc.set_password("pw@example.com", "mypassword")
@@ -76,15 +76,15 @@ class TestAccountService:
     def test_resolve_account_by_email(self, db):
         svc = AccountService(db)
         data = {
-            "nomo": "Email Resolve",
-            "retposto": "resolve@example.com",
-            "imap_servilo": "imap.example.com",
-            "smtp_servilo": "smtp.example.com",
+            "name": "Email Resolve",
+            "email": "resolve@example.com",
+            "imap_server": "imap.example.com",
+            "smtp_server": "smtp.example.com",
         }
         svc.create_account(data, "pw")
         acct = svc.get("resolve@example.com")
         assert acct is not None
-        assert acct["retposto"] == "resolve@example.com"
+        assert acct["email"] == "resolve@example.com"
 
 
 class TestMessageService:
@@ -96,29 +96,29 @@ class TestMessageService:
         # Create an account first
         acct_svc = AccountService(db)
         acct = acct_svc.create_account({
-            "nomo": "Msg Test",
-            "retposto": "msg@example.com",
-            "imap_servilo": "imap.example.com",
-            "smtp_servilo": "smtp.example.com",
+            "name": "Msg Test",
+            "email": "msg@example.com",
+            "imap_server": "imap.example.com",
+            "smtp_server": "smtp.example.com",
         }, "pw")
 
-        # Insert a message manually using retposto as konto_id
+        # Insert a message manually using email as account_email
         import uuid
         msg_uuid = str(uuid.uuid4())
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc).isoformat()
         db.execute(
-            "INSERT INTO mesagoj (uuid, konto_id, de, al, subjekto, korpo, "
-            "ricevita_je, kreita_je, modifita_je) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (msg_uuid, acct["retposto"], "sender@example.com", '["me@example.com"]',
+            "INSERT INTO messages (uuid, account_email, from_addr, to_recipients, subject, body, "
+            "received_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (msg_uuid, acct["email"], "sender@example.com", '["me@example.com"]',
              "Hello", "Test body", now, now, now),
         )
 
         svc = MessageService(db)
         msg = svc.get_message(msg_uuid)
         assert msg is not None
-        assert msg["subjekto"] == "Hello"
-        assert msg["korpo"] == "Test body"
+        assert msg["subject"] == "Hello"
+        assert msg["body"] == "Test body"
 
         msgs = svc.list_messages()
         assert len(msgs) == 1
@@ -223,12 +223,12 @@ class TestParser:
         msg.set_payload("Hello World")
 
         data = parse_email_message(msg, "user@example.com", "INBOX", 42)
-        assert data["subjekto"] == "Test"
-        assert data["de"] == "sender@example.com"
-        assert data["korpo"] == "Hello World"
+        assert data["subject"] == "Test"
+        assert data["from_addr"] == "sender@example.com"
+        assert data["body"] == "Hello World"
         assert data["imap_uid"] == 42
-        assert data["konto_id"] == "user@example.com"
-        assert data["dosierujo_nomo"] == "INBOX"
+        assert data["account_email"] == "user@example.com"
+        assert data["folder_name"] == "INBOX"
 
     def test_parse_multipart_message(self):
         from email.mime.multipart import MIMEMultipart
@@ -243,5 +243,5 @@ class TestParser:
         msg.attach(MIMEText("<p>HTML body</p>", "html", "utf-8"))
 
         data = parse_email_message(msg, "user@example.com", "INBOX", 1)
-        assert "Plain body" in data["korpo"]
-        assert "HTML body" in data["html_korpo"] or "p" in data.get("html_korpo", "")
+        assert "Plain body" in data["body"]
+        assert "HTML body" in data["html_body"] or "p" in data.get("html_body", "")

@@ -69,11 +69,11 @@ def contacts_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
     svc: ContactService = get_contact_service()
     data = {
-        "nomo": name,
-        "retposto": email,
-        "telefonnumero": phone,
-        "organizo": org,
-        "notoj": notes,
+        "given_name": name,
+        "email": email,
+        "phone": phone,
+        "organization": org,
+        "notes": notes,
     }
     contact = svc.create(data)
     return {"type": "status", "title": "Contact Added", "data": {"uuid": contact["uuid"], "name": name}}
@@ -91,7 +91,7 @@ def contacts_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
         contact = svc.find_by_email(identifier)
     if not contact:
         raise CommandValidationError(f"Contact not found: {identifier[:16]}")
-    return {"type": "status", "title": contact.get("nomo", "(unnamed)"), "data": normalize_contact(contact)}
+    return {"type": "status", "title": contact.get("given_name", "(unnamed)"), "data": normalize_contact(contact)}
 
 
 @command("contacts.modify")
@@ -102,7 +102,7 @@ def contacts_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, An
     uuid = remaining[0]
     svc: ContactService = get_contact_service()
     updates = {}
-    field_map = {"name": "nomo", "email": "retposto", "phone": "telefonnumero", "organization": "organizo", "org": "organizo", "notes": "notoj"}
+    field_map = {"name": "given_name", "email": "email", "phone": "phone", "organization": "organization", "org": "organization", "notes": "notes"}
     for flag_key, db_key in field_map.items():
         if flag_key in flags:
             updates[db_key] = flags[flag_key]

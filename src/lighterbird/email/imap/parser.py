@@ -16,8 +16,8 @@ from lighterbird.email.imap.helpers import decode_mime_header, parse_address_lis
 
 def parse_email_message(
     msg: Any,
-    konto_id: str,
-    dosierujo_nomo: str,
+    account_email: str,
+    folder_name: str,
     imap_uid: int,
     store_attachments: bool = True,
 ) -> dict[str, Any]:
@@ -25,14 +25,14 @@ def parse_email_message(
 
     Args:
         msg: Email message object (from email.message_from_bytes).
-        konto_id: Account email.
-        dosierujo_nomo: Folder name.
+        account_email: Account email.
+        folder_name: Folder name.
         imap_uid: IMAP UID.
         store_attachments: If True, persist attachment blobs via
             AttachmentStore and include attachment metadata in the result.
 
     Returns:
-        Dict with all fields for the mesagoj table, plus an extra
+        Dict with all fields for the messages table, plus an extra
         ``_attachments`` key with attachment metadata if any were found.
     """
     now = datetime.now(timezone.utc).isoformat()
@@ -47,11 +47,11 @@ def parse_email_message(
     cc_raw = decode_mime_header(msg.get("Cc", ""))
     date_str = msg.get("Date", "")
 
-    ricevita_je = now
+    received_at = now
     if date_str:
         try:
             dt = parsedate_to_datetime(date_str)
-            ricevita_je = dt.isoformat()
+            received_at = dt.isoformat()
         except (TypeError, ValueError):
             pass
 
@@ -106,24 +106,24 @@ def parse_email_message(
 
     data: dict[str, Any] = {
         "uuid": str(uuid_mod.uuid4()),
-        "konto_id": konto_id,
-        "dosierujo_nomo": dosierujo_nomo,
+        "account_email": account_email,
+        "folder_name": folder_name,
         "message_id": message_id,
         "in_reply_to": in_reply_to,
         "imap_uid": imap_uid,
-        "de": from_header,
-        "al": json.dumps(parse_address_list(to_raw), ensure_ascii=False),
-        "kc": json.dumps(parse_address_list(cc_raw), ensure_ascii=False),
-        "subjekto": subject,
-        "korpo": body,
-        "html_korpo": html_body,
-        "prioritato": 5,
-        "legita": 0,
-        "stelo": 0,
-        "forigita": 0,
-        "ricevita_je": ricevita_je,
-        "kreita_je": now,
-        "modifita_je": now,
+        "from_addr": from_header,
+        "to_recipients": json.dumps(parse_address_list(to_raw), ensure_ascii=False),
+        "cc_recipients": json.dumps(parse_address_list(cc_raw), ensure_ascii=False),
+        "subject": subject,
+        "body": body,
+        "html_body": html_body,
+        "priority": 5,
+        "is_read": 0,
+        "is_starred": 0,
+        "is_deleted": 0,
+        "received_at": received_at,
+        "created_at": now,
+        "updated_at": now,
     }
 
     if attachments:
@@ -132,7 +132,7 @@ def parse_email_message(
             {
                 "dosiernomo": a["filename"],
                 "mime_tipo": a["mime_type"],
-                "grandeco": a["size"],
+                "size": a["size"],
                 "content_id": a["content_id"],
             }
             for a in attachments

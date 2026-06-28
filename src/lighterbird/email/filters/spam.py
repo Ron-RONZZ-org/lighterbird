@@ -13,7 +13,7 @@ from typing import Any
 class SpamManager:
     """Local spam blocklist management.
 
-    Blocks are stored in the email DB (using the mesagoj table's
+    Blocks are stored in the email DB (using the messages table's
     ``spamo`` flag) and optionally exported as Sieve rules.
     """
 
@@ -39,11 +39,11 @@ class SpamManager:
             "uuid": str(uuid.uuid4()),
             "type": "sender",
             "pattern": sender.strip().lower(),
-            "kreita_je": now,
-            "modifita_je": now,
+            "created_at": now,
+            "updated_at": now,
         }
         return self.db.execute_one(
-            "INSERT INTO spam_blockoj (uuid, type, pattern, kreita_je, modifita_je) "
+            "INSERT INTO spam_blocks (uuid, type, pattern, created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?) RETURNING *",
             (block["uuid"], block["type"], block["pattern"], now, now),
         )
@@ -68,22 +68,22 @@ class SpamManager:
             "uuid": str(uuid.uuid4()),
             "type": "domain",
             "pattern": domain,
-            "kreita_je": now,
-            "modifita_je": now,
+            "created_at": now,
+            "updated_at": now,
         }
         return self.db.execute_one(
-            "INSERT INTO spam_blockoj (uuid, type, pattern, kreita_je, modifita_je) "
+            "INSERT INTO spam_blocks (uuid, type, pattern, created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?) RETURNING *",
             (block["uuid"], block["type"], block["pattern"], now, now),
         )
 
     def unblock(self, block_uuid: str) -> None:
         """Remove a block by UUID."""
-        self.db.execute("DELETE FROM spam_blockoj WHERE uuid = ?", (block_uuid,))
+        self.db.execute("DELETE FROM spam_blocks WHERE uuid = ?", (block_uuid,))
 
     def list_blocks(self) -> list[dict[str, Any]]:
         """List all spam blocks."""
-        return self.db.execute("SELECT * FROM spam_blockoj ORDER BY kreita_je DESC")
+        return self.db.execute("SELECT * FROM spam_blocks ORDER BY created_at DESC")
 
     # ── Sieve export ────────────────────────────────────────────────────
 

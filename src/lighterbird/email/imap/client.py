@@ -137,25 +137,25 @@ class IMAPClient:
                 pass
         return result
 
-    def ensure_folder(self, konto_id: str, folder_name: str, db_store: Any) -> str:
+    def ensure_folder(self, account_email: str, folder_name: str, db_store: Any) -> str:
         """Ensure folder exists in local DB, return its name.
 
-        Uses ``(konto_id, nomo)`` as the natural key (INSERT OR IGNORE).
+        Uses ``(account_email, name)`` as the natural key (INSERT OR IGNORE).
         """
         now = datetime.now(timezone.utc).isoformat()
         try:
             db_store.db.execute(
-                "INSERT OR IGNORE INTO dosierujoj "
-                "(konto_id, nomo, kreita_je, modifita_je) "
+                "INSERT OR IGNORE INTO folders "
+                "(account_email, name, created_at, updated_at) "
                 "VALUES (?, ?, ?, ?)",
-                (konto_id, folder_name, now, now),
+                (account_email, folder_name, now, now),
             )
         except Exception:
             pass
         return folder_name
 
     def sync_folder(
-        self, folder: str, konto_id: str, dosierujo_nomo: str,
+        self, folder: str, account_email: str, folder_name: str,
         db_store: Any, force: bool = False,
     ) -> dict[str, Any]:
         """Sync messages in a single folder.
@@ -195,8 +195,8 @@ class IMAPClient:
             known_uids: set[int] = set()
             if not force:
                 rows = db_store.db.execute(
-                    "SELECT imap_uid FROM mesagoj WHERE konto_id = ? AND dosierujo_nomo = ? AND imap_uid IS NOT NULL AND forigita = 0",
-                    (konto_id, dosierujo_nomo),
+                    "SELECT imap_uid FROM messages WHERE account_email = ? AND folder_name = ? AND imap_uid IS NOT NULL AND is_deleted = 0",
+                    (account_email, folder_name),
                 )
                 known_uids = {r["imap_uid"] for r in rows}
             else:
@@ -236,7 +236,7 @@ class IMAPClient:
                         from lighterbird.email.imap.parser import parse_email_message
                         from lighterbird.core.storage import AttachmentStore
                         msg = email_lib.message_from_bytes(raw_data)
-                        data = parse_email_message(msg, konto_id, dosierujo_nomo, imap_uid, store_attachments=True)
+                        data = parse_email_message(msg, account_email, folder_name, imap_uid, store_attachments=True)
                         # Store attachment blobs if any
                         if "_attachments_data" in data:
                             uid_str = str(uuid_mod.uuid4())
@@ -249,7 +249,7 @@ class IMAPClient:
                                         f"Attachment store error for UID {imap_uid}: {store_err}"
                                     )
                         # Insert or update message
-                        msg_uuid = store_message(db_store.db, data, force=force, konto_id=konto_id, dosierujo_nomo=dosierujo_nomo)
+                        msg_uuid = store_message(db_store.db, data, force=force, account_email=account_email, folder_name=folder_name)
                         # Store attachment metadata in aldonajxoj table
                         if "_attachments_meta" in data:
                             now_ts = datetime.now(timezone.utc).isoformat()
@@ -259,10 +259,10 @@ class IMAPClient:
                                     store_path = f"{uid_str}/{meta['content_id']}"
                                     db_store.db.execute(
                                         "INSERT OR IGNORE INTO aldonajxoj "
-                                        "(uuid, mesago_uuid, filename, mime_type, size, content_id, storage_path, kreita_je, modifita_je) "
+                                        "(uuid, message_uuid, filename, mime_type, size, content_id, storage_path, created_at, updated_at) "
                                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                                         (att_uuid, msg_uuid, meta["dosiernomo"], meta["mime_tipo"],
-                                         meta["grandeco"], meta["content_id"], store_path,
+                                         meta["size"], meta["content_id"], store_path,
                                          now_ts, now_ts),
                                     )
                                 except Exception as meta_err:
@@ -282,10 +282,10 @@ def store_message(
     db: Any,
     data: dict[str, Any],
     force: bool = False,
-    konto_id: str | None = None,
-    dosierujo_nomo: str | None = None,
+    account_email: str | None = None,
+    folder_name: str | None = None,
 ) -> str:
-    """Insert or update a message in mesagoj table.
+    """Insert or update a message in messages table.
 
     Uses ``Message-ID`` for cross-folder dedup when available.
     Falls back to creating a new UUID for messages without one.
@@ -294,80 +294,81 @@ def store_message(
     message_id = data.get("message_id")
 
     # Try dedup by Message-ID first
-    if message_id and konto_id:
+    if message_id and account_email:
         existing = db.execute_one(
-            "SELECT uuid, legita, stelo FROM mesagoj "
-            "WHERE konto_id = ? AND message_id = ?",
-            (konto_id, message_id),
+            "SELECT uuid, is_read, is_starred FROM messages "
+            "WHERE account_email = ? AND message_id = ?",
+            (account_email, message_id),
         )
         if existing:
             msg_uuid = existing["uuid"]
             if force:
-                local_legita = existing["legita"]
-                local_stelo = existing["stelo"]
-                db.execute("DELETE FROM mesagoj WHERE uuid = ?", (msg_uuid,))
+                is_read = existing["is_read"]
+                is_starred = existing["is_starred"]
+                db.execute("DELETE FROM messages WHERE uuid = ?", (msg_uuid,))
                 # Re-insert preserving read/star state
-                _insert_message(db, data, msg_uuid, konto_id, dosierujo_nomo)
+                _insert_message(db, data, msg_uuid, account_email, folder_name)
                 db.execute(
-                    "UPDATE mesagoj SET legita = ?, stelo = ? WHERE uuid = ?",
-                    (local_legita, local_stelo, msg_uuid),
+                    "UPDATE messages SET is_read = ?, is_starred = ? WHERE uuid = ?",
+                    (is_read, is_starred, msg_uuid),
                 )
             else:
                 # Update folder and UID for existing message
                 db.execute(
-                    "UPDATE mesagoj SET dosierujo_nomo = ?, imap_uid = ?, "
-                    "modifita_je = ? WHERE uuid = ?",
-                    (dosierujo_nomo, data.get("imap_uid"),
+                    "UPDATE messages SET folder_name = ?, imap_uid = ?, "
+                    "updated_at = ? WHERE uuid = ?",
+                    (folder_name, data.get("imap_uid"),
                      datetime.now(timezone.utc).isoformat(), msg_uuid),
                 )
             return msg_uuid
 
     # Fall back to UID-based dedup (per-folder)
     imap_uid = data.get("imap_uid")
-    if imap_uid is not None and konto_id and dosierujo_nomo:
+    if imap_uid is not None and account_email and folder_name:
         existing = db.execute_one(
-            "SELECT uuid, legita, stelo FROM mesagoj "
-            "WHERE konto_id = ? AND dosierujo_nomo = ? AND imap_uid = ?",
-            (konto_id, dosierujo_nomo, imap_uid),
+            "SELECT uuid, is_read, is_starred FROM messages "
+            "WHERE account_email = ? AND folder_name = ? AND imap_uid = ?",
+            (account_email, folder_name, imap_uid),
         )
         if existing:
             msg_uuid = existing["uuid"]
             if force:
-                local_legita = existing["legita"]
-                local_stelo = existing["stelo"]
-                db.execute("DELETE FROM mesagoj WHERE uuid = ?", (msg_uuid,))
-                _insert_message(db, data, msg_uuid, konto_id, dosierujo_nomo)
+                is_read = existing["is_read"]
+                is_starred = existing["is_starred"]
+                db.execute("DELETE FROM messages WHERE uuid = ?", (msg_uuid,))
+                _insert_message(db, data, msg_uuid, account_email, folder_name)
                 db.execute(
-                    "UPDATE mesagoj SET legita = ?, stelo = ? WHERE uuid = ?",
-                    (local_legita, local_stelo, msg_uuid),
+                    "UPDATE messages SET is_read = ?, is_starred = ? WHERE uuid = ?",
+                    (is_read, is_starred, msg_uuid),
                 )
             else:
                 return msg_uuid  # Already known
 
     # New message — insert
-    _insert_message(db, data, msg_uuid, konto_id, dosierujo_nomo)
+    _insert_message(db, data, msg_uuid, account_email, folder_name)
     return msg_uuid
 
 
 def _insert_message(
     db: Any, data: dict[str, Any],
-    msg_uuid: str, konto_id: str | None, dosierujo_nomo: str | None,
+    msg_uuid: str, account_email: str | None, folder_name: str | None,
 ) -> None:
     """Insert a message row."""
     db.execute(
-        """INSERT OR REPLACE INTO mesagoj
-           (uuid, konto_id, dosierujo_nomo, message_id, in_reply_to,
-            imap_uid, de, al, kc, subjekto, korpo, html_korpo,
-            prioritato, legita, stelo, forigita,
-            ricevita_je, kreita_je, modifita_je)
+        """INSERT OR REPLACE INTO messages
+           (uuid, account_email, folder_name, message_id, in_reply_to,
+            imap_uid, from_addr, to_recipients, cc_recipients,
+            subject, body, html_body,
+            priority, is_read, is_starred, is_deleted,
+            received_at, created_at, updated_at)
            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-        (msg_uuid, konto_id or data.get("konto_id", ""),
-         dosierujo_nomo or data.get("dosierujo_nomo"),
+        (msg_uuid, account_email or data.get("account_email", ""),
+         folder_name or data.get("folder_name"),
          data.get("message_id", ""), data.get("in_reply_to", ""),
-         data.get("imap_uid"), data.get("de", ""), data.get("al", "[]"),
-         data.get("kc", "[]"), data.get("subjekto", ""), data.get("korpo", ""),
-         data.get("html_korpo", ""), data.get("prioritato", 5),
-         int(data.get("legita", 0)), int(data.get("stelo", 0)),
-         int(data.get("forigita", 0)), data.get("ricevita_je", ""),
-         data.get("kreita_je", ""), data.get("modifita_je", "")),
+         data.get("imap_uid"), data.get("from_addr", ""), data.get("to_recipients", "[]"),
+         data.get("cc_recipients", "[]"), data.get("subject", ""), data.get("body", ""),
+         data.get("html_body", ""), data.get("priority", 5),
+         int(data.get("is_read", 0)), int(data.get("is_starred", 0)),
+         int(data.get("is_deleted", 0)), data.get("received_at", ""),
+         data.get("created_at", ""), data.get("updated_at", "")),
     )

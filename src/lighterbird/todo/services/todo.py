@@ -12,11 +12,11 @@ from lighterbird.core.priority import eval_safe, validate_safe
 
 
 class TodoService(CRUDService):
-    """CRUD service for taskoj (todos) with priority formulas, labels,
+    """CRUD service for tasks with priority formulas, labels,
     subtask hierarchy, dependencies, attachments, and templates."""
 
     def __init__(self, db):
-        super().__init__(db, "taskoj")
+        super().__init__(db, "tasks")
 
     # ── Search & List ───────────────────────────────────────────────────
 
@@ -27,16 +27,16 @@ class TodoService(CRUDService):
         conditions: list[str] = []
         params: list[Any] = []
         if query:
-            conditions.append("(LOWER(titolo) LIKE LOWER(?)"
-                              " OR LOWER(priskribo) LIKE LOWER(?))")
+            conditions.append("(LOWER(title) LIKE LOWER(?)"
+                              " OR LOWER(description) LIKE LOWER(?))")
             params.extend([f"%{query}%", f"%{query}%"])
         if status:
-            conditions.append("stato = ?")
+            conditions.append("status = ?")
             params.append(status)
         where = " AND ".join(conditions)
         rows = self.db.execute(
-            f"SELECT * FROM taskoj WHERE {where} ORDER BY"
-            f" kreita_je DESC LIMIT ?",
+            f"SELECT * FROM tasks WHERE {where} ORDER BY"
+            f" created_at DESC LIMIT ?",
             (*params, limit),
         )
         for row in rows:
@@ -48,8 +48,8 @@ class TodoService(CRUDService):
         if not query:
             return []
         rows = self.db.execute(
-            "SELECT uuid, titolo FROM taskoj WHERE LOWER(titolo)"
-            " LIKE LOWER(?) ORDER BY kreita_je DESC LIMIT ?",
+            "SELECT uuid, title FROM tasks WHERE LOWER(title)"
+            " LIKE LOWER(?) ORDER BY created_at DESC LIMIT ?",
             (f"%{query}%", limit),
         )
         return rows
@@ -65,22 +65,17 @@ class TodoService(CRUDService):
     def get_tree(self, parent_uuid: str | None = None,
                  depth: int = 0, max_depth: int = 10
                  ) -> list[dict[str, Any]]:
-        """Recursively build a tree of todos.
-
-        If parent_uuid is None, return root-level items
-        (those with parent_uuid IS NULL).
-        """
         if depth > max_depth:
             return []
         if parent_uuid is None:
             rows = self.db.execute(
-                "SELECT * FROM taskoj WHERE parent_uuid IS NULL"
-                " ORDER BY sort_order, kreita_je DESC",
+                "SELECT * FROM tasks WHERE parent_uuid IS NULL"
+                " ORDER BY sort_order, created_at DESC",
             )
         else:
             rows = self.db.execute(
-                "SELECT * FROM taskoj WHERE parent_uuid = ?"
-                " ORDER BY sort_order, kreita_je DESC",
+                "SELECT * FROM tasks WHERE parent_uuid = ?"
+                " ORDER BY sort_order, created_at DESC",
                 (parent_uuid,),
             )
         result = []
@@ -93,25 +88,24 @@ class TodoService(CRUDService):
         return result
 
     def flatten_tree(self, parent_uuid: str | None = None) -> list[dict[str, Any]]:
-        """Return a flat list with depth metadata for frontend tree view."""
         flat: list[dict[str, Any]] = []
 
         def _walk(pid: str | None, depth: int) -> None:
             if pid is None:
                 rows = self.db.execute(
-                    "SELECT * FROM taskoj WHERE parent_uuid IS NULL"
-                    " ORDER BY sort_order, kreita_je DESC",
+                    "SELECT * FROM tasks WHERE parent_uuid IS NULL"
+                    " ORDER BY sort_order, created_at DESC",
                 )
             else:
                 rows = self.db.execute(
-                    "SELECT * FROM taskoj WHERE parent_uuid = ?"
-                    " ORDER BY sort_order, kreita_je DESC",
+                    "SELECT * FROM tasks WHERE parent_uuid = ?"
+                    " ORDER BY sort_order, created_at DESC",
                     (pid,),
                 )
             for row in rows:
                 has_children = bool(
                     self.db.execute_one(
-                        "SELECT 1 FROM taskoj WHERE parent_uuid = ? LIMIT 1",
+                        "SELECT 1 FROM tasks WHERE parent_uuid = ? LIMIT 1",
                         (row["uuid"],),
                     )
                 )
@@ -127,7 +121,6 @@ class TodoService(CRUDService):
         return flat
 
     def get_with_children(self, uuid_: str) -> dict[str, Any] | None:
-        """Get a todo with its children nested inside."""
         todo = self.get(uuid_)
         if not todo:
             return None
@@ -136,7 +129,6 @@ class TodoService(CRUDService):
         return todo
 
     def move_as_child(self, uuid_: str, parent_uuid_: str | None) -> None:
-        """Move a todo under a new parent (or to root if parent is None)."""
         self.update(uuid_, {"parent_uuid": parent_uuid_})
 
     # ── Override hooks ──────────────────────────────────────────────────
@@ -145,13 +137,13 @@ class TodoService(CRUDService):
         """Reparent children when a todo is deleted (not cascade)."""
         if data:
             children = self.db.execute(
-                "SELECT uuid FROM taskoj WHERE parent_uuid = ?",
+                "SELECT uuid FROM tasks WHERE parent_uuid = ?",
                 (uuid_,),
             )
             grandparent = data.get("parent_uuid")
             for child in children:
                 self.db.execute(
-                    "UPDATE taskoj SET parent_uuid = ? WHERE uuid = ?",
+                    "UPDATE tasks SET parent_uuid = ? WHERE uuid = ?",
                     (grandparent, child["uuid"]),
                 )
 
@@ -162,10 +154,10 @@ class TodoService(CRUDService):
             now = datetime.now(timezone.utc).isoformat()
             dep_list = depends_on if isinstance(depends_on, list) else [depends_on]
             for dep_uuid in dep_list:
-                if dep_uuid:  # skip empty strings
+                if dep_uuid:
                     self.db.execute(
-                        "INSERT OR IGNORE INTO todoj_dependoj"
-                        " (task_uuid, dependanta_je, type, kreita_je)"
+                        "INSERT OR IGNORE INTO todo_dependencies"
+                        " (task_uuid, depends_on, type, created_at)"
                         " VALUES (?, ?, 'blocked_by', ?)",
                         (result["uuid"], dep_uuid, now),
                     )
@@ -173,107 +165,97 @@ class TodoService(CRUDService):
     # ── Dependencies ────────────────────────────────────────────────────
 
     def add_dependency(self, task_uuid: str, depends_on_uuid: str) -> None:
-        """Declare that task_uuid depends on depends_on_uuid."""
         if task_uuid == depends_on_uuid:
             raise ValueError("A task cannot depend on itself.")
         now = datetime.now(timezone.utc).isoformat()
         self.db.execute(
-            "INSERT OR IGNORE INTO todoj_dependoj"
-            " (task_uuid, dependanta_je, type, kreita_je)"
+            "INSERT OR IGNORE INTO todo_dependencies"
+            " (task_uuid, depends_on, type, created_at)"
             " VALUES (?, ?, 'blocked_by', ?)",
             (task_uuid, depends_on_uuid, now),
         )
 
     def remove_dependency(self, task_uuid: str, depends_on_uuid: str) -> None:
-        """Remove a dependency."""
         self.db.execute(
-            "DELETE FROM todoj_dependoj"
-            " WHERE task_uuid = ? AND dependanta_je = ?",
+            "DELETE FROM todo_dependencies"
+            " WHERE task_uuid = ? AND depends_on = ?",
             (task_uuid, depends_on_uuid),
         )
 
     def get_dependencies(self, task_uuid: str) -> list[dict[str, Any]]:
-        """Get all tasks that this task depends on (blockers)."""
         return self.db.execute(
-            "SELECT t.* FROM taskoj t"
-            " JOIN todoj_dependoj d ON t.uuid = d.dependanta_je"
+            "SELECT t.* FROM tasks t"
+            " JOIN todo_dependencies d ON t.uuid = d.depends_on"
             " WHERE d.task_uuid = ?",
             (task_uuid,),
         )
 
     def get_blocked_tasks(self, task_uuid: str) -> list[dict[str, Any]]:
-        """Get all tasks that depend on this task (blocked tasks)."""
         return self.db.execute(
-            "SELECT t.* FROM taskoj t"
-            " JOIN todoj_dependoj d ON t.uuid = d.task_uuid"
-            " WHERE d.dependanta_je = ?",
+            "SELECT t.* FROM tasks t"
+            " JOIN todo_dependencies d ON t.uuid = d.task_uuid"
+            " WHERE d.depends_on = ?",
             (task_uuid,),
         )
 
     # ── Attachments ─────────────────────────────────────────────────────
 
     def add_attachment(self, todo_uuid: str,
-                       origina_nomo: str,
-                       origina_vojo: str = "",
-                       kasko_vojo: str = "",
-                       dosier_peco: str = "",
-                       grandeco: int = 0,
-                       md5_cheksumo: str = "") -> dict[str, Any]:
-        """Attach a file reference to a todo."""
+                       original_name: str,
+                       original_path: str = "",
+                       cache_path: str = "",
+                       mime_type: str = "",
+                       size: int = 0,
+                       md5_checksum: str = "") -> dict[str, Any]:
         now = datetime.now(timezone.utc).isoformat()
         att_uuid = str(uuid.uuid4())
         self.db.execute(
-            "INSERT INTO aldonajxoj"
-            " (uuid, todo_uuid, origina_nomo, origina_vojo,"
-            "  kasko_vojo, dosier_peco, grandeco, md5_cheksumo,"
-            "  kreita_je, modifita_je)"
+            "INSERT INTO attachments"
+            " (uuid, todo_uuid, original_name, original_path,"
+            "  cache_path, mime_type, size, md5_checksum,"
+            "  created_at, updated_at)"
             " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (att_uuid, todo_uuid, origina_nomo, origina_vojo,
-             kasko_vojo, dosier_peco, grandeco, md5_cheksumo,
+            (att_uuid, todo_uuid, original_name, original_path,
+             cache_path, mime_type, size, md5_checksum,
              now, now),
         )
         return self.db.execute_one(
-            "SELECT * FROM aldonajxoj WHERE uuid = ?", (att_uuid,),
+            "SELECT * FROM attachments WHERE uuid = ?", (att_uuid,),
         )
 
     def remove_attachment(self, attachment_uuid: str) -> None:
-        """Remove an attachment record."""
         self.db.execute(
-            "DELETE FROM aldonajxoj WHERE uuid = ?", (attachment_uuid,),
+            "DELETE FROM attachments WHERE uuid = ?", (attachment_uuid,),
         )
 
     def get_attachments(self, todo_uuid: str) -> list[dict[str, Any]]:
-        """Get all attachments for a todo."""
         return self.db.execute(
-            "SELECT * FROM aldonajxoj WHERE todo_uuid = ?"
-            " ORDER BY kreita_je", (todo_uuid,),
+            "SELECT * FROM attachments WHERE todo_uuid = ?"
+            " ORDER BY created_at", (todo_uuid,),
         )
 
     def get_attachments_needing_sync(self) -> list[dict[str, Any]]:
-        """Get all attachments needing sync (files from URLs)."""
         return self.db.execute(
-            "SELECT * FROM aldonajxoj"
-            " WHERE origina_vojo LIKE 'http%'"
-            " AND sync_stato != 'synced'",
+            "SELECT * FROM attachments"
+            " WHERE original_path LIKE 'http%'"
+            " AND sync_status != 'synced'",
         )
 
     def mark_attachment_synced(self, attachment_uuid: str,
-                               md5_cheksumo: str = "") -> None:
-        """Mark an attachment as synced."""
+                               md5_checksum: str = "") -> None:
         now = datetime.now(timezone.utc).isoformat()
         self.db.execute(
-            "UPDATE aldonajxoj SET sync_stato = 'synced',"
-            " md5_cheksumo = ?, last_sync_je = ?, modifita_je = ?"
+            "UPDATE attachments SET sync_status = 'synced',"
+            " md5_checksum = ?, last_synced_at = ?, updated_at = ?"
             " WHERE uuid = ?",
-            (md5_cheksumo, now, now, attachment_uuid),
+            (md5_checksum, now, now, attachment_uuid),
         )
 
     # ── Priority ────────────────────────────────────────────────────────
 
     def _compute_priority(self, todo: dict[str, Any]) -> float:
-        """Compute effective priority from formula and creation time."""
-        formula = str(todo.get("prioritato", "5") or "5")
-        created_at = todo.get("kreita_je", "")
+        formula = str(todo.get("priority", "5") or "5")
+        created_at = todo.get("created_at", "")
         if not created_at:
             return float(formula) if formula.replace(".", "").isdigit() else 5.0
 
@@ -303,229 +285,203 @@ class TodoService(CRUDService):
             return 5.0
 
     def validate_priority_formula(self, formula: str) -> bool:
-        """Check if a priority formula is syntactically valid."""
         return validate_safe(formula)
 
     # ── Status ──────────────────────────────────────────────────────────
 
     def mark_done(self, uuid_: str) -> bool:
-        """Mark a todo as done."""
-        result = self.update(uuid_, {"stato": "done"})
+        result = self.update(uuid_, {"status": "done"})
         return result is not None
 
     # ── Labels ──────────────────────────────────────────────────────────
 
-    def add_label(self, todo_uuid: str, label_teksto: str) -> None:
-        """Attach a label to a todo."""
+    def add_label(self, todo_uuid: str, label_name: str) -> None:
         self.db.execute(
-            "INSERT OR IGNORE INTO todoj_etikedo"
-            " (todo_uuid, etikedo_teksto) VALUES (?, ?)",
-            (todo_uuid, label_teksto),
+            "INSERT OR IGNORE INTO todo_labels"
+            " (todo_uuid, label_name) VALUES (?, ?)",
+            (todo_uuid, label_name),
         )
 
-    def remove_label(self, todo_uuid: str, label_teksto: str) -> None:
-        """Detach a label from a todo."""
+    def remove_label(self, todo_uuid: str, label_name: str) -> None:
         self.db.execute(
-            "DELETE FROM todoj_etikedo"
-            " WHERE todo_uuid = ? AND etikedo_teksto = ?",
-            (todo_uuid, label_teksto),
+            "DELETE FROM todo_labels"
+            " WHERE todo_uuid = ? AND label_name = ?",
+            (todo_uuid, label_name),
         )
 
     def get_labels(self, todo_uuid: str) -> list[dict[str, Any]]:
-        """Get all labels attached to a todo."""
         return self.db.execute(
-            "SELECT e.* FROM etikedoj e"
-            " JOIN todoj_etikedo te ON e.teksto = te.etikedo_teksto"
-            " WHERE te.todo_uuid = ? ORDER BY e.teksto",
+            "SELECT l.* FROM labels l"
+            " JOIN todo_labels tl ON l.name = tl.label_name"
+            " WHERE tl.todo_uuid = ? ORDER BY l.name",
             (todo_uuid,),
         )
 
     def list_all_labels(self) -> list[dict[str, Any]]:
-        """List all available labels."""
-        return self.db.execute("SELECT * FROM etikedoj ORDER BY teksto")
+        return self.db.execute("SELECT * FROM labels ORDER BY name")
 
     def create_label(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Create a new label."""
         now = datetime.now(timezone.utc).isoformat()
-        teksto = data.get("teksto", "").strip()
-        if not teksto:
-            raise ValueError("Label text (teksto) is required.")
-        koloro = data.get("koloro", "")
+        name = data.get("name", "").strip()
+        if not name:
+            raise ValueError("Label name is required.")
+        color = data.get("color", "")
         try:
             return self.db.execute_one(
-                "INSERT INTO etikedoj (teksto, koloro, kreita_je, modifita_je)"
+                "INSERT INTO labels (name, color, created_at, updated_at)"
                 " VALUES (?, ?, ?, ?) RETURNING *",
-                (teksto, koloro, now, now),
+                (name, color, now, now),
             )
         except Exception as e:
             if "UNIQUE" in str(e) or "PRIMARY KEY" in str(e):
                 raise ValueError(
-                    f"Label '{teksto}' already exists.",
+                    f"Label '{name}' already exists.",
                 ) from e
             raise
 
     def delete_label(self, label_uuid: str) -> None:
-        """Delete a label and all its associations."""
         self.db.execute(
-            "DELETE FROM etikedoj WHERE uuid = ?", (label_uuid,),
+            "DELETE FROM labels WHERE uuid = ?", (label_uuid,),
         )
 
     # ── Templates ───────────────────────────────────────────────────────
 
     def create_template(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Create a template with optional fields."""
         now = datetime.now(timezone.utc).isoformat()
         tpl_uuid = str(uuid.uuid4())
-        nomo = data.get("nomo", "").strip()
-        if not nomo:
-            raise ValueError("Template name (nomo) is required.")
+        name = data.get("name", "").strip()
+        if not name:
+            raise ValueError("Template name is required.")
         title_placeholder = data.get("title_placeholder", "")
         self.db.execute(
-            "INSERT INTO shablonoj (uuid, nomo, title_placeholder,"
-            " kreita_je, modifita_je) VALUES (?, ?, ?, ?, ?)",
-            (tpl_uuid, nomo, title_placeholder, now, now),
+            "INSERT INTO templates (uuid, name, title_placeholder,"
+            " created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+            (tpl_uuid, name, title_placeholder, now, now),
         )
         fields = data.get("fields", [])
         for i, f in enumerate(fields):
             field_uuid = str(uuid.uuid4())
-            kampo_nomo = f.get("nomo", "").strip()
-            is_required = kampo_nomo.startswith("!")
+            field_name = f.get("name", "").strip()
+            is_required = field_name.startswith("!")
             if is_required:
-                kampo_nomo = kampo_nomo[1:].strip()
-            if not kampo_nomo:
+                field_name = field_name[1:].strip()
+            if not field_name:
                 continue
             self.db.execute(
-                "INSERT INTO shablonaj_kampoj"
-                " (uuid, shablono_uuid, kampo_nomo, kampo_tipo,"
-                "  estas_deviga, ordo)"
+                "INSERT INTO template_fields"
+                " (uuid, template_uuid, field_name, field_type,"
+                "  is_required, sort_order)"
                 " VALUES (?, ?, ?, ?, ?, ?)",
-                (field_uuid, tpl_uuid, kampo_nomo,
-                 f.get("tipo", "text"), 1 if is_required else 0, i),
+                (field_uuid, tpl_uuid, field_name,
+                 f.get("type", "text"), 1 if is_required else 0, i),
             )
         return self.get_template(tpl_uuid)
 
     def get_template(self, uuid_: str) -> dict[str, Any] | None:
-        """Get a template with its fields."""
         tpl = self.db.execute_one(
-            "SELECT * FROM shablonoj WHERE uuid = ?", (uuid_,),
+            "SELECT * FROM templates WHERE uuid = ?", (uuid_,),
         )
         if not tpl:
             return None
         tpl["fields"] = self.db.execute(
-            "SELECT * FROM shablonaj_kampoj WHERE shablono_uuid = ?"
-            " ORDER BY ordo", (uuid_,),
+            "SELECT * FROM template_fields WHERE template_uuid = ?"
+            " ORDER BY sort_order", (uuid_,),
         )
         return tpl
 
     def get_template_by_name(self, name: str) -> dict[str, Any] | None:
-        """Get a template by name."""
         tpl = self.db.execute_one(
-            "SELECT * FROM shablonoj WHERE nomo = ?", (name,),
+            "SELECT * FROM templates WHERE name = ?", (name,),
         )
         if not tpl:
             return None
         tpl["fields"] = self.db.execute(
-            "SELECT * FROM shablonaj_kampoj WHERE shablono_uuid = ?"
-            " ORDER BY ordo", (tpl["uuid"],),
+            "SELECT * FROM template_fields WHERE template_uuid = ?"
+            " ORDER BY sort_order", (tpl["uuid"],),
         )
         return tpl
 
     def list_templates(self) -> list[dict[str, Any]]:
-        """List all templates (without fields)."""
         return self.db.execute(
-            "SELECT * FROM shablonoj ORDER BY nomo",
+            "SELECT * FROM templates ORDER BY name",
         )
 
     def update_template(self, uuid_: str,
                         data: dict[str, Any]) -> dict[str, Any]:
-        """Update a template — name, title_placeholder, and fields.
-
-        WARNING: If fields are modified and existing todos have data
-        in removed fields, this should be checked before calling
-        (see template_fields_in_use).
-        """
         now = datetime.now(timezone.utc).isoformat()
-        if "nomo" in data:
+        if "name" in data:
             self.db.execute(
-                "UPDATE shablonoj SET nomo = ?, modifita_je = ?"
+                "UPDATE templates SET name = ?, updated_at = ?"
                 " WHERE uuid = ?",
-                (data["nomo"], now, uuid_),
+                (data["name"], now, uuid_),
             )
         if "title_placeholder" in data:
             self.db.execute(
-                "UPDATE shablonoj SET title_placeholder = ?, modifita_je = ?"
-                " WHERE uuid = ?",
+                "UPDATE templates SET title_placeholder = ?,"
+                " updated_at = ? WHERE uuid = ?",
                 (data["title_placeholder"], now, uuid_),
             )
         if "fields" in data:
-            # Replace all fields
             self.db.execute(
-                "DELETE FROM shablonaj_kampoj WHERE shablono_uuid = ?",
+                "DELETE FROM template_fields WHERE template_uuid = ?",
                 (uuid_,),
             )
             for i, f in enumerate(data["fields"]):
                 field_uuid = str(uuid.uuid4())
-                kampo_nomo = f.get("nomo", "").strip()
-                is_required = kampo_nomo.startswith("!")
+                field_name = f.get("name", "").strip()
+                is_required = field_name.startswith("!")
                 if is_required:
-                    kampo_nomo = kampo_nomo[1:].strip()
-                if not kampo_nomo:
+                    field_name = field_name[1:].strip()
+                if not field_name:
                     continue
                 self.db.execute(
-                    "INSERT INTO shablonaj_kampoj"
-                    " (uuid, shablono_uuid, kampo_nomo, kampo_tipo,"
-                    "  estas_deviga, ordo)"
+                    "INSERT INTO template_fields"
+                    " (uuid, template_uuid, field_name, field_type,"
+                    "  is_required, sort_order)"
                     " VALUES (?, ?, ?, ?, ?, ?)",
-                    (field_uuid, uuid_, kampo_nomo,
-                     f.get("tipo", "text"), 1 if is_required else 0, i),
+                    (field_uuid, uuid_, field_name,
+                     f.get("type", "text"), 1 if is_required else 0, i),
                 )
         self.db.execute(
-            "UPDATE shablonoj SET modifita_je = ? WHERE uuid = ?",
+            "UPDATE templates SET updated_at = ? WHERE uuid = ?",
             (now, uuid_),
         )
         return self.get_template(uuid_)
 
     def delete_template(self, uuid_: str) -> None:
-        """Delete a template."""
         self.db.execute(
-            "DELETE FROM shablonoj WHERE uuid = ?", (uuid_,),
+            "DELETE FROM templates WHERE uuid = ?", (uuid_,),
         )
 
     def template_fields_in_use(self, template_uuid: str
                                 ) -> dict[str, int]:
-        """Check which template fields have values in existing todos.
-
-        Returns a dict of field_name -> count of non-empty values.
-        """
         tpl = self.get_template(template_uuid)
         if not tpl:
             return {}
         result: dict[str, int] = {}
         todos = self.db.execute(
-            "SELECT uuid FROM taskoj WHERE shablono_uuid = ?",
+            "SELECT uuid FROM tasks WHERE template_uuid = ?",
             (template_uuid,),
         )
         if not todos:
             return {}
-        # We store template field values in the description as JSON
-        # when using templates. Check for non-empty values.
         for field in tpl.get("fields", []):
             count = 0
             for todo in todos:
                 desc = self.db.execute_one(
-                    "SELECT priskribo FROM taskoj WHERE uuid = ?",
+                    "SELECT description FROM tasks WHERE uuid = ?",
                     (todo["uuid"],),
                 )
-                if desc and desc.get("priskribo"):
+                if desc and desc.get("description"):
                     import json
                     try:
-                        tpl_data = json.loads(desc["priskribo"])
+                        tpl_data = json.loads(desc["description"])
                         if isinstance(tpl_data, dict):
-                            val = tpl_data.get(field["kampo_nomo"], "")
+                            val = tpl_data.get(field["field_name"], "")
                             if val:
                                 count += 1
                     except (json.JSONDecodeError, TypeError):
                         pass
             if count > 0:
-                result[field["kampo_nomo"]] = count
+                result[field["field_name"]] = count
         return result

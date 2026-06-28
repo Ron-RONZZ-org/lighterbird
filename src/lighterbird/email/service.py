@@ -63,12 +63,12 @@ class EmailService:
             return result
         try:
             result = _sync(
-                host=acct.get("imap_servilo", ""),
-                port=acct.get("imap_haveno", 993),
-                use_ssl=acct.get("imap_ssl", 1) == 1,
-                username=acct.get("imap_uzantonomo", "") or acct.get("retposto", ""),
+                host=acct.get("imap_server", ""),
+                port=acct.get("imap_port", 993),
+                use_ssl=acct.get("imap_use_ssl", 1) == 1,
+                username=acct.get("imap_username", "") or acct.get("email", ""),
                 password=acct["password"],
-                konto_id=email,
+                account_email=email,
                 db_store=self,
                 force=force,
             )
@@ -81,7 +81,7 @@ class EmailService:
         """Sync messages for all accounts."""
         results = {}
         for acct in self.accounts.list_accounts():
-            email = acct["retposto"]
+            email = acct["email"]
             try:
                 sr = self.sync_account(email, force=force)
                 results[email] = sr.to_dict()
@@ -94,9 +94,9 @@ class EmailService:
     def get_message(self, uuid_: str):
         return self.messages.get_message(uuid_)
 
-    def list_messages(self, konto_id=None, folder=None, limit=50, offset=0):
+    def list_messages(self, account_email=None, folder=None, limit=50, offset=0):
         return self.messages.list_messages(
-            konto_id=konto_id, folder=folder, limit=limit, offset=offset
+            account_email=account_email, folder=folder, limit=limit, offset=offset
         )
 
     def search_messages(self, filters: dict, limit=50):
@@ -115,14 +115,14 @@ class EmailService:
 
     # ── Message operations ───────────────────────────────────────────────
 
-    def mark_read(self, msg_uuid: str, legita: bool = True):
-        self.msg_ops.mark_read(msg_uuid, legita)
+    def mark_read(self, msg_uuid: str, is_read: bool = True):
+        self.msg_ops.mark_read(msg_uuid, is_read)
 
     def trash_message(self, msg_uuid: str):
         self.msg_ops.trash_message(msg_uuid)
 
-    def move_message(self, msg_uuid: str, destination_folder_nomo: str):
-        self.msg_ops.move_message(msg_uuid, destination_folder_nomo)
+    def move_message(self, msg_uuid: str, destination_folder_name: str):
+        self.msg_ops.move_message(msg_uuid, destination_folder_name)
 
     def send_email(self, account_email: str, to: list[str], subject: str,
                    body: str = "", cc: list[str] | None = None):

@@ -26,11 +26,11 @@ def create_contact(
     svc: ContactService = Depends(get_contact_service),
 ):
     contact_data = {
-        "nomo": data.get("name", ""),
-        "retposto": data.get("email", ""),
-        "telefonnumero": data.get("phone", ""),
-        "organizo": data.get("organization", ""),
-        "notoj": data.get("notes", ""),
+        "given_name": data.get("name", ""),
+        "email": data.get("email", ""),
+        "phone": data.get("phone", ""),
+        "organization": data.get("organization", ""),
+        "notes": data.get("notes", ""),
     }
     contact = svc.create(contact_data)
     return contact
@@ -52,11 +52,11 @@ def update_contact(
 ):
     updates = {}
     field_map = {
-        "name": "nomo",
-        "email": "retposto",
-        "phone": "telefonnumero",
-        "organization": "organizo",
-        "notes": "notoj",
+        "name": "given_name",
+        "email": "email",
+        "phone": "phone",
+        "organization": "organization",
+        "notes": "notes",
     }
     for json_key, db_key in field_map.items():
         if json_key in data:
