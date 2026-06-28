@@ -274,6 +274,43 @@ export function formatListItemDate(iso) {
 }
 
 /**
+ * Focus trap for modal dialogs.
+ * Wraps Tab/Shift+Tab within the container's focusable elements.
+ *
+ * @param {() => HTMLElement} getContainer — callback returning the dialog root
+ * @param {(e: KeyboardEvent) => void} [onKeydown] — optional extra handler
+ * @returns {(e: KeyboardEvent) => void} keydown handler to mount on the overlay
+ */
+export function createDialogTrap(getContainer, onKeydown) {
+  const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+  return function trapKeydown(e) {
+    if (e.key === "Tab") {
+      const container = getContainer();
+      if (!container) return;
+      const focusable = container.querySelectorAll(FOCUSABLE);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+
+    if (onKeydown) onKeydown(e);
+  };
+}
+
+/**
  * Truncate a string with ellipsis if it exceeds max length.
  */
 export function truncate(s, max) {
