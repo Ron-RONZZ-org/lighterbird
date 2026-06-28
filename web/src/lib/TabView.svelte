@@ -13,6 +13,7 @@
   import SieveListTab from "./SieveListTab.svelte";
   import ContactsListTab from "./ContactsListTab.svelte";
   import TodoListTab from "./TodoListTab.svelte";
+  import TodoViewTab from "./TodoViewTab.svelte";
   import CalendarEventsListTab from "./CalendarEventsListTab.svelte";
   import SieveEditorForm from "./SieveEditorForm.svelte";
   import FormTab from "./FormTab.svelte";
@@ -131,6 +132,8 @@
         <ContactsListTab data={tabStore.active.data} />
       {:else if tabStore.active.type === "todo-list"}
         <TodoListTab data={tabStore.active.data} />
+      {:else if tabStore.active.type === "todo-view"}
+        <TodoViewTab data={tabStore.active.data} />
       {:else if tabStore.active.type === "calendar-events"}
         <CalendarEventsListTab data={tabStore.active.data} />
       {:else if tabStore.active.type === "sieve-list"}

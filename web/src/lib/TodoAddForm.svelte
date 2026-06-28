@@ -201,8 +201,7 @@
     <label for="parent">Parent UUID <span class="field-hint">(subtask of)</span></label>
     <div class="autocomplete-wrapper">
       <input id="parent" type="text" bind:value={parentUuid}
-        placeholder="Search by title or enter UUID…"
-        oninput={(e) => searchParentTitle(e.target.value)}
+        placeholder="Search by title or enter UUID (comma-separated)"
         onfocus={() => { if (parentSuggestions.length > 0) showParentSuggestions = true; }}
         onblur={() => setTimeout(() => showParentSuggestions = false, 200)} />
       {#if showParentSuggestions && parentSuggestions.length > 0}
@@ -223,8 +222,7 @@
     <label for="dependency">Depends On <span class="field-hint">(UUID of blocker)</span></label>
     <div class="autocomplete-wrapper">
       <input id="dependency" type="text" bind:value={dependencyUuid}
-        placeholder="Search by title or enter UUID…"
-        oninput={(e) => searchDepTitle(e.target.value)}
+        placeholder="Search by title or enter UUID(s); comma-separated"
         onfocus={() => { if (depSuggestions.length > 0) showDepSuggestions = true; }}
         onblur={() => setTimeout(() => showDepSuggestions = false, 200)} />
       {#if showDepSuggestions && depSuggestions.length > 0}
