@@ -95,6 +95,20 @@
       // ── Normal command execution → result opens in new tab ─────────
       try {
         const result = await execute(trimmed);
+
+        // Handle form-required response (interactive commands with missing args)
+        if (result.type === "form-required") {
+          const { form, initialData } = result.data || {};
+          if (form) {
+            tabStore.open("form", result.title || "Complete Form", {
+              form,
+              initialData: initialData || {},
+            }, { idKey: `form-${form}` });
+            scrollToBottom();
+            return;
+          }
+        }
+
         const dataType = detectPersistentType(trimmed);
         if (dataType) {
           popup.showPersistent(result.type, result.title, result.data, dataType);
