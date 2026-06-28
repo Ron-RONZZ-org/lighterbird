@@ -1,6 +1,6 @@
 <script>
   import { tabStore } from "./tabStore.svelte.js";
-  import { calendar as calendarApi, llm as llmApi, email as emailApi, contacts as contactsApi, todo as todoApi, journal as journalApi } from "./api.js";
+  import { calendar as calendarApi, llm as llmApi, email as emailApi, journal as journalApi } from "./api.js";
   import AccountList from "./AccountList.svelte";
   import LlmProfileForm from "./LlmProfileForm.svelte";
   import EmailAccountForm from "./EmailAccountForm.svelte";
@@ -67,10 +67,6 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ tokens: ["backup", "config", "remove", item.id], flags: {} }),
         });
-      } else if (type === "contacts") {
-        await contactsApi.delete(item.uuid);
-      } else if (type === "todo") {
-        await todoApi.delete(item.uuid);
       } else if (type === "journal") {
         await journalApi.delete(item.uuid);
       }
@@ -135,10 +131,6 @@
             return;
           }
         }
-      } else if (d.contacts !== undefined) {
-        result = await contactsApi.list({ limit: 50 });
-      } else if (d.todos !== undefined) {
-        result = await todoApi.list({ limit: 50 });
       } else if (d.entries !== undefined) {
         result = await journalApi.list({ limit: 50 });
       }
@@ -148,101 +140,11 @@
     } catch { /* ignore */ }
   }
 
-  /** Save a contacts item via the contacts API. */
-  async function saveContact(data) {
-    await contactsApi.create(data);
-    closeForm();
-    await refetchCurrentTab();
-  }
-
-  /** Save a todo item via the todo API. */
-  async function saveTodo(data) {
-    await todoApi.create(data);
-    closeForm();
-    await refetchCurrentTab();
-  }
-
   /** Save a journal entry via the journal API. */
   async function saveJournal(data) {
     await journalApi.create(data);
     closeForm();
     await refetchCurrentTab();
-  }
-
-  // ── Inline form state for contacts ─────────────────────────────────
-  let contactName = $state("");
-  let contactEmail = $state("");
-  let contactPhone = $state("");
-  let contactOrg = $state("");
-  let savingContact = $state(false);
-  let contactError = $state("");
-
-  function resetContactForm(initialData) {
-    contactName = initialData?.name || "";
-    contactEmail = initialData?.email || "";
-    contactPhone = initialData?.phone || "";
-    contactOrg = initialData?.org || "";
-    contactError = "";
-  }
-
-  async function handleSaveContact() {
-    if (!contactName.trim()) {
-      contactError = "Name is required.";
-      return;
-    }
-    savingContact = true;
-    contactError = "";
-    try {
-      const data = { name: contactName.trim() };
-      if (contactEmail.trim()) data.email = contactEmail.trim();
-      if (contactPhone.trim()) data.phone = contactPhone.trim();
-      if (contactOrg.trim()) data.org = contactOrg.trim();
-      await contactsApi.create(data);
-      closeForm();
-      await refetchCurrentTab();
-    } catch (err) {
-      contactError = err.message || "Failed to save contact.";
-    } finally {
-      savingContact = false;
-    }
-  }
-
-  // ── Inline form state for todos ────────────────────────────────────
-  let todoTitle = $state("");
-  let todoDescription = $state("");
-  let todoPriority = $state("5");
-  let todoDue = $state("");
-  let savingTodo = $state(false);
-  let todoError = $state("");
-
-  function resetTodoForm(initialData) {
-    todoTitle = initialData?.title || "";
-    todoDescription = initialData?.description || "";
-    todoPriority = initialData?.priority || "5";
-    todoDue = initialData?.due || "";
-    todoError = "";
-  }
-
-  async function handleSaveTodo() {
-    if (!todoTitle.trim()) {
-      todoError = "Title is required.";
-      return;
-    }
-    savingTodo = true;
-    todoError = "";
-    try {
-      const data = { title: todoTitle.trim() };
-      if (todoDescription.trim()) data.description = todoDescription.trim();
-      if (todoPriority) data.priority = parseInt(todoPriority, 10);
-      if (todoDue) data.due = todoDue;
-      await todoApi.create(data);
-      closeForm();
-      await refetchCurrentTab();
-    } catch (err) {
-      todoError = err.message || "Failed to save todo.";
-    } finally {
-      savingTodo = false;
-    }
   }
 
   // ── Inline form state for journal ──────────────────────────────────
@@ -279,15 +181,9 @@
     }
   }
 
-  // Reset inline form when activeForm changes to a new type
+  // Reset journal form when activeForm changes
   $effect(() => {
-    if (activeForm === "contacts") {
-      const initData = editingItem && !editingItem.uuid ? editingItem : {};
-      resetContactForm(initData);
-    } else if (activeForm === "todo") {
-      const initData = editingItem && !editingItem.uuid ? editingItem : {};
-      resetTodoForm(initData);
-    } else if (activeForm === "journal-write") {
+    if (activeForm === "journal-write") {
       const initData = editingItem && !editingItem.uuid ? editingItem : {};
       resetJournalForm(initData);
     }
@@ -364,118 +260,6 @@
       onRemove={(item) => removeItem("backup-strategy", item)}
       onTest={(item) => testStrategy(item)}
     />
-
-  {:else if d.contacts !== undefined}
-    {#if activeForm === "contacts"}
-      <div class="modal-overlay" onclick={closeForm} onkeydown={(e) => e.key === "Escape" && closeForm()} role="button" tabindex="-1" aria-label="Dismiss">
-        <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-          <div class="modal-header">
-            <h2>Add Contact</h2>
-          </div>
-          <div class="form">
-            <label class="field">
-              <span class="field-label">Name *</span>
-              <input type="text" class="text-input" bind:value={contactName} placeholder="Full name" autofocus />
-            </label>
-            <label class="field">
-              <span class="field-label">Email</span>
-              <input type="email" class="text-input" bind:value={contactEmail} placeholder="email@example.com" />
-            </label>
-            <label class="field">
-              <span class="field-label">Phone</span>
-              <input type="text" class="text-input" bind:value={contactPhone} placeholder="+1-555-1234" />
-            </label>
-            <label class="field">
-              <span class="field-label">Organization</span>
-              <input type="text" class="text-input" bind:value={contactOrg} placeholder="Company name" />
-            </label>
-            {#if contactError}
-              <p class="error">{contactError}</p>
-            {/if}
-            <div class="form-actions">
-              <button class="btn-primary" onclick={handleSaveContact} disabled={savingContact || !contactName.trim()}>
-                {savingContact ? "Saving…" : "Add Contact"}
-              </button>
-              <button class="btn-secondary" onclick={closeForm}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    {/if}
-    <div class="section-header">
-      <h3 class="title">Contacts</h3>
-      <button class="btn-add" onclick={() => { resetContactForm({}); openForm("contacts"); }}>+ Add Contact</button>
-    </div>
-    {#if d.contacts.length === 0}
-      <p class="empty">No contacts.</p>
-    {:else}
-      {#each d.contacts as contact}
-        <div class="row">
-          <span class="key">{contact.uuid?.slice(0, 8) || ""}</span>
-          <span class="val">{(contact.nomo || contact.name || "").slice(0, 24)}</span>
-          <span class="hint">{contact.retposto || contact.email || ""}</span>
-          <div class="row-actions">
-            <button class="btn-remove-sm" onclick={() => removeItem("contacts", contact)} title="Remove">✕</button>
-          </div>
-        </div>
-      {/each}
-    {/if}
-
-  {:else if d.todos !== undefined}
-    {#if activeForm === "todo"}
-      <div class="modal-overlay" onclick={closeForm} onkeydown={(e) => e.key === "Escape" && closeForm()} role="button" tabindex="-1" aria-label="Dismiss">
-        <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-          <div class="modal-header">
-            <h2>Add Todo</h2>
-          </div>
-          <div class="form">
-            <label class="field">
-              <span class="field-label">Title *</span>
-              <input type="text" class="text-input" bind:value={todoTitle} placeholder="What needs to be done?" autofocus />
-            </label>
-            <label class="field">
-              <span class="field-label">Description</span>
-              <textarea class="text-input textarea" bind:value={todoDescription} rows="3" placeholder="Optional details..."></textarea>
-            </label>
-            <div class="row-fields">
-              <label class="field">
-                <span class="field-label">Priority (1-10)</span>
-                <input type="number" class="text-input" bind:value={todoPriority} min="1" max="10" />
-              </label>
-              <label class="field">
-                <span class="field-label">Due Date</span>
-                <input type="date" class="text-input" bind:value={todoDue} />
-              </label>
-            </div>
-            {#if todoError}
-              <p class="error">{todoError}</p>
-            {/if}
-            <div class="form-actions">
-              <button class="btn-primary" onclick={handleSaveTodo} disabled={savingTodo || !todoTitle.trim()}>
-                {savingTodo ? "Saving…" : "Add Todo"}
-              </button>
-              <button class="btn-secondary" onclick={closeForm}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    {/if}
-    <div class="section-header">
-      <h3 class="title">Todos</h3>
-      <button class="btn-add" onclick={() => { resetTodoForm({}); openForm("todo"); }}>+ Add Todo</button>
-    </div>
-    {#each d.todos as todo}
-      <div class="row">
-        <span class="key">{todo.uuid?.slice(0, 8) || ""}</span>
-        <span class="val">{(todo.titolo || todo.title || "").slice(0, 36)}</span>
-        <span class="hint">{todo.status || ""}</span>
-        <div class="row-actions">
-          <button class="btn-remove-sm" onclick={() => removeItem("todo", todo)} title="Remove">✕</button>
-        </div>
-      </div>
-    {:else}
-      <p class="empty">No todos.</p>
-    {/each}
 
   {:else if d.entries !== undefined}
     {#if activeForm === "journal-write"}

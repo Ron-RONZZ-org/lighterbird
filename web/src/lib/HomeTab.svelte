@@ -303,9 +303,10 @@
     const t = input.trim();
     if (/^!(email\s+)?account\s+list\s*$/i.test(t)) return "accounts";
     if (/^!(calendar\s+)?account\s+list\s*$/i.test(t)) return "calendars";
-    if (/^!contacts\s+list\s*$/i.test(t)) return "contacts";
-    if (/^!todo\s+list\s*$/i.test(t)) return "todos";
+    if (/^!contacts\s+(list|search)\b/i.test(t)) return "contacts-list";
+    if (/^!todo\s+(list|search)\b/i.test(t)) return "todo-list";
     if (/^!journal\s+(list|search)\b/i.test(t)) return "journal-list";
+    if (/^!calendar\s+(list|search)\b/i.test(t)) return "calendar-events";
     if (/^!email\s+(list|search)\b/i.test(t)) return "email-list";
     if (/^!user\s+saved-commands\s+list\s*$/i.test(t)) return "saved-commands";
     return null;

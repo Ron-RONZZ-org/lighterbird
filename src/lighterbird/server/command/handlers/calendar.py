@@ -68,7 +68,7 @@ def calendar_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
             if q in (e.get("title") or "").lower()
             or q in (e.get("description") or "").lower()
         ]
-    return {"type": "events", "title": "Events", "data": {"events": events}}
+    return {"type": "calendar-events", "title": "Events", "data": {"events": events}}
 
 
 @command("calendar.event.add")
@@ -188,7 +188,7 @@ def event_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
             if q in (e.get("title") or "").lower()
             or q in (e.get("description") or "").lower()
         ]
-    return {"type": "events", "title": "Search Results", "data": {"events": events}}
+    return {"type": "calendar-events", "title": "Search Results", "data": {"events": events}}
 
 
 # ── Calendar account sub-commands ───────────────────────────────────────

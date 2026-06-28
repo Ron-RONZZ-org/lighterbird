@@ -144,9 +144,10 @@ function resolveListIdKey(listTokens) {
   const path = listTokens.join(" ");
   if (/^email(\s+account)?\s+list$/i.test(path)) return "accounts";
   if (/^calendar(\s+account)?\s+list$/i.test(path)) return "calendars";
-  if (/^contacts\s+list$/i.test(path)) return "contacts";
-  if (/^todo\s+list$/i.test(path)) return "todos";
+  if (/^contacts\s+list$/i.test(path)) return "contacts-list";
+  if (/^todo\s+list$/i.test(path)) return "todo-list";
   if (/^journal\s+list$/i.test(path)) return "journal-list";
+  if (/^calendar\s+list$/i.test(path)) return "calendar-events";
   if (/^email\s+list$/i.test(path)) return "email-list";
   if (/^user\s+saved-commands\s+list$/i.test(path)) return "saved-commands";
   if (/^email\s+sieve\s+list$/i.test(path)) return "sieve-list";
@@ -188,7 +189,7 @@ function resolveAddFormType(tokens, leafName) {
   if (/^email\s+account\s+add$/i.test(path)) return "email";
   if (/^calendar\s+account\s+add$/i.test(path)) return "calendar";
   if (/^contacts\s+add$/i.test(path)) return "contacts";
-  if (/^todo\s+add$/i.test(path)) return "todo";
+  if (/^todo\s+add$/i.test(path)) return "todo-add";
   if (/^journal\s+write$/i.test(path)) return "journal-write";
   if (/^email\s+sieve\s+add$/i.test(path)) return "sieve";
   if (/^email\s+send$/i.test(path)) return "email-send";
@@ -206,7 +207,7 @@ function resolveAddTitle(addFormType) {
     email: "Add Email Account",
     calendar: "Add Calendar Account",
     contacts: "Add Contact",
-    todo: "Add Todo",
+    "todo-add": "Add Todo",
     "journal-write": "Write Journal Entry",
     sieve: "Add Sieve Script",
     "email-send": "Compose Email",
