@@ -69,20 +69,19 @@
           if (listResult.type === "error") {
             popup.show("error", "Error", listResult.data);
           } else {
-            // Open the persistent list tab with autoAdd flag
+            // Open the persistent list tab
             popup.showPersistent(
               listResult.type,
               listResult.title,
-              {
-                ...(listResult.data || {}),
-                autoAdd: true,
-                addFormType: routing.addFormType,
-                addTitle: routing.addTitle,
-                addInitialData: routing.initialData,
-              },
+              listResult.data || {},
               routing.listIdKey,
             );
             popup.updateCache(listResult.data || {});
+            // Then open the add form directly (not via autoAdd in list data)
+            tabStore.open("form", routing.addTitle || "Add", {
+              form: routing.addFormType,
+              initialData: routing.initialData || {},
+            }, { idKey: `form-${routing.addFormType}` });
           }
         } catch (err) {
           popup.show("error", "Routing Error", {

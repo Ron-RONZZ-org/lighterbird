@@ -4,6 +4,11 @@
    * Each form calls onsubmit() with a structured command payload:
    *   { tokens: string[], flags: object, remaining: string[] }
    * which gets sent to POST /api/v1/command.
+   *
+   * Supports three categories:
+   *   Level 1 — Dedicated forms (complex UI): ComposeEmail, JournalWrite, TodoAddForm, EventForm
+   *   Level 2 — DynamicForm (generic from tree metadata): contacts, accounts, templates, etc.
+   *   Level 3 — Sieve editor (dedicated): SieveEditorForm
    */
 
   import { tabStore } from "./tabStore.svelte.js";
@@ -11,10 +16,36 @@
   import JournalWrite from "./JournalWrite.svelte";
   import TodoAddForm from "./TodoAddForm.svelte";
   import EventForm from "./EventForm.svelte";
+  import DynamicForm from "./DynamicForm.svelte";
+  import SieveEditorForm from "./SieveEditorForm.svelte";
 
   let { data = {} } = $props();
   let formType = $derived(data?.form || "");
   let initialData = $derived(data?.initialData || {});
+  let commandPath = $derived(data?.commandPath || _inferCommandPath(formType));
+
+  /** Infer command path from form type name */
+  function _inferCommandPath(formType) {
+    const map = {
+      "contacts-add": ["contacts", "add"],
+      "contacts-modify": ["contacts", "modify"],
+      "email-account-add": ["email", "account", "add"],
+      "email-account-modify": ["email", "account", "modify"],
+      "calendar-account-add": ["calendar", "account", "add"],
+      "calendar-account-modify": ["calendar", "account", "modify"],
+      "todo-template-add": ["todo", "template", "add"],
+      "todo-template-modify": ["todo", "template", "modify"],
+      "user-saved-commands-add": ["user", "saved-commands", "add"],
+      "user-saved-commands-modify": ["user", "saved-commands", "modify"],
+      "llm-profile-new": ["llm", "profile", "new"],
+      "llm-profile-set": ["llm", "profile", "set"],
+      "backup-config-add": ["backup", "config", "add"],
+      "backup-config-modify": ["backup", "config", "modify"],
+      "backup-prune": ["backup", "prune"],
+      "sync": ["sync"],
+    };
+    return map[formType] || [];
+  }
 
   let submitting = $state(false);
 
@@ -64,11 +95,22 @@
     const activeId = tabStore.active?.id;
     if (activeId) tabStore.close(activeId);
   }
+
+  /** Human-readable title for the form type. */
+  let displayTitle = $derived(
+    formType === "email-send" ? "Compose Email"
+    : formType === "journal-write" ? "Write Journal Entry"
+    : formType === "todo-add" ? "Add Todo"
+    : formType === "calendar-event-add" ? "Add Calendar Event"
+    : formType === "email-sieve-add" ? "New Sieve Script"
+    : formType === "email-sieve-modify" ? "Edit Sieve Script"
+    : formType.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+  );
 </script>
 
 <div class="form-tab">
   <div class="form-header">
-    <span class="form-title">{formType.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}</span>
+    <span class="form-title">{displayTitle}</span>
     <button class="cancel-btn" onclick={handleCancel} aria-label="Cancel">✕</button>
   </div>
 
@@ -80,6 +122,10 @@
     <TodoAddForm {initialData} onsubmit={handleFormSubmit} />
   {:else if formType === "calendar-event-add"}
     <EventForm {initialData} onsubmit={handleFormSubmit} />
+  {:else if formType === "email-sieve-add" || formType === "email-sieve-modify"}
+    <SieveEditorForm data={formType === "email-sieve-modify" ? { script: initialData } : {}} />
+  {:else if commandPath.length > 0}
+    <DynamicForm {commandPath} {initialData} onsubmit={handleFormSubmit} />
   {:else}
     <p class="unknown-form">Unknown form type: {formType}</p>
   {/if}

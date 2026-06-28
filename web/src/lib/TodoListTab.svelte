@@ -38,12 +38,7 @@
     });
   }
 
-  // Auto-add form via commandRouter interception
-  $effect(() => {
-    if (data?.autoAdd && data?.addFormType === "todo-add") {
-      handleNew();
-    }
-  });
+
 
   // Shared selection state (stable reference — not $derived)
   let sel = createSelectionManager(

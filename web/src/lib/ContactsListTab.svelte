@@ -2,7 +2,6 @@
   /** Contacts list tab — selection, batch delete, UUID/email copy, search, add. */
 
   import { tabStore } from "./tabStore.svelte.js";
-  import { contacts as contactsApi } from "./api.js";
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import {
     createSelectionManager,
@@ -20,14 +19,7 @@
   let searchTimeout;
   let abortController = null;
 
-  // Inline add form state
-  let showAddForm = $state(false);
-  let addName = $state("");
-  let addEmail = $state("");
-  let addPhone = $state("");
-  let addOrg = $state("");
-  let saving = $state(false);
-  let addError = $state("");
+
 
   // Shared selection state
   let sel = createSelectionManager(
@@ -42,14 +34,7 @@
   let uuidCopy = createCopyState();
   let emailCopy = createCopyState();
 
-  // Auto-add form via commandRouter interception
-  $effect(() => {
-    if (data?.autoAdd && data?.addFormType === "contacts" && !showAddForm) {
-      showAddForm = true;
-      addName = data?.addInitialData?.name || "";
-      addEmail = data?.addInitialData?.email || "";
-    }
-  });
+
 
   // Sync filters from tab data
   $effect(() => {
@@ -60,34 +45,10 @@
     }
   });
 
-  function resetForm() {
-    addName = ""; addEmail = ""; addPhone = ""; addOrg = ""; addError = ""; saving = false;
-  }
-
-  function openAddForm() {
-    resetForm();
-    showAddForm = true;
-  }
-
-  function closeAddForm() {
-    showAddForm = false;
-    resetForm();
-  }
-
-  async function handleSave() {
-    if (!addName.trim()) { addError = "Name is required."; return; }
-    saving = true; addError = "";
-    try {
-      const data = { name: addName.trim() };
-      if (addEmail.trim()) data.email = addEmail.trim();
-      if (addPhone.trim()) data.phone = addPhone.trim();
-      if (addOrg.trim()) data.org = addOrg.trim();
-      await contactsApi.create(data);
-      closeAddForm();
-      await refreshList();
-    } catch (err) {
-      addError = err.message || "Failed to save contact.";
-    } finally { saving = false; }
+  function handleNew() {
+    tabStore.open("form", "Add Contact", { form: "contacts-add", initialData: {} }, {
+      idKey: "contacts-add",
+    });
   }
 
   async function openContact(uuid) {
@@ -140,10 +101,6 @@
     const tag = e.target.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || e.target.isContentEditable) return;
 
-    if (showAddForm) {
-      if (e.key === "Escape") { e.preventDefault(); closeAddForm(); }
-      return;
-    }
     if (sel.confirmDelete) {
       if (e.key === "Escape") { sel.confirmDelete = false; e.preventDefault(); }
       return;
@@ -212,7 +169,7 @@
         <span class="hint"><kbd>f</kbd> search</span>
       </div>
       <div class="right">
-        <button class="tool-btn primary" onclick={openAddForm} title="Add new contact">+ New</button>
+        <button class="tool-btn primary" onclick={handleNew} title="Add new contact">+ New</button>
       </div>
     {/if}
   </div>
@@ -254,41 +211,6 @@
     <ConfirmDialog message="Delete {sel.numSelected} contact{sel.numSelected !== 1 ? 's' : ''}?"
       onConfirm={async () => { sel.confirmDelete = false; await sel.deleteSelected(); }}
       onDismiss={() => { sel.confirmDelete = false; }} />
-  {/if}
-
-  <!-- Add Contact Form Overlay -->
-  {#if showAddForm}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="modal-overlay" onclick={closeAddForm} onkeydown={(e) => e.key === "Escape" && closeAddForm()} role="button" tabindex="-1" aria-label="Dismiss">
-      <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-        <div class="modal-header"><h3>Add Contact</h3></div>
-        <div class="form">
-          <label class="field">
-            <span class="field-label">Name *</span>
-            <input type="text" class="text-input" bind:value={addName} placeholder="Full name" />
-          </label>
-          <label class="field">
-            <span class="field-label">Email</span>
-            <input type="email" class="text-input" bind:value={addEmail} placeholder="email@example.com" />
-          </label>
-          <label class="field">
-            <span class="field-label">Phone</span>
-            <input type="text" class="text-input" bind:value={addPhone} placeholder="+1-555-1234" />
-          </label>
-          <label class="field">
-            <span class="field-label">Organization</span>
-            <input type="text" class="text-input" bind:value={addOrg} placeholder="Company name" />
-          </label>
-          {#if addError}<p class="error">{addError}</p>{/if}
-          <div class="form-actions">
-            <button class="btn-primary" onclick={handleSave} disabled={saving || !addName.trim()}>
-              {saving ? "Saving…" : "Add Contact"}
-            </button>
-            <button class="btn-secondary" onclick={closeAddForm}>Cancel</button>
-          </div>
-        </div>
-      </div>
-    </div>
   {/if}
 </div>
 
