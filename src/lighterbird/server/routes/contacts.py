@@ -25,8 +25,10 @@ def create_contact(
     data: dict,
     svc: ContactService = Depends(get_contact_service),
 ):
+    name = data.get("name", "")
     contact_data = {
-        "given_name": data.get("name", ""),
+        "given_name": name,
+        "full_name": name,
         "email": data.get("email", ""),
         "phone": data.get("phone", ""),
         "organization": data.get("organization", ""),

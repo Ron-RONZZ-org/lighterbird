@@ -55,7 +55,7 @@
     if (!uuid) return;
     try {
       const contact = await contactsApi.get(uuid);
-      tabStore.open("status", contact.name || "(unnamed)", contact, {
+      tabStore.open("status", contact.given_name || contact.full_name || "(unnamed)", contact, {
         idKey: `contact-${uuid}`, replaceable: false,
       });
     } catch (err) {
@@ -195,7 +195,7 @@
               title="Click to copy UUID">
           {uuidCopy.copiedKey === contact.uuid ? "Copied!" : contact.uuid.slice(0, 8)}
         </span>
-        <span class="name">{truncate(contact.name || "(unnamed)", 24)}</span>
+        <span class="name">{truncate(contact.given_name || contact.full_name || "(unnamed)", 24)}</span>
         <span class="email" onclick={(e) => { e.stopPropagation(); emailCopy.copyToClipboard(contact.email || ""); }}
               title="Click to copy email">
           {emailCopy.copiedKey === contact.email ? "Copied!" : truncate(contact.email || "", 28)}
