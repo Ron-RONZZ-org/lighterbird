@@ -29,7 +29,7 @@ def list_todos(
         todos = svc.search("", status=status, limit=limit)
     else:
         todos = svc.list(limit=limit)
-    return {"todos": todos, "total": len(todos)}
+    return {"todos": [normalize_todo(t) for t in todos], "total": len(todos)}
 
 
 @router.get("/todos/search-titles")
@@ -60,7 +60,7 @@ def create_todo(
         "shablono_uuid": data.get("template_uuid"),
     }
     todo = svc.create(todo_data)
-    return todo
+    return normalize_todo(todo)
 
 
 @router.get("/todos/{uuid}")
@@ -70,15 +70,17 @@ def get_todo(uuid: str, svc: TodoService = Depends(get_todo_service)):
         raise HTTPException(
             status_code=404, detail=f"Todo not found: {uuid[:8]}",
         )
+    # Normalize the main todo (children already normalized via get_with_children)
+    result = normalize_todo(todo)
     # Include dependencies and attachments
-    todo["dependencies"] = [
+    result["dependencies"] = [
         normalize_todo(t) for t in svc.get_dependencies(todo["uuid"])
     ]
-    todo["blocked_tasks"] = [
+    result["blocked_tasks"] = [
         normalize_todo(t) for t in svc.get_blocked_tasks(todo["uuid"])
     ]
-    todo["attachments"] = svc.get_attachments(todo["uuid"])
-    return todo
+    result["attachments"] = svc.get_attachments(todo["uuid"])
+    return result
 
 
 @router.patch("/todos/{uuid}")
@@ -102,7 +104,7 @@ def update_todo(
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
     result = svc.update(uuid, updates)
-    return result
+    return normalize_todo(result)
 
 
 @router.post("/todos/{uuid}/done")

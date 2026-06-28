@@ -116,14 +116,16 @@ def todo_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         "limdato": flags.get("due", ""),
     }
 
-    # Parent
+    # Parent (first comma-separated value is used; a task has one parent)
     if "parent" in flags:
-        parent = svc.get(flags["parent"])
-        if not parent:
-            raise CommandValidationError(
-                f"Parent todo not found: {flags['parent'][:8]}",
-            )
-        data["parent_uuid"] = parent["uuid"]
+        parent_uuids = [u.strip() for u in flags["parent"].split(",") if u.strip()]
+        if parent_uuids:
+            parent = svc.get(parent_uuids[0])
+            if not parent:
+                raise CommandValidationError(
+                    f"Parent todo not found: {parent_uuids[0][:8]}",
+                )
+            data["parent_uuid"] = parent["uuid"]
 
     # Template reference
     if template_data:
@@ -147,21 +149,31 @@ def todo_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 tpl_values[tf] = ""
         data["priskribo"] = json.dumps(tpl_values)
 
-    # Dependency
-    depends_on = flags.get("dependency")
-    if depends_on:
-        dep_todo = svc.get(depends_on)
-        if not dep_todo:
-            raise CommandValidationError(
-                f"Dependency todo not found: {depends_on[:8]}",
-            )
-        data["_depends_on"] = dep_todo["uuid"]
+    # Dependency (comma-separated list)
+    depends_on_raw = flags.get("dependency")
+    if depends_on_raw:
+        dep_uuids = [u.strip() for u in depends_on_raw.split(",") if u.strip()]
+        resolved = []
+        for du in dep_uuids:
+            dep_todo = svc.get(du)
+            if not dep_todo:
+                raise CommandValidationError(
+                    f"Dependency todo not found: {du[:8]}",
+                )
+            resolved.append(dep_todo["uuid"])
+        data["_depends_on"] = resolved
 
     todo = svc.create(data)
 
-    # File attachment
+    # File attachment (comma-separated list)
     if "file" in flags:
-        _attach_file(svc, todo["uuid"], flags["file"])
+        file_paths = [f.strip() for f in flags["file"].split(",") if f.strip()]
+        for fp in file_paths:
+            try:
+                _attach_file(svc, todo["uuid"], fp)
+            except CommandValidationError as e:
+                # Skip invalid files but report them
+                pass
 
     return {
         "type": "status",
