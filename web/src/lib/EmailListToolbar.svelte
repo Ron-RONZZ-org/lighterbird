@@ -7,6 +7,7 @@
     onToggleMode = () => {},
     onDelete = () => {},
     onMove = () => {},
+    onNew = null,
     onToggleSearch = () => {},
     onSearchInput = () => {},
     onSearchClear = () => {},
@@ -71,7 +72,9 @@
       <span class="search-hint"><kbd>f</kbd> search</span>
     </div>
     <div class="right">
-      <button class="tool-btn" onclick={onToggleSearch} title="Toggle search (F)">🔍</button>
+      {#if onNew}
+        <button class="tool-btn primary" onclick={onNew} title="New message">+ New</button>
+      {/if}
     </div>
   {/if}
 </div>
@@ -130,6 +133,8 @@
   .tool-btn:hover:not(:disabled) { background: #3a3a5e; }
   .tool-btn:disabled { opacity: 0.4; cursor: default; }
   .tool-btn.danger:hover:not(:disabled) { background: #6b2020; border-color: #8b3030; }
+  .tool-btn.primary { border-color: #3a6a3a; color: #7fdb7f; }
+  .tool-btn.primary:hover { background: #1e3a1e; }
 
   .search-hint {
     color: #5a5a7a;

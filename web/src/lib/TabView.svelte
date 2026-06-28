@@ -11,6 +11,9 @@
   import EmailListTab from "./EmailListTab.svelte";
   import JournalListTab from "./JournalListTab.svelte";
   import SieveListTab from "./SieveListTab.svelte";
+  import ContactsListTab from "./ContactsListTab.svelte";
+  import TodoListTab from "./TodoListTab.svelte";
+  import CalendarEventsListTab from "./CalendarEventsListTab.svelte";
   import SieveEditorForm from "./SieveEditorForm.svelte";
   import FormTab from "./FormTab.svelte";
   import KeyboardShortcutOverlay from "./KeyboardShortcutOverlay.svelte";
@@ -124,6 +127,12 @@
         <EmailListTab data={tabStore.active.data} />
       {:else if tabStore.active.type === "journal-list"}
         <JournalListTab data={tabStore.active.data} />
+      {:else if tabStore.active.type === "contacts-list"}
+        <ContactsListTab data={tabStore.active.data} />
+      {:else if tabStore.active.type === "todo-list"}
+        <TodoListTab data={tabStore.active.data} />
+      {:else if tabStore.active.type === "calendar-events"}
+        <CalendarEventsListTab data={tabStore.active.data} />
       {:else if tabStore.active.type === "sieve-list"}
         <SieveListTab data={tabStore.active.data} />
       {:else if tabStore.active.type === "sieve-editor"}
@@ -218,6 +227,9 @@
       email: "✉",
       "email-list": "✉",
       "journal-list": "📓",
+      "contacts-list": "👤",
+      "todo-list": "☐",
+      "calendar-events": "📅",
       "sieve-list": "🔍",
       "sieve-editor": "✏",
       "saved-commands": "⚡",

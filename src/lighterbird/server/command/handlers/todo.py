@@ -48,7 +48,7 @@ def todo_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     svc: TodoService = get_todo_service()
     status = flags.get("status")
     todos = [normalize_todo(t) for t in (svc.search("", status=status) if status else svc.list())]
-    return {"type": "status", "title": "Todos", "data": {"todos": todos}}
+    return {"type": "todo-list", "title": "Todos", "data": {"todos": todos}}
 
 
 @command("todo.add")
@@ -139,4 +139,4 @@ def todo_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     query = " ".join(remaining) if remaining else flags.get("query", "")
     status = flags.get("status")
     todos = [normalize_todo(t) for t in svc.search(query, status=status)]
-    return {"type": "status", "title": "Todo Search", "data": {"todos": todos}}
+    return {"type": "todo-list", "title": "Todo Search", "data": {"todos": todos}}
