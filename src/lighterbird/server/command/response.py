@@ -85,7 +85,7 @@ def normalize_contact(contact: dict[str, Any]) -> dict[str, Any]:
 
 def normalize_todo(todo: dict[str, Any]) -> dict[str, Any]:
     """Translate raw taskoj record -> frontend-friendly dict."""
-    return {
+    result = {
         "uuid": todo.get("uuid", ""),
         "title": todo.get("titolo", ""),
         "description": todo.get("priskribo", ""),
@@ -93,7 +93,19 @@ def normalize_todo(todo: dict[str, Any]) -> dict[str, Any]:
         "status": todo.get("stato", "pending"),
         "due": todo.get("limdato", ""),
         "created_at": todo.get("kreita_je", ""),
+        "parent_uuid": todo.get("parent_uuid", None),
+        "sort_order": todo.get("sort_order", 0),
+        "template_uuid": todo.get("shablono_uuid", None),
     }
+    # Tree metadata from flatten_tree()
+    if "_depth" in todo:
+        result["_depth"] = todo["_depth"]
+    if "_has_children" in todo:
+        result["_has_children"] = todo["_has_children"]
+    # Nested children from get_tree()
+    if "children" in todo:
+        result["children"] = [normalize_todo(c) for c in todo["children"]]
+    return result
 
 
 def normalize_journal_entry(entry: dict[str, Any]) -> dict[str, Any]:

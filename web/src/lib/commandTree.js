@@ -395,7 +395,14 @@ export let commandTree = [
     children: [
       {
         name: "list",
-        description: "List all todos",
+        description: "List all todos (flat view)",
+        flags: [
+          { name: "status", type: "string", help: "Filter by status (pending|done)" },
+        ],
+      },
+      {
+        name: "tree",
+        description: "List todos (tree view with expand/collapse)",
         flags: [
           { name: "status", type: "string", help: "Filter by status (pending|done)" },
         ],
@@ -412,11 +419,15 @@ export let commandTree = [
           { name: "due", type: "date", help: "Due date (YYYY-MM-DD)" },
           { name: "priority", type: "number", help: "Priority (1-10)" },
           { name: "description", type: "string", help: "Description" },
+          { name: "parent", type: "uuid", help: "Parent todo UUID (subtask)", uuidSource: "todo.list" },
+          { name: "dependency", type: "uuid", help: "Depends on todo UUID", uuidSource: "todo.list" },
+          { name: "file", type: "string", help: "Attach a file (path or URL)" },
+          { name: "template", type: "string", help: "Template name for structured fields" },
         ],
       },
       {
         name: "view",
-        description: "View todo details",
+        description: "View todo details (with children & dependencies)",
         params: [
           { name: "uuid", required: true, type: "uuid", placeholder: "todo-uuid", uuidSource: "todo.list" },
         ],
@@ -440,6 +451,7 @@ export let commandTree = [
           { name: "priority", type: "number", help: "New priority (1-10)" },
           { name: "due", type: "date", help: "New due date" },
           { name: "status", type: "string", help: "New status (pending|done)" },
+          { name: "parent", type: "string", help: "New parent UUID (or 'none' to make root)" },
         ],
       },
       {
@@ -457,6 +469,57 @@ export let commandTree = [
         ],
         flags: [
           { name: "status", type: "string", help: "Filter by status" },
+        ],
+      },
+      {
+        name: "template",
+        description: "Manage todo templates",
+        children: [
+          {
+            name: "list",
+            description: "List all templates",
+          },
+          {
+            name: "add",
+            description: "Create a new template",
+            params: [
+              { name: "name", required: true, type: "string", placeholder: "template-name" },
+            ],
+            flags: [
+              { name: "title-placeholder", type: "string", help: "Default title text" },
+              { name: "text", type: "string", help: "A text field name (repeatable); prefix with ! for required" },
+              { name: "file", type: "string", help: "A file field name (repeatable)" },
+              { name: "markdown", type: "string", help: "A markdown field name (repeatable)" },
+            ],
+          },
+          {
+            name: "view",
+            description: "View a template's details",
+            params: [
+              { name: "name", required: true, type: "string", placeholder: "template-name" },
+            ],
+          },
+          {
+            name: "modify",
+            description: "Modify a template",
+            params: [
+              { name: "name", required: true, type: "string", placeholder: "template-name" },
+            ],
+            flags: [
+              { name: "new-name", type: "string", help: "Rename to" },
+              { name: "title-placeholder", type: "string", help: "Default title text" },
+              { name: "text", type: "string", help: "A text field name (repeatable)" },
+              { name: "file", type: "string", help: "A file field name (repeatable)" },
+              { name: "markdown", type: "string", help: "A markdown field name (repeatable)" },
+            ],
+          },
+          {
+            name: "remove",
+            description: "Delete a template",
+            params: [
+              { name: "name", required: true, type: "string", placeholder: "template-name" },
+            ],
+          },
         ],
       },
     ],
@@ -570,10 +633,12 @@ export let commandTree = [
   // ── Sync (unified) ───────────────────────────────────────────────────
   {
     name: "sync",
-    description: "Synchronize data (email & calendar)",
+    description: "Synchronize data (email, calendar, todo attachments)",
     flags: [
       { name: "email", type: "flag", help: "Sync email only" },
       { name: "calendar", type: "flag", help: "Sync calendar only" },
+      { name: "todo-attachments", type: "flag", help: "Resync cached attachment files" },
+      { name: "complete", type: "flag", help: "Force sync of large files (>5 MB)" },
       { name: "account", type: "uuid", help: "Sync specific email account", uuidSource: "email.listAccounts" },
       { name: "calendar-uuid", type: "uuid", help: "Sync specific calendar", uuidSource: "calendar.listCalendars" },
     ],

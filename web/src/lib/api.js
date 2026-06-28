@@ -169,8 +169,12 @@ export const todo = {
     const q = new URLSearchParams();
     if (params.status) q.set("status", params.status);
     if (params.limit) q.set("limit", String(params.limit));
+    if (params.tree) q.set("tree", "true");
+    if (params.query) q.set("query", params.query);
     return request("GET", `/todo/todos?${q}`);
   },
+
+  searchTitles: (q) => request("GET", `/todo/todos/search-titles?q=${encodeURIComponent(q)}`),
 
   create: (data) => request("POST", "/todo/todos", data),
 
@@ -181,6 +185,31 @@ export const todo = {
   markDone: (uuid) => request("POST", `/todo/todos/${uuid}/done`),
 
   delete: (uuid) => request("DELETE", `/todo/todos/${uuid}`),
+
+  addDependency: (uuid, dependsOn) =>
+    request("POST", `/todo/todos/${uuid}/dependencies`, { depends_on: dependsOn }),
+
+  removeDependency: (uuid, depUuid) =>
+    request("DELETE", `/todo/todos/${uuid}/dependencies/${depUuid}`),
+
+  getDependencies: (uuid) => request("GET", `/todo/todos/${uuid}/dependencies`),
+
+  addAttachment: (uuid, data) =>
+    request("POST", `/todo/todos/${uuid}/attachments`, data),
+
+  removeAttachment: (uuid, attUuid) =>
+    request("DELETE", `/todo/todos/${uuid}/attachments/${attUuid}`),
+
+  listTemplates: () => request("GET", "/todo/templates"),
+
+  getTemplate: (name) => request("GET", `/todo/templates/${encodeURIComponent(name)}`),
+
+  createTemplate: (data) => request("POST", "/todo/templates", data),
+
+  updateTemplate: (name, data) =>
+    request("PATCH", `/todo/templates/${encodeURIComponent(name)}`, data),
+
+  deleteTemplate: (name) => request("DELETE", `/todo/templates/${encodeURIComponent(name)}`),
 };
 
 // ── Journal API ───────────────────────────────────────────────────────
