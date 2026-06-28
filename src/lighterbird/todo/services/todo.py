@@ -160,14 +160,15 @@ class TodoService(CRUDService):
         depends_on = data.pop("_depends_on", None)
         if depends_on:
             now = datetime.now(timezone.utc).isoformat()
-            for dep_uuid in (depends_on if isinstance(depends_on, list)
-                             else [depends_on]):
-                self.db.execute(
-                    "INSERT OR IGNORE INTO todoj_dependoj"
-                    " (task_uuid, dependanta_je, type, kreita_je)"
-                    " VALUES (?, ?, 'blocked_by', ?)",
-                    (result["uuid"], dep_uuid, now),
-                )
+            dep_list = depends_on if isinstance(depends_on, list) else [depends_on]
+            for dep_uuid in dep_list:
+                if dep_uuid:  # skip empty strings
+                    self.db.execute(
+                        "INSERT OR IGNORE INTO todoj_dependoj"
+                        " (task_uuid, dependanta_je, type, kreita_je)"
+                        " VALUES (?, ?, 'blocked_by', ?)",
+                        (result["uuid"], dep_uuid, now),
+                    )
 
     # ── Dependencies ────────────────────────────────────────────────────
 

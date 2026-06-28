@@ -10,6 +10,7 @@
     formatListItemDate,
     truncate,
   } from "./listTabShared.svelte.js";
+  import { renderMarkdown } from "./markdown.js";
 
   let { data = {} } = $props();
   let todos = $derived(data?.todos || []);
@@ -89,7 +90,7 @@
     if (!uuid) return;
     try {
       const item = await todoApi.get(uuid);
-      tabStore.open("status", item.title || "(untitled)", item, {
+      tabStore.open("todo-view", item.title || "(untitled)", item, {
         idKey: `todo-${uuid}`,
         replaceable: false,
       });
