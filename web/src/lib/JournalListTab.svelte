@@ -1,28 +1,32 @@
 <script>
-  /** Journal entry list tab — like EmailListTab but for journal entries. */
+  /** Journal entry list tab — selection, batch delete, UUID copy, search. */
 
   import { tabStore } from "./tabStore.svelte.js";
   import { journal as journalApi } from "./api.js";
+  import {
+    createSelectionManager,
+    createCopyState,
+    formatListItemDate,
+    truncate,
+    preview,
+  } from "./listTabShared.svelte.js";
 
   let { data = {} } = $props();
   let entries = $derived(data?.entries || []);
   let total = $derived(data?.total || 0);
 
-  let focusedIndex = $state(-1);
-  let confirmDelete = $state(false);
-  let selectedUuids = $state(new Set());
-  let selectionMode = $state(false);
-  let anchorIndex = $state(-1);
-  let copiedUuid = $state("");
+  // Shared copy state
+  let uuidCopy = createCopyState();
 
-  function copyUuid(uuid) {
-    navigator.clipboard.writeText(uuid).then(() => {
-      copiedUuid = uuid;
-      setTimeout(() => { if (copiedUuid === uuid) copiedUuid = ""; }, 1200);
-    }).catch(() => {});
-  }
-
-  let numSelected = $derived(selectedUuids.size);
+  // Shared selection state (stable reference)
+  let sel = createSelectionManager(
+    () => entries,
+    (uuid) => openEntry(uuid),
+    async (uuids) => {
+      await Promise.all(uuids.map((u) => journalApi.delete(u)));
+    },
+    () => refreshList(),
+  );
 
   // Search bar
   let showSearch = $state(false);
@@ -40,56 +44,6 @@
     }
   });
 
-  function toggleSelectionMode() {
-    selectionMode = !selectionMode;
-    if (!selectionMode) {
-      selectedUuids = new Set();
-      focusedIndex = -1;
-      anchorIndex = -1;
-    } else if (entries.length > 0 && focusedIndex === -1) {
-      focusedIndex = 0;
-    }
-  }
-
-  function toggleEntry(uuid) {
-    const next = new Set(selectedUuids);
-    if (next.has(uuid)) next.delete(uuid);
-    else next.add(uuid);
-    selectedUuids = next;
-  }
-
-  function isSelected(uuid) {
-    return selectedUuids.has(uuid);
-  }
-
-  function selectRange(from, to) {
-    const start = Math.min(from, to);
-    const end = Math.max(from, to);
-    const next = new Set(selectedUuids);
-    for (let i = start; i <= end; i++) {
-      next.add(entries[i].uuid);
-    }
-    selectedUuids = next;
-  }
-
-  function handleRowClick(e, entry) {
-    if (selectionMode) {
-      if (e.shiftKey && anchorIndex >= 0) {
-        const idx = entries.findIndex((en) => en.uuid === entry.uuid);
-        if (idx >= 0) {
-          selectRange(anchorIndex, idx);
-          anchorIndex = idx;
-        }
-      } else {
-        toggleEntry(entry.uuid);
-        const idx = entries.findIndex((en) => en.uuid === entry.uuid);
-        if (idx >= 0 && anchorIndex < 0) anchorIndex = idx;
-      }
-    } else {
-      openEntry(entry.uuid);
-    }
-  }
-
   async function openEntry(uuid) {
     if (!uuid) return;
     try {
@@ -104,7 +58,7 @@
   }
 
   async function deleteSelected() {
-    const uuids = [...selectedUuids];
+    const uuids = [...sel.selectedKeys];
     if (uuids.length === 0) return;
     try {
       await Promise.all(uuids.map((uuid) => journalApi.delete(uuid)));
@@ -129,7 +83,6 @@
     journalApi.list(params)
       .then((result) => {
         tabStore.update(tabStore.active.id, result);
-        selectedUuids = new Set();
       })
       .catch((err) => {
         if (err?.name === "AbortError") return;
@@ -160,36 +113,20 @@
       }
       const result = await journalApi.list(params);
       tabStore.update(tabStore.active.id, result);
-      selectedUuids = new Set();
-    } catch {
-      // Silent — let user retry
-    }
+    } catch { /* silent */ }
   }
 
-  function focusRow(index) {
-    if (index < 0) index = 0;
-    if (index >= entries.length) index = entries.length - 1;
-    focusedIndex = index;
-    const el = document.getElementById(`journal-row-${entries[index]?.uuid}`);
-    if (el) el.scrollIntoView({ block: "nearest" });
-  }
-
-  function handleKeydown(e) {
+  function handleWindowKeydown(e) {
     const tag = e.target.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || e.target.isContentEditable) return;
 
-    // When confirm dialog is open, block all keyboard events
-    if (confirmDelete) {
-      if (e.key === "Escape") { confirmDelete = false; e.preventDefault(); return; }
-      if (e.key === "Enter") { e.preventDefault(); return; }
+    if (sel.confirmDelete) {
+      if (e.key === "Escape") { sel.confirmDelete = false; e.preventDefault(); }
       return;
     }
 
     const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
     switch (e.key) {
-      case "v":
-        if (plain) { toggleSelectionMode(); e.preventDefault(); }
-        return;
       case "f":
         if (plain) {
           showSearch = !showSearch;
@@ -200,95 +137,19 @@
         return;
       case "Escape":
         if (showSearch) { closeSearch(); e.preventDefault(); return; }
-        if (selectionMode) { toggleSelectionMode(); e.preventDefault(); return; }
+        if (sel.selectionMode) { sel.toggleSelectionMode(); e.preventDefault(); return; }
         return;
     }
 
-    if (!selectionMode) return;
-    const shift = e.shiftKey;
-
-    function navRow(idx) {
-      if (shift && anchorIndex >= 0) selectRange(anchorIndex, idx);
-      focusRow(idx);
-      if (!shift) anchorIndex = idx;
-    }
-
-    switch (e.key) {
-      case "ArrowDown":
-        e.preventDefault();
-        if (focusedIndex < entries.length - 1) navRow(focusedIndex + 1);
-        return;
-      case "ArrowUp":
-        e.preventDefault();
-        if (focusedIndex > 0) navRow(focusedIndex - 1);
-        return;
-      case "PageDown":
-        e.preventDefault();
-        navRow(Math.min(focusedIndex + Math.max(1, Math.floor(entries.length / 5)), entries.length - 1));
-        return;
-      case "PageUp":
-        e.preventDefault();
-        navRow(Math.max(focusedIndex - Math.max(1, Math.floor(entries.length / 5)), 0));
-        return;
-      case "Home":
-        e.preventDefault();
-        if (shift && anchorIndex >= 0) selectRange(anchorIndex, 0);
-        focusRow(0);
-        if (!shift) anchorIndex = 0;
-        return;
-      case "End":
-        e.preventDefault();
-        if (shift && anchorIndex >= 0) selectRange(anchorIndex, entries.length - 1);
-        focusRow(entries.length - 1);
-        if (!shift) anchorIndex = entries.length - 1;
-        return;
-      case " ":
-        e.preventDefault();
-        if (focusedIndex >= 0 && focusedIndex < entries.length) {
-          toggleEntry(entries[focusedIndex].uuid);
-          if (anchorIndex < 0) anchorIndex = focusedIndex;
-        }
-        return;
-      case "Delete":
-        e.preventDefault();
-        if (numSelected > 0) confirmDelete = true;
-        return;
-    }
-  }
-
-  function truncate(s, max) {
-    if (!s) return "";
-    return s.length > max ? s.slice(0, max - 1) + "…" : s;
-  }
-
-  function preview(s, max = 60) {
-    if (!s) return "";
-    // Take first line, strip markdown/whitespace
-    const firstLine = s.split("\n")[0].trim();
-    return truncate(firstLine.replace(/[#*_~`>]/g, ""), max);
-  }
-
-  function formatDate(iso) {
-    if (!iso) return "";
-    try {
-      const d = new Date(iso);
-      if (isNaN(d.getTime())) return iso.slice(0, 10);
-      const now = new Date();
-      const opts = d.toDateString() === now.toDateString()
-        ? { hour: "2-digit", minute: "2-digit" }
-        : d.getFullYear() === now.getFullYear()
-          ? { month: "short", day: "numeric" }
-          : { year: "numeric", month: "short", day: "numeric" };
-      return d.toLocaleDateString([], opts);
-    } catch { return iso.slice(0, 10); }
+    sel.handleKeydown(e);
   }
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window onkeydown={handleWindowKeydown} />
 
 <div class="journal-list">
   <!-- Toolbar -->
-  <div class="toolbar" class:active={selectionMode || numSelected > 0}>
+  <div class="toolbar" class:active={sel.selectionMode || sel.numSelected > 0}>
     {#if showSearch}
       <div class="search-bar">
         <span class="search-icon">🔍</span>
@@ -308,29 +169,30 @@
           <button class="search-clear" onclick={() => { searchQuery = ""; performSearch(""); }} aria-label="Clear search">✕</button>
         {/if}
       </div>
-    {:else if selectionMode}
+    {:else if sel.selectionMode}
       <div class="toolbar-left">
-        <button class="tool-btn" title="Exit selection mode (V)" onclick={toggleSelectionMode}>Exit <kbd>V</kbd></button>
+        <button class="tool-btn" title="Exit selection mode (V)" onclick={() => sel.toggleSelectionMode()}>Exit <kbd>V</kbd></button>
       </div>
       <div class="toolbar-center">
-        {#if numSelected > 0}
-          <span class="count">{numSelected} selected</span>
+        {#if sel.numSelected > 0}
+          <span class="count">{sel.numSelected} selected</span>
         {:else}
           <span class="count muted">Select entries with click or <kbd>Space</kbd></span>
         {/if}
       </div>
       <div class="toolbar-right">
-        <button class="tool-btn danger" disabled={numSelected === 0} title="Delete selected (Delete key)" onclick={() => { confirmDelete = true; }}>Delete <kbd>Del</kbd></button>
+        <button class="tool-btn danger" disabled={sel.numSelected === 0} title="Delete selected (Delete key)"
+          onclick={() => { sel.confirmDelete = true; }}>Delete <kbd>Del</kbd></button>
       </div>
     {:else}
       <div class="toolbar-left">
-        <button class="tool-btn" title="Toggle selection mode (V)" onclick={toggleSelectionMode}>Select <kbd>V</kbd></button>
+        <button class="tool-btn" title="Toggle selection mode (V)" onclick={() => sel.toggleSelectionMode()}>Select <kbd>V</kbd></button>
       </div>
       <div class="toolbar-center">
         <span class="search-hint"><kbd>f</kbd> search</span>
       </div>
       <div class="toolbar-right">
-        <button class="tool-btn" onclick={() => { showSearch = !showSearch; requestAnimationFrame(() => document.querySelector(".journal-search-input")?.focus()); }}>🔍</button>
+        <button class="tool-btn primary" onclick={handleNew} title="Write new journal entry">+ New</button>
       </div>
     {/if}
   </div>
@@ -339,34 +201,34 @@
   <div class="list" role="listbox" aria-label="Journal entries" aria-multiselectable="true">
     {#each entries as entry, i (entry.uuid)}
       <div
-        id="journal-row-{entry.uuid}"
+        id="row-{entry.uuid}"
         class="row"
-        class:selected={isSelected(entry.uuid)}
-        class:focused={i === focusedIndex}
-        class:selection-mode={selectionMode}
+        class:selected={sel.isSelected(entry.uuid)}
+        class:focused={i === sel.focusedIndex}
+        class:selection-mode={sel.selectionMode}
         role="option"
-        aria-selected={isSelected(entry.uuid)}
-        tabindex={selectionMode ? (i === focusedIndex ? 0 : -1) : 0}
-        onclick={(e) => handleRowClick(e, entry)}
+        aria-selected={sel.isSelected(entry.uuid)}
+        tabindex={sel.selectionMode ? (i === sel.focusedIndex ? 0 : -1) : 0}
+        onclick={(e) => sel.handleRowClick(e, entry.uuid)}
         onkeydown={(e) => {
-          if (e.key === "Enter") handleRowClick(e, entry);
+          if (e.key === "Enter") sel.handleRowClick(e, entry.uuid);
         }}
       >
         <!-- Checkbox reserved space -->
         <span class="checkbox-cell">
-          {#if selectionMode}
-            <span class="checkbox" class:checked={isSelected(entry.uuid)}>
-              {isSelected(entry.uuid) ? "✓" : ""}
+          {#if sel.selectionMode}
+            <span class="checkbox" class:checked={sel.isSelected(entry.uuid)}>
+              {sel.isSelected(entry.uuid) ? "✓" : ""}
             </span>
           {/if}
         </span>
 
         <!-- Entry data -->
-        <span class="journal-uuid" onclick={(e) => { e.stopPropagation(); copyUuid(entry.uuid); }}
+        <span class="journal-uuid" onclick={(e) => { e.stopPropagation(); uuidCopy.copyToClipboard(entry.uuid); }}
               title="Click to copy UUID">
-          {copiedUuid === entry.uuid ? "Copied!" : entry.uuid.slice(0, 8)}
+          {uuidCopy.copiedKey === entry.uuid ? "Copied!" : entry.uuid.slice(0, 8)}
         </span>
-        <span class="date">{formatDate(entry.date || entry.created_at)}</span>
+        <span class="date">{formatListItemDate(entry.date || entry.created_at)}</span>
         <span class="title">{truncate(entry.title || "(untitled)", 32)}</span>
         <span class="preview">{preview(entry.text || "")}</span>
       </div>
@@ -375,12 +237,12 @@
     {/each}
   </div>
 
-  {#if confirmDelete}
+  {#if sel.confirmDelete}
     <div class="confirm-dialog">
-      <p>Delete {numSelected} journal entr{numSelected !== 1 ? 'ies' : 'y'}?</p>
+      <p>Delete {sel.numSelected} journal entr{sel.numSelected !== 1 ? 'ies' : 'y'}?</p>
       <div class="confirm-actions">
-        <button class="btn-confirm" onclick={async () => { confirmDelete = false; await deleteSelected(); }}>Delete</button>
-        <button class="btn-cancel" onclick={() => { confirmDelete = false; }}>Cancel</button>
+        <button class="btn-confirm" onclick={async () => { sel.confirmDelete = false; await deleteSelected(); }}>Delete</button>
+        <button class="btn-cancel" onclick={() => { sel.confirmDelete = false; }}>Cancel</button>
       </div>
     </div>
   {/if}
@@ -438,6 +300,8 @@
   .tool-btn:hover:not(:disabled) { background: #3a3a5e; }
   .tool-btn:disabled { opacity: 0.4; cursor: default; }
   .tool-btn.danger:hover:not(:disabled) { background: #6b2020; border-color: #8b3030; }
+  .tool-btn.primary { border-color: #3a6a3a; color: #7fdb7f; }
+  .tool-btn.primary:hover { background: #1e3a1e; }
 
   .search-hint { color: #5a5a7a; font-size: 0.72rem; }
   .search-hint kbd {

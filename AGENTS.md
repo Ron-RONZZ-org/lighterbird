@@ -121,6 +121,47 @@ lighterbird/
 8. **Error messages include actionable suggestions.** "Set it with: `!account modify <uuid> --password <pw>`"
 9. **Use `tr()` or `tr_multi()` for i18n** — but only once i18n infrastructure is in place. For initial development, plain English strings are acceptable.
 
+## List Tab Standard Feature Set
+
+All list tab components (`EmailListTab`, `JournalListTab`, `SieveListTab`, `ContactsListTab`, `TodoListTab`, `CalendarEventsListTab`) must implement the following standard feature set:
+
+| Feature | Implementation |
+|---------|---------------|
+| **Selection mode** | Toggle via `V` key + toolbar "Select"/"Exit" button; checkboxes appear in reserved column |
+| **Range selection** | Shift+click selects contiguous range; anchor point set on first click |
+| **Keyboard navigation** | Arrow keys (up/down), PgUp/PgDn, Home/End, Space to toggle focused item |
+| **Batch delete** | `Delete` key or toolbar button → ConfirmDialog → deletes all selected items |
+| **UUID copy** | Click on truncated UUID (first 8 chars) → `navigator.clipboard.writeText()` → "Copied!" flash for 1.2s |
+| **Email/address copy** | Click on email/from cell → copies address to clipboard (same flash pattern) |
+| **Search** | `f` key toggles search bar; debounced 300ms with AbortController; min 2 chars |
+| **"+ New" button** | Toolbar right side in view mode → opens context-appropriate add form (FormTab or inline modal) |
+| **Context-appropriate toolbar** | View mode: [Select] [hint] [+ New]; Selection mode: [Exit] [count] [Delete]; Search mode: full-width search input |
+
+### Shared Helpers
+
+Common logic lives in `web/src/lib/listTabShared.svelte.js`:
+
+| Export | Purpose |
+|--------|---------|
+| `createCopyState()` | Returns `copiedKey` (reactive) + `copyToClipboard(key)` — 1.2s auto-clear |
+| `createSelectionManager(getItems, onOpen, onDeleteSelected, onRefresh, opts)` | Returns reactive selection state + keyboard navigation handler |
+| `formatListItemDate(iso)` | Context-aware date formatting (today=time, this year=month+day, older=full) |
+| `truncate(s, max)` | String truncation with ellipsis |
+| `preview(s, max)` | First line, stripped of markdown, truncated |
+
+### Response Type Mapping
+
+Backend list commands return typed responses that map to frontend components:
+
+| Command | Backend Response Type | Frontend Component |
+|---------|----------------------|--------------------|
+| `!email list` / `!email search` | `email-list` | EmailListTab |
+| `!journal list` / `!journal search` | `journal-list` | JournalListTab |
+| `!contacts list` / `!contacts search` | `contacts-list` | ContactsListTab |
+| `!todo list` / `!todo search` | `todo-list` | TodoListTab |
+| `!calendar list` / `!calendar event search` | `calendar-events` | CalendarEventsListTab |
+| `!email sieve list` | `sieve-list` | SieveListTab |
+
 ---
 
 ## Commit Message Format
