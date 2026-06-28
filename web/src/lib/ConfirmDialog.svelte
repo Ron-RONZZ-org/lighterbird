@@ -1,15 +1,17 @@
 <script>
   import { tick } from "svelte";
+  import { createDialogTrap } from "./listTabShared.svelte.js";
 
   let { message = "Confirm?", onConfirm = () => {}, onDismiss = () => {} } = $props();
   let confirmBtn;
+  let overlay;
 
   // Steal focus from whatever was focused (e.g. the Delete button that triggered this dialog)
   $effect(() => {
     tick().then(() => confirmBtn?.focus());
   });
 
-  function handleKeydown(e) {
+  const trapKeydown = createDialogTrap(() => overlay, (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
       e.stopPropagation();
@@ -19,11 +21,12 @@
       e.stopPropagation();
       onDismiss();
     }
-  }
+  });
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
-<div class="confirm-overlay" role="alertdialog" aria-label="Confirm" onclick={onDismiss} onkeydown={handleKeydown} tabindex="0">
+<div class="confirm-overlay" role="alertdialog" aria-modal="true" aria-label="Confirm"
+     onclick={onDismiss} onkeydown={trapKeydown} bind:this={overlay} tabindex="0">
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div class="confirm-box" onclick={(e) => e.stopPropagation()}>

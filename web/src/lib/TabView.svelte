@@ -10,8 +10,10 @@
   import HelpPopup from "./HelpPopup.svelte";
   import EmailListTab from "./EmailListTab.svelte";
   import JournalListTab from "./JournalListTab.svelte";
+  import JournalViewTab from "./JournalViewTab.svelte";
   import SieveListTab from "./SieveListTab.svelte";
   import ContactsListTab from "./ContactsListTab.svelte";
+  import ContactViewTab from "./ContactViewTab.svelte";
   import TodoListTab from "./TodoListTab.svelte";
   import TodoViewTab from "./TodoViewTab.svelte";
   import CalendarEventsListTab from "./CalendarEventsListTab.svelte";
@@ -142,8 +144,12 @@
         <EmailListTab data={tabStore.active.data} />
       {:else if tabStore.active.type === "journal-list"}
         <JournalListTab data={tabStore.active.data} />
+      {:else if tabStore.active.type === "journal-view"}
+        <JournalViewTab data={tabStore.active.data} />
       {:else if tabStore.active.type === "contacts-list"}
         <ContactsListTab data={tabStore.active.data} />
+      {:else if tabStore.active.type === "contact-view"}
+        <ContactViewTab data={tabStore.active.data} />
       {:else if tabStore.active.type === "todo-list"}
         <TodoListTab data={tabStore.active.data} />
       {:else if tabStore.active.type === "todo-view"}
@@ -244,7 +250,9 @@
       email: "✉",
       "email-list": "✉",
       "journal-list": "📓",
+      "journal-view": "📓",
       "contacts-list": "👤",
+      "contact-view": "👤",
       "todo-list": "☐",
       "calendar-events": "📅",
       "sieve-list": "🔍",
