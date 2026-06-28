@@ -18,7 +18,7 @@ from lighterbird.server.schemas import (
 )
 from lighterbird.email.service import EmailService
 
-router = APIRouter(prefix="/api/v1/sieve", tags=["sieve"])
+router = APIRouter(prefix="/api/v1/email/sieve", tags=["sieve"])
 
 
 def _resolve_account(email_svc: EmailService, account_email: str) -> str:
