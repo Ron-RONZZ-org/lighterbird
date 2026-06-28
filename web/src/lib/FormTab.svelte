@@ -12,12 +12,21 @@
    */
 
   import { tabStore } from "./tabStore.svelte.js";
+  import { journal as journalApi, todo as todoApi, contacts as contactsApi, calendar as calendarApi } from "./api.js";
   import ComposeEmail from "./ComposeEmail.svelte";
   import JournalWrite from "./JournalWrite.svelte";
   import TodoAddForm from "./TodoAddForm.svelte";
   import EventForm from "./EventForm.svelte";
   import DynamicForm from "./DynamicForm.svelte";
   import SieveEditorForm from "./SieveEditorForm.svelte";
+
+  /** List refreshers keyed by _returnIdKey — fetch fresh data with highlight. */
+  const LIST_REFRESHERS = {
+    "persistent-journal-list":         (highlight) => journalApi.list({ limit: 50 }).then(r => ({ ...r, highlight })),
+    "persistent-todo-list":            (highlight) => todoApi.list({ limit: 50 }).then(r => ({ ...r, highlight })),
+    "persistent-contacts-list":        (highlight) => contactsApi.list({ limit: 50 }).then(r => ({ ...r, highlight })),
+    "persistent-calendar-events":      (highlight) => calendarApi.listEvents({ limit: 50 }).then(r => ({ ...r, highlight })),
+  };
 
   let { data = {} } = $props();
   let formType = $derived(data?.form || "");
@@ -76,9 +85,27 @@
         return;
       }
 
-      // Close form tab, open result tab
+      // Read return-to-list values BEFORE closing (component may unmount)
+      const returnIdKey = initialData?._returnIdKey;
+      const highlightUuid = result.data?.uuid;
+      const returnType = initialData?._returnType;
+      const returnTitle = initialData?._returnTitle;
+
+      // Close form tab
       const activeId = tabStore.active?.id;
       if (activeId) tabStore.close(activeId);
+
+      if (returnIdKey && highlightUuid && LIST_REFRESHERS[returnIdKey]) {
+        // Navigate to list tab with highlight on the new item
+        try {
+          const freshData = await LIST_REFRESHERS[returnIdKey](highlightUuid);
+          tabStore.open(returnType || "status", returnTitle || "Done", freshData, { idKey: returnIdKey });
+          return;
+        } catch {
+          // Refresh failed — fall through to open result tab
+        }
+      }
+
       tabStore.open(result.type || "status", result.title || "Done", result.data || {});
     } catch (err) {
       const msg = err.cause?.code === "ECONNREFUSED"

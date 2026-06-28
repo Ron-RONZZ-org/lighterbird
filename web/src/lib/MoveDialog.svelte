@@ -1,5 +1,6 @@
 <script>
   import { email as emailApi } from "./api.js";
+  import { createDialogTrap } from "./listTabShared.svelte.js";
 
   let { onConfirm = () => {}, onDismiss = () => {} } = $props();
 
@@ -8,6 +9,7 @@
   let selectedFolder = $state(null); // { label, folder_name }
   let loading = $state(true);
   let error = $state("");
+  let overlay;
 
   // Debounce timeout for filtering
   let filterTimeout;
@@ -50,7 +52,7 @@
     onConfirm(selectedFolder.folder_name);
   }
 
-  function handleKeydown(e) {
+  const trapKeydown = createDialogTrap(() => overlay, (e) => {
     if (e.key === "Escape") {
       onDismiss();
       e.preventDefault();
@@ -65,7 +67,7 @@
     if ((e.key === "ArrowDown" || e.key === "ArrowUp") && showSuggestions) {
       e.preventDefault();
       const focused = document.activeElement;
-      const items = document.querySelectorAll(".suggestion-item");
+      const items = overlay?.querySelectorAll(".suggestion-item");
       if (items.length === 0) return;
       let idx = Array.from(items).indexOf(focused);
       if (e.key === "ArrowDown") {
@@ -75,7 +77,7 @@
       }
       if (idx >= 0) items[idx].focus();
     }
-  }
+  });
 
   // Load folders on mount
   $effect(() => {
@@ -84,7 +86,7 @@
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
-<div class="overlay" onclick={onDismiss} onkeydown={handleKeydown} role="dialog" aria-label="Move messages" tabindex="0">
+<div class="overlay" onclick={onDismiss} onkeydown={trapKeydown} role="dialog" aria-modal="true" aria-label="Move messages" bind:this={overlay} tabindex="0">
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div class="dialog" onclick={(e) => e.stopPropagation()} role="document">
     <h3>Move to folder</h3>
@@ -96,14 +98,12 @@
       <p class="error-msg">{error}</p>
     {:else}
       <div class="search-box" role="combobox" aria-expanded={showSuggestions} aria-controls="folder-suggestions">
-        <!-- svelte-ignore a11y_autofocus -->
         <input
           type="text"
           placeholder="Type account/folder…"
           value={query}
           oninput={handleInput}
-          onkeydown={handleKeydown}
-          autofocus
+          onkeydown={trapKeydown}
           aria-autocomplete="list"
         />
 

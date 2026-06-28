@@ -23,6 +23,17 @@
   let searchTimeout;
   let abortController = null;
 
+  // Highlight animation — auto-clears after 2s
+  let highlight = $derived(data?.highlight || "");
+  let highlightActive = $state(false);
+  $effect(() => {
+    if (highlight) {
+      highlightActive = true;
+      const timer = setTimeout(() => { highlightActive = false; }, 2000);
+      return () => clearTimeout(timer);
+    }
+  });
+
   // Tree view state: set of expanded UUIDs
   let expanded = $state(new Set());
 
@@ -33,7 +44,11 @@
   }
 
   function handleNew() {
-    tabStore.open("form", "Add Todo", { form: "todo-add", initialData: {} }, {
+    tabStore.open("form", "Add Todo", { form: "todo-add", initialData: {
+      _returnIdKey: "persistent-todo-list",
+      _returnType: "todo-list",
+      _returnTitle: "Todos",
+    } }, {
       idKey: "todo-add",
     });
   }
@@ -239,6 +254,7 @@
             class="row"
             class:selected={sel.isSelected(todo.uuid)}
             class:focused={i === sel.focusedIndex}
+            class:highlight={todo.uuid === highlight && highlightActive}
             class:selection-mode={sel.selectionMode}
             class:done={todo.status === "done"}
             class:tree-mode={isTree}
@@ -351,6 +367,11 @@
   .row:hover { background: #2a2a44; }
   .row.focused { background: #2a2a50; outline: 1px solid #5a5a8a; outline-offset: -1px; }
   .row.selected { background: #2a2a50; }
+  .row.highlight { animation: todo-highlight-fade 2s ease-out; }
+  @keyframes todo-highlight-fade {
+    0% { background: rgba(42, 90, 42, 0.6); }
+    100% { background: transparent; }
+  }
   .row.selection-mode { cursor: pointer; }
   .row.done .title { opacity: 0.5; text-decoration: line-through; }
   .checkbox-cell {

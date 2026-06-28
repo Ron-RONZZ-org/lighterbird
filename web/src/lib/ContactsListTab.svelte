@@ -13,6 +13,17 @@
   let contacts = $derived(data?.contacts || []);
   let total = $derived(data?.total || 0);
 
+  // Highlight animation — auto-clears after 2s
+  let highlight = $derived(data?.highlight || "");
+  let highlightActive = $state(false);
+  $effect(() => {
+    if (highlight) {
+      highlightActive = true;
+      const timer = setTimeout(() => { highlightActive = false; }, 2000);
+      return () => clearTimeout(timer);
+    }
+  });
+
   let showSearch = $state(false);
   let searchQuery = $state("");
   let currentFilters = $state({});
@@ -46,7 +57,11 @@
   });
 
   function handleNew() {
-    tabStore.open("form", "Add Contact", { form: "contacts-add", initialData: {} }, {
+    tabStore.open("form", "Add Contact", { form: "contacts-add", initialData: {
+      _returnIdKey: "persistent-contacts-list",
+      _returnType: "contacts-list",
+      _returnTitle: "Contacts",
+    } }, {
       idKey: "contacts-add",
     });
   }
@@ -55,7 +70,7 @@
     if (!uuid) return;
     try {
       const contact = await contactsApi.get(uuid);
-      tabStore.open("status", contact.given_name || contact.full_name || "(unnamed)", contact, {
+      tabStore.open("contact-view", contact.given_name || contact.full_name || "(unnamed)", contact, {
         idKey: `contact-${uuid}`, replaceable: false,
       });
     } catch (err) {
@@ -179,6 +194,7 @@
     {#each contacts as contact, i (contact.uuid)}
       <div id="row-{contact.uuid}" class="row"
         class:selected={sel.isSelected(contact.uuid)} class:focused={i === sel.focusedIndex}
+        class:highlight={contact.uuid === highlight && highlightActive}
         class:selection-mode={sel.selectionMode} role="option"
         aria-selected={sel.isSelected(contact.uuid)}
         tabindex={sel.selectionMode ? (i === sel.focusedIndex ? 0 : -1) : 0}
@@ -243,6 +259,11 @@
   .row:hover { background: #2a2a44; }
   .row.focused { background: #2a2a50; outline: 1px solid #5a5a8a; outline-offset: -1px; }
   .row.selected { background: #2a2a50; }
+  .row.highlight { animation: contact-highlight-fade 2s ease-out; }
+  @keyframes contact-highlight-fade {
+    0% { background: rgba(42, 90, 42, 0.6); }
+    100% { background: transparent; }
+  }
   .row.selection-mode { cursor: pointer; }
   .checkbox-cell { display: flex; align-items: center; justify-content: center; width: 1.8rem; flex-shrink: 0; }
   .checkbox { display: inline-flex; align-items: center; justify-content: center; width: 1.1rem; height: 1.1rem; border: 1.5px solid #7c7c9a; border-radius: 3px; font-size: 0.7rem; color: #e0e0e0; background: transparent; transition: background 0.1s, border-color 0.1s; }
