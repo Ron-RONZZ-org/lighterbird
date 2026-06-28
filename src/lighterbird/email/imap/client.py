@@ -15,6 +15,71 @@ from datetime import datetime, timezone
 from typing import Any
 
 
+_SPECIAL_USE_MAP = {
+    "\\Inbox": "INBOX",
+    "\\Sent": "Sent",
+    "\\Trash": "Trash",
+    "\\Drafts": "Drafts",
+    "\\Junk": "Junk",
+    "\\Spam": "Spam",
+    "\\Archive": "Archive",
+    "\\All": "All Mail",
+    "\\Flagged": "Starred",
+}
+
+
+def _parse_list_response(line: bytes) -> dict[str, Any] | None:
+    """Parse a single IMAP LIST response line.
+
+    Returns dict with ``name``, ``delimiter``, ``flags``, or None.
+    """
+    if not line:
+        return None
+    # RFC 3501: (flags) "/" "name"
+    parts = line.split(b'"')
+    flags_str = b""
+    delimiter = "/"
+    name = ""
+
+    if len(parts) >= 1:
+        # Flags are before the first quoted delimiter, in parentheses
+        raw = parts[0]
+        paren_idx = raw.find(b"(")
+        if paren_idx >= 0:
+            end_idx = raw.find(b")", paren_idx)
+            if end_idx >= 0:
+                flags_str = raw[paren_idx + 1 : end_idx]
+
+    if len(parts) >= 3:
+        delimiter = parts[1].decode("utf-8", errors="replace")
+        name = parts[2].strip().strip('"').strip()
+    elif len(parts) >= 2:
+        name = parts[-2].strip().strip('"').strip()
+
+    if not name:
+        return None
+
+    flags = [
+        f.decode("utf-8", errors="replace")
+        for f in flags_str.split() if f
+    ]
+
+    # Detect SPECIAL-USE
+    special_use = None
+    for flag in flags:
+        upper_flag = flag.upper()
+        if upper_flag in _SPECIAL_USE_MAP:
+            special_use = _SPECIAL_USE_MAP[upper_flag]
+            break
+
+    return {
+        "name": name,
+        "delimiter": delimiter or "/",
+        "flags": flags,
+        "special_use": special_use,
+    }
+
+
 class IMAPClient:
     """Low-level IMAP operations for a single connection."""
 
@@ -55,67 +120,48 @@ class IMAPClient:
             self._conn = None
 
     def list_folders(self) -> list[dict[str, Any]]:
-        """List all IMAP folders/mailboxes."""
+        """List all IMAP folders/mailboxes with SPECIAL-USE flags."""
         result: list[dict[str, Any]] = []
         typ, data = self.conn.list()
         if typ != "OK" or not data:
             return result
-        _folder_re = re.compile(rb'"/" "?([^"]+)"?\s*$')
         for line in data:
-            if not line:
-                continue
-            m = _folder_re.search(line)
-            if m:
-                name = m.group(1).decode("utf-8", errors="replace").strip()
-            else:
-                decoded = line.decode("utf-8", errors="replace")
-                parts = decoded.split('"')
-                if len(parts) >= 3:
-                    name = parts[2].strip() if len(parts) == 3 else parts[-2].strip()
-                else:
-                    continue
-            if not name or name == "/":
-                decoded = line.decode("utf-8", errors="replace")
-                flags_str = decoded.split('"')[0].strip("() ")
-                if "\\Sent" in flags_str:
-                    name = "Sent"
-                elif "\\Drafts" in flags_str:
-                    name = "Drafts"
-                elif "\\Trash" in flags_str:
-                    name = "Trash"
-                elif "\\Junk" in flags_str:
-                    name = "Junk"
-                elif "\\Archive" in flags_str:
-                    name = "Archive"
-                elif "\\Inbox" in flags_str:
-                    name = "INBOX"
-                else:
-                    continue
-            result.append({"name": name, "delimiter": "/", "flags": []})
+            parsed = _parse_list_response(line)
+            if parsed:
+                result.append(parsed)
+
+        # Assign canonical names for standard folders not already named
+        for folder in result:
+            if folder["special_use"] and folder["name"] != folder["special_use"]:
+                # Keep the server name but tag with special_use hint
+                pass
         return result
 
     def ensure_folder(self, konto_id: str, folder_name: str, db_store: Any) -> str:
-        """Ensure folder exists in local DB, return its UUID."""
-        dosierujo_id = str(uuid_mod.uuid5(uuid_mod.NAMESPACE_DNS, f"{konto_id}/{folder_name}"))
+        """Ensure folder exists in local DB, return its name.
+
+        Uses ``(konto_id, nomo)`` as the natural key (INSERT OR IGNORE).
+        """
+        now = datetime.now(timezone.utc).isoformat()
         try:
-            now = datetime.now(timezone.utc).isoformat()
             db_store.db.execute(
                 "INSERT OR IGNORE INTO dosierujoj "
-                "(uuid, konto_id, nomo, patro_id, kreita_je, modifita_je) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (dosierujo_id, konto_id, folder_name, None, now, now),
+                "(konto_id, nomo, kreita_je, modifita_je) "
+                "VALUES (?, ?, ?, ?)",
+                (konto_id, folder_name, now, now),
             )
         except Exception:
             pass
-        return dosierujo_id
+        return folder_name
 
     def sync_folder(
-        self, folder: str, konto_id: str, dosierujo_id: str,
+        self, folder: str, konto_id: str, dosierujo_nomo: str,
         db_store: Any, force: bool = False,
     ) -> dict[str, Any]:
         """Sync messages in a single folder.
 
-        Uses IMAP UID SEARCH/FETCH for stable dedup.
+        Uses IMAP UID SEARCH/FETCH for stable dedup, with ``Message-ID``
+        as the cross-folder stable identifier.
 
         Returns:
             Dict with keys: total, new, errors.
@@ -149,8 +195,8 @@ class IMAPClient:
             known_uids: set[int] = set()
             if not force:
                 rows = db_store.db.execute(
-                    "SELECT imap_uid FROM mesagoj WHERE konto_id = ? AND dosierujo_id = ? AND imap_uid IS NOT NULL AND forigita = 0",
-                    (konto_id, dosierujo_id),
+                    "SELECT imap_uid FROM mesagoj WHERE konto_id = ? AND dosierujo_nomo = ? AND imap_uid IS NOT NULL AND forigita = 0",
+                    (konto_id, dosierujo_nomo),
                 )
                 known_uids = {r["imap_uid"] for r in rows}
             else:
@@ -190,7 +236,7 @@ class IMAPClient:
                         from lighterbird.email.imap.parser import parse_email_message
                         from lighterbird.core.storage import AttachmentStore
                         msg = email_lib.message_from_bytes(raw_data)
-                        data = parse_email_message(msg, konto_id, dosierujo_id, imap_uid, store_attachments=True)
+                        data = parse_email_message(msg, konto_id, dosierujo_nomo, imap_uid, store_attachments=True)
                         # Store attachment blobs if any
                         if "_attachments_data" in data:
                             uid_str = str(uuid_mod.uuid4())
@@ -202,8 +248,8 @@ class IMAPClient:
                                     result["errors"].append(
                                         f"Attachment store error for UID {imap_uid}: {store_err}"
                                     )
-                        # Insert message
-                        msg_uuid = store_message(db_store.db, data, force=force)
+                        # Insert or update message
+                        msg_uuid = store_message(db_store.db, data, force=force, konto_id=konto_id, dosierujo_nomo=dosierujo_nomo)
                         # Store attachment metadata in aldonajxoj table
                         if "_attachments_meta" in data:
                             now_ts = datetime.now(timezone.utc).isoformat()
@@ -232,32 +278,91 @@ class IMAPClient:
         return result
 
 
-def store_message(db: Any, data: dict[str, Any], force: bool = False) -> str:
-    """Insert or update a message in mesagoj table."""
+def store_message(
+    db: Any,
+    data: dict[str, Any],
+    force: bool = False,
+    konto_id: str | None = None,
+    dosierujo_nomo: str | None = None,
+) -> str:
+    """Insert or update a message in mesagoj table.
+
+    Uses ``Message-ID`` for cross-folder dedup when available.
+    Falls back to creating a new UUID for messages without one.
+    """
     msg_uuid = data.get("uuid") or str(uuid_mod.uuid4())
-    local_legita = None
-    local_stelo = None
-    if force:
-        imap_uid = data.get("imap_uid")
-        if imap_uid is not None:
-            existing = db.execute_one(
-                "SELECT uuid, legita, stelo FROM mesagoj "
-                "WHERE konto_id = ? AND dosierujo_id = ? AND imap_uid = ?",
-                (data["konto_id"], data["dosierujo_id"], imap_uid),
-            )
-            if existing:
-                msg_uuid = existing["uuid"]
+    message_id = data.get("message_id")
+
+    # Try dedup by Message-ID first
+    if message_id and konto_id:
+        existing = db.execute_one(
+            "SELECT uuid, legita, stelo FROM mesagoj "
+            "WHERE konto_id = ? AND message_id = ?",
+            (konto_id, message_id),
+        )
+        if existing:
+            msg_uuid = existing["uuid"]
+            if force:
                 local_legita = existing["legita"]
                 local_stelo = existing["stelo"]
                 db.execute("DELETE FROM mesagoj WHERE uuid = ?", (msg_uuid,))
+                # Re-insert preserving read/star state
+                _insert_message(db, data, msg_uuid, konto_id, dosierujo_nomo)
+                db.execute(
+                    "UPDATE mesagoj SET legita = ?, stelo = ? WHERE uuid = ?",
+                    (local_legita, local_stelo, msg_uuid),
+                )
+            else:
+                # Update folder and UID for existing message
+                db.execute(
+                    "UPDATE mesagoj SET dosierujo_nomo = ?, imap_uid = ?, "
+                    "modifita_je = ? WHERE uuid = ?",
+                    (dosierujo_nomo, data.get("imap_uid"),
+                     datetime.now(timezone.utc).isoformat(), msg_uuid),
+                )
+            return msg_uuid
+
+    # Fall back to UID-based dedup (per-folder)
+    imap_uid = data.get("imap_uid")
+    if imap_uid is not None and konto_id and dosierujo_nomo:
+        existing = db.execute_one(
+            "SELECT uuid, legita, stelo FROM mesagoj "
+            "WHERE konto_id = ? AND dosierujo_nomo = ? AND imap_uid = ?",
+            (konto_id, dosierujo_nomo, imap_uid),
+        )
+        if existing:
+            msg_uuid = existing["uuid"]
+            if force:
+                local_legita = existing["legita"]
+                local_stelo = existing["stelo"]
+                db.execute("DELETE FROM mesagoj WHERE uuid = ?", (msg_uuid,))
+                _insert_message(db, data, msg_uuid, konto_id, dosierujo_nomo)
+                db.execute(
+                    "UPDATE mesagoj SET legita = ?, stelo = ? WHERE uuid = ?",
+                    (local_legita, local_stelo, msg_uuid),
+                )
+            else:
+                return msg_uuid  # Already known
+
+    # New message — insert
+    _insert_message(db, data, msg_uuid, konto_id, dosierujo_nomo)
+    return msg_uuid
+
+
+def _insert_message(
+    db: Any, data: dict[str, Any],
+    msg_uuid: str, konto_id: str | None, dosierujo_nomo: str | None,
+) -> None:
+    """Insert a message row."""
     db.execute(
         """INSERT OR REPLACE INTO mesagoj
-           (uuid, konto_id, dosierujo_id, message_id, in_reply_to,
+           (uuid, konto_id, dosierujo_nomo, message_id, in_reply_to,
             imap_uid, de, al, kc, subjekto, korpo, html_korpo,
             prioritato, legita, stelo, forigita,
             ricevita_je, kreita_je, modifita_je)
            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-        (msg_uuid, data.get("konto_id", ""), data.get("dosierujo_id", "") or None,
+        (msg_uuid, konto_id or data.get("konto_id", ""),
+         dosierujo_nomo or data.get("dosierujo_nomo"),
          data.get("message_id", ""), data.get("in_reply_to", ""),
          data.get("imap_uid"), data.get("de", ""), data.get("al", "[]"),
          data.get("kc", "[]"), data.get("subjekto", ""), data.get("korpo", ""),
@@ -266,9 +371,3 @@ def store_message(db: Any, data: dict[str, Any], force: bool = False) -> str:
          int(data.get("forigita", 0)), data.get("ricevita_je", ""),
          data.get("kreita_je", ""), data.get("modifita_je", "")),
     )
-    if force and local_legita is not None:
-        db.execute(
-            "UPDATE mesagoj SET legita = ?, stelo = ? WHERE uuid = ?",
-            (local_legita, local_stelo, msg_uuid),
-        )
-    return msg_uuid

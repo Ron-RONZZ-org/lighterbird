@@ -24,8 +24,7 @@ CREATE TABLE IF NOT EXISTS taglibro (
 
 _CREATE_ETIKEDOJ = """
 CREATE TABLE IF NOT EXISTS etikedoj (
-    uuid        TEXT PRIMARY KEY,
-    teksto      TEXT NOT NULL UNIQUE,
+    teksto      TEXT PRIMARY KEY COLLATE NOCASE,
     koloro      TEXT NOT NULL DEFAULT '',
     kreita_je   TEXT NOT NULL,
     modifita_je TEXT NOT NULL
@@ -34,9 +33,9 @@ CREATE TABLE IF NOT EXISTS etikedoj (
 
 _CREATE_TAGLIBRO_ETIKEDO = """
 CREATE TABLE IF NOT EXISTS taglibro_etikedo (
-    taglibro_uuid TEXT NOT NULL REFERENCES taglibro(uuid) ON DELETE CASCADE,
-    etikedo_uuid  TEXT NOT NULL REFERENCES etikedoj(uuid) ON DELETE CASCADE,
-    PRIMARY KEY (taglibro_uuid, etikedo_uuid)
+    taglibro_uuid  TEXT NOT NULL REFERENCES taglibro(uuid) ON DELETE CASCADE,
+    etikedo_teksto TEXT NOT NULL REFERENCES etikedoj(teksto) ON DELETE CASCADE,
+    PRIMARY KEY (taglibro_uuid, etikedo_teksto)
 );
 """
 
@@ -46,7 +45,7 @@ _SCHEMA_STMTS: list[str] = [
     _CREATE_TAGLIBRO_ETIKEDO,
     "CREATE INDEX IF NOT EXISTS idx_taglibro_dato ON taglibro(dato);",
     "CREATE INDEX IF NOT EXISTS idx_taglibro_etikedo_entry ON taglibro_etikedo(taglibro_uuid);",
-    "CREATE INDEX IF NOT EXISTS idx_taglibro_etikedo_label ON taglibro_etikedo(etikedo_uuid);",
+    "CREATE INDEX IF NOT EXISTS idx_taglibro_etikedo_label ON taglibro_etikedo(etikedo_teksto);",
 ]
 
 

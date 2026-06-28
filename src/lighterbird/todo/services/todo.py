@@ -88,25 +88,25 @@ class TodoService(CRUDService):
 
     # ── Labels ──────────────────────────────────────────────────────────
 
-    def add_label(self, todo_uuid: str, label_uuid: str) -> None:
+    def add_label(self, todo_uuid: str, label_teksto: str) -> None:
         """Attach a label to a todo."""
         self.db.execute(
-            "INSERT OR IGNORE INTO todoj_etikedo (todo_uuid, etikedo_uuid) VALUES (?, ?)",
-            (todo_uuid, label_uuid),
+            "INSERT OR IGNORE INTO todoj_etikedo (todo_uuid, etikedo_teksto) VALUES (?, ?)",
+            (todo_uuid, label_teksto),
         )
 
-    def remove_label(self, todo_uuid: str, label_uuid: str) -> None:
+    def remove_label(self, todo_uuid: str, label_teksto: str) -> None:
         """Detach a label from a todo."""
         self.db.execute(
-            "DELETE FROM todoj_etikedo WHERE todo_uuid = ? AND etikedo_uuid = ?",
-            (todo_uuid, label_uuid),
+            "DELETE FROM todoj_etikedo WHERE todo_uuid = ? AND etikedo_teksto = ?",
+            (todo_uuid, label_teksto),
         )
 
     def get_labels(self, todo_uuid: str) -> list[dict[str, Any]]:
         """Get all labels attached to a todo."""
         return self.db.execute(
             "SELECT e.* FROM etikedoj e "
-            "JOIN todoj_etikedo te ON e.uuid = te.etikedo_uuid "
+            "JOIN todoj_etikedo te ON e.teksto = te.etikedo_teksto "
             "WHERE te.todo_uuid = ? ORDER BY e.teksto",
             (todo_uuid,),
         )
@@ -120,22 +120,20 @@ class TodoService(CRUDService):
         from datetime import datetime, timezone
 
         now = datetime.now(timezone.utc).isoformat()
-        import uuid
-
-        label = {
-            "uuid": str(uuid.uuid4()),
-            "teksto": data.get("teksto", "").strip(),
-            "koloro": data.get("koloro", ""),
-            "kreita_je": now,
-            "modifita_je": now,
-        }
-        if not label["teksto"]:
+        teksto = data.get("teksto", "").strip()
+        if not teksto:
             raise ValueError("Label text (teksto) is required.")
-        return self.db.execute_one(
-            "INSERT INTO etikedoj (uuid, teksto, koloro, kreita_je, modifita_je) "
-            "VALUES (?, ?, ?, ?, ?) RETURNING *",
-            (label["uuid"], label["teksto"], label["koloro"], now, now),
-        )
+        koloro = data.get("koloro", "")
+        try:
+            return self.db.execute_one(
+                "INSERT INTO etikedoj (teksto, koloro, kreita_je, modifita_je) "
+                "VALUES (?, ?, ?, ?) RETURNING *",
+                (teksto, koloro, now, now),
+            )
+        except Exception as e:
+            if "UNIQUE" in str(e) or "PRIMARY KEY" in str(e):
+                raise ValueError(f"Label '{teksto}' already exists.") from e
+            raise
 
     def delete_label(self, label_uuid: str) -> None:
         """Delete a label and all its associations."""

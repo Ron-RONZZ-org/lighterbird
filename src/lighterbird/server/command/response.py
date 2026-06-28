@@ -12,7 +12,6 @@ from typing import Any
 def normalize_account(acct: dict[str, Any]) -> dict[str, Any]:
     """Translate raw kontoj record -> frontend-friendly dict."""
     return {
-        "uuid": acct.get("uuid", ""),
         "email": acct.get("retposto", ""),
         "name": acct.get("nomo", ""),
         "imap_server": acct.get("imap_servilo", ""),
@@ -34,7 +33,7 @@ def normalize_message(msg: dict[str, Any]) -> dict[str, Any]:
         to_list = to_raw or []
     return {
         "uuid": msg.get("uuid", ""),
-        "account_uuid": msg.get("konto_id", ""),
+        "account_email": msg.get("konto_id", ""),
         "from": msg.get("de", ""),
         "to": to_list,
         "subject": msg.get("subjekto", ""),

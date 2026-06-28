@@ -52,7 +52,6 @@ class TestEmailAPI:
         assert resp.status_code == 201
         data = resp.json()
         assert data["email"] == "test@example.com"
-        assert "uuid" in data
 
     def test_create_and_list(self, client):
         client.post("/api/v1/email/accounts", json={
@@ -86,8 +85,8 @@ class TestEmailAPI:
             "smtp_server": "smtp.example.com",
             "password": "pw",
         })
-        uuid = create_resp.json()["uuid"]
-        resp = client.delete(f"/api/v1/email/accounts/{uuid}")
+        email_addr = create_resp.json()["email"]
+        resp = client.delete(f"/api/v1/email/accounts/{email_addr}")
         assert resp.status_code == 200
         assert resp.json()["status"] == "deleted"
         list_resp = client.get("/api/v1/email/accounts")
@@ -99,7 +98,7 @@ class TestEmailAPI:
 
     def test_send_no_account(self, client):
         resp = client.post("/api/v1/email/send", json={
-            "account_uuid": "nonexistent",
+            "account_email": "nonexistent@test.com",
             "to": ["someone@example.com"],
             "subject": "Test",
             "body": "Hello",
