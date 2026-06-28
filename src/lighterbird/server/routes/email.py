@@ -23,7 +23,6 @@ router = APIRouter(prefix="/api/v1/email", tags=["email"])
 
 def _account_to_response(acct: dict) -> AccountResponse:
     return AccountResponse(
-        uuid=acct["uuid"],
         email=acct.get("retposto", ""),
         name=acct.get("nomo", ""),
         imap_server=acct.get("imap_servilo", ""),
@@ -56,7 +55,7 @@ def create_account(
     )
     acct_data = {
         "nomo": data.name or data.email.split("@")[0],
-        "retposto": data.email,
+        "retposto": data.email.lower().strip(),
         "imap_servilo": detected["imap"],
         "imap_haveno": data.imap_port,
         "imap_ssl": 1 if data.imap_ssl else 0,
@@ -70,16 +69,16 @@ def create_account(
     return _account_to_response(acct)
 
 
-@router.patch("/accounts/{uuid}")
+@router.patch("/accounts/{email}")
 def update_account(
-    uuid: str,
+    email: str,
     data: AccountUpdate,
     email_svc: EmailService = Depends(get_email_service),
 ):
     """Update an email account (partial)."""
-    acct = email_svc.get_account(uuid)
+    acct = email_svc.get_account(email)
     if not acct:
-        raise HTTPException(status_code=404, detail=f"Account not found: {uuid[:8]}")
+        raise HTTPException(status_code=404, detail=f"Account not found: {email}")
 
     updates = {}
     if data.name is not None:
@@ -89,18 +88,18 @@ def update_account(
     if data.smtp_server is not None:
         updates["smtp_servilo"] = data.smtp_server
     if updates:
-        email_svc.accounts.update(uuid, updates)
+        email_svc.accounts.update(email, updates)
     if data.password is not None:
-        email_svc.accounts.set_password(uuid, data.password)
+        email_svc.accounts.set_password(email, data.password)
 
-    return {"status": "updated", "uuid": uuid[:8]}
+    return {"status": "updated", "email": email}
 
 
-@router.delete("/accounts/{uuid}")
-def delete_account(uuid: str, email_svc: EmailService = Depends(get_email_service)):
-    deleted = email_svc.delete_account(uuid)
+@router.delete("/accounts/{email}")
+def delete_account(email: str, email_svc: EmailService = Depends(get_email_service)):
+    deleted = email_svc.delete_account(email)
     if not deleted:
-        raise HTTPException(status_code=404, detail=f"Account not found: {uuid[:8]}")
+        raise HTTPException(status_code=404, detail=f"Account not found: {email}")
     return {"status": "deleted"}
 
 
@@ -109,14 +108,13 @@ def sync_email(
     req: SyncRequest = SyncRequest(),
     email_svc: EmailService = Depends(get_email_service),
 ):
-    if req.account_uuid:
-        result = email_svc.sync_account(req.account_uuid)
+    if req.account_email:
+        result = email_svc.sync_account(req.account_email)
         return SyncResultResponse(
             total=result.total, new=result.new, errors=result.errors
         )
     else:
         results = email_svc.sync_all()
-        # Return aggregated result
         total = sum(r.get("total", 0) for r in results.values())
         new = sum(r.get("new", 0) for r in results.values())
         errors = []
@@ -129,20 +127,15 @@ def sync_email(
 def list_folders(email_svc: EmailService = Depends(get_email_service)):
     """List all known folders with account info."""
     from lighterbird.server.command.response import normalize_account
-    # Get all accounts first to map account UUIDs to emails
-    accounts = {a["uuid"]: normalize_account(a) for a in email_svc.list_accounts()}
-    # Query folders
+    accounts = {a["retposto"]: normalize_account(a) for a in email_svc.list_accounts()}
     rows = list(email_svc.db.execute(
-        "SELECT d.uuid, d.nomo, d.konto_id FROM dosierujoj d ORDER BY d.konto_id, d.nomo"
+        "SELECT konto_id, nomo FROM dosierujoj ORDER BY konto_id, nomo"
     ))
     folders = []
     for row in rows:
-        acct = accounts.get(row["konto_id"], {})
-        acct_email = acct.get("email", row["konto_id"][:8] if row["konto_id"] else "")
+        acct_email = row["konto_id"]
         folders.append({
-            "folder_uuid": row["uuid"],
             "folder_name": row["nomo"],
-            "account_uuid": row["konto_id"],
             "account_email": acct_email,
             "label": f"{acct_email}/{row['nomo']}",
         })
@@ -151,7 +144,7 @@ def list_folders(email_svc: EmailService = Depends(get_email_service)):
 
 @router.get("/messages")
 def list_messages(
-    account_uuid: str | None = Query(default=None, alias="account_uuid"),
+    account_email: str | None = Query(default=None, alias="account_email"),
     folder: str | None = None,
     query: str | None = None,
     from_: str | None = Query(default=None, alias="from"),
@@ -177,8 +170,8 @@ def list_messages(
         filters["before"] = before
     if read is not None:
         filters["read"] = read
-    if account_uuid:
-        filters["account"] = account_uuid
+    if account_email:
+        filters["account"] = account_email
     if folder:
         filters["folder"] = folder
     if filters:
@@ -285,7 +278,7 @@ def send_email(
     email_svc: EmailService = Depends(get_email_service),
 ):
     try:
-        email_svc.send_email(req.account_uuid, req.to, req.subject, req.body, cc=req.cc)
+        email_svc.send_email(req.account_email, req.to, req.subject, req.body, cc=req.cc)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     return {"status": "sent"}
@@ -328,17 +321,6 @@ def batch_move(
     email_svc: EmailService = Depends(get_email_service),
 ):
     """Move multiple messages to a destination folder."""
-    # Validate destination folder exists
-    folder = email_svc.db.execute_one(
-        "SELECT uuid FROM dosierujoj WHERE uuid = ?",
-        (req.destination_folder_uuid,),
-    )
-    if not folder:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Destination folder '{req.destination_folder_uuid[:8]}' not found. "
-                   f"Sync your email accounts first with !sync --email.",
-        )
     for uuid in req.uuids:
-        email_svc.move_message(uuid, req.destination_folder_uuid)
+        email_svc.move_message(uuid, req.destination_folder)
     return BatchResultResponse(status="ok", count=len(req.uuids))

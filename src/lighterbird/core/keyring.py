@@ -21,7 +21,7 @@ def get_password(service: str, key: str) -> str | None:
     """Retrieve a password from the system keyring.
 
     Args:
-        service: Service name (e.g. ``"lighterbird/{account_uuid}"``)
+        service: Service name (e.g. ``"lighterbird/email/{email}"``)
         key: Key within the service (e.g. ``"password"``)
 
     Returns:

@@ -45,15 +45,12 @@ class MessageService:
             conditions.append("m.konto_id = ?")
             params.append(konto_id)
         if folder:
-            conditions.append(
-                "m.dosierujo_id IN (SELECT uuid FROM dosierujoj WHERE nomo = ?)"
-            )
+            conditions.append("m.dosierujo_nomo = ?")
             params.append(folder)
         where = " AND ".join(conditions)
         sql = (
-            "SELECT m.*, COALESCE(d.nomo, '') AS dosierujo_nomo"
+            "SELECT m.*, COALESCE(m.dosierujo_nomo, '') AS dosierujo_nomo"
             " FROM mesagoj m"
-            " LEFT JOIN dosierujoj d ON m.dosierujo_id = d.uuid"
             f" WHERE {where}"
             " ORDER BY m.ricevita_je DESC LIMIT ? OFFSET ?"
         )
@@ -94,17 +91,13 @@ class MessageService:
         if filters.get("account"):
             conditions.append("m.konto_id = ?")
             params.append(filters["account"])
-        # Folder filtering: list of folders to INCLUDE
+        # Folder filtering: list of folders to INCLUDE (by name)
         folder_names = filters.get("folder")
         if folder_names:
             if isinstance(folder_names, str):
                 folder_names = [folder_names]
             placeholders = ",".join("?" for _ in folder_names)
-            conditions.append(
-                f"m.dosierujo_id IN ("
-                f"SELECT uuid FROM dosierujoj WHERE nomo IN ({placeholders})"
-                f")"
-            )
+            conditions.append(f"m.dosierujo_nomo IN ({placeholders})")
             params.extend(folder_names)
         # Exclude specific folders (e.g. Trash)
         exclude_folders = filters.get("exclude_folder")
@@ -113,16 +106,13 @@ class MessageService:
                 exclude_folders = [exclude_folders]
             placeholders = ",".join("?" for _ in exclude_folders)
             conditions.append(
-                f"(m.dosierujo_id IS NULL OR m.dosierujo_id NOT IN ("
-                f"SELECT uuid FROM dosierujoj WHERE nomo IN ({placeholders})"
-                f"))"
+                f"(m.dosierujo_nomo IS NULL OR m.dosierujo_nomo NOT IN ({placeholders}))"
             )
             params.extend(exclude_folders)
         where = " AND ".join(conditions)
         sql = (
-            "SELECT m.*, COALESCE(d.nomo, '') AS dosierujo_nomo"
+            "SELECT m.*"
             " FROM mesagoj m"
-            " LEFT JOIN dosierujoj d ON m.dosierujo_id = d.uuid"
             f" WHERE {where}"
             " ORDER BY m.ricevita_je DESC LIMIT ?"
         )
@@ -131,29 +121,22 @@ class MessageService:
             rows = self.db.execute(sql, tuple(params))
         except Exception:
             fallback_sql = (
-                "SELECT m.*, '' AS dosierujo_nomo"
-                " FROM mesagoj m"
+                "SELECT m.* FROM mesagoj m"
                 " WHERE m.forigita = 0"
                 " ORDER BY m.ricevita_je DESC LIMIT ?"
             )
             rows = self.db.execute(fallback_sql, (limit,))
         return list(rows)
 
-
     def find_conversation(
-        self, message_id: str, references: str = "", in_reply_to: str = "", limit: int = 20
+        self, message_id: str, references: str = "", in_reply_to: str = "",
+        limit: int = 20,
     ) -> list[dict[str, Any]]:
-        """Find messages in the same conversation thread.
-
-        Matches by ``references`` (full thread list), ``in_reply_to``
-        (direct parent), or ``message_id`` (the message itself, to catch
-        replies to it).
-        """
+        """Find messages in the same conversation thread."""
         ids = set()
         if message_id:
             ids.add(message_id)
         if in_reply_to:
-            # in_reply_to may contain multiple space-separated message IDs
             for rid in in_reply_to.split():
                 rid = rid.strip()
                 if rid:
@@ -169,9 +152,7 @@ class MessageService:
 
         placeholders = ",".join("?" for _ in ids)
         sql = (
-            "SELECT m.*, COALESCE(d.nomo, '') AS dosierujo_nomo"
-            " FROM mesagoj m"
-            " LEFT JOIN dosierujoj d ON m.dosierujo_id = d.uuid"
+            "SELECT m.* FROM mesagoj m"
             " WHERE m.forigita = 0"
             " AND (m.message_id IN ({p}) OR m.in_reply_to IN ({p})"
             "      OR m.references IN ({p})"

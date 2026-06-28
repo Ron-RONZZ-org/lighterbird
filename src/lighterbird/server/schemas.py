@@ -40,7 +40,6 @@ class AccountCreate(BaseModel):
 
 
 class AccountResponse(BaseModel):
-    uuid: str
     email: str
     name: str
     imap_server: str
@@ -56,7 +55,7 @@ class AccountListResponse(BaseModel):
 
 
 class SyncRequest(BaseModel):
-    account_uuid: str | None = Field(default=None, description="Account UUID (or empty for all)")
+    account_email: str | None = Field(default=None, description="Account email (or empty for all)")
 
 
 class SyncResultResponse(BaseModel):
@@ -71,7 +70,7 @@ class SyncAllResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     uuid: str
-    account_uuid: str
+    account_email: str
     subject: str
     from_addr: str = Field(alias="from")
     to: list[str]
@@ -90,7 +89,7 @@ class MessageListResponse(BaseModel):
 
 
 class SendRequest(BaseModel):
-    account_uuid: str
+    account_email: str
     to: list[str]
     subject: str
     body: str = ""
@@ -111,7 +110,7 @@ class BatchDeleteRequest(BaseModel):
 
 class BatchMoveRequest(BaseModel):
     uuids: list[str] = Field(..., min_length=1, max_length=200)
-    destination_folder_uuid: str = Field(..., min_length=1)
+    destination_folder: str = Field(..., min_length=1, description="Destination folder name")
 
     model_config = {"extra": "forbid"}
 
@@ -220,6 +219,23 @@ class LLMProfileUpdate(BaseModel):
 
 # ── Account Updates ──────────────────────────────────────────────────────
 
+class AccountUpdate(BaseModel):
+    name: str | None = Field(default=None, description="Display name")
+    password: str | None = Field(default=None, description="Account password")
+    imap_server: str | None = Field(default=None, description="IMAP server")
+    smtp_server: str | None = Field(default=None, description="SMTP server")
+
+    model_config = {"extra": "forbid"}
+
+
+class CalendarUpdate(BaseModel):
+    url: str | None = Field(default=None, description="CalDAV URL")
+    username: str | None = Field(default=None, description="Username")
+    password: str | None = Field(default=None, description="Password")
+
+    model_config = {"extra": "forbid"}
+
+
 # ── Sieve ─────────────────────────────────────────────────────────────────
 
 class SieveScriptCreate(BaseModel):
@@ -237,14 +253,13 @@ class SieveScriptUpdate(BaseModel):
 
 
 class SieveActivateRequest(BaseModel):
-    account_uuid: str = Field(..., description="Account UUID to activate/deactivate on")
+    account_email: str = Field(..., description="Account email to activate/deactivate on")
     priority: int = Field(default=0, ge=0, le=999, description="Execution priority (0=lowest)")
 
     model_config = {"extra": "forbid"}
 
 
 class SieveActivationInfo(BaseModel):
-    uuid: str
     active: bool
     priority: int = 0
     man_sync: bool
@@ -253,7 +268,7 @@ class SieveActivationInfo(BaseModel):
 
 
 class SievePriorityUpdate(BaseModel):
-    account_uuid: str = Field(..., description="Account UUID")
+    account_email: str = Field(..., description="Account email")
     priority: int = Field(..., ge=0, le=999, description="New priority (0=lowest)")
 
     model_config = {"extra": "forbid"}
@@ -271,7 +286,7 @@ class SieveCombineWarning(BaseModel):
 
 
 class SieveAnalyzeRequest(BaseModel):
-    account_uuid: str = Field(default="", description="Account UUID (for _spam_blocks injection)")
+    account_email: str = Field(default="", description="Account email (for _spam_blocks injection)")
     scripts: list[SieveScriptEntry] = Field(..., description="Ordered list of scripts to combine")
 
     model_config = {"extra": "forbid"}
@@ -285,7 +300,6 @@ class SieveAnalyzeResponse(BaseModel):
 
 
 class SieveScriptResponse(BaseModel):
-    uuid: str
     name: str
     content: str
     system: bool
@@ -307,22 +321,3 @@ class SieveValidateRequest(BaseModel):
 class SieveValidateResponse(BaseModel):
     is_valid: bool
     error: str = ""
-
-
-# ── Account Updates ──────────────────────────────────────────────────────
-
-class AccountUpdate(BaseModel):
-    name: str | None = Field(default=None, description="Display name")
-    password: str | None = Field(default=None, description="Account password")
-    imap_server: str | None = Field(default=None, description="IMAP server")
-    smtp_server: str | None = Field(default=None, description="SMTP server")
-
-    model_config = {"extra": "forbid"}
-
-
-class CalendarUpdate(BaseModel):
-    url: str | None = Field(default=None, description="CalDAV URL")
-    username: str | None = Field(default=None, description="Username")
-    password: str | None = Field(default=None, description="Password")
-
-    model_config = {"extra": "forbid"}

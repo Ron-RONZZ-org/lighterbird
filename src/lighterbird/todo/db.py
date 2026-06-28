@@ -26,8 +26,7 @@ CREATE TABLE IF NOT EXISTS taskoj (
 
 _CREATE_ETIKEDOJ = """
 CREATE TABLE IF NOT EXISTS etikedoj (
-    uuid        TEXT PRIMARY KEY,
-    teksto      TEXT NOT NULL UNIQUE,
+    teksto      TEXT PRIMARY KEY COLLATE NOCASE,
     koloro      TEXT NOT NULL DEFAULT '',
     kreita_je   TEXT NOT NULL,
     modifita_je TEXT NOT NULL
@@ -36,9 +35,9 @@ CREATE TABLE IF NOT EXISTS etikedoj (
 
 _CREATE_TODOJ_ETIKEDO = """
 CREATE TABLE IF NOT EXISTS todoj_etikedo (
-    todo_uuid   TEXT NOT NULL REFERENCES taskoj(uuid) ON DELETE CASCADE,
-    etikedo_uuid TEXT NOT NULL REFERENCES etikedoj(uuid) ON DELETE CASCADE,
-    PRIMARY KEY (todo_uuid, etikedo_uuid)
+    todo_uuid      TEXT NOT NULL REFERENCES taskoj(uuid) ON DELETE CASCADE,
+    etikedo_teksto TEXT NOT NULL REFERENCES etikedoj(teksto) ON DELETE CASCADE,
+    PRIMARY KEY (todo_uuid, etikedo_teksto)
 );
 """
 
@@ -48,7 +47,7 @@ _SCHEMA_STMTS: list[str] = [
     _CREATE_TODOJ_ETIKEDO,
     "CREATE INDEX IF NOT EXISTS idx_taskoj_stato ON taskoj(stato);",
     "CREATE INDEX IF NOT EXISTS idx_todoj_etikedo_todo ON todoj_etikedo(todo_uuid);",
-    "CREATE INDEX IF NOT EXISTS idx_todoj_etikedo_etikedo ON todoj_etikedo(etikedo_uuid);",
+    "CREATE INDEX IF NOT EXISTS idx_todoj_etikedo_etikedo ON todoj_etikedo(etikedo_teksto);",
 ]
 
 

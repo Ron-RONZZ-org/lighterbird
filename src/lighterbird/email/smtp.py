@@ -9,10 +9,12 @@ from __future__ import annotations
 import smtplib
 import socket
 import ssl
+import uuid as uuid_mod
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email import encoders
+from email.utils import make_msgid
 from pathlib import Path
 from typing import Any
 
@@ -78,26 +80,37 @@ class SMTPClient:
         html_body: str = "",
         attachments: list[str | Path] | None = None,
         signature: str = "",
-    ) -> None:
+        message_id: str | None = None,
+    ) -> str:
         """Send an email message with optional HTML, attachments, and signature.
 
         Args:
             from_addr: Sender email address.
             to: List of primary recipients.
             subject: Email subject.
-            body: Plain text body.
             cc: Carbon copy recipients.
             bcc: Blind carbon copy recipients.
             html_body: Optional HTML body (alters MIME structure to
                 ``multipart/alternative``).
             attachments: List of file paths to attach.
             signature: Optional signature appended to the plain text body.
+            message_id: Optional Message-ID header value (without angle brackets).
+                If not provided, one is auto-generated.
+
+        Returns:
+            The Message-ID that was set on the outgoing message (without angle brackets).
         """
         cc = cc or []
         bcc = bcc or []
         attachments = attachments or []
 
         all_recipients = to + cc + bcc
+
+        # Generate or use provided Message-ID
+        if message_id:
+            msg_id = message_id
+        else:
+            msg_id = str(uuid_mod.uuid4())
 
         # Append signature to body
         full_body = body
@@ -124,6 +137,7 @@ class SMTPClient:
             msg["To"] = ", ".join(to)
             if cc:
                 msg["Cc"] = ", ".join(cc)
+            msg["Message-ID"] = f"<{msg_id}>"
 
             # If we have attachments, nest alternative inside mixed
             if has_attachments and (full_body or has_html):
@@ -148,6 +162,7 @@ class SMTPClient:
             msg["To"] = ", ".join(to)
             if cc:
                 msg["Cc"] = ", ".join(cc)
+            msg["Message-ID"] = f"<{msg_id}>"
 
         try:
             failed = self.conn.sendmail(from_addr, all_recipients, msg.as_string())
@@ -157,6 +172,7 @@ class SMTPClient:
                 )
         except Exception as e:
             raise ConnectionError(f"SMTP send failed: {e}") from e
+        return msg_id
 
     @staticmethod
     def _attach_file(msg: MIMEMultipart, path: str | Path) -> None:
