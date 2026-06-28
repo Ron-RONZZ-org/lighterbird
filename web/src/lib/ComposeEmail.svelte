@@ -2,6 +2,7 @@
   /** Email compose form — used when !email send is typed interactively. */
 
   import { email as emailApi } from "./api.js";
+  import FormField from "./FormField.svelte";
 
   let { initialData = {}, onsubmit } = $props();
   // svelte-ignore state_referenced_locally
@@ -12,6 +13,10 @@
   let subject = $state(_initial.subject || "");
   let body = $state(_initial.body || "");
   let cc = $state(_initial.cc || "");
+  let bcc = $state(_initial.bcc || "");
+  let priority = $state(_initial.priority || "3");
+  let bodyFormat = $state("markdown"); // "markdown" | "html" | "plain"
+  let attachmentFiles = $state([]); // Array of {name, data} (base64)
   let sending = $state(false);
   let accounts = $state([]);
 
@@ -24,18 +29,53 @@
     }).catch(() => {});
   });
 
+  async function handleAttachmentUpload(e) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const newAttachments = [];
+    for (const file of files) {
+      const data = await fileToBase64(file);
+      newAttachments.push({ name: file.name, data });
+    }
+    attachmentFiles = [...attachmentFiles, ...newAttachments];
+    e.target.value = ""; // reset so same file can be re-selected
+  }
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(",")[1]); // strip data: prefix
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function removeAttachment(idx) {
+    attachmentFiles = attachmentFiles.filter((_, i) => i !== idx);
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     if (!to || !subject) return;
     sending = true;
     try {
+      const flags = {
+        ...(accountUuid ? { account: accountUuid } : {}),
+        ...(cc ? { cc } : {}),
+        ...(bcc ? { bcc } : {}),
+        priority,
+        ...(bodyFormat !== "markdown" ? { [`body-format`]: bodyFormat } : {}),
+      };
+      const remaining = [to, subject, body];
+      // Attachments passed as --file flags
+      for (const att of attachmentFiles) {
+        remaining.push(`--file`);
+        remaining.push(`${att.name}:${att.data}`);
+      }
       await onsubmit({
         tokens: ["email", "send"],
-        flags: {
-          ...(accountUuid ? { account: accountUuid } : {}),
-          ...(cc ? { cc } : {}),
-        },
-        remaining: [to, subject, body],
+        flags,
+        remaining,
       });
     } finally {
       sending = false;
@@ -44,32 +84,91 @@
 </script>
 
 <form onsubmit={handleSubmit} class="email-form">
-  <div class="field">
-    <label for="account">Account</label>
-    <select id="account" bind:value={accountUuid}>
-      {#each accounts as acct}
-        <option value={acct.uuid}>{acct.email}</option>
-      {/each}
-    </select>
+  <div class="row-fields">
+    <FormField label="Account" class="flex-1">
+      {#snippet children()}
+        <select id="account" class="ff-input" bind:value={accountUuid}>
+          {#each accounts as acct}
+            <option value={acct.uuid}>{acct.email}</option>
+          {/each}
+        </select>
+      {/snippet}
+    </FormField>
+    <FormField label="Priority" class="flex-1">
+      {#snippet children()}
+        <select id="priority" class="ff-input" bind:value={priority}>
+          <option value="1">1 — Highest</option>
+          <option value="2">2 — High</option>
+          <option value="3" selected>3 — Normal</option>
+          <option value="4">4 — Low</option>
+          <option value="5">5 — Lowest</option>
+        </select>
+      {/snippet}
+    </FormField>
   </div>
-  <div class="field">
-    <label for="to">To</label>
-    <input id="to" type="email" bind:value={to} required placeholder="recipient@example.com" />
+
+  <FormField label="To" required={true}>
+    {#snippet children()}
+      <input id="to" type="email" class="ff-input" bind:value={to} required placeholder="recipient@example.com" />
+    {/snippet}
+  </FormField>
+
+  <div class="row-fields">
+    <FormField label="CC" class="flex-1">
+      {#snippet children()}
+        <input id="cc" type="email" class="ff-input" bind:value={cc} placeholder="cc@example.com" />
+      {/snippet}
+    </FormField>
+    <FormField label="BCC" class="flex-1">
+      {#snippet children()}
+        <input id="bcc" type="email" class="ff-input" bind:value={bcc} placeholder="bcc@example.com" />
+      {/snippet}
+    </FormField>
   </div>
-  <div class="field">
-    <label for="cc">CC</label>
-    <input id="cc" type="email" bind:value={cc} placeholder="cc@example.com (optional)" />
-  </div>
-  <div class="field">
-    <label for="subject">Subject</label>
-    <input id="subject" type="text" bind:value={subject} required placeholder="Subject" />
-  </div>
-  <div class="field">
-    <label for="body">Body</label>
-    <textarea id="body" bind:value={body} rows="8" placeholder="Message body..."></textarea>
-  </div>
-  <div class="actions">
-    <button type="submit" disabled={sending || !to || !subject}>
+
+  <FormField label="Subject" required={true}>
+    {#snippet children()}
+      <input id="subject" type="text" class="ff-input" bind:value={subject} required placeholder="Subject" />
+    {/snippet}
+  </FormField>
+
+  <FormField label="Body" hint="Markdown (default) — use dropdown to switch">
+    {#snippet children()}
+      <div class="body-area">
+        <div class="body-format-bar">
+          <select class="format-select" bind:value={bodyFormat}>
+            <option value="markdown">Markdown</option>
+            <option value="html">HTML</option>
+            <option value="plain">Plain Text</option>
+          </select>
+        </div>
+        <textarea id="body" class="ff-textarea" bind:value={body} rows="8"
+          placeholder="Message body (Markdown supported)"></textarea>
+      </div>
+    {/snippet}
+  </FormField>
+
+  <!-- File attachments -->
+  <FormField label="Attachments">
+    {#snippet children()}
+      <div class="attachment-area">
+        <input type="file" class="file-input" multiple onchange={handleAttachmentUpload} />
+        {#if attachmentFiles.length > 0}
+          <div class="attachment-list">
+            {#each attachmentFiles as att, i}
+              <div class="attachment-item">
+                <span class="att-name">{att.name}</span>
+                <button type="button" class="att-remove" onclick={() => removeAttachment(i)} aria-label="Remove">✕</button>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/snippet}
+  </FormField>
+
+  <div class="form-actions">
+    <button type="submit" class="btn-primary" disabled={sending || !to || !subject}>
       {sending ? "Sending..." : "Send"}
     </button>
   </div>
@@ -77,18 +176,49 @@
 
 <style>
   .email-form { padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
-  .field { display: flex; flex-direction: column; gap: 0.25rem; }
-  .field label { font-size: 0.8rem; color: #7c7c9a; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-  .field input, .field select, .field textarea {
-    background: #16213e; border: 1px solid #333; color: #e0e0e0;
-    padding: 0.5rem; border-radius: 4px; font-family: inherit; font-size: 0.9rem;
+  .row-fields { display: flex; gap: 0.75rem; }
+  .row-fields :global(.flex-1) { flex: 1; }
+  :global(.ff-input) {
+    width: 100%; padding: 0.5rem 0.6rem; background: #16213e; border: 1px solid #333;
+    color: #e0e0e0; border-radius: 4px; font-family: inherit; font-size: 0.9rem;
+    outline: none; transition: border-color 0.15s; box-sizing: border-box;
   }
-  .field textarea { resize: vertical; min-height: 100px; }
-  .actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
-  .actions button {
-    background: #0f3460; color: #e0e0e0; border: none; padding: 0.5rem 1.5rem;
-    border-radius: 4px; cursor: pointer; font-size: 0.9rem;
+  :global(.ff-input:focus) { border-color: #5a5a8a; }
+  :global(.ff-textarea) {
+    width: 100%; padding: 0.5rem 0.6rem; background: #16213e; border: 1px solid #333;
+    color: #e0e0e0; border-radius: 4px; font-family: inherit; font-size: 0.9rem;
+    outline: none; transition: border-color 0.15s; box-sizing: border-box;
+    resize: vertical; min-height: 120px;
   }
-  .actions button:disabled { opacity: 0.5; cursor: not-allowed; }
-  .actions button:hover:not(:disabled) { background: #1a4a7a; }
+  :global(.ff-textarea:focus) { border-color: #5a5a8a; }
+  :global(.ff-input-has-error) { border-color: #8a4a4a; }
+  .body-area { display: flex; flex-direction: column; gap: 0.3rem; }
+  .body-format-bar { display: flex; align-items: center; gap: 0.5rem; }
+  .format-select {
+    padding: 0.25rem 0.5rem; background: #2a2a3e; border: 1px solid #444;
+    color: #e0e0e0; border-radius: 4px; font-family: monospace; font-size: 0.78rem;
+    cursor: pointer;
+  }
+  .attachment-area { display: flex; flex-direction: column; gap: 0.4rem; }
+  .file-input {
+    font-family: monospace; font-size: 0.8rem; color: #ccc;
+  }
+  .file-input::file-selector-button {
+    background: #2a2a3e; border: 1px solid #444; border-radius: 4px;
+    color: #e0e0e0; padding: 0.3rem 0.6rem; font-family: monospace; font-size: 0.8rem;
+    cursor: pointer; margin-right: 0.5rem;
+  }
+  .file-input::file-selector-button:hover { background: #3a3a5a; }
+  .attachment-list { display: flex; flex-direction: column; gap: 0.25rem; }
+  .attachment-item {
+    display: flex; align-items: center; justify-content: space-between;
+    background: #2a2a3e; padding: 0.25rem 0.5rem; border-radius: 4px;
+    font-family: monospace; font-size: 0.8rem;
+  }
+  .att-name { color: #ccc; }
+  .att-remove {
+    background: none; border: none; color: #8a4a4a; cursor: pointer;
+    font-size: 0.8rem; padding: 0.1rem 0.3rem;
+  }
+  .att-remove:hover { color: #cc6a6a; }
 </style>

@@ -4,6 +4,9 @@
     numSelected = 0,
     showSearch = false,
     searchQuery = "",
+    showFolderTree = false,
+    showSortDropdown = false,
+    showParamsDialog = false,
     onToggleMode = () => {},
     onDelete = () => {},
     onMove = () => {},
@@ -13,6 +16,9 @@
     onSearchClear = () => {},
     onSearchEscape = () => {},
     onSearchEnter = () => {},
+    onToggleFolderTree = () => {},
+    onToggleSortDropdown = () => {},
+    onToggleParamsDialog = () => {},
   } = $props();
 
   function handleSearchKeydown(e) {
@@ -45,7 +51,7 @@
         <button class="search-clear" onclick={onSearchClear} aria-label="Clear search">✕</button>
       {/if}
     </div>
-    {:else if selectionMode}
+  {:else if selectionMode}
     <!-- Selection mode: action toolbar -->
     <div class="left">
       <button class="tool-btn" title="Exit selection mode (V)" onclick={onToggleMode}>
@@ -64,12 +70,18 @@
       <button class="tool-btn danger" disabled={numSelected === 0} onclick={onDelete} title="Delete selected (Delete key)">Delete <kbd>Del</kbd></button>
     </div>
   {:else}
-    <!-- View mode: minimal toolbar -->
+    <!-- View mode: expanded toolbar with actions + nav -->
     <div class="left">
       <button class="tool-btn" title="Toggle selection mode (V)" onclick={onToggleMode}>Select <kbd>V</kbd></button>
+      <button class="tool-btn" title="Folders (F)" onclick={onToggleFolderTree}
+        class:active={showFolderTree}>Fldrs <kbd>F</kbd></button>
+      <button class="tool-btn" title="Sort (S)" onclick={onToggleSortDropdown}
+        class:active={showSortDropdown}>Sort <kbd>S</kbd></button>
+      <button class="tool-btn" title="Parameters (P)" onclick={onToggleParamsDialog}
+        class:active={showParamsDialog}>Params <kbd>P</kbd></button>
     </div>
     <div class="center">
-      <span class="search-hint"><kbd>f</kbd> search</span>
+      <span class="search-hint"><kbd>/</kbd> search</span>
     </div>
     <div class="right">
       {#if onNew}
@@ -100,7 +112,7 @@
   .left, .right {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.3rem;
   }
   .center {
     flex: 1;
@@ -115,8 +127,9 @@
     color: #e0e0e0;
     cursor: pointer;
     font-family: monospace;
-    font-size: 0.8rem;
-    transition: background 0.1s;
+    font-size: 0.78rem;
+    transition: background 0.1s, border-color 0.1s;
+    white-space: nowrap;
   }
   .tool-btn kbd {
     display: inline-block;
@@ -132,6 +145,7 @@
   }
   .tool-btn:hover:not(:disabled) { background: #3a3a5e; }
   .tool-btn:disabled { opacity: 0.4; cursor: default; }
+  .tool-btn.active { border-color: #6a6a9a; background: #2a2a50; }
   .tool-btn.danger:hover:not(:disabled) { background: #6b2020; border-color: #8b3030; }
   .tool-btn.primary { border-color: #3a6a3a; color: #7fdb7f; }
   .tool-btn.primary:hover { background: #1e3a1e; }

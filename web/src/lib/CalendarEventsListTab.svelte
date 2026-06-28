@@ -121,7 +121,7 @@
       case "v":
         if (plain && !sel.selectionMode) { sel.toggleSelectionMode(); e.preventDefault(); }
         return;
-      case "f":
+      case "/":
         if (plain) {
           showSearch = !showSearch;
           if (showSearch) requestAnimationFrame(() => document.querySelector(".cel-search-input")?.focus());
@@ -185,7 +185,7 @@
         <button class="tool-btn" title="Toggle selection mode (V)" onclick={() => sel.toggleSelectionMode()}>Select <kbd>V</kbd></button>
       </div>
       <div class="center">
-        <span class="hint"><kbd>f</kbd> search</span>
+        <span class="hint"><kbd>/</kbd> search</span>
       </div>
       <div class="right">
         <button class="tool-btn primary" onclick={handleNew} title="Add new event">+ New</button>
