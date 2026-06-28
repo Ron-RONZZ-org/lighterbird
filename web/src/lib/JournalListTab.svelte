@@ -3,6 +3,7 @@
 
   import { tabStore } from "./tabStore.svelte.js";
   import { journal as journalApi } from "./api.js";
+  import ConfirmDialog from "./ConfirmDialog.svelte";
   import {
     createSelectionManager,
     createCopyState,
@@ -28,6 +29,17 @@
     () => refreshList(),
   );
 
+  // Highlight animation — auto-clears after 2s
+  let highlight = $derived(data?.highlight || "");
+  let highlightActive = $state(false);
+  $effect(() => {
+    if (highlight) {
+      highlightActive = true;
+      const timer = setTimeout(() => { highlightActive = false; }, 2000);
+      return () => clearTimeout(timer);
+    }
+  });
+
   // Search bar
   let showSearch = $state(false);
   let searchQuery = $state("");
@@ -48,7 +60,7 @@
     if (!uuid) return;
     try {
       const entry = await journalApi.get(uuid);
-      tabStore.open("status", entry.title || "(untitled)", entry, {
+      tabStore.open("journal-view", entry.title || "(untitled)", entry, {
         idKey: `journal-${uuid}`,
         replaceable: false,
       });
@@ -145,7 +157,11 @@
   }
 
   function handleNew() {
-    tabStore.open("form", "Write Journal Entry", { form: "journal-write", initialData: {} }, {
+    tabStore.open("form", "Write Journal Entry", { form: "journal-write", initialData: {
+      _returnIdKey: "persistent-journal-list",
+      _returnType: "journal-list",
+      _returnTitle: "Journal",
+    } }, {
       idKey: "journal-write",
     });
   }
@@ -211,6 +227,7 @@
         class="row"
         class:selected={sel.isSelected(entry.uuid)}
         class:focused={i === sel.focusedIndex}
+        class:highlight={entry.uuid === highlight && highlightActive}
         class:selection-mode={sel.selectionMode}
         role="option"
         aria-selected={sel.isSelected(entry.uuid)}
@@ -244,13 +261,11 @@
   </div>
 
   {#if sel.confirmDelete}
-    <div class="confirm-dialog">
-      <p>Delete {sel.numSelected} journal entr{sel.numSelected !== 1 ? 'ies' : 'y'}?</p>
-      <div class="confirm-actions">
-        <button class="btn-confirm" onclick={async () => { sel.confirmDelete = false; await deleteSelected(); }}>Delete</button>
-        <button class="btn-cancel" onclick={() => { sel.confirmDelete = false; }}>Cancel</button>
-      </div>
-    </div>
+    <ConfirmDialog
+      message="Delete {sel.numSelected} journal entr{sel.numSelected !== 1 ? 'ies' : 'y'}?"
+      onConfirm={async () => { sel.confirmDelete = false; await deleteSelected(); }}
+      onDismiss={() => { sel.confirmDelete = false; }}
+    />
   {/if}
 </div>
 
@@ -352,6 +367,11 @@
   .row:hover { background: #2a2a44; }
   .row.focused { background: #2a2a50; outline: 1px solid #5a5a8a; outline-offset: -1px; }
   .row.selected { background: #2a2a50; }
+  .row.highlight { animation: journal-highlight-fade 2s ease-out; }
+  @keyframes journal-highlight-fade {
+    0% { background: rgba(42, 90, 42, 0.6); }
+    100% { background: transparent; }
+  }
   .row.selection-mode { cursor: pointer; }
 
   .checkbox-cell {
@@ -404,17 +424,5 @@
     padding: 2rem;
   }
 
-  .confirm-dialog {
-    position: absolute; inset: 0; display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    background: rgba(0,0,0,0.6); z-index: 10;
-  }
-  .confirm-dialog p { color: #e0e0e0; font-size: 0.95rem; margin-bottom: 1rem; }
-  .confirm-actions { display: flex; gap: 0.5rem; }
-  .btn-confirm, .btn-cancel {
-    padding: 0.4rem 1rem; border-radius: 4px; border: 1px solid #444;
-    font-family: monospace; font-size: 0.85rem; cursor: pointer;
-  }
-  .btn-confirm { background: #6b2020; color: #e0e0e0; border-color: #8b3030; }
-  .btn-cancel { background: #2a2a3e; color: #e0e0e0; }
+
 </style>

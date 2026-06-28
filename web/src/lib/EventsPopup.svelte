@@ -1,4 +1,6 @@
 <script>
+  import { renderMarkdown } from "./markdown.js";
+
   let { data = {} } = $props();
   let events = $derived(data.events || []);
 </script>
@@ -18,7 +20,7 @@
           {/if}
         </div>
         {#if event.description}
-          <div class="desc">{event.description}</div>
+          <div class="desc">{@html renderMarkdown(event.description)}</div>
         {/if}
       </div>
     {/each}
@@ -55,8 +57,19 @@
     margin: 0 0.4rem;
   }
   .desc {
-    color: #999;
-    font-size: 0.8rem;
-    margin-top: 0.2rem;
+    color: #d0d0e0;
+    font-size: 0.85rem;
+    margin-top: 0.3rem;
+    line-height: 1.5;
   }
+  .desc :global(p) { margin: 0 0 0.4rem; }
+  .desc :global(p:last-child) { margin-bottom: 0; }
+  .desc :global(code) {
+    background: #111; padding: 1px 4px; border-radius: 3px; font-size: 0.78rem;
+  }
+  .desc :global(pre) {
+    background: #111; padding: 0.5rem; border-radius: 4px;
+    overflow-x: auto; font-size: 0.8rem; margin: 0.4rem 0;
+  }
+  .desc :global(a) { color: #8a8acc; text-decoration: underline; }
 </style>

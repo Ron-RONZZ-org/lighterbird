@@ -15,6 +15,17 @@
   let events = $derived(data?.events || []);
   let total = $derived(data?.total || 0);
 
+  // Highlight animation — auto-clears after 2s
+  let highlight = $derived(data?.highlight || "");
+  let highlightActive = $state(false);
+  $effect(() => {
+    if (highlight) {
+      highlightActive = true;
+      const timer = setTimeout(() => { highlightActive = false; }, 2000);
+      return () => clearTimeout(timer);
+    }
+  });
+
   let showSearch = $state(false);
   let searchQuery = $state("");
   let currentFilters = $state({});
@@ -22,7 +33,11 @@
   let abortController = null;
 
   function handleNew() {
-    tabStore.open("form", "Add Event", { form: "calendar-event-add", initialData: {} }, {
+    tabStore.open("form", "Add Event", { form: "calendar-event-add", initialData: {
+      _returnIdKey: "persistent-calendar-events",
+      _returnType: "calendar-events",
+      _returnTitle: "Events",
+    } }, {
       idKey: "event-add",
     });
   }
@@ -201,6 +216,7 @@
         class="row"
         class:selected={sel.isSelected(event.uuid)}
         class:focused={i === sel.focusedIndex}
+        class:highlight={event.uuid === highlight && highlightActive}
         class:selection-mode={sel.selectionMode}
         role="option"
         aria-selected={sel.isSelected(event.uuid)}
@@ -293,6 +309,11 @@
   .row:hover { background: #2a2a44; }
   .row.focused { background: #2a2a50; outline: 1px solid #5a5a8a; outline-offset: -1px; }
   .row.selected { background: #2a2a50; }
+  .row.highlight { animation: event-highlight-fade 2s ease-out; }
+  @keyframes event-highlight-fade {
+    0% { background: rgba(42, 90, 42, 0.6); }
+    100% { background: transparent; }
+  }
   .row.selection-mode { cursor: pointer; }
   .checkbox-cell { display: flex; align-items: center; justify-content: center; width: 1.8rem; flex-shrink: 0; }
   .checkbox {
