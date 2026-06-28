@@ -27,8 +27,8 @@ class ContactService(CRUDService):
             try:
                 return self.db.execute(
                     "SELECT contacts.* FROM contacts "
-                    "JOIN kontaktoj_fts ON contacts.rowid = kontaktoj_fts.rowid "
-                    "WHERE kontaktoj_fts MATCH ? "
+                    "JOIN contacts_fts ON contacts.rowid = contacts_fts.rowid "
+                    "WHERE contacts_fts MATCH ? "
                     "ORDER BY rank LIMIT ?",
                     (query, limit),
                 )

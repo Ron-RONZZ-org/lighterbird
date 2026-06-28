@@ -70,6 +70,7 @@ def contacts_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     svc: ContactService = get_contact_service()
     data = {
         "given_name": name,
+        "full_name": name,
         "email": email,
         "phone": phone,
         "organization": org,
