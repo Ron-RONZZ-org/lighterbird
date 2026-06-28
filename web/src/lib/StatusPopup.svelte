@@ -1,6 +1,6 @@
 <script>
   import { tabStore } from "./tabStore.svelte.js";
-  import { calendar as calendarApi, llm as llmApi, email as emailApi, journal as journalApi } from "./api.js";
+  import { calendar as calendarApi, llm as llmApi, email as emailApi } from "./api.js";
   import AccountList from "./AccountList.svelte";
   import LlmProfileForm from "./LlmProfileForm.svelte";
   import EmailAccountForm from "./EmailAccountForm.svelte";
@@ -17,15 +17,7 @@
   let activeForm = $state(null); // null | "llm" | "email" | "calendar" | "backup-strategy" | "contacts" | "todo" | "journal-write"
   let editingItem = $state(null); // existing item for edit, or initialData for new
 
-  // Auto-show form when the tab data includes autoAdd flag
-  $effect(() => {
-    if (d.autoAdd && d.addFormType && !activeForm) {
-      activeForm = d.addFormType;
-      if (d.addInitialData && Object.keys(d.addInitialData).length > 0) {
-        editingItem = d.addInitialData;
-      }
-    }
-  });
+
 
   // Backup strategy testing state
   let testingStrategies = $state(new Set());
@@ -147,47 +139,7 @@
     await refetchCurrentTab();
   }
 
-  // ── Inline form state for journal ──────────────────────────────────
-  let journalTitle = $state("");
-  let journalText = $state("");
-  let journalDate = $state(new Date().toISOString().slice(0, 10));
-  let savingJournal = $state(false);
-  let journalError = $state("");
 
-  function resetJournalForm(initialData) {
-    journalTitle = initialData?.title || "";
-    journalText = initialData?.text || initialData?.body || "";
-    journalDate = initialData?.date || new Date().toISOString().slice(0, 10);
-    journalError = "";
-  }
-
-  async function handleSaveJournal() {
-    if (!journalTitle.trim()) {
-      journalError = "Title is required.";
-      return;
-    }
-    savingJournal = true;
-    journalError = "";
-    try {
-      const data = { title: journalTitle.trim(), text: journalText };
-      if (journalDate) data.date = journalDate;
-      await journalApi.create(data);
-      closeForm();
-      await refetchCurrentTab();
-    } catch (err) {
-      journalError = err.message || "Failed to save journal entry.";
-    } finally {
-      savingJournal = false;
-    }
-  }
-
-  // Reset journal form when activeForm changes
-  $effect(() => {
-    if (activeForm === "journal-write") {
-      const initData = editingItem && !editingItem.uuid ? editingItem : {};
-      resetJournalForm(initData);
-    }
-  });
 </script>
 
 <div class="status">
@@ -262,41 +214,9 @@
     />
 
   {:else if d.entries !== undefined}
-    {#if activeForm === "journal-write"}
-      <div class="modal-overlay" onclick={closeForm} onkeydown={(e) => e.key === "Escape" && closeForm()} role="button" tabindex="-1" aria-label="Dismiss">
-        <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-          <div class="modal-header">
-            <h2>Write Journal Entry</h2>
-          </div>
-          <div class="form">
-            <label class="field">
-              <span class="field-label">Title *</span>
-              <input type="text" class="text-input" bind:value={journalTitle} placeholder="Entry title" autofocus />
-            </label>
-            <label class="field">
-              <span class="field-label">Date</span>
-              <input type="date" class="text-input" bind:value={journalDate} />
-            </label>
-            <label class="field">
-              <span class="field-label">Content</span>
-              <textarea class="text-input textarea journal-textarea" bind:value={journalText} rows="10" placeholder="Write your journal entry here..."></textarea>
-            </label>
-            {#if journalError}
-              <p class="error">{journalError}</p>
-            {/if}
-            <div class="form-actions">
-              <button class="btn-primary" onclick={handleSaveJournal} disabled={savingJournal || !journalTitle.trim()}>
-                {savingJournal ? "Saving…" : "Save Entry"}
-              </button>
-              <button class="btn-secondary" onclick={closeForm}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    {/if}
     <div class="section-header">
       <h3 class="title">Journal Entries</h3>
-      <button class="btn-add" onclick={() => { resetJournalForm({}); openForm("journal-write"); }}>+ Write Entry</button>
+      <button class="btn-add" onclick={() => tabStore.open("form", "Write Journal Entry", { form: "journal-write", initialData: {} }, { idKey: "journal-write" })}>+ Write Entry</button>
     </div>
     {#each d.entries as entry}
       <div class="row">
