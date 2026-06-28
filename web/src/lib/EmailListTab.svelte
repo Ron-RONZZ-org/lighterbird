@@ -5,27 +5,77 @@
   import MoveDialog from "./MoveDialog.svelte";
   import KeyboardShortcutOverlay from "./KeyboardShortcutOverlay.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
+  import {
+    createSelectionManager,
+    createCopyState,
+    formatListItemDate,
+    truncate,
+  } from "./listTabShared.svelte.js";
 
   let { data = {} } = $props();
   let messages = $derived(data?.messages || []);
   let total = $derived(data?.total || 0);
 
-  let selectionMode = $state(false);
-  let selectedUuids = $state(new Set());
-  let focusedIndex = $state(-1);
-  let anchorIndex = $state(-1);
-  let copiedUuid = $state("");
+  // Shared copy states
+  let uuidCopy = createCopyState();
+  let emailCopy = createCopyState();
 
-  function copyUuid(uuid) {
-    navigator.clipboard.writeText(uuid).then(() => {
-      copiedUuid = uuid;
-      setTimeout(() => { if (copiedUuid === uuid) copiedUuid = ""; }, 1200);
-    }).catch(() => {});
-  }
+  // Shared selection state (stable reference, not $derived)
+  let sel = createSelectionManager(
+    () => messages,
+    (uuid) => openMessage(uuid),
+    async (uuids) => {
+      await emailApi.batchDelete(uuids);
+    },
+    () => refreshList(),
+    {
+      onBeforeKeydown(e) {
+        // Handle search/help keys before delegating to selection manager
+        const tag = e.target.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || e.target.isContentEditable) return true;
+
+        // Move dialog open — only allow Escape
+        if (showMoveDialog) {
+          if (e.key === "Escape") { showMoveDialog = false; e.preventDefault(); }
+          return true;
+        }
+
+        const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
+        switch (e.key) {
+          case "f":
+            if (plain) {
+              showSearch = !showSearch;
+              if (showSearch) requestAnimationFrame(() => document.querySelector(".search-input")?.focus());
+              else closeSearch();
+              e.preventDefault();
+            }
+            return true;
+          case "Escape":
+            if (showShortcutHelp) { showShortcutHelp = false; e.preventDefault(); return true; }
+            if (showSearch) { closeSearch(); e.preventDefault(); return true; }
+            if (showMoveDialog) { showMoveDialog = false; e.preventDefault(); return true; }
+            return false; // Let selection manager handle it
+        }
+
+        if ((e.ctrlKey || e.metaKey) && e.key === "m") {
+          e.preventDefault();
+          if (sel.numSelected > 0) showMoveDialog = true;
+          return true;
+        }
+
+        return false;
+      },
+    }
+  );
 
   let showMoveDialog = $state(false);
   let showShortcutHelp = $state(false);
-  let confirmDelete = $state(false);
+
+  function handleNew() {
+    tabStore.open("form", "Compose Email", { form: "email-send", initialData: {} }, {
+      idKey: "email-compose",
+    });
+  }
 
   // Listen for global `h` key dispatched from TabView
   $effect(() => {
@@ -34,65 +84,20 @@
     return () => window.removeEventListener("help-toggle", handler);
   });
 
-  // Search bar — initialized from props via $effect below
+  // Search bar state
   let showSearch = $state(false);
   let searchQuery = $state("");
   let currentFilters = $state({});
   let searchTimeout;
   let abortController = null;
 
-  let numSelected = $derived(selectedUuids.size);
-
-  function toggleSelectionMode() {
-    selectionMode = !selectionMode;
-    if (!selectionMode) {
-      selectedUuids = new Set();
-      focusedIndex = -1;
-      anchorIndex = -1;
-    } else if (messages.length > 0 && focusedIndex === -1) {
-      focusedIndex = 0;
-    }
-  }
-
-  function toggleMessage(uuid) {
-    const next = new Set(selectedUuids);
-    if (next.has(uuid)) {
-      next.delete(uuid);
-    } else {
-      next.add(uuid);
-    }
-    selectedUuids = next;
-  }
-
-  function isSelected(uuid) {
-    return selectedUuids.has(uuid);
-  }
-
-  function selectRange(from, to) {
-    const start = Math.min(from, to);
-    const end = Math.max(from, to);
-    const next = new Set(selectedUuids);
-    for (let i = start; i <= end; i++) {
-      next.add(messages[i].uuid);
-    }
-    selectedUuids = next;
-  }
-
   // ── Row interaction ─────────────────────────────────────────────────
 
   function handleRowClick(e, msg) {
-    if (selectionMode) {
-      if (e.shiftKey && anchorIndex >= 0) {
-        const idx = messages.findIndex((m) => m.uuid === msg.uuid);
-        if (idx >= 0) {
-          selectRange(anchorIndex, idx);
-          anchorIndex = idx;
-        }
-      } else {
-        toggleMessage(msg.uuid);
-        const idx = messages.findIndex((m) => m.uuid === msg.uuid);
-        if (idx >= 0 && anchorIndex < 0) anchorIndex = idx;
-      }
+    if (sel.selectionMode) {
+      sel.handleRowClick(e, msg.uuid);
+    } else if (e.ctrlKey || e.metaKey || e.button === 1) {
+      openMessageInNewTab(e, msg.uuid);
     } else {
       openMessage(msg.uuid);
     }
@@ -120,11 +125,10 @@
   // ── Batch actions ───────────────────────────────────────────────────
 
   async function deleteSelected() {
-    const uuids = [...selectedUuids];
+    const uuids = [...sel.selectedKeys];
     if (uuids.length === 0) return;
     try {
       await emailApi.batchDelete(uuids);
-      // Re-fetch messages after delete
       await refreshList();
     } catch (err) {
       tabStore.open("error", "Delete Failed", {
@@ -134,7 +138,7 @@
   }
 
   async function handleMoveConfirmed(destinationFolderUuid) {
-    const uuids = [...selectedUuids];
+    const uuids = [...sel.selectedKeys];
     if (uuids.length === 0) return;
     try {
       await emailApi.batchMove(uuids, destinationFolderUuid);
@@ -148,8 +152,6 @@
   }
 
   // Sync state when tab data is replaced by a command (has filters/query).
-  // Do NOT sync on local API refreshes (delete/move/search) — those have no
-  // filters/query and would overwrite the user's current search bar state.
   $effect(() => {
     if (data && (data.filters !== undefined || data.query !== undefined)) {
       currentFilters = data.filters || {};
@@ -171,10 +173,8 @@
     emailApi.listMessages(params)
       .then((result) => {
         tabStore.update(tabStore.active.id, result);
-        selectedUuids = new Set();
       })
       .catch((err) => {
-        // Silent on abort, let user retry otherwise
         if (err?.name === "AbortError") return;
       });
   }
@@ -191,11 +191,7 @@
   function closeSearch() {
     showSearch = false;
     searchQuery = "";
-    // Reset to initial filter state if there was a query
-    if (data?.query) {
-      performSearch("");
-    }
-    // Re-focus the list area after closing
+    if (data?.query) performSearch("");
     document.querySelector(".email-list .list")?.focus();
   }
 
@@ -207,149 +203,27 @@
       }
       const result = await emailApi.listMessages(params);
       tabStore.update(tabStore.active.id, result);
-      selectedUuids = new Set();
-    } catch {
-      // Silent — let user retry
-    }
+    } catch { /* silent */ }
   }
 
-  function focusRow(index) {
-    if (index < 0) index = 0;
-    if (index >= messages.length) index = messages.length - 1;
-    focusedIndex = index;
-    // Scroll row into view
-    const el = document.getElementById(`email-row-${messages[index]?.uuid}`);
-    if (el) el.scrollIntoView({ block: "nearest" });
-  }
-
-  function handleKeydown(e) {
-    // Don't intercept when user is typing in an input
-    const tag = e.target.tagName;
-    if (tag === "INPUT" || tag === "TEXTAREA" || e.target.isContentEditable) return;
-
-    // When confirm dialog is open, only let it handle Enter/Escape; block everything else
-    if (confirmDelete) {
-      if (e.key === "Escape") { confirmDelete = false; e.preventDefault(); return; }
-      if (e.key === "Enter") { /* dialog handles it */ e.preventDefault(); return; }
-      return;
-    }
-
-    // When move dialog is open, only let it handle Escape
-    if (showMoveDialog) {
-      if (e.key === "Escape") { showMoveDialog = false; e.preventDefault(); return; }
-      return;
-    }
-
-    const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
-    switch (e.key) {
-      case "v":
-        if (plain) { toggleSelectionMode(); e.preventDefault(); }
-        return;
-      case "f":
-        if (plain) {
-          showSearch = !showSearch;
-          if (showSearch) requestAnimationFrame(() => document.querySelector(".search-input")?.focus());
-          else closeSearch();
-          e.preventDefault();
-        }
-        return;
-      case "Escape":
-        if (showShortcutHelp) { showShortcutHelp = false; e.preventDefault(); return; }
-        if (showSearch) { closeSearch(); e.preventDefault(); return; }
-        if (selectionMode) { toggleSelectionMode(); e.preventDefault(); return; }
-        return;
-    }
-
-    if (!selectionMode) return;
-    const shift = e.shiftKey;
-
-    function navRow(idx) {
-      if (shift && anchorIndex >= 0) selectRange(anchorIndex, idx);
-      focusRow(idx);
-      if (!shift) anchorIndex = idx;
-    }
-
-    switch (e.key) {
-      case "ArrowDown":
-        e.preventDefault();
-        if (focusedIndex < messages.length - 1) navRow(focusedIndex + 1);
-        return;
-      case "ArrowUp":
-        e.preventDefault();
-        if (focusedIndex > 0) navRow(focusedIndex - 1);
-        return;
-      case "PageDown":
-        e.preventDefault();
-        navRow(Math.min(focusedIndex + Math.max(1, Math.floor(messages.length / 5)), messages.length - 1));
-        return;
-      case "PageUp":
-        e.preventDefault();
-        navRow(Math.max(focusedIndex - Math.max(1, Math.floor(messages.length / 5)), 0));
-        return;
-      case "Home":
-        e.preventDefault();
-        if (shift && anchorIndex >= 0) selectRange(anchorIndex, 0);
-        focusRow(0);
-        if (!shift) anchorIndex = 0;
-        return;
-      case "End":
-        e.preventDefault();
-        if (shift && anchorIndex >= 0) selectRange(anchorIndex, messages.length - 1);
-        focusRow(messages.length - 1);
-        if (!shift) anchorIndex = messages.length - 1;
-        return;
-      case " ":
-        e.preventDefault();
-        if (focusedIndex >= 0 && focusedIndex < messages.length) {
-          toggleMessage(messages[focusedIndex].uuid);
-          if (anchorIndex < 0) anchorIndex = focusedIndex;
-        }
-        return;
-      case "Delete":
-        e.preventDefault();
-        if (numSelected > 0) confirmDelete = true;
-        return;
-    }
-
-    if ((e.ctrlKey || e.metaKey) && e.key === "m") {
-      e.preventDefault();
-      if (numSelected > 0) showMoveDialog = true;
-    }
-  }
-
-  function truncate(s, max) {
-    if (!s) return "";
-    return s.length > max ? s.slice(0, max - 1) + "…" : s;
-  }
-
-  function formatDate(iso) {
-    if (!iso) return "";
-    try {
-      const d = new Date(iso);
-      if (isNaN(d.getTime())) return iso.slice(0, 10);
-      const now = new Date();
-      const opts = d.toDateString() === now.toDateString()
-        ? { hour: "2-digit", minute: "2-digit" }
-        : d.getFullYear() === now.getFullYear()
-          ? { month: "short", day: "numeric" }
-          : { year: "numeric", month: "short", day: "numeric" };
-      return d.toLocaleDateString([], opts);
-    } catch { return iso.slice(0, 10); }
+  function handleWindowKeydown(e) {
+    sel.handleKeydown(e);
   }
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window onkeydown={handleWindowKeydown} />
 
 <div class="email-list">
   <!-- Toolbar -->
   <EmailListToolbar
-    {selectionMode}
-    {numSelected}
+    selectionMode={sel.selectionMode}
+    numSelected={sel.numSelected}
     {showSearch}
     {searchQuery}
-    onToggleMode={toggleSelectionMode}
-    onDelete={() => { if (numSelected > 0) confirmDelete = true; }}
-    onMove={() => { if (numSelected > 0) showMoveDialog = true; }}
+    onToggleMode={() => sel.toggleSelectionMode()}
+    onDelete={() => { if (sel.numSelected > 0) sel.confirmDelete = true; }}
+    onMove={() => { if (sel.numSelected > 0) showMoveDialog = true; }}
+    onNew={handleNew}
     onToggleSearch={() => { showSearch = !showSearch; if (showSearch) requestAnimationFrame(() => document.querySelector(".search-input")?.focus()); }}
     onSearchInput={handleSearchInput}
     onSearchClear={() => { searchQuery = ""; performSearch(""); }}
@@ -361,59 +235,53 @@
   <div class="list" role="listbox" aria-label="Email messages" aria-multiselectable="true">
     {#each messages as msg, i (msg.uuid)}
       <div
-        id="email-row-{msg.uuid}"
+        id="row-{msg.uuid}"
         class="row"
-        class:selected={isSelected(msg.uuid)}
-        class:focused={i === focusedIndex}
-        class:selection-mode={selectionMode}
+        class:selected={sel.isSelected(msg.uuid)}
+        class:focused={i === sel.focusedIndex}
+        class:selection-mode={sel.selectionMode}
         role="option"
-        aria-selected={isSelected(msg.uuid)}
-        tabindex={selectionMode ? (i === focusedIndex ? 0 : -1) : 0}
-        onclick={(e) => {
-          if (e.ctrlKey || e.metaKey || e.button === 1) {
-            openMessageInNewTab(e, msg.uuid);
-          } else {
-            handleRowClick(e, msg);
-          }
-        }}
+        aria-selected={sel.isSelected(msg.uuid)}
+        tabindex={sel.selectionMode ? (i === sel.focusedIndex ? 0 : -1) : 0}
+        onclick={(e) => handleRowClick(e, msg)}
         onkeydown={(e) => {
-          if (e.key === "Enter") {
-            if (e.ctrlKey || e.metaKey) {
-              openMessageInNewTab(e, msg.uuid);
-            } else {
-              handleRowClick(e, msg);
-            }
-          }
+          if (e.key === "Enter") handleRowClick(e, msg);
         }}
       >
         <!-- Checkbox (selection mode only, reserved space always) -->
         <span class="checkbox-cell">
-          {#if selectionMode}
-            <span class="checkbox" class:checked={isSelected(msg.uuid)}>
-              {isSelected(msg.uuid) ? "✓" : ""}
+          {#if sel.selectionMode}
+            <span class="checkbox" class:checked={sel.isSelected(msg.uuid)}>
+              {sel.isSelected(msg.uuid) ? "✓" : ""}
             </span>
           {/if}
         </span>
 
         <!-- Message data -->
-        <span class="msg-uuid" onclick={(e) => { e.stopPropagation(); copyUuid(msg.uuid); }}
+        <span class="msg-uuid" onclick={(e) => { e.stopPropagation(); uuidCopy.copyToClipboard(msg.uuid); }}
               title="Click to copy UUID">
-          {copiedUuid === msg.uuid ? "Copied!" : msg.uuid.slice(0, 8)}
+          {uuidCopy.copiedKey === msg.uuid ? "Copied!" : msg.uuid.slice(0, 8)}
         </span>
-        <span class="from" class:unread={!msg.is_read}>{truncate(msg.from || "", 24)}</span>
+        <span class="from" class:unread={!msg.is_read}
+              onclick={(e) => {
+                if (!sel.selectionMode) { e.stopPropagation(); emailCopy.copyToClipboard(msg.from || ""); }
+              }}
+              title="Click to copy email address">
+          {emailCopy.copiedKey === msg.from ? "Copied!" : truncate(msg.from || "", 24)}
+        </span>
         <span class="subject" class:unread={!msg.is_read}>{truncate(msg.subject || "(no subject)", 40)}</span>
-        <span class="date">{formatDate(msg.received_at)}</span>
+        <span class="date">{formatListItemDate(msg.received_at)}</span>
       </div>
     {:else}
       <p class="empty">No messages.</p>
     {/each}
   </div>
 
-  {#if confirmDelete}
+  {#if sel.confirmDelete}
     <ConfirmDialog
-      message="Delete {numSelected} message{numSelected !== 1 ? 's' : ''}?"
-      onConfirm={async () => { confirmDelete = false; await deleteSelected(); }}
-      onDismiss={() => { confirmDelete = false; }}
+      message="Delete {sel.numSelected} message{sel.numSelected !== 1 ? 's' : ''}?"
+      onConfirm={async () => { sel.confirmDelete = false; await deleteSelected(); }}
+      onDismiss={() => { sel.confirmDelete = false; }}
     />
   {/if}
 
@@ -513,7 +381,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    cursor: pointer;
   }
+  .from:hover { color: #ccc; text-decoration: underline; }
   .from.unread {
     font-weight: 700;
   }

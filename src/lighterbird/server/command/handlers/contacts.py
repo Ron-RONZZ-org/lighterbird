@@ -46,7 +46,7 @@ def contacts_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     svc: ContactService = get_contact_service()
     limit = int(flags.get("limit", 50))
     contacts = [normalize_contact(c) for c in svc.list(limit=limit)]
-    return {"type": "status", "title": "Contacts", "data": {"contacts": contacts}}
+    return {"type": "contacts-list", "title": "Contacts", "data": {"contacts": contacts}}
 
 
 @command("contacts.add")
@@ -134,4 +134,4 @@ def contacts_search(remaining: list[str], flags: dict[str, str]) -> dict[str, An
     svc: ContactService = get_contact_service()
     query = " ".join(remaining) if remaining else flags.get("query", "")
     contacts = [normalize_contact(c) for c in svc.search(query)]
-    return {"type": "status", "title": "Contact Search", "data": {"contacts": contacts}}
+    return {"type": "contacts-list", "title": "Contact Search", "data": {"contacts": contacts}}
