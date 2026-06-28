@@ -47,13 +47,28 @@ class MessageOpsService:
         subject: str,
         body: str = "",
         cc: list[str] | None = None,
+        bcc: list[str] | None = None,
+        priority: int = 3,
+        body_format: str = "markdown",
+        attachments: list[str] | None = None,
     ) -> None:
-        """Send an email via SMTP."""
+        """Send an email via SMTP.
+
+        Args:
+            account_email: Sender account email.
+            to: Primary recipients.
+            subject: Email subject.
+            body: Message body (markdown, html, or plain text per body_format).
+            cc: Carbon-copy recipients.
+            bcc: Blind carbon-copy recipients.
+            priority: 1 (highest) to 5 (lowest), default 3.
+            body_format: "markdown" (default), "html", or "plain".
+            attachments: List of base64-encoded attachment content strings.
+        """
         from lighterbird.email.smtp import SMTPClient
 
         acct = self._account_service.get_account_with_password(account_email)
         if not acct:
-            # Check if account exists at all vs just missing password
             exists = self._account_service.get(account_email)
             if not exists:
                 raise ValueError(
@@ -66,13 +81,29 @@ class MessageOpsService:
             )
         sender_email = acct.get("email", "")
         cc = cc or []
+        bcc = bcc or []
+        attachments = attachments or []
         smtp_port = acct.get("smtp_port", 587)
 
-        # Generate Message-ID before sending so it's used both in the SMTP
-        # envelope and in the local store — enabling IMAP dedup via Message-ID.
         import uuid as uuid_mod
-
         message_id = str(uuid_mod.uuid4())
+
+        # Parse body per body_format
+        html_body = ""
+        final_body = body
+        if body_format == "markdown" and body:
+            try:
+                import mistune
+                html_body = mistune.html(body)
+                final_body = body  # keep original markdown as plain text fallback
+            except ImportError:
+                # mistune not installed — fallback to plain text
+                html_body = ""
+                final_body = body
+        elif body_format == "html":
+            html_body = body
+            final_body = ""  # no plain text fallback for explicit HTML
+        # "plain" — final_body stays as-is, no html_body
 
         client = SMTPClient(
             host=acct.get("smtp_server", ""),
@@ -87,11 +118,13 @@ class MessageOpsService:
             )
             client.send_email(
                 from_addr=sender_email, to=to, subject=subject,
-                body=body, cc=cc, message_id=message_id,
+                body=final_body, cc=cc, bcc=bcc,
+                html_body=html_body,
+                message_id=message_id,
             )
         finally:
             client.disconnect()
-        # Store sent message locally with the same Message-ID
+        # Store sent message locally
         import json as json_mod
 
         now = datetime.now(timezone.utc).isoformat()

@@ -73,6 +73,22 @@ export async function execute(input) {
       }),
     });
 
+    // Check content-type before parsing JSON — avoids cryptic
+    // "JSON.parse: unexpected end of data" on non-JSON error pages.
+    const ct = resp.headers.get("content-type") || "";
+    if (!ct.includes("application/json")) {
+      const text = await resp.text().catch(() => "");
+      return {
+        type: "error",
+        title: "Backend Error",
+        data: {
+          message: text
+            ? `Backend returned ${ct || "unknown"} content (HTTP ${resp.status})`
+            : `Backend returned empty response (HTTP ${resp.status}). Is the backend running? Try: uv run python -m lighterbird`,
+        },
+      };
+    }
+
     const data = await resp.json();
 
     if (!resp.ok) {
@@ -88,9 +104,11 @@ export async function execute(input) {
 
     return data;
   } catch (err) {
+    const BACKEND_HELP =
+      "Is the Python backend running? Run `uv run python -m lighterbird` in another terminal.";
     const msg = err.cause?.code === "ECONNREFUSED"
-      ? "Cannot connect to the backend. Is `uv run python -m lighterbird` running?"
-      : `Network error: ${err.message}`;
+      ? `Cannot connect to the backend. ${BACKEND_HELP}`
+      : `Network error: ${err.message}. ${BACKEND_HELP}`;
     return {
       type: "error",
       title: "Connection Error",

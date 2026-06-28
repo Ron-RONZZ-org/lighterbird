@@ -278,7 +278,11 @@ def send_email(
     email_svc: EmailService = Depends(get_email_service),
 ):
     try:
-        email_svc.send_email(req.account_email, req.to, req.subject, req.body, cc=req.cc)
+        email_svc.send_email(
+            req.account_email, req.to, req.subject, req.body,
+            cc=req.cc, bcc=req.bcc, priority=req.priority,
+            body_format=req.body_format, attachments=req.attachments,
+        )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     return {"status": "sent"}
