@@ -2,6 +2,7 @@
   import { tabStore } from "./tabStore.svelte.js";
   import { email as emailApi } from "./api.js";
   import EmailListToolbar from "./EmailListToolbar.svelte";
+  import EmailFolderTree from "./EmailFolderTree.svelte";
   import MoveDialog from "./MoveDialog.svelte";
   import KeyboardShortcutOverlay from "./KeyboardShortcutOverlay.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
@@ -11,16 +12,55 @@
     formatListItemDate,
     truncate,
   } from "./listTabShared.svelte.js";
+  import { createEmailConfigStore } from "./emailConfigStore.svelte.js";
 
   let { data = {} } = $props();
   let messages = $derived(data?.messages || []);
   let total = $derived(data?.total || 0);
 
+  // ── Config store ─────────────────────────────────────────────────────
+  let config = $state(createEmailConfigStore());
+  let folderVisibility = $state({});
+  let expandedFolders = $state([]);
+  let sort = $state("newest");
+  let groupByConversation = $state(false);
+
+  // Sync config when tab data changes (e.g., !email list --sort oldest)
+  $effect(() => {
+    if (data?.filters) {
+      const cliFlags = {};
+      if (data.filters.folder) cliFlags.folder = data.filters.folder;
+      if (data.filters.sort) cliFlags.sort = data.filters.sort;
+      if (data.filters.group === "conversation") cliFlags.group = "conversation";
+      if (Object.keys(cliFlags).length > 0) {
+        const merged = config.mergeWithCliFlags(cliFlags);
+        folderVisibility = merged.folderVisibility || {};
+        sort = merged.sort || "newest";
+        groupByConversation = !!merged.groupByConversation;
+      } else {
+        // No CLI flags — apply lastConfig from store
+        const lastCfg = config.getLastConfig();
+        folderVisibility = lastCfg.folderVisibility || {};
+        expandedFolders = lastCfg.expandedFolders || [];
+        sort = lastCfg.sort || "newest";
+        groupByConversation = !!lastCfg.groupByConversation;
+      }
+    }
+  });
+
+  // Folders for the tree
+  let folders = $state([]);
+  $effect(() => {
+    emailApi.listFolders().then((res) => {
+      folders = res.folders || [];
+    }).catch(() => {});
+  });
+
   // Shared copy states
   let uuidCopy = createCopyState();
   let emailCopy = createCopyState();
 
-  // Shared selection state (stable reference, not $derived)
+  // Shared selection state
   let sel = createSelectionManager(
     () => messages,
     (uuid) => openMessage(uuid),
@@ -30,11 +70,9 @@
     () => refreshList(),
     {
       onBeforeKeydown(e) {
-        // Handle search/help keys before delegating to selection manager
         const tag = e.target.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA" || e.target.isContentEditable) return true;
 
-        // Move dialog open — only allow Escape
         if (showMoveDialog) {
           if (e.key === "Escape") { showMoveDialog = false; e.preventDefault(); }
           return true;
@@ -42,7 +80,7 @@
 
         const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
         switch (e.key) {
-          case "f":
+          case "/":
             if (plain) {
               showSearch = !showSearch;
               if (showSearch) requestAnimationFrame(() => document.querySelector(".search-input")?.focus());
@@ -50,11 +88,26 @@
               e.preventDefault();
             }
             return true;
+          case "f":
+          case "F":
+            if (plain) { showFolderTree = !showFolderTree; e.preventDefault(); }
+            return true;
+          case "s":
+          case "S":
+            if (plain) { showSortDropdown = !showSortDropdown; e.preventDefault(); }
+            return true;
+          case "p":
+          case "P":
+            if (plain) { showParamsDialog = !showParamsDialog; e.preventDefault(); }
+            return true;
           case "Escape":
             if (showShortcutHelp) { showShortcutHelp = false; e.preventDefault(); return true; }
             if (showSearch) { closeSearch(); e.preventDefault(); return true; }
             if (showMoveDialog) { showMoveDialog = false; e.preventDefault(); return true; }
-            return false; // Let selection manager handle it
+            if (showFolderTree) { showFolderTree = false; e.preventDefault(); return true; }
+            if (showSortDropdown) { showSortDropdown = false; e.preventDefault(); return true; }
+            if (showParamsDialog) { showParamsDialog = false; e.preventDefault(); return true; }
+            return false;
         }
 
         if ((e.ctrlKey || e.metaKey) && e.key === "m") {
@@ -70,6 +123,9 @@
 
   let showMoveDialog = $state(false);
   let showShortcutHelp = $state(false);
+  let showFolderTree = $state(false);
+  let showSortDropdown = $state(false);
+  let showParamsDialog = $state(false);
 
   function handleNew() {
     tabStore.open("form", "Compose Email", { form: "email-send", initialData: {} }, {
@@ -77,21 +133,17 @@
     });
   }
 
-  // Listen for global `h` key dispatched from TabView
   $effect(() => {
     function handler() { showShortcutHelp = !showShortcutHelp; }
     window.addEventListener("help-toggle", handler);
     return () => window.removeEventListener("help-toggle", handler);
   });
 
-  // Search bar state
   let showSearch = $state(false);
   let searchQuery = $state("");
   let currentFilters = $state({});
   let searchTimeout;
   let abortController = null;
-
-  // ── Row interaction ─────────────────────────────────────────────────
 
   function handleRowClick(e, msg) {
     if (sel.selectionMode) {
@@ -122,8 +174,6 @@
     window.open(`/api/v1/email/messages/${uuid}/view`, "_blank");
   }
 
-  // ── Batch actions ───────────────────────────────────────────────────
-
   async function deleteSelected() {
     const uuids = [...sel.selectedKeys];
     if (uuids.length === 0) return;
@@ -151,7 +201,6 @@
     }
   }
 
-  // Sync state when tab data is replaced by a command (has filters/query).
   $effect(() => {
     if (data && (data.filters !== undefined || data.query !== undefined)) {
       currentFilters = data.filters || {};
@@ -160,16 +209,13 @@
     }
   });
 
-  /** Perform a search with the given query, preserving current filters. */
   function performSearch(query) {
     if (abortController) abortController.abort();
     abortController = new AbortController();
-
     const params = { ...currentFilters, limit: 50 };
     if (query && query.length >= 2) {
       params.query = query;
     }
-
     emailApi.listMessages(params)
       .then((result) => {
         tabStore.update(tabStore.active.id, result);
@@ -206,9 +252,98 @@
     } catch { /* silent */ }
   }
 
+  // ── Folder tree callbacks ──────────────────────────────────────────
+  function handleToggleFolder(folderName) {
+    const next = { ...folderVisibility };
+    next[folderName] = !(next[folderName] !== false);
+    folderVisibility = next;
+    config.autoSave({ folderVisibility: next });
+    // Refresh list with the new folder filter
+    applyFolderFilter();
+  }
+
+  function handleToggleExpand(path) {
+    const next = expandedFolders.includes(path)
+      ? expandedFolders.filter((p) => p !== path)
+      : [...expandedFolders, path];
+    expandedFolders = next;
+    config.autoSave({ expandedFolders: next });
+  }
+
+  function handleSortChange(val) {
+    sort = val;
+    config.autoSave({ sort: val });
+    applyFolderFilter();
+  }
+
+  function handleGroupChange(val) {
+    groupByConversation = val;
+    config.autoSave({ groupByConversation: val });
+    applyFolderFilter();
+  }
+
+  function applyFolderFilter() {
+    // Determine which folders to show
+    const visibleFolders = Object.entries(folderVisibility)
+      .filter(([_, visible]) => visible)
+      .map(([name]) => name);
+
+    const params = { ...currentFilters, limit: 50 };
+    if (visibleFolders.length > 0) {
+      params.folder = visibleFolders.join(",");
+    }
+    if (sort) params.sort = sort;
+    if (groupByConversation) params.group = "conversation";
+    if (searchQuery && searchQuery.length >= 2) {
+      params.query = searchQuery;
+    }
+    emailApi.listMessages(params)
+      .then((result) => {
+        tabStore.update(tabStore.active.id, result);
+      })
+      .catch(() => {});
+  }
+
+  // ── Config dialog ──────────────────────────────────────────────────
+  let configDialogName = $state("");
+  let configDialogMode = $state("save"); // "save" | "manage"
+  let configSearchQuery = $state("");
+
+  function handleSaveConfig() {
+    const name = configDialogName.trim();
+    if (!name) return;
+    config.saveAs(name);
+    configDialogName = "";
+  }
+
+  function handleActivateConfig(name) {
+    config.activate(name);
+    const cfg = config.getLastConfig();
+    folderVisibility = cfg.folderVisibility || {};
+    expandedFolders = cfg.expandedFolders || [];
+    sort = cfg.sort || "newest";
+    groupByConversation = !!cfg.groupByConversation;
+    applyFolderFilter();
+  }
+
+  function handleDeleteConfig(name) {
+    config.remove(name);
+  }
+
+  let userConfigs = $state({});
+  $effect(() => {
+    userConfigs = config.getUserConfigs();
+  });
+
   function handleWindowKeydown(e) {
     sel.handleKeydown(e);
   }
+
+  // Save config on tab close
+  $effect(() => {
+    // Flush on unmount
+    return () => { config.flush(); };
+  });
 </script>
 
 <svelte:window onkeydown={handleWindowKeydown} />
@@ -220,6 +355,7 @@
     numSelected={sel.numSelected}
     {showSearch}
     {searchQuery}
+    {showFolderTree}
     onToggleMode={() => sel.toggleSelectionMode()}
     onDelete={() => { if (sel.numSelected > 0) sel.confirmDelete = true; }}
     onMove={() => { if (sel.numSelected > 0) showMoveDialog = true; }}
@@ -229,7 +365,76 @@
     onSearchClear={() => { searchQuery = ""; performSearch(""); }}
     onSearchEscape={closeSearch}
     onSearchEnter={() => performSearch(searchQuery)}
+    onToggleFolderTree={() => { showFolderTree = !showFolderTree; }}
+    onToggleSortDropdown={() => { showSortDropdown = !showSortDropdown; }}
+    onToggleParamsDialog={() => { showParamsDialog = !showParamsDialog; }}
   />
+
+  <!-- Folder tree dropdown overlay -->
+  {#if showFolderTree || showSortDropdown}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div class="dropdown-backdrop" onclick={() => { showFolderTree = false; showSortDropdown = false; }} role="presentation"></div>
+    <div class="dropdown-panel folder-panel">
+      <EmailFolderTree
+        {folders}
+        {folderVisibility}
+        {expandedFolders}
+        {sort}
+        {groupByConversation}
+        onToggleFolder={handleToggleFolder}
+        onToggleExpand={handleToggleExpand}
+        onSortChange={handleSortChange}
+        onGroupChange={handleGroupChange}
+      />
+    </div>
+  {/if}
+
+  <!-- Params dialog -->
+  {#if showParamsDialog}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div class="dropdown-backdrop" onclick={() => { showParamsDialog = false; }} role="presentation"></div>
+    <div class="dropdown-panel params-panel">
+      <div class="params-header">
+        <h4>Parameters</h4>
+        <button class="close-btn" onclick={() => { showParamsDialog = false; }} aria-label="Close">✕</button>
+      </div>
+
+      <!-- Save / Load section -->
+      <div class="params-section">
+        <h5>Save Current View</h5>
+        <div class="save-row">
+          <input type="text" class="params-input" bind:value={configDialogName}
+            placeholder="Config name..." onkeydown={(e) => { if (e.key === "Enter") handleSaveConfig(); }} />
+          <button class="btn-sm" onclick={handleSaveConfig} disabled={!configDialogName.trim()}>Save</button>
+        </div>
+      </div>
+
+      <!-- Manage configs -->
+      <div class="params-section">
+        <h5>Saved Configs</h5>
+        {#if Object.keys(userConfigs).length === 0}
+          <p class="empty-msg">No saved configs yet.</p>
+        {:else}
+          <div class="config-list">
+            {#each Object.entries(userConfigs) as [name, cfg]}
+              <div class="config-item" class:active={config.getActiveConfigName() === name}>
+                <label class="config-check">
+                  <input type="checkbox" />
+                  <span class="config-name">{name}</span>
+                </label>
+                <div class="config-actions">
+                  <button class="btn-tiny" onclick={() => handleActivateConfig(name)}
+                    disabled={config.getActiveConfigName() === name}
+                    title="Activate">Activate</button>
+                  <button class="btn-tiny danger" onclick={() => handleDeleteConfig(name)} title="Delete">✕</button>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
 
   <!-- Message list -->
   <div class="list" role="listbox" aria-label="Email messages" aria-multiselectable="true">
@@ -248,16 +453,14 @@
           if (e.key === "Enter") handleRowClick(e, msg);
         }}
       >
-        <!-- Checkbox (selection mode only, reserved space always) -->
         <span class="checkbox-cell">
           {#if sel.selectionMode}
             <span class="checkbox" class:checked={sel.isSelected(msg.uuid)}>
-              {sel.isSelected(msg.uuid) ? "✓" : ""}
+              {sel.isSelected(msg.uuid) ? "\u2713" : ""}
             </span>
           {/if}
         </span>
 
-        <!-- Message data -->
         <span class="msg-uuid" onclick={(e) => { e.stopPropagation(); uuidCopy.copyToClipboard(msg.uuid); }}
               title="Click to copy UUID">
           {uuidCopy.copiedKey === msg.uuid ? "Copied!" : msg.uuid.slice(0, 8)}
@@ -285,7 +488,6 @@
     />
   {/if}
 
-  <!-- Move dialog -->
   {#if showMoveDialog}
     <MoveDialog
       onConfirm={(destUuid) => handleMoveConfirmed(destUuid)}
@@ -293,7 +495,6 @@
     />
   {/if}
 
-  <!-- Keyboard shortcut help overlay -->
   {#if showShortcutHelp}
     <KeyboardShortcutOverlay onDismiss={() => { showShortcutHelp = false; }} />
   {/if}
@@ -325,22 +526,11 @@
     transition: background 0.08s;
     min-height: 2rem;
   }
-  .row:hover {
-    background: #2a2a44;
-  }
-  .row.focused {
-    background: #2a2a50;
-    outline: 1px solid #5a5a8a;
-    outline-offset: -1px;
-  }
-  .row.selected {
-    background: #2a2a50;
-  }
-  .row.selection-mode {
-    cursor: pointer;
-  }
+  .row:hover { background: #2a2a44; }
+  .row.focused { background: #2a2a50; outline: 1px solid #5a5a8a; outline-offset: -1px; }
+  .row.selected { background: #2a2a50; }
+  .row.selection-mode { cursor: pointer; }
 
-  /* Checkbox cell — always reserved to avoid layout shift */
   .checkbox-cell {
     display: flex;
     align-items: center;
@@ -361,10 +551,7 @@
     background: transparent;
     transition: background 0.1s, border-color 0.1s;
   }
-  .checkbox.checked {
-    background: #4a6fa5;
-    border-color: #4a6fa5;
-  }
+  .checkbox.checked { background: #4a6fa5; border-color: #4a6fa5; }
 
   .msg-uuid {
     color: var(--clr-muted);
@@ -384,9 +571,7 @@
     cursor: pointer;
   }
   .from:hover { color: #ccc; text-decoration: underline; }
-  .from.unread {
-    font-weight: 700;
-  }
+  .from.unread { font-weight: 700; }
   .subject {
     color: #ccc;
     flex: 1;
@@ -394,10 +579,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .subject.unread {
-    font-weight: 600;
-    color: #e0e0e0;
-  }
+  .subject.unread { font-weight: 600; color: #e0e0e0; }
   .date {
     color: var(--clr-muted);
     min-width: 6rem;
@@ -405,10 +587,123 @@
     flex-shrink: 0;
     font-size: 0.78rem;
   }
-
   .empty {
     color: var(--clr-muted);
     text-align: center;
     padding: 2rem;
   }
+
+  /* Dropdown overlay */
+  .dropdown-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: transparent;
+  }
+  .dropdown-panel {
+    position: absolute;
+    top: 2.4rem;
+    left: 0.3rem;
+    z-index: 300;
+    background: #1e1e32;
+    border: 1px solid #4a4a6a;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+  .folder-panel {
+    width: 320px;
+    padding: 0.75rem;
+  }
+  .params-panel {
+    width: 360px;
+    padding: 0;
+  }
+  .params-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid #333;
+  }
+  .params-header h4 {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #e0e0e0;
+  }
+  .close-btn {
+    background: none; border: none; color: #7c7c9a; cursor: pointer;
+    font-size: 0.9rem; padding: 0.1rem 0.3rem;
+  }
+  .close-btn:hover { color: #e0e0e0; }
+  .params-section {
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid #2a2a3e;
+  }
+  .params-section:last-child { border-bottom: none; }
+  .params-section h5 {
+    margin: 0 0 0.4rem;
+    font-size: 0.72rem;
+    color: var(--clr-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .save-row {
+    display: flex;
+    gap: 0.4rem;
+  }
+  .params-input {
+    flex: 1;
+    padding: 0.3rem 0.5rem;
+    background: #16213e; border: 1px solid #333; color: #e0e0e0;
+    border-radius: 4px; font-family: monospace; font-size: 0.82rem; outline: none;
+  }
+  .params-input:focus { border-color: #5a5a8a; }
+  .btn-sm {
+    padding: 0.3rem 0.6rem; border: 1px solid #444; border-radius: 4px;
+    background: #2a2a3e; color: #e0e0e0; cursor: pointer;
+    font-family: monospace; font-size: 0.78rem;
+  }
+  .btn-sm:hover { background: #3a3a5a; }
+  .btn-sm:disabled { opacity: 0.4; cursor: default; }
+  .empty-msg {
+    color: var(--clr-muted); font-size: 0.78rem; text-align: center; padding: 0.5rem;
+  }
+  .config-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .config-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.3rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+  }
+  .config-item:hover { background: #2a2a44; }
+  .config-item.active { background: #2a2a50; border: 1px solid #4a4a6a; }
+  .config-check {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+    flex: 1;
+  }
+  .config-check input { width: 0.85rem; height: 0.85rem; accent-color: #4a6fa5; }
+  .config-name { color: #e0e0e0; }
+  .config-actions { display: flex; gap: 0.25rem; }
+  .btn-tiny {
+    padding: 0.15rem 0.4rem; border: 1px solid #444; border-radius: 3px;
+    background: #2a2a3e; color: #b0b0c0; cursor: pointer;
+    font-family: monospace; font-size: 0.7rem;
+  }
+  .btn-tiny:hover { background: #3a3a5a; }
+  .btn-tiny.danger { border-color: #5a3a3a; color: #8a4a4a; }
+  .btn-tiny.danger:hover { background: #4a2a2a; color: #cc6a6a; }
+  .btn-tiny:disabled { opacity: 0.4; cursor: default; }
 </style>

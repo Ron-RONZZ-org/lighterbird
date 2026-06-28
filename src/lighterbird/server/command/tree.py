@@ -54,6 +54,8 @@ def get_command_tree() -> list[CommandNode]:
                         {"name": "folder", "short": "f", "type": "string", "help": "Filter by folder(s); comma-separated", "uuidSource": "email.folders"},
                         {"name": "not-folder", "type": "string", "help": "Exclude folder(s); comma-separated"},
                         {"name": "all", "type": "flag", "help": "Include trash folder"},
+                        {"name": "sort", "short": "s", "type": "string", "help": "Sort order: newest (default), oldest, sender"},
+                        {"name": "group", "short": "g", "type": "string", "help": "Group by: conversation (default none)"},
                     ],
                 },
                 {

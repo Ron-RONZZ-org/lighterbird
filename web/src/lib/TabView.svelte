@@ -43,25 +43,39 @@
   });
 
   function handleKeydown(e) {
-    // Escape — close current tab
-    // Tabs with complex overlays (email-list) manage their own Escape;
-    // they use 'q' or the close button to close.
+    // Escape — context-sensitive: blur field → allow component → close tab
     if (e.key === "Escape") {
-      // Dismiss global help overlay first if open
-      if (showGlobalHelp) {
-        showGlobalHelp = false;
+      // Level 1: If an input/textarea is focused, blur it
+      const tag = e.target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || e.target?.isContentEditable) {
+        e.target.blur();
+        e.preventDefault();
         return;
       }
-      // When command input is focused on home tab, let ChatInput handle Escape (blur)
+
+      // Level 2: Dismiss global help overlay if open
+      if (showGlobalHelp) {
+        showGlobalHelp = false;
+        e.preventDefault();
+        return;
+      }
+
+      // Level 3: When command input is focused on home tab, let ChatInput handle Escape
       if (tabStore.isHome && inputFocused) return;
+
+      // Level 4: Let email-list manage its own Escape (dialogs, search, selection)
       const type = tabStore.active?.type;
-      if (type === "email-list") return; // self-managed Escape (dialogs, search, selection)
+      if (type === "email-list") return;
+
+      // Level 5: Close current tab
       if (tabStore.active && tabStore.active.closable && !tabStore.isHome) {
         tabStore.close(tabStore.active.id);
+        e.preventDefault();
       } else if (tabStore.isHome) {
         const resultTabs = tabStore.tabs.filter((t) => t.closable);
         if (resultTabs.length > 0) {
           tabStore.close(resultTabs[resultTabs.length - 1].id);
+          e.preventDefault();
         }
       }
       return;

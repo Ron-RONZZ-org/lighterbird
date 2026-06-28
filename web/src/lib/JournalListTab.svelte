@@ -127,7 +127,7 @@
 
     const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
     switch (e.key) {
-      case "f":
+      case "/":
         if (plain) {
           showSearch = !showSearch;
           if (showSearch) requestAnimationFrame(() => document.querySelector(".journal-search-input")?.focus());
@@ -195,7 +195,7 @@
         <button class="tool-btn" title="Toggle selection mode (V)" onclick={() => sel.toggleSelectionMode()}>Select <kbd>V</kbd></button>
       </div>
       <div class="toolbar-center">
-        <span class="search-hint"><kbd>f</kbd> search</span>
+        <span class="search-hint"><kbd>/</kbd> search</span>
       </div>
       <div class="toolbar-right">
         <button class="tool-btn primary" onclick={handleNew} title="Write new journal entry">+ New</button>
