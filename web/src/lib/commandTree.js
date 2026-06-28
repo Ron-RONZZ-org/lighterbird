@@ -173,7 +173,7 @@ export let commandTree = [
               { name: "name", type: "string", help: "Display name" },
               { name: "imap", type: "string", help: "IMAP server hostname (auto-detected if omitted)" },
               { name: "smtp", type: "string", help: "SMTP server hostname (auto-detected if omitted)" },
-              { name: "password", type: "string", help: "Account password" },
+              { name: "password", type: "string", help: "Account password", sensitive: true },
             ],
           },
           {
@@ -188,7 +188,7 @@ export let commandTree = [
             ],
             flags: [
               { name: "name", type: "string", help: "New display name" },
-              { name: "password", type: "string", help: "New password" },
+              { name: "password", type: "string", help: "New password", sensitive: true },
               { name: "imap_server", type: "string", help: "New IMAP server" },
               { name: "smtp_server", type: "string", help: "New SMTP server" },
             ],
@@ -309,7 +309,7 @@ export let commandTree = [
             flags: [
               { name: "url", type: "string", help: "New URL" },
               { name: "username", type: "string", help: "New username" },
-              { name: "password", type: "string", help: "New password" },
+              { name: "password", type: "string", help: "New password", sensitive: true },
             ],
           },
           {

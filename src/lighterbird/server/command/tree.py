@@ -26,7 +26,7 @@ FlagDef = dict[str, Any]
 
 ParamDef = dict[str, Any]
 """A parameter definition dict with keys: name, required, type, placeholder (optional),
-repeatable (optional), uuidSource (optional)."""
+repeatable (optional), uuidSource (optional), sensitive (optional)."""
 
 CommandNode = dict[str, Any]
 """A node in the command tree with keys: name, description (optional), children (optional),
@@ -202,7 +202,7 @@ def get_command_tree() -> list[CommandNode]:
                                 {"name": "name", "type": "string", "help": "Display name"},
                                 {"name": "imap", "type": "string", "help": "IMAP server hostname (auto-detected if omitted)"},
                                 {"name": "smtp", "type": "string", "help": "SMTP server hostname (auto-detected if omitted)"},
-                                {"name": "password", "type": "string", "help": "Account password"},
+                                {"name": "password", "type": "string", "help": "Account password", "sensitive": True},
                             ],
                         },
                         {
@@ -217,7 +217,7 @@ def get_command_tree() -> list[CommandNode]:
                             ],
                             "flags": [
                                 {"name": "name", "type": "string", "help": "New display name"},
-                                {"name": "password", "type": "string", "help": "New password"},
+                                {"name": "password", "type": "string", "help": "New password", "sensitive": True},
                                 {"name": "imap_server", "type": "string", "help": "New IMAP server"},
                                 {"name": "smtp_server", "type": "string", "help": "New SMTP server"},
                                 {"name": "managesieve_host", "type": "string", "help": "ManageSieve server hostname"},
@@ -339,7 +339,7 @@ def get_command_tree() -> list[CommandNode]:
                             "flags": [
                                 {"name": "url", "type": "string", "help": "New URL"},
                                 {"name": "username", "type": "string", "help": "New username"},
-                                {"name": "password", "type": "string", "help": "New password"},
+                                {"name": "password", "type": "string", "help": "New password", "sensitive": True},
                             ],
                         },
                         {
@@ -837,3 +837,50 @@ def get_command_tree() -> list[CommandNode]:
             "description": "Show available commands",
         },
     ]
+
+
+# ---------------------------------------------------------------------------
+# Helper functions for form-required response resolution
+# ---------------------------------------------------------------------------
+
+
+def _find_command_depth(tokens: list[str]) -> int:
+    """Walk the tree to find how many leading tokens form the command path."""
+    tree = get_command_tree()
+    current = tree
+    for i, token in enumerate(tokens):
+        found = None
+        for node in current:
+            if node["name"].lower() == token.lower():
+                found = node
+                break
+        if found is None:
+            return i
+        children = found.get("children", [])
+        if not children:
+            return i + 1
+        current = children
+    return len(tokens)
+
+
+def _get_param_names(tokens: list[str]) -> list[str]:
+    """Get the param names for a leaf command node."""
+    tree = get_command_tree()
+    current = tree
+    node = None
+    for token in tokens:
+        found = None
+        for n in current:
+            if n["name"].lower() == token.lower():
+                found = n
+                break
+        if found is None:
+            return []
+        node = found
+        children = node.get("children", [])
+        if not children:
+            break
+        current = children
+    if node is None:
+        return []
+    return [p["name"] for p in node.get("params", [])]

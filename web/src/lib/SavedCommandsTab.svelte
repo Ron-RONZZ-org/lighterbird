@@ -6,75 +6,22 @@
   let commands = $derived(data?.commands || []);
   let total = $derived(data?.total || 0);
 
-  // Inline add/edit form state
-  let showForm = $state(false);
-  let editingAlias = $state("");
-  let formAlias = $state("");
-  let formCommand = $state("");
-  let formHint = $state("");
-
   function openAddForm() {
-    editingAlias = "";
-    formAlias = "";
-    formCommand = "";
-    formHint = "";
-    showForm = true;
+    tabStore.open("form", "New Saved Command", {
+      form: "user-saved-commands-add",
+      initialData: {},
+    }, { idKey: "user-saved-commands-add" });
   }
 
   function openEditForm(cmd) {
-    editingAlias = cmd.alias;
-    formAlias = cmd.alias;
-    formCommand = cmd.command_template;
-    formHint = cmd.hint || "";
-    showForm = true;
-  }
-
-  function closeForm() {
-    showForm = false;
-    editingAlias = "";
-    formAlias = "";
-    formCommand = "";
-    formHint = "";
-  }
-
-  async function handleSave() {
-    const alias = formAlias.trim();
-    const cmdTemplate = formCommand.trim();
-    const hint = formHint.trim();
-    if (!alias || !cmdTemplate) return;
-
-    let input;
-    if (editingAlias) {
-      // Modify existing
-      input = `!user saved-commands modify ${editingAlias}` +
-        ` --alias ${alias}` +
-        ` --command "${cmdTemplate}"` +
-        (hint ? ` --hint "${hint}"` : "");
-    } else {
-      // New
-      input = `!user saved-commands add --alias ${alias} --command "${cmdTemplate}"` +
-        (hint ? ` --hint "${hint}"` : "");
-    }
-
-    try {
-      const result = await execute(input);
-      if (result.type === "status") {
-        // Refresh the list
-        const refreshed = await execute("!user saved-commands list");
-        if (refreshed.type === "saved-commands") {
-          tabStore.update(tabStore.active.id, refreshed);
-        }
-        closeForm();
-      } else {
-        tabStore.open("error", "Error", {
-          message: result.data?.message || "Failed to save command",
-        });
-      }
-    } catch (err) {
-      tabStore.open("error", "Error", {
-        message: err.message || "Failed to save command",
-      });
-    }
+    tabStore.open("form", `Edit: ${cmd.alias}`, {
+      form: "user-saved-commands-modify",
+      initialData: {
+        alias: cmd.alias,
+        command: cmd.command_template,
+        hint: cmd.hint || "",
+      },
+    }, { idKey: "user-saved-commands-edit" });
   }
 
   async function handleDelete(cmdAlias) {
@@ -115,35 +62,6 @@
     <span class="title">Saved Commands ({total})</span>
     <button class="btn-add" onclick={openAddForm}>+ New Saved Command</button>
   </div>
-
-  <!-- Inline Add/Edit Form -->
-  {#if showForm}
-    <div class="form-card">
-      <h3>{editingAlias ? `Edit: ${editingAlias}` : "New Saved Command"}</h3>
-      <div class="form-row">
-        <label>
-          <span class="label-text">Alias</span>
-          <input type="text" bind:value={formAlias} placeholder="e.g. ronzz" />
-        </label>
-      </div>
-      <div class="form-row">
-        <label>
-          <span class="label-text">Command <em>(without !, use $1 $2 … for args)</em></span>
-          <input type="text" bind:value={formCommand} placeholder="e.g. email list --folder ron@ronzz.org/$1" />
-        </label>
-      </div>
-      <div class="form-row">
-        <label>
-          <span class="label-text">Hint</span>
-          <input type="text" bind:value={formHint} placeholder="Short description" />
-        </label>
-      </div>
-      <div class="form-actions">
-        <button class="btn-primary" onclick={handleSave}>Save</button>
-        <button class="btn-cancel" onclick={closeForm}>Cancel</button>
-      </div>
-    </div>
-  {/if}
 
   <!-- List -->
   <div class="list">

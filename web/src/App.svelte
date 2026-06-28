@@ -3,6 +3,7 @@
   import { popup } from "./lib/popupStore.svelte.js";
   import { tabStore } from "./lib/tabStore.svelte.js";
   import { execute } from "./lib/commandExecutor.js";
+  import { shouldIntercept } from "./lib/commandRouter.js";
   import { findNode } from "./lib/commandTree.js";
   import { parseCommand } from "./lib/parser.js";
   import { email, calendar, contacts, todo, journal } from "./lib/api.js";
@@ -76,11 +77,65 @@
   }
 
   async function handleCommand(input) {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+
     isLoading = true;
-    popup.showLoading(loadingLabel(input));
 
     try {
+      // ── Smart add-command routing (frontend interception) ──────────
+      // Detects "add"/"write"/interactive commands with missing required
+      // params and opens interactive form instead of sending to backend.
+      if (trimmed.startsWith("!")) {
+        const routing = shouldIntercept(trimmed);
+        if (routing.intercept) {
+          // Execute the list command to get current data
+          const listInput = "!" + routing.listTokens.join(" ");
+          const listResult = await execute(listInput);
+          if (listResult.type === "error") {
+            popup.show("error", "Error", listResult.data);
+          } else {
+            // Open the persistent list tab
+            popup.showPersistent(
+              listResult.type,
+              listResult.title,
+              listResult.data || {},
+              routing.listIdKey,
+            );
+            popup.updateCache(listResult.data || {});
+            // Then open the add form directly (not via autoAdd in list data)
+            tabStore.open("form", routing.addTitle || "Add", {
+              form: routing.addFormType,
+              initialData: routing.initialData || {},
+            }, { idKey: `form-${routing.addFormType}` });
+          }
+          isLoading = false;
+          return;
+        }
+      }
+
+      // ── Normal command execution ──────────────────────────────────
+      popup.showLoading(loadingLabel(input));
+
       const result = await execute(input);
+
+      // Handle form-required response type (backend fallback for
+      // saved-commands/aliases that can't be expanded frontend-side)
+      if (result.type === "form-required") {
+        const { form, initialData } = result.data || {};
+        if (form) {
+          // Close loading, open form
+          const activeId = tabStore.active?.id;
+          if (activeId) tabStore.close(activeId);
+          tabStore.open("form", result.title || "Complete Form", {
+            form,
+            initialData: initialData || {},
+          }, { idKey: `form-${form}` });
+          isLoading = false;
+          return;
+        }
+      }
+
       const dataType = detectPersistentType(input);
       if (dataType) {
         popup.showPersistent(result.type, result.title, result.data, dataType);
@@ -101,16 +156,17 @@
     const t = input.trim();
     if (/^!(email\s+)?account\s+list\s*$/i.test(t)) return "accounts";
     if (/^!(calendar\s+)?account\s+list\s*$/i.test(t)) return "calendars";
-    if (/^!contacts\s+list\s*$/i.test(t)) return "contacts";
+    if (/^!contacts\s+list\s*$/i.test(t)) return "contacts-list";
     if (/^!todo\s+list\s*$/i.test(t)) return "todos";
     if (/^!journal\s+list\s*$/i.test(t)) return "journal";
+    if (/^!calendar\s+list\s*$/i.test(t)) return "calendar-events";
     if (/^!email\s+(list|search)\b/i.test(t)) return "email-list";
     if (/^!user\s+saved-commands\s+list\s*$/i.test(t)) return "saved-commands";
     return null;
   }
 
-  // Expose handleCommand globally so HomeTab can use it for ! commands
-  // (HomeTab calls execute() directly via the import)
+  // Expose handleCommand globally so HomeTab can bypass it
+  // (HomeTab calls shouldIntercept + execute directly for conversation display)
 </script>
 
 <svelte:window onkeydown={handleGlobalKeydown} />

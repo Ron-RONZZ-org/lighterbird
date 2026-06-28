@@ -143,6 +143,12 @@
 
     sel.handleKeydown(e);
   }
+
+  function handleNew() {
+    tabStore.open("form", "Write Journal Entry", { form: "journal-write", initialData: {} }, {
+      idKey: "journal-write",
+    });
+  }
 </script>
 
 <svelte:window onkeydown={handleWindowKeydown} />

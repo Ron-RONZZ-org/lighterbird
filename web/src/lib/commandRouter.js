@@ -186,12 +186,12 @@ function buildInitialData(node, leafName, paramTokens, flags) {
 function resolveAddFormType(tokens, leafName) {
   const path = tokens.join(" ");
 
-  if (/^email\s+account\s+add$/i.test(path)) return "email";
-  if (/^calendar\s+account\s+add$/i.test(path)) return "calendar";
-  if (/^contacts\s+add$/i.test(path)) return "contacts";
+  if (/^email\s+account\s+add$/i.test(path)) return "email-account-add";
+  if (/^calendar\s+account\s+add$/i.test(path)) return "calendar-account-add";
+  if (/^contacts\s+add$/i.test(path)) return "contacts-add";
   if (/^todo\s+add$/i.test(path)) return "todo-add";
   if (/^journal\s+write$/i.test(path)) return "journal-write";
-  if (/^email\s+sieve\s+add$/i.test(path)) return "sieve";
+  if (/^email\s+sieve\s+add$/i.test(path)) return "email-sieve-add";
   if (/^email\s+send$/i.test(path)) return "email-send";
   if (/^calendar\s+event\s+add$/i.test(path)) return "calendar-event-add";
 
@@ -204,12 +204,12 @@ function resolveAddFormType(tokens, leafName) {
  */
 function resolveAddTitle(addFormType) {
   const titles = {
-    email: "Add Email Account",
-    calendar: "Add Calendar Account",
-    contacts: "Add Contact",
+    "email-account-add": "Add Email Account",
+    "calendar-account-add": "Add Calendar Account",
+    "contacts-add": "Add Contact",
     "todo-add": "Add Todo",
     "journal-write": "Write Journal Entry",
-    sieve: "Add Sieve Script",
+    "email-sieve-add": "Add Sieve Script",
     "email-send": "Compose Email",
     "calendar-event-add": "Add Calendar Event",
   };
