@@ -17,7 +17,6 @@ async function request(method, path, body = null) {
     }
     resp = await fetch(`${BASE}${path}`, opts);
   } catch (err) {
-    // Network error (backend not running, DNS failure, etc.)
     const msg = err.cause?.code === "ECONNREFUSED"
       ? `Cannot connect to the backend server on port 8000. ${BACKEND_HELP}`
       : `Network error: ${err.message}. ${BACKEND_HELP}`;
@@ -29,7 +28,6 @@ async function request(method, path, body = null) {
 
   if (resp.status === 204) return null;
 
-  // Parse response body
   let data;
   const ct = resp.headers.get("content-type") || "";
   if (ct.includes("application/json")) {
@@ -40,7 +38,6 @@ async function request(method, path, body = null) {
     }
   } else {
     const text = await resp.text();
-    // Proxy error (Vite dev server can't reach backend)
     if (resp.status === 502 || resp.status === 504) {
       const e = new Error(
         `Backend server not reachable (HTTP ${resp.status}). ${BACKEND_HELP}`
@@ -57,7 +54,6 @@ async function request(method, path, body = null) {
   }
 
   if (!resp.ok) {
-    // Handle validation error arrays (FastAPI 422) and object details
     let msg;
     if (Array.isArray(data?.detail)) {
       msg = data.detail.map((d) => d.msg || JSON.stringify(d)).join("; ");
@@ -75,23 +71,23 @@ async function request(method, path, body = null) {
   return data;
 }
 
-// ── Email API ─────────────────────────────────────────────────────────
+// ── Email API (natural keys: accounts by email, folders by name) ────────
 
 export const email = {
   listAccounts: () => request("GET", "/email/accounts"),
 
   createAccount: (data) => request("POST", "/email/accounts", data),
 
-  updateAccount: (uuid, data) => request("PATCH", `/email/accounts/${uuid}`, data),
+  updateAccount: (email, data) => request("PATCH", `/email/accounts/${encodeURIComponent(email)}`, data),
 
-  deleteAccount: (uuid) => request("DELETE", `/email/accounts/${uuid}`),
+  deleteAccount: (email) => request("DELETE", `/email/accounts/${encodeURIComponent(email)}`),
 
-  sync: (accountUuid = null) =>
-    request("POST", "/email/sync", accountUuid ? { account_uuid: accountUuid } : {}),
+  sync: (accountEmail = null) =>
+    request("POST", "/email/sync", accountEmail ? { account_email: accountEmail } : {}),
 
   listMessages: (params = {}) => {
     const q = new URLSearchParams();
-    if (params.account_uuid) q.set("account_uuid", params.account_uuid);
+    if (params.account_email) q.set("account_email", params.account_email);
     if (params.folder) q.set("folder", params.folder);
     if (params.query) q.set("query", params.query);
     if (params.from) q.set("from", params.from);
@@ -112,8 +108,8 @@ export const email = {
 
   batchDelete: (uuids) => request("POST", "/email/messages/batch-delete", { uuids }),
 
-  batchMove: (uuids, destinationFolderUuid) =>
-    request("POST", "/email/messages/batch-move", { uuids, destination_folder_uuid: destinationFolderUuid }),
+  batchMove: (uuids, destinationFolder) =>
+    request("POST", "/email/messages/batch-move", { uuids, destination_folder: destinationFolder }),
 
   listFolders: () => request("GET", "/email/folders"),
 };
@@ -230,18 +226,18 @@ export const llm = {
   loadProfile: (name) => request("POST", `/llm/profiles/${encodeURIComponent(name)}/load`),
 };
 
-// ── Sieve API ─────────────────────────────────────────────────────────
+// ── Sieve API (scripts by name, accounts by email) ───────────────────────
 
 export const sieve = {
   list: (params = {}) => {
     const q = new URLSearchParams();
-    if (params.account_uuid) q.set("account_uuid", params.account_uuid);
+    if (params.account_email) q.set("account_email", params.account_email);
     const qs = q.toString();
     return request("GET", `/email/sieve${qs ? `?${qs}` : ""}`);
   },
 
-  get: (name, accountUuid) => {
-    const q = accountUuid ? `?account_uuid=${encodeURIComponent(accountUuid)}` : "";
+  get: (name, accountEmail) => {
+    const q = accountEmail ? `?account_email=${encodeURIComponent(accountEmail)}` : "";
     return request("GET", `/email/sieve/${encodeURIComponent(name)}${q}`);
   },
 
@@ -251,14 +247,14 @@ export const sieve = {
 
   delete: (name) => request("DELETE", `/email/sieve/${encodeURIComponent(name)}`),
 
-  activate: (name, accountUuid, priority = 0) =>
-    request("POST", `/email/sieve/${encodeURIComponent(name)}/activate`, { account_uuid: accountUuid, priority }),
+  activate: (name, accountEmail, priority = 0) =>
+    request("POST", `/email/sieve/${encodeURIComponent(name)}/activate`, { account_email: accountEmail, priority }),
 
-  deactivate: (name, accountUuid) =>
-    request("POST", `/email/sieve/${encodeURIComponent(name)}/deactivate`, { account_uuid: accountUuid }),
+  deactivate: (name, accountEmail) =>
+    request("POST", `/email/sieve/${encodeURIComponent(name)}/deactivate`, { account_email: accountEmail }),
 
-  setPriority: (name, accountUuid, priority) =>
-    request("POST", `/email/sieve/${encodeURIComponent(name)}/priority`, { account_uuid: accountUuid, priority }),
+  setPriority: (name, accountEmail, priority) =>
+    request("POST", `/email/sieve/${encodeURIComponent(name)}/priority`, { account_email: accountEmail, priority }),
 
   analyze: (scripts) => request("POST", "/email/sieve/analyze", { scripts }),
 

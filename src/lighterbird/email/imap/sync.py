@@ -5,7 +5,6 @@ Forked from A-lien's imap/sync.py, simplified for MVP.
 
 from __future__ import annotations
 
-import uuid as uuid_mod
 from typing import Any
 
 from lighterbird.email.imap.client import IMAPClient
@@ -39,7 +38,7 @@ def sync_account(
         use_ssl: Use SSL
         username: Login username
         password: Login password
-        konto_id: Account UUID
+        konto_id: Account email (primary key)
         db_store: Object with .db (LighterbirdDB)
         folders: Specific folders to sync (None = sync all discovered)
         force: If True, re-download all messages
@@ -55,11 +54,12 @@ def sync_account(
         target_folders = folders or [f["name"] for f in available]
 
         for folder_name in target_folders:
-            dosierujo_id = str(uuid_mod.uuid5(
-                uuid_mod.NAMESPACE_DNS, f"{konto_id}/{folder_name}",
-            ))
             client.ensure_folder(konto_id, folder_name, db_store)
-            fr = client.sync_folder(folder_name, konto_id, dosierujo_id, db_store, force=force)
+            fr = client.sync_folder(
+                folder_name, konto_id,
+                dosierujo_nomo=folder_name,
+                db_store=db_store, force=force,
+            )
             result.total += fr["total"]
             result.new += fr["new"]
             result.errors.extend(fr["errors"])

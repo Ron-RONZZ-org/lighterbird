@@ -288,9 +288,9 @@ function addJournal(cache, result) {
 function addFolders(cache, result) {
   if (cache.folders) {
     for (const f of cache.folders) {
-      // Folders use value-based completion (full path, not UUID)
+      // Folders use value-based completion (folder name, not UUID)
       result.push({
-        uuid: f.folder_uuid,
+        uuid: f.folder_name,
         label: f.label || `${f.account_email}/${f.folder_name}`,
         value: f.label || `${f.account_email}/${f.folder_name}`,
       });

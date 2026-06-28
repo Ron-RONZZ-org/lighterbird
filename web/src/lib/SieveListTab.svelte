@@ -134,7 +134,7 @@
 
   async function refreshList() {
     try {
-      const params = accountFilter ? { account_uuid: accountFilter } : {};
+      const params = accountFilter ? { account_email: accountFilter } : {};
       const result = await sieveApi.list(params);
       tabStore.update(tabStore.active.id, result);
       selectedNames = new Set();

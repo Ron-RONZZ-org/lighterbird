@@ -5,6 +5,8 @@ Composes AccountService, MessageService, and MessageOpsService.
 
 from __future__ import annotations
 
+from typing import Any
+
 from lighterbird.email.services import AccountService, MessageService, MessageOpsService, SieveService
 from lighterbird.email.db import get_db
 
@@ -13,11 +15,11 @@ class EmailService:
     """Unified email operations facade."""
 
     def __init__(self, db=None):
-        self.db = db or get_db()
-        self.accounts = AccountService(self.db)
-        self.messages = MessageService(self.db)
-        self.msg_ops = MessageOpsService(self.db, self.accounts)
-        self.sieve = SieveService(self.db)
+        self._db = db or get_db()
+        self.accounts = AccountService(self._db)
+        self.messages = MessageService(self._db)
+        self.msg_ops = MessageOpsService(self._db, self.accounts)
+        self.sieve = SieveService(self._db)
 
     # ── Account operations ───────────────────────────────────────────────
 
@@ -27,38 +29,36 @@ class EmailService:
     def list_accounts(self):
         return self.accounts.list_accounts()
 
-    def delete_account(self, uuid_: str):
-        self.accounts.delete_password(uuid_)
-        return self.accounts.delete(uuid_)
+    def delete_account(self, email: str):
+        self.accounts.delete_password(email)
+        return self.accounts.delete(email)
 
-    def get_account(self, uuid_: str):
-        return self.accounts.get_account_with_password(uuid_)
+    def get_account(self, email: str):
+        return self.accounts.get_account_with_password(email)
 
     def resolve_account(self, identifier: str):
         return self.accounts.resolve_account(identifier)
 
     # ── Sync ─────────────────────────────────────────────────────────────
 
-    def sync_account(self, uuid_: str, force: bool = False):
-        """Sync messages for a single account.
+    def sync_account(self, email: str, force: bool = False):
+        """Sync messages for a single account by email.
 
-        Always returns a SyncResult (never raises). Errors such as
-        missing account, missing password, or IMAP connection failure
-        are captured in the result's ``errors`` list.
+        Always returns a SyncResult (never raises).
         """
         from lighterbird.email.imap import sync_account as _sync
         from lighterbird.email.imap.sync import SyncResult
 
-        acct = self.accounts.get_account_with_password(uuid_)
+        acct = self.accounts.get_account_with_password(email)
         if not acct:
             result = SyncResult()
-            result.errors.append(f"Account not found: {uuid_[:8]}")
+            result.errors.append(f"Account not found: {email}")
             return result
         if not acct.get("password"):
             result = SyncResult()
             result.errors.append(
-                f"No password configured for account {uuid_[:8]}. "
-                f"Set it with: !email account modify {uuid_[:8]} --password <pw>"
+                f"No password configured for account {email}. "
+                f"Set it with: !email account modify {email} --password <pw>"
             )
             return result
         try:
@@ -68,7 +68,7 @@ class EmailService:
                 use_ssl=acct.get("imap_ssl", 1) == 1,
                 username=acct.get("imap_uzantonomo", "") or acct.get("retposto", ""),
                 password=acct["password"],
-                konto_id=uuid_,
+                konto_id=email,
                 db_store=self,
                 force=force,
             )
@@ -78,20 +78,15 @@ class EmailService:
         return result
 
     def sync_all(self, force: bool = False) -> dict[str, dict]:
-        """Sync messages for all accounts.
-
-        Delegates to :meth:`sync_account` per account — errors (missing
-        password, IMAP failure, etc.) are captured in each result's
-        ``errors`` list.
-        """
+        """Sync messages for all accounts."""
         results = {}
         for acct in self.accounts.list_accounts():
-            uuid_ = acct["uuid"]
+            email = acct["retposto"]
             try:
-                sr = self.sync_account(uuid_, force=force)
-                results[uuid_] = sr.to_dict()
+                sr = self.sync_account(email, force=force)
+                results[email] = sr.to_dict()
             except Exception as e:
-                results[uuid_] = {"total": 0, "new": 0, "errors": [str(e)]}
+                results[email] = {"total": 0, "new": 0, "errors": [str(e)]}
         return results
 
     # ── Message queries ──────────────────────────────────────────────────
@@ -108,7 +103,6 @@ class EmailService:
         return self.messages.search_messages(filters, limit=limit)
 
     def get_conversation(self, uuid_: str, limit: int = 20) -> list[dict[str, Any]]:
-        """Get all messages in the same conversation thread as the given message UUID."""
         msg = self.get_message(uuid_)
         if not msg:
             return []
@@ -127,12 +121,12 @@ class EmailService:
     def trash_message(self, msg_uuid: str):
         self.msg_ops.trash_message(msg_uuid)
 
-    def move_message(self, msg_uuid: str, destination_folder_uuid: str):
-        self.msg_ops.move_message(msg_uuid, destination_folder_uuid)
+    def move_message(self, msg_uuid: str, destination_folder_nomo: str):
+        self.msg_ops.move_message(msg_uuid, destination_folder_nomo)
 
-    def send_email(self, account_uuid: str, to: list[str], subject: str,
+    def send_email(self, account_email: str, to: list[str], subject: str,
                    body: str = "", cc: list[str] | None = None):
-        self.msg_ops.send_email(account_uuid, to, subject, body, cc=cc)
+        self.msg_ops.send_email(account_email, to, subject, body, cc=cc)
 
     # ── MessageStore protocol (used by IMAP sync) ────────────────────────
 

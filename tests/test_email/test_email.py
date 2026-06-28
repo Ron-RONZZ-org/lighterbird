@@ -54,7 +54,6 @@ class TestAccountService:
             "smtp_servilo": "smtp.example.com",
         }
         account = svc.create_account(data, "sekret123")
-        assert account["uuid"] is not None
         assert account["retposto"] == "test@example.com"
 
         accounts = svc.list_accounts()
@@ -69,11 +68,10 @@ class TestAccountService:
             "smtp_servilo": "smtp.example.com",
         }
         account = svc.create_account(data, "mypassword")
-        # Without real keyring, password is stored to None, so get returns None
-        result = svc.get_account_with_password(account["uuid"])
-        # Since keyring is unavailable in test, this returns None
-        # (password not actually stored)
-        svc.set_password(account["uuid"], "mypassword")  # Try to store
+        # Account uses retposto (email) as PK
+        result = svc.get_account_with_password("pw@example.com")
+        # Since keyring is unavailable in test, password may be empty
+        svc.set_password("pw@example.com", "mypassword")
 
     def test_resolve_account_by_email(self, db):
         svc = AccountService(db)
@@ -84,7 +82,7 @@ class TestAccountService:
             "smtp_servilo": "smtp.example.com",
         }
         svc.create_account(data, "pw")
-        acct = svc.find_by_email("resolve@example.com")
+        acct = svc.get("resolve@example.com")
         assert acct is not None
         assert acct["retposto"] == "resolve@example.com"
 
@@ -104,7 +102,7 @@ class TestMessageService:
             "smtp_servilo": "smtp.example.com",
         }, "pw")
 
-        # Insert a message manually
+        # Insert a message manually using retposto as konto_id
         import uuid
         msg_uuid = str(uuid.uuid4())
         from datetime import datetime, timezone
@@ -112,7 +110,7 @@ class TestMessageService:
         db.execute(
             "INSERT INTO mesagoj (uuid, konto_id, de, al, subjekto, korpo, "
             "ricevita_je, kreita_je, modifita_je) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (msg_uuid, acct["uuid"], "sender@example.com", '["me@example.com"]',
+            (msg_uuid, acct["retposto"], "sender@example.com", '["me@example.com"]',
              "Hello", "Test body", now, now, now),
         )
 
@@ -148,14 +146,14 @@ class TestEmailService:
     def test_send_email_no_account(self, email_service):
         with pytest.raises(ValueError):
             email_service.send_email(
-                "no-such-uuid",
+                "nosuch@test.com",
                 to=["someone@example.com"],
                 subject="Test",
                 body="Hello",
             )
 
     def test_delete_account(self, email_service):
-        result = email_service.delete_account("nonexistent")
+        result = email_service.delete_account("nonexistent@test.com")
         assert result is False
 
 
@@ -164,15 +162,14 @@ class TestKeyring:
         from lighterbird.core.keyring import _keyring_available
         available = _keyring_available()
         # Should not crash regardless of keyring availability
-        pw = get_password("test-uuid")
+        pw = get_password("test@example.com")
         if available:
-            # With keyring, password returns None (not set) or works
             assert pw is None or isinstance(pw, str)
         else:
             assert pw is None
         # set_password should not crash
-        set_password("test-uuid", "pw")
-        delete_password("test-uuid")
+        set_password("test@example.com", "pw")
+        delete_password("test@example.com")
 
 
 class TestIMAPHelpers:
@@ -225,12 +222,13 @@ class TestParser:
         msg["Date"] = "Mon, 01 Jan 2024 12:00:00 +0000"
         msg.set_payload("Hello World")
 
-        data = parse_email_message(msg, "acct-1", "folder-1", 42)
+        data = parse_email_message(msg, "user@example.com", "INBOX", 42)
         assert data["subjekto"] == "Test"
         assert data["de"] == "sender@example.com"
         assert data["korpo"] == "Hello World"
         assert data["imap_uid"] == 42
-        assert data["konto_id"] == "acct-1"
+        assert data["konto_id"] == "user@example.com"
+        assert data["dosierujo_nomo"] == "INBOX"
 
     def test_parse_multipart_message(self):
         from email.mime.multipart import MIMEMultipart
@@ -244,6 +242,6 @@ class TestParser:
         msg.attach(MIMEText("Plain body", "plain", "utf-8"))
         msg.attach(MIMEText("<p>HTML body</p>", "html", "utf-8"))
 
-        data = parse_email_message(msg, "acct-1", "folder-1", 1)
+        data = parse_email_message(msg, "user@example.com", "INBOX", 1)
         assert "Plain body" in data["korpo"]
         assert "HTML body" in data["html_korpo"] or "p" in data.get("html_korpo", "")

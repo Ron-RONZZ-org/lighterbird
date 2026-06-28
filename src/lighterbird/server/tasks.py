@@ -52,11 +52,11 @@ def get_worker_pool() -> WorkerPool:
 # ── Email sync ────────────────────────────────────────────────────────────
 
 
-def enqueue_email_sync(account_uuid: str | None = None) -> None:
+def enqueue_email_sync(account_email: str | None = None) -> None:
     """Enqueue an email sync job.
 
     Args:
-        account_uuid: Sync a specific account, or ``None`` for all.
+        account_email: Sync a specific account (by email), or ``None`` for all.
     """
     worker = _pool.get("email")
     if worker is None:
@@ -66,7 +66,7 @@ def enqueue_email_sync(account_uuid: str | None = None) -> None:
         Job(
             domain="email",
             operation="sync",
-            payload={"account_uuid": account_uuid} if account_uuid else {},
+            payload={"account_email": account_email} if account_email else {},
         )
     )
 
@@ -143,12 +143,12 @@ class EmailSyncWorker(BackgroundWorker):
         from lighterbird.email.service import EmailService
 
         svc = EmailService()
-        account_uuid = payload.get("account_uuid")
-        if account_uuid:
-            svc.sync_account(account_uuid)
+        account_email = payload.get("account_email")
+        if account_email:
+            svc.sync_account(account_email)
         else:
             for account in svc.list_accounts():
-                svc.sync_account(account["uuid"])
+                svc.sync_account(account["retposto"])
 
 
 class CalDAVWorker(BackgroundWorker):

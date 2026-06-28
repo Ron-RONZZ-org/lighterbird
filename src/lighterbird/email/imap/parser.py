@@ -17,7 +17,7 @@ from lighterbird.email.imap.helpers import decode_mime_header, parse_address_lis
 def parse_email_message(
     msg: Any,
     konto_id: str,
-    dosierujo_id: str,
+    dosierujo_nomo: str,
     imap_uid: int,
     store_attachments: bool = True,
 ) -> dict[str, Any]:
@@ -25,8 +25,8 @@ def parse_email_message(
 
     Args:
         msg: Email message object (from email.message_from_bytes).
-        konto_id: Account UUID.
-        dosierujo_id: Folder UUID.
+        konto_id: Account email.
+        dosierujo_nomo: Folder name.
         imap_uid: IMAP UID.
         store_attachments: If True, persist attachment blobs via
             AttachmentStore and include attachment metadata in the result.
@@ -36,8 +36,10 @@ def parse_email_message(
         ``_attachments`` key with attachment metadata if any were found.
     """
     now = datetime.now(timezone.utc).isoformat()
-    message_id = decode_mime_header(msg.get("Message-ID", ""))
-    in_reply_to = decode_mime_header(msg.get("In-Reply-To", ""))
+    raw_message_id = decode_mime_header(msg.get("Message-ID", ""))
+    # Strip angle brackets from Message-ID
+    message_id = raw_message_id.strip("<>") if raw_message_id else ""
+    in_reply_to = decode_mime_header(msg.get("In-Reply-To", "")).strip("<>")
 
     subject = decode_mime_header(msg.get("Subject", ""))
     from_header = decode_mime_header(msg.get("From", ""))
@@ -105,7 +107,7 @@ def parse_email_message(
     data: dict[str, Any] = {
         "uuid": str(uuid_mod.uuid4()),
         "konto_id": konto_id,
-        "dosierujo_id": dosierujo_id,
+        "dosierujo_nomo": dosierujo_nomo,
         "message_id": message_id,
         "in_reply_to": in_reply_to,
         "imap_uid": imap_uid,

@@ -5,7 +5,7 @@
 
   let folders = $state([]);
   let query = $state("");
-  let selectedFolder = $state(null); // { label, folder_uuid }
+  let selectedFolder = $state(null); // { label, folder_name }
   let loading = $state(true);
   let error = $state("");
 
@@ -47,7 +47,7 @@
 
   function handleConfirm() {
     if (!selectedFolder) return;
-    onConfirm(selectedFolder.folder_uuid);
+    onConfirm(selectedFolder.folder_name);
   }
 
   function handleKeydown(e) {
@@ -113,7 +113,7 @@
               <li
                 class="suggestion-item"
                 role="option"
-                aria-selected={selectedFolder?.folder_uuid === folder.folder_uuid}
+                aria-selected={selectedFolder?.folder_name === folder.folder_name}
                 tabindex="0"
                 onclick={() => selectSuggestion(folder)}
                 onkeydown={(e) => {
