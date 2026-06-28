@@ -39,7 +39,7 @@ def create_entry(
     entry_data = {
         "title": data.get("title", ""),
         "text": data.get("text", ""),
-        "dato": data.get("date", date.today().isoformat()),
+        "date": data.get("date", date.today().isoformat()),
     }
     entry = svc.create(entry_data)
     return normalize_journal_entry(entry)
@@ -63,7 +63,7 @@ def update_entry(
     field_map = {
         "title": "title",
         "text": "text",
-        "date": "dato",
+        "date": "date",
     }
     for json_key, db_key in field_map.items():
         if json_key in data:

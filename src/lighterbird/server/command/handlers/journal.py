@@ -63,7 +63,7 @@ def journal_write(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     text = flags.get("text", " ".join(remaining[1:]) if len(remaining) > 1 else "")
     date_str = flags.get("date", date.today().isoformat())
     svc: JournalService = get_journal_service()
-    data = {"title": title, "text": text, "dato": date_str}
+    data = {"title": title, "text": text, "date": date_str}
     entry = svc.create(data)
     return {"type": "status", "title": "Journal Entry Written", "data": {"uuid": entry["uuid"], "title": title}}
 
