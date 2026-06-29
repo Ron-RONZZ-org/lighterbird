@@ -1,10 +1,10 @@
 <script>
   /** Todo creation form — supports templates, parent/dependency, file attachment. */
 
-  import { todo as todoApi } from "./api.js";
+  import { todo as todoApi, drafts as draftsApi } from "./api.js";
   import TemplateFieldInput from "./TemplateFieldInput.svelte";
 
-  let { initialData = {}, onsubmit } = $props();
+  let { initialData = {}, onsubmit, onDirtyChange = () => {} } = $props();
   // svelte-ignore state_referenced_locally
   const _initial = initialData;
 
@@ -16,6 +16,35 @@
   let dependencyUuid = $state("");
   let filePath = $state("");
   let adding = $state(false);
+  let savingDraft = $state(false);
+  let draftSaved = $state(false);
+  let draftUuid = $state(_initial._draft_uuid || null);
+
+  /** Save draft on Ctrl+S */
+  async function saveDraft() {
+    if (savingDraft) return;
+    savingDraft = true;
+    draftSaved = false;
+    try {
+      const result = await draftsApi.save(
+        "todo",
+        title || "(untitled)",
+        { title, description, priority, due, parent_uuid: parentUuid, template: selectedTemplate },
+        draftUuid,
+      );
+      draftUuid = result.uuid;
+      draftSaved = true;
+      setTimeout(() => { draftSaved = false; }, 2000);
+    } catch { /* silent */ }
+    finally { savingDraft = false; }
+  }
+
+  function handleFormKeydown(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      e.preventDefault();
+      saveDraft();
+    }
+  }
 
   // Template support
   let templates = $state([]);
@@ -23,6 +52,28 @@
   let templateFields = $state([]);
   let templateValues = $state({});
   let loadingTemplates = $state(false);
+
+  // Dirty state — compare current against initial
+  /** @param {object} a @param {object} b */
+  function shallowDiff(a, b) {
+    if (Object.keys(a).length !== Object.keys(b).length) return true;
+    for (const k of Object.keys(a)) {
+      if (a[k] !== b[k]) return true;
+    }
+    return false;
+  }
+  let dirty = $derived(
+    title !== (_initial.title || "")
+    || description !== (_initial.description || "")
+    || priority !== (_initial.priority || "5")
+    || due !== (_initial.due || "")
+    || parentUuid !== (_initial.parent_uuid || "")
+    || dependencyUuid !== ""
+    || filePath !== ""
+    || selectedTemplate !== (_initial.template || "")
+    || shallowDiff(templateValues, {})
+  );
+  $effect(() => { onDirtyChange(dirty); });
 
   // Autocomplete for parent/dependency
   let parentSuggestions = $state([]);
@@ -134,6 +185,7 @@
         flags,
         remaining: [title],
       });
+      onDirtyChange(false);
     } finally {
       adding = false;
     }
@@ -245,11 +297,22 @@
   </div>
 
   <div class="actions">
+    <button type="button" class="draft-btn" onclick={saveDraft} disabled={savingDraft || !title && !description}>
+      {#if savingDraft}
+        Saving…
+      {:else if draftSaved}
+        Draft saved ✓
+      {:else}
+        Save Draft <kbd>Ctrl+S</kbd>
+      {/if}
+    </button>
     <button type="submit" disabled={adding || !title}>
       {adding ? "Adding..." : "Add Todo"}
     </button>
   </div>
 </form>
+
+<svelte:window onkeydown={handleFormKeydown} />
 
 <style>
   .todo-add-form { padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
@@ -312,4 +375,21 @@
   }
   .actions button:disabled { opacity: 0.4; cursor: not-allowed; }
   .actions button:hover:not(:disabled) { background: #1a4a7a; }
+  .draft-btn {
+    background: #2a2a3e;
+    border: 1px solid #444;
+    color: #ccc;
+    margin-right: auto;
+  }
+  .draft-btn:hover:not(:disabled) { background: #3a3a5a; }
+  .draft-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .draft-btn kbd {
+    display: inline-block;
+    padding: 1px 4px;
+    background: #222;
+    border: 1px solid #555;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    margin-left: 0.2rem;
+  }
 </style>

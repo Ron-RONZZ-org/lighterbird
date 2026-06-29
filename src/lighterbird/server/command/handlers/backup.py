@@ -41,6 +41,7 @@ from lighterbird.core.backup import (
     restore_latest,
     save_config,
 )
+from lighterbird.core.paths import data_dir
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 
@@ -59,6 +60,17 @@ def _fmt_ts(ts: str) -> str:
     if len(ts) >= 15:
         return f"{ts[:4]}-{ts[4:6]}-{ts[6:8]} {ts[9:11]}:{ts[11:13]}:{ts[13:15]}"
     return ts
+
+
+def _fmt_location() -> str:
+    """Return a human-readable backup location summary."""
+    lines = [f"  Local backup dir: {data_dir() / '.backups'}"]
+    cfg = load_config()
+    for s in cfg.get("strategies", []):
+        target = s.get("target", "local")
+        if target and target != "local":
+            lines.append(f"  {s['id']}: external target → {target}")
+    return "\n".join(lines)
 
 
 # ── !backup now ────────────────────────────────────────────────────────────
@@ -84,7 +96,7 @@ def backup_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "  !backup config remove    — Remove a backup strategy\n"
                 "  !backup config test      — Test a strategy's target\n"
                 "  !backup export           — Export all data to a portable directory\n"
-                "  !backup import           — Import data from an exported directory"
+                "  !backup import           — Import data (auto-skip identical; --overwrite/--skip per file)"
             ),
         },
     }
@@ -119,9 +131,9 @@ def backup_now(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     if not created:
         return {"type": "status", "title": "Backup", "data": {"message": "No data files found to back up."}}
 
-    msg = f"Created {len(created)} backup(s)."
+    msg = f"Created {len(created)} backup(s).\n\nBackup location:\n{_fmt_location()}"
     if ext_copied:
-        msg += f" Also copied {len(ext_copied)} to external directory."
+        msg += f"\nAlso copied {len(ext_copied)} to external directory."
 
     return {
         "type": "status",
@@ -495,13 +507,21 @@ def backup_export(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
 
 @command("backup.import")
 def backup_import(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!backup import <path> [--force]
+    """!backup import <path> [--force] [--overwrite FILE] [--skip FILE]
 
     Import data from a previously exported directory. The path must
     point to an export directory containing manifest.json.
 
     By default, files that already exist in the data directory are
-    skipped. Use --force to overwrite existing files.
+    checked against SHA-256 from the manifest. Byte-identical files
+    are auto-skipped. Files that differ are listed as "conflicts"
+    and left untouched.
+
+    Flags:
+      --force            Overwrite ALL existing files without checking.
+      --overwrite FILE   Overwrite a specific conflicting file.
+      --skip FILE        Skip a specific conflicting file (overrides --force).
+      --overwrite and --skip can be repeated for multiple files.
     """
     if not remaining:
         raise CommandValidationError("Missing export path.", "Usage: !backup import <path> [--force]")
@@ -509,22 +529,44 @@ def backup_import(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     export_path = remaining[0]
     force = "force" in flags
 
+    # Collect per-file decisions from --overwrite / --skip flags
+    decisions: dict[str, str] = {}
+    for key, value in flags.items():
+        if key == "overwrite":
+            decisions[value] = "overwrite"
+        elif key == "skip":
+            decisions[value] = "skip"
+
     try:
-        result = import_data(export_path, force=force)
+        result = import_data(export_path, force=force, decisions=decisions or None)
     except (FileNotFoundError, ValueError, OSError) as e:
         raise CommandValidationError(f"Import failed: {e}")
+
+    imported = result.get("imported", [])
+    skipped = result.get("skipped", [])
+    identical = result.get("identical", [])
+    conflicts = result.get("conflicts", [])
+    errors = result.get("errors", [])
+
+    msg_parts = [f"Imported {len(imported)} file(s)."]
+    if identical:
+        msg_parts.append(f"{len(identical)} identical — skipped.")
+    if skipped:
+        msg_parts.append(f"{len(skipped)} skipped by user.")
+    if conflicts:
+        msg_parts.append(f"{len(conflicts)} conflict(s) — use --overwrite <file> or --skip <file> to resolve.")
+    if errors:
+        msg_parts.append(f"{len(errors)} error(s).")
 
     return {
         "type": "status",
         "title": "Import Complete",
         "data": {
-            "imported": result.get("imported", []),
-            "skipped": result.get("skipped", []),
-            "errors": result.get("errors", []),
-            "message": (
-                f"Imported {len(result.get('imported', []))} file(s), "
-                f"skipped {len(result.get('skipped', []))}, "
-                f"errors: {len(result.get('errors', []))}"
-            ),
+            "imported": imported,
+            "identical": identical,
+            "skipped": skipped,
+            "conflicts": conflicts,
+            "errors": errors,
+            "message": " ".join(msg_parts),
         },
     }

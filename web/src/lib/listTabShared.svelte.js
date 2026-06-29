@@ -35,6 +35,7 @@ export function createCopyState() {
  *
  * All list tabs share this same interaction model:
  * - `V` key toggles selection mode
+ * - `N` key opens the "+ New" form (view mode)
  * - Arrow keys navigate focused row
  * - Shift+click / Shift+arrows range-selects
  * - Space toggles focused item
@@ -53,6 +54,8 @@ export function createCopyState() {
  * @param {(e: KeyboardEvent) => boolean} [opts.onBeforeKeydown]
  *   Optional hook to intercept keydown (e.g. when search open).
  *   Return true to prevent default handling.
+ * @param {() => void} [opts.onNew]
+ *   Called when user presses `N` in view mode to open "+ New" form.
  */
 export function createSelectionManager(getItems, onOpen, onDeleteSelected, onRefresh, opts = {}) {
   let selectionMode = $state(false);
@@ -173,6 +176,12 @@ export function createSelectionManager(getItems, onOpen, onDeleteSelected, onRef
         return;
       case "Escape":
         if (selectionMode) { toggleSelectionMode(); e.preventDefault(); }
+        return;
+      case "n":
+        if (plain && !selectionMode && opts.onNew) {
+          opts.onNew();
+          e.preventDefault();
+        }
         return;
     }
 

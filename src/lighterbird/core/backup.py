@@ -920,22 +920,33 @@ def export_data(output_dir: str | Path) -> Path:
     return export_dir
 
 
-def import_data(export_dir: str | Path, *, force: bool = False) -> dict[str, Any]:
+def import_data(
+    export_dir: str | Path,
+    *,
+    force: bool = False,
+    decisions: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Import data from a previously exported directory.
 
     Args:
         export_dir: Path to an export directory (must contain
             ``manifest.json``).
-        force: If True, overwrite existing DB files without comparing
-            timestamps. If False, skip files that already exist in the
-            target data directory (default).
+        force: If True, overwrite existing files without checking.
+        decisions: Per-filename decision dict. Keys are filenames
+            (e.g. ``"email.db"``, ``"config/backup.json"``), values
+            are ``"overwrite"`` or ``"skip"``. Takes precedence over
+            *force* for individual files.
 
     Returns:
         Dict with keys:
 
         - **imported** (:class:`list`) — names of files imported.
         - **skipped** (:class:`list`) — names of files skipped (already
-          exist and ``force`` is False).
+          exist and not overwritten).
+        - **identical** (:class:`list`) — names of files skipped because
+          they are byte-identical (SHA-256 matches existing).
+        - **conflicts** (:class:`list`) — names of files that differ
+          between source and destination.
         - **errors** (:class:`list`) — names of files that failed.
 
     Raises:
@@ -956,7 +967,7 @@ def import_data(export_dir: str | Path, *, force: bool = False) -> dict[str, Any
     dst_data = data_dir()
     dst_config = config_dir()
 
-    result: dict[str, Any] = {"imported": [], "skipped": [], "errors": []}
+    result: dict[str, Any] = {"imported": [], "skipped": [], "identical": [], "conflicts": [], "errors": []}
 
     for rel_path_str, file_info in manifest.get("files", {}).items():
         src_file = src / rel_path_str
@@ -970,9 +981,35 @@ def import_data(export_dir: str | Path, *, force: bool = False) -> dict[str, Any
         else:
             dst_file = dst_data / src_file.name
 
-        if dst_file.exists() and not force:
-            result["skipped"].append(rel_path_str)
-            continue
+        # Check if destination exists
+        if dst_file.exists():
+            # Compare SHA-256 of actual source file vs destination
+            try:
+                source_sha = _sha256(src_file)
+                dest_sha = _sha256(dst_file)
+            except OSError:
+                source_sha = ""
+                dest_sha = ""
+
+            # SHA-256 match → auto-skip (identical content)
+            if source_sha and dest_sha and source_sha == dest_sha:
+                result["identical"].append(rel_path_str)
+                continue
+
+            # File differs → check decisions/force
+            file_name = dst_file.name
+            file_decision = (decisions or {}).get(file_name, "")
+
+            if file_decision == "overwrite":
+                pass  # proceed to copy
+            elif file_decision == "skip":
+                result["skipped"].append(rel_path_str)
+                continue
+            elif force:
+                pass  # proceed to copy
+            else:
+                result["conflicts"].append(rel_path_str)
+                continue
 
         try:
             dst_file.parent.mkdir(parents=True, exist_ok=True)

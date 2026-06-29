@@ -5,9 +5,24 @@
   import { formatListItemDate } from "./listTabShared.svelte.js";
 
   let { data = {} } = $props();
+
+  function handleKeydown(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "p") {
+      e.preventDefault();
+      window.print();
+    }
+  }
 </script>
 
+<svelte:window onkeydown={handleKeydown} />
+
 <div class="journal-view">
+  <div class="print-toolbar">
+    <button class="print-btn" onclick={() => window.print()} title="Print / Export PDF (Ctrl+P)">
+      <kbd>Ctrl+P</kbd> Print / PDF
+    </button>
+  </div>
+
   <h1 class="title">{data.title || "(untitled)"}</h1>
 
   <div class="meta-row">
@@ -95,5 +110,55 @@
     color: var(--clr-muted);
     font-style: italic;
     padding: 1rem 0;
+  }
+
+  .print-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 0.5rem;
+  }
+  .print-btn {
+    background: #2a2a3e;
+    border: 1px solid #444;
+    color: #e0e0e0;
+    padding: 0.3rem 0.8rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 0.78rem;
+    transition: background 0.15s;
+  }
+  .print-btn:hover {
+    background: #3a3a5a;
+  }
+  .print-btn kbd {
+    display: inline-block;
+    padding: 1px 4px;
+    background: #222;
+    border: 1px solid #555;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    margin-right: 0.3rem;
+  }
+
+  /* Print styles — hide non-essential UI */
+  @media print {
+    :global(.tab-bar),
+    :global(.command-bar),
+    :global(.home-content),
+    :global(.top-progress),
+    .print-toolbar {
+      display: none !important;
+    }
+    .journal-view {
+      padding: 0 !important;
+      color: #000 !important;
+    }
+    .content {
+      color: #000 !important;
+    }
+    .content :global(a) {
+      color: #0000ee !important;
+    }
   }
 </style>

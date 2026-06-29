@@ -14,3 +14,4 @@ from lighterbird.server.command.handlers import journal  # noqa: F401
 from lighterbird.server.command.handlers import llm  # noqa: F401
 from lighterbird.server.command.handlers import backup  # noqa: F401
 from lighterbird.server.command.handlers import user_commands  # noqa: F401
+from lighterbird.server.command.handlers import drafts  # noqa: F401

@@ -40,6 +40,7 @@
       await Promise.all(uuids.map((u) => contactsApi.delete(u)));
     },
     () => refreshList(),
+    { onNew: handleNew },
   );
 
   let uuidCopy = createCopyState();
@@ -184,7 +185,7 @@
         <span class="hint"><kbd>/</kbd> search</span>
       </div>
       <div class="right">
-        <button class="tool-btn primary" onclick={handleNew} title="Add new contact">+ New</button>
+        <button class="tool-btn primary" onclick={handleNew} title="Add new contact">+ New <kbd>N</kbd></button>
       </div>
     {/if}
   </div>
