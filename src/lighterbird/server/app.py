@@ -19,6 +19,7 @@ from lighterbird.server.routes.todo import router as todo_router
 from lighterbird.server.routes.journal import router as journal_router
 from lighterbird.server.routes.chat import router as chat_router
 from lighterbird.server.routes.llm import router as llm_router
+from lighterbird.server.routes.drafts import router as drafts_router
 from lighterbird.server.tasks import init_workers, shutdown_workers
 
 
@@ -62,6 +63,7 @@ def create_app(static_dir: str | Path | None = None) -> FastAPI:
     app.include_router(journal_router)
     app.include_router(chat_router)
     app.include_router(llm_router)
+    app.include_router(drafts_router)
 
     # ── Static files (Svelte SPA) ────────────────────────────────────────
     if static_dir is None:

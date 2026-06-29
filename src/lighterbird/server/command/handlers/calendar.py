@@ -45,7 +45,8 @@ def calendar_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
                 "  !calendar account list      — List calendars\n"
                 "  !calendar account add       — Add a calendar\n"
                 "  !calendar account modify    — Modify a calendar\n"
-                "  !calendar account remove    — Remove a calendar"
+                "  !calendar account remove    — Remove a calendar\n"
+                "  !calendar draft             — List / recall event drafts"
             ),
         },
     }

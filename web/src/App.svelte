@@ -2,6 +2,7 @@
   import PopupOverlay from "./lib/PopupOverlay.svelte";
   import { popup } from "./lib/popupStore.svelte.js";
   import { tabStore } from "./lib/tabStore.svelte.js";
+  import { dirtyFormStore } from "./lib/dirtyFormStore.svelte.js";
   import { execute } from "./lib/commandExecutor.js";
   import { shouldIntercept } from "./lib/commandRouter.js";
   import { findNode } from "./lib/commandTree.js";
@@ -169,7 +170,12 @@
   // (HomeTab calls shouldIntercept + execute directly for conversation display)
 </script>
 
-<svelte:window onkeydown={handleGlobalKeydown} />
+<svelte:window onkeydown={handleGlobalKeydown} onbeforeunload={(e) => {
+    if (dirtyFormStore.hasAnyDirty) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  }} />
 
 <main>
   {#if noticeMessage && !noticeDismissed}

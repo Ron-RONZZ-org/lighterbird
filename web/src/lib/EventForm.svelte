@@ -1,9 +1,9 @@
 <script>
   /** Event creation form — used when !calendar event add is typed interactively. */
 
-  import { calendar as calendarApi } from "./api.js";
+  import { calendar as calendarApi, drafts as draftsApi } from "./api.js";
 
-  let { initialData = {}, onsubmit } = $props();
+  let { initialData = {}, onsubmit, onDirtyChange = () => {} } = $props();
   // svelte-ignore state_referenced_locally
   const _initial = initialData;
 
@@ -13,7 +13,46 @@
   let end = $state(_initial.end || "");
   let location = $state(_initial.location || "");
   let creating = $state(false);
+  let savingDraft = $state(false);
+  let draftSaved = $state(false);
+  let draftUuid = $state(_initial._draft_uuid || null);
   let calendars = $state([]);
+
+  /** Save draft on Ctrl+S */
+  async function saveDraft() {
+    if (savingDraft) return;
+    savingDraft = true;
+    draftSaved = false;
+    try {
+      const result = await draftsApi.save(
+        "calendar-event",
+        title || "(untitled)",
+        { calendar_uuid: calendarUuid, title, start, end, location },
+        draftUuid,
+      );
+      draftUuid = result.uuid;
+      draftSaved = true;
+      setTimeout(() => { draftSaved = false; }, 2000);
+    } catch { /* silent */ }
+    finally { savingDraft = false; }
+  }
+
+  function handleFormKeydown(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      e.preventDefault();
+      saveDraft();
+    }
+  }
+
+  // Dirty state — compare current against initial
+  let dirty = $derived(
+    calendarUuid !== (_initial.calendar_uuid || "")
+    || title !== (_initial.title || "")
+    || start !== (_initial.start || "")
+    || end !== (_initial.end || "")
+    || location !== (_initial.location || "")
+  );
+  $effect(() => { onDirtyChange(dirty); });
 
   $effect(() => {
     calendarApi.listCalendars().then((data) => {
@@ -40,6 +79,7 @@
         flags: { calendar: calendarUuid },
         remaining: [title, toIso(start), toIso(end), location].filter(Boolean),
       });
+      onDirtyChange(false);
     } finally {
       creating = false;
     }
@@ -72,11 +112,22 @@
     <input id="location" type="text" bind:value={location} placeholder="(optional)" />
   </div>
   <div class="actions">
+    <button type="button" class="draft-btn" onclick={saveDraft} disabled={savingDraft || !title && !start && !end}>
+      {#if savingDraft}
+        Saving…
+      {:else if draftSaved}
+        Draft saved ✓
+      {:else}
+        Save Draft <kbd>Ctrl+S</kbd>
+      {/if}
+    </button>
     <button type="submit" disabled={creating || !calendarUuid || !title || !start || !end}>
       {creating ? "Creating..." : "Create Event"}
     </button>
   </div>
 </form>
+
+<svelte:window onkeydown={handleFormKeydown} />
 
 <style>
   .event-form { padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
@@ -93,4 +144,21 @@
   }
   .actions button:disabled { opacity: 0.5; cursor: not-allowed; }
   .actions button:hover:not(:disabled) { background: #1a4a7a; }
+  .draft-btn {
+    background: #2a2a3e;
+    border: 1px solid #444;
+    color: #ccc;
+    margin-right: auto;
+  }
+  .draft-btn:hover:not(:disabled) { background: #3a3a5a; }
+  .draft-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .draft-btn kbd {
+    display: inline-block;
+    padding: 1px 4px;
+    background: #222;
+    border: 1px solid #555;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    margin-left: 0.2rem;
+  }
 </style>

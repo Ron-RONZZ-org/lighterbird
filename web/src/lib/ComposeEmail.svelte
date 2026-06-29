@@ -1,10 +1,10 @@
 <script>
   /** Email compose form — used when !email send is typed interactively. */
 
-  import { email as emailApi } from "./api.js";
+  import { email as emailApi, drafts as draftsApi } from "./api.js";
   import FormField from "./FormField.svelte";
 
-  let { initialData = {}, onsubmit } = $props();
+  let { initialData = {}, onsubmit, onDirtyChange = () => {} } = $props();
   // svelte-ignore state_referenced_locally
   const _initial = initialData;
 
@@ -18,7 +18,49 @@
   let bodyFormat = $state("markdown"); // "markdown" | "html" | "plain"
   let attachmentFiles = $state([]); // Array of {name, data} (base64)
   let sending = $state(false);
+  let savingDraft = $state(false);
+  let draftSaved = $state(false);
+  let draftUuid = $state(_initial._draft_uuid || null);
   let accounts = $state([]);
+
+  /** Save draft on Ctrl+S */
+  async function saveDraft() {
+    if (savingDraft) return;
+    savingDraft = true;
+    draftSaved = false;
+    try {
+      const result = await draftsApi.save(
+        "email",
+        subject || "(no subject)",
+        { account: accountUuid, to, subject, body, cc, bcc, priority, bodyFormat },
+        draftUuid,
+      );
+      draftUuid = result.uuid;
+      draftSaved = true;
+      setTimeout(() => { draftSaved = false; }, 2000);
+    } catch { /* silent */ }
+    finally { savingDraft = false; }
+  }
+
+  function handleFormKeydown(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      e.preventDefault();
+      saveDraft();
+    }
+  }
+
+  // Dirty state — compare current against initial
+  let dirty = $derived(
+    to !== (_initial.to || "")
+    || subject !== (_initial.subject || "")
+    || body !== (_initial.body || "")
+    || cc !== (_initial.cc || "")
+    || bcc !== (_initial.bcc || "")
+    || priority !== (_initial.priority || "3")
+    || bodyFormat !== "markdown"
+    || attachmentFiles.length > 0
+  );
+  $effect(() => { onDirtyChange(dirty); });
 
   $effect(() => {
     emailApi.listAccounts().then((data) => {
@@ -77,6 +119,8 @@
         flags,
         remaining,
       });
+      // Clear dirty state after successful submit
+      onDirtyChange(false);
     } finally {
       sending = false;
     }
@@ -168,11 +212,22 @@
   </FormField>
 
   <div class="form-actions">
+    <button type="button" class="btn-draft" onclick={saveDraft} disabled={savingDraft || !to && !subject && !body}>
+      {#if savingDraft}
+        Saving…
+      {:else if draftSaved}
+        Draft saved ✓
+      {:else}
+        Save Draft <kbd>Ctrl+S</kbd>
+      {/if}
+    </button>
     <button type="submit" class="btn-primary" disabled={sending || !to || !subject}>
       {sending ? "Sending..." : "Send"}
     </button>
   </div>
 </form>
+
+<svelte:window onkeydown={handleFormKeydown} />
 
 <style>
   .email-form { padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
@@ -221,4 +276,28 @@
     font-size: 0.8rem; padding: 0.1rem 0.3rem;
   }
   .att-remove:hover { color: #cc6a6a; }
+  .form-actions { display: flex; align-items: center; gap: 0.5rem; }
+  .btn-draft {
+    background: #2a2a3e;
+    border: 1px solid #444;
+    color: #ccc;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 0.82rem;
+    transition: background 0.15s;
+    white-space: nowrap;
+  }
+  .btn-draft:hover:not(:disabled) { background: #3a3a5a; }
+  .btn-draft:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-draft kbd {
+    display: inline-block;
+    padding: 1px 4px;
+    background: #222;
+    border: 1px solid #555;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    margin-left: 0.2rem;
+  }
 </style>

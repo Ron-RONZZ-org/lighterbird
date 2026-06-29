@@ -85,7 +85,7 @@
     </div>
     <div class="right">
       {#if onNew}
-        <button class="tool-btn primary" onclick={onNew} title="New message">+ New</button>
+        <button class="tool-btn primary" onclick={onNew} title="New message">+ New <kbd>N</kbd></button>
       {/if}
     </div>
   {/if}

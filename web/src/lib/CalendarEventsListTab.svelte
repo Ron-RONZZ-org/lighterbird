@@ -52,6 +52,7 @@
       await Promise.all(uuids.map((u) => calendarApi.deleteEvent(u)));
     },
     () => refreshList(),
+    { onNew: handleNew },
   );
 
   let uuidCopy = createCopyState();
@@ -203,7 +204,7 @@
         <span class="hint"><kbd>/</kbd> search</span>
       </div>
       <div class="right">
-        <button class="tool-btn primary" onclick={handleNew} title="Add new event">+ New</button>
+        <button class="tool-btn primary" onclick={handleNew} title="Add new event">+ New <kbd>N</kbd></button>
       </div>
     {/if}
   </div>
