@@ -51,7 +51,8 @@ def email_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "  !email sieve modify      — Modify a Sieve script\n"
                 "  !email sieve delete      — Delete a Sieve script\n"
                 "  !email sieve activate    — Activate on an account\n"
-                "  !email sieve deactivate  — Deactivate on an account"
+                "  !email sieve deactivate  — Deactivate on an account\n"
+                "  !email draft             — List / recall email drafts"
             ),
         },
     }

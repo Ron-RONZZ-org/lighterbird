@@ -27,6 +27,7 @@
       await Promise.all(uuids.map((u) => journalApi.delete(u)));
     },
     () => refreshList(),
+    { onNew: handleNew },
   );
 
   // Highlight animation — auto-clears after 2s
@@ -214,7 +215,7 @@
         <span class="search-hint"><kbd>/</kbd> search</span>
       </div>
       <div class="toolbar-right">
-        <button class="tool-btn primary" onclick={handleNew} title="Write new journal entry">+ New</button>
+        <button class="tool-btn primary" onclick={handleNew} title="Write new journal entry">+ New <kbd>N</kbd></button>
       </div>
     {/if}
   </div>

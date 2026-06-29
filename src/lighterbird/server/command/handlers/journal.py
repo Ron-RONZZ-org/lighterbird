@@ -31,7 +31,8 @@ def journal_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "  !journal list         — List journal entries\n"
                 "  !journal write        — Write a journal entry\n"
                 "  !journal view         — View a journal entry\n"
-                "  !journal search       — Search journal entries"
+                "  !journal search       — Search journal entries\n"
+                "  !journal draft        — List / recall journal drafts"
             ),
         },
     }

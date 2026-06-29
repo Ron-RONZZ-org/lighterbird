@@ -48,6 +48,14 @@
 
   // Load accounts for the activation account selector
   let accounts = $state([]);
+
+  /** Global keyboard handler for this tab. */
+  function handleGlobalKeydown(e) {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable) return;
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key === "n") {
+      if (!selectionMode) { addNew(); e.preventDefault(); }
+    }
+  }
   $effect(() => {
     emailApi.listAccounts().then((r) => {
       accounts = r?.accounts || [];
@@ -171,11 +179,13 @@
   }
 </script>
 
+<svelte:window onkeydown={handleGlobalKeydown} />
+
 <div class="sieve-list">
   <!-- Toolbar -->
   <div class="toolbar">
     <div class="left">
-      <button class="btn" onclick={addNew} title="Create new Sieve script">+ New</button>
+      <button class="btn" onclick={addNew} title="Create new Sieve script">+ New <kbd>N</kbd></button>
       <button class="btn" onclick={toggleSelectionMode} title="Toggle multi-select mode">
         {selectionMode ? "Done" : "Select"}
       </button>

@@ -408,11 +408,11 @@ class TestExportImport:
         assert (tmp_data_dir / "email.db").read_text() == "original"
 
     def test_import_skips_existing(self, tmp_data_dir: Path, tmp_path: Path):
-        """import_data skips files that already exist (without --force)."""
+        """import_data marks byte-identical files as identical (without --force)."""
         (tmp_data_dir / "email.db").write_text("original")
         export_dir = export_data(str(tmp_path))
         result = import_data(str(export_dir))
-        assert "email.db" in result["skipped"]
+        assert "email.db" in result["identical"]
 
     def test_import_force_overwrites(self, tmp_data_dir: Path, tmp_path: Path):
         """import_data with --force overwrites existing files."""

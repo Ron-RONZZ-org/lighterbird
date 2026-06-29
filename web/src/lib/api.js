@@ -296,3 +296,13 @@ export const admin = {
   health: () => request("GET", "/health"),
   syncAll: () => request("POST", "/sync/all"),
 };
+
+// ── Drafts API (Ctrl+S save / !{domain} draft recall) ──────────────────
+
+export const drafts = {
+  save: (domain, title, data, uuid = null) => request("POST", "/drafts", { domain, title, data, uuid }),
+  list: (domain) => request("GET", `/drafts?domain=${encodeURIComponent(domain)}`),
+  getAll: () => request("GET", "/drafts"),
+  get: (uuid) => request("GET", `/drafts/${encodeURIComponent(uuid)}`),
+  delete: (uuid) => request("DELETE", `/drafts/${encodeURIComponent(uuid)}`),
+};

@@ -1,5 +1,6 @@
 <script>
   import { tabStore } from "./tabStore.svelte.js";
+  import { dirtyFormStore } from "./dirtyFormStore.svelte.js";
   import HomeTab from "./HomeTab.svelte";
   import LoadingPopup from "./LoadingPopup.svelte";
   import StatusPopup from "./StatusPopup.svelte";
@@ -44,6 +45,15 @@
     }
   });
 
+  /** Close a tab, checking for unsaved changes first. */
+  function handleCloseTab(tabId) {
+    if (dirtyFormStore.isDirty(tabId)) {
+      if (!confirm("You have unsaved changes. Discard them?")) return;
+      dirtyFormStore.clear(tabId);
+    }
+    tabStore.close(tabId);
+  }
+
   function handleKeydown(e) {
     // Escape — context-sensitive: blur field → allow component → close tab
     if (e.key === "Escape") {
@@ -71,12 +81,13 @@
 
       // Level 5: Close current tab
       if (tabStore.active && tabStore.active.closable && !tabStore.isHome) {
-        tabStore.close(tabStore.active.id);
+        handleCloseTab(tabStore.active.id);
         e.preventDefault();
       } else if (tabStore.isHome) {
         const resultTabs = tabStore.tabs.filter((t) => t.closable);
         if (resultTabs.length > 0) {
-          tabStore.close(resultTabs[resultTabs.length - 1].id);
+          const tab = resultTabs[resultTabs.length - 1];
+          handleCloseTab(tab.id);
           e.preventDefault();
         }
       }
@@ -115,7 +126,7 @@
         return;
       }
       if (tabStore.active && tabStore.active.closable) {
-        tabStore.close(tabStore.active.id);
+        handleCloseTab(tabStore.active.id);
       }
     }
   }
@@ -193,12 +204,12 @@
               tabindex="-1"
               onclick={(e) => {
                 e.stopPropagation();
-                tabStore.close(tab.id);
+                handleCloseTab(tab.id);
               }}
               onkeydown={(e) => {
                 if (e.key === "Enter") {
                   e.stopPropagation();
-                  tabStore.close(tab.id);
+                  handleCloseTab(tab.id);
                 }
               }}
             >✕</span>

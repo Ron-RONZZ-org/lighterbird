@@ -130,12 +130,13 @@ All list tab components (`EmailListTab`, `JournalListTab`, `SieveListTab`, `Cont
 | **Selection mode** | Toggle via `V` key + toolbar "Select"/"Exit" button; checkboxes appear in reserved column |
 | **Range selection** | Shift+click selects contiguous range; anchor point set on first click |
 | **Keyboard navigation** | Arrow keys (up/down), PgUp/PgDn, Home/End, Space to toggle focused item |
+| **"+ New" action** | `N` key (view mode) or toolbar "+ New" <kbd>N</kbd> button → opens add form |
 | **Batch delete** | `Delete` key or toolbar button → ConfirmDialog → deletes all selected items |
 | **UUID copy** | Click on truncated UUID (first 8 chars) → `navigator.clipboard.writeText()` → "Copied!" flash for 1.2s |
 | **Email/address copy** | Click on email/from cell → copies address to clipboard (same flash pattern) |
 | **Search** | `f` key toggles search bar; debounced 300ms with AbortController; min 2 chars |
-| **"+ New" button** | Toolbar right side in view mode → opens context-appropriate add form (FormTab or inline modal) |
-| **Context-appropriate toolbar** | View mode: [Select] [hint] [+ New]; Selection mode: [Exit] [count] [Delete]; Search mode: full-width search input |
+| **Context-appropriate toolbar** | View mode: [Select] [hint] [+ New <kbd>N</kbd>]; Selection mode: [Exit] [count] [Delete]; Search mode: full-width search input |
+| **Unsaved-changes guard** | Tab close → ConfirmDialog if form dirty; browser `beforeunload` if any dirty form exists; forms expose `dirty` derived rune + `onDirtyChange` callback |
 
 ### Shared Helpers
 

@@ -32,6 +32,11 @@
   let formType = $derived(data?.form || "");
   let initialData = $derived(data?.initialData || {});
   let commandPath = $derived(data?.commandPath || _inferCommandPath(formType));
+  let formDirty = $state(false);
+
+  function handleDirtyChange(dirty) {
+    formDirty = dirty;
+  }
 
   /** Infer command path from form type name */
   function _inferCommandPath(formType) {
@@ -117,8 +122,11 @@
     }
   }
 
-  /** Cancel / close the form tab. */
+  /** Cancel / close the form tab. Warns if there are unsaved changes. */
   function handleCancel() {
+    if (formDirty) {
+      if (!confirm("You have unsaved changes. Discard them?")) return;
+    }
     const activeId = tabStore.active?.id;
     if (activeId) tabStore.close(activeId);
   }
@@ -142,13 +150,13 @@
   </div>
 
   {#if formType === "email-send"}
-    <ComposeEmail {initialData} onsubmit={handleFormSubmit} />
+    <ComposeEmail {initialData} onsubmit={handleFormSubmit} onDirtyChange={handleDirtyChange} />
   {:else if formType === "journal-write"}
-    <JournalWrite {initialData} onsubmit={handleFormSubmit} />
+    <JournalWrite {initialData} onsubmit={handleFormSubmit} onDirtyChange={handleDirtyChange} />
   {:else if formType === "todo-add"}
-    <TodoAddForm {initialData} onsubmit={handleFormSubmit} />
+    <TodoAddForm {initialData} onsubmit={handleFormSubmit} onDirtyChange={handleDirtyChange} />
   {:else if formType === "calendar-event-add"}
-    <EventForm {initialData} onsubmit={handleFormSubmit} />
+    <EventForm {initialData} onsubmit={handleFormSubmit} onDirtyChange={handleDirtyChange} />
   {:else if formType === "email-sieve-add" || formType === "email-sieve-modify"}
     <SieveEditorForm data={formType === "email-sieve-modify" ? { script: initialData } : {}} />
   {:else if commandPath.length > 0}

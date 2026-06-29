@@ -39,6 +39,7 @@ def todo_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "  !todo modify <uuid>       — Modify a todo\n"
                 "  !todo remove <uuid> [...] — Remove a todo(s)\n"
                 "  !todo search <query>      — Search todos\n"
+                "  !todo draft               — List / recall todo drafts\n"
                 "  !todo template            — Manage templates\n"
                 "\nFlags for !todo add:\n"
                 "  --parent <uuid>           — Set parent (subtask)\n"
