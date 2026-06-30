@@ -62,6 +62,8 @@ export let commandTree = [
           { name: "priority", short: "p", type: "number", help: "Priority 1 (highest) to 5 (lowest)" },
           { name: "body-format", type: "string", help: "Body format: markdown (default), html, or plain" },
           { name: "file", short: "f", type: "string", help: "File attachment (name:base64, repeatable)" },
+          { name: "cowrite", type: "string", help: "LLM co-writing instruction (e.g. 'make it formal')" },
+          { name: "cowrite-diff", type: "flag", help: "Show unified diff before applying cowrite" },
         ],
       },
       {
@@ -495,6 +497,8 @@ export let commandTree = [
           { name: "dependency", type: "uuid", help: "Depends on todo UUID", uuidSource: "todo.list" },
           { name: "file", type: "string", help: "Attach a file (path or URL)" },
           { name: "template", type: "string", help: "Template name for structured fields" },
+          { name: "cowrite", type: "string", help: "LLM co-writing instruction (e.g. 'add more detail')" },
+          { name: "cowrite-diff", type: "flag", help: "Show unified diff before applying cowrite" },
         ],
       },
       {
@@ -621,6 +625,8 @@ export let commandTree = [
         flags: [
           { name: "date", type: "date", help: "Date (YYYY-MM-DD, default: today)" },
           { name: "text", type: "string", help: "Entry text" },
+          { name: "cowrite", type: "string", help: "LLM co-writing instruction (e.g. 'make it more reflective')" },
+          { name: "cowrite-diff", type: "flag", help: "Show unified diff before applying cowrite" },
         ],
       },
       {

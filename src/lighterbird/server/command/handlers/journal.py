@@ -63,6 +63,24 @@ def journal_write(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     title = remaining[0]
     text = flags.get("text", " ".join(remaining[1:]) if len(remaining) > 1 else "")
     date_str = flags.get("date", date.today().isoformat())
+    # ── LLM co-writing ─────────────────────────────────────────────────
+    cowrite_instr = flags.get("cowrite", "")
+    if cowrite_instr:
+        import asyncio
+        from lighterbird.server.cowrite.engine import cowrite as _cowrite_call
+
+        fields = {"title": title, "text": text}
+        try:
+            result = asyncio.run(_cowrite_call(
+                form_type="journal-write",
+                fields=fields,
+                instruction=cowrite_instr,
+            ))
+            title = result["revised"].get("title", title)
+            text = result["revised"].get("text", text)
+        except (RuntimeError, ValueError) as exc:
+            raise CommandValidationError(f"Co-writing failed: {exc}")
+
     svc: JournalService = get_journal_service()
     data = {"title": title, "text": text, "date": date_str}
     entry = svc.create(data)
