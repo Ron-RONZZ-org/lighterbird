@@ -171,9 +171,9 @@ def user_info_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
             "updated_at": p["updated_at"],
         })
     return {
-        "type": "user-profiles",
+        "type": "status",
         "title": "User Profiles",
-        "data": {"profiles": items, "total": len(items)},
+        "data": {"user_profiles": items, "total": len(items)},
     }
 
 

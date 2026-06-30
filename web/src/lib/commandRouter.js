@@ -158,7 +158,7 @@ function resolveListIdKey(listTokens) {
   const path = listTokens.join(" ");
   if (/^email(\s+account)?\s+list$/i.test(path)) return "accounts";
   if (/^calendar(\s+account)?\s+list$/i.test(path)) return "calendars";
-  if (/^contacts\s+list$/i.test(path)) return "contacts-list";
+  if (/^contact\s+list$/i.test(path)) return "contacts-list";
   if (/^todo\s+list$/i.test(path)) return "todo-list";
   if (/^journal\s+list$/i.test(path)) return "journal-list";
   if (/^calendar\s+list$/i.test(path)) return "calendar-events";
@@ -204,7 +204,7 @@ function resolveAddFormType(tokens, leafName) {
 
   if (/^email\s+account\s+add$/i.test(path)) return "email-account-add";
   if (/^calendar\s+account\s+add$/i.test(path)) return "calendar-account-add";
-  if (/^contacts\s+add$/i.test(path)) return "contacts-add";
+  if (/^contact\s+add$/i.test(path)) return "contacts-add";
   if (/^todo\s+add$/i.test(path)) return "todo-add";
   if (/^journal\s+write$/i.test(path)) return "journal-write";
   if (/^email\s+sieve\s+add$/i.test(path)) return "email-sieve-add";
