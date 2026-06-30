@@ -223,6 +223,10 @@ def backup_restore(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
 
     try:
         from lighterbird.core.paths import data_dir
+        from lighterbird.server.deps import reset_services
+
+        # Close all active DB connections before overwriting files
+        reset_services()
 
         target = str(data_dir())
         if timestamp:
@@ -352,9 +356,9 @@ def backup_config_add(remaining: list[str], flags: dict[str, str]) -> dict[str, 
     if not label:
         label = sid  # fall back to id as label
 
-    raw_interval = flags.get("interval", "0")
+    raw_interval = flags.get("interval", flags.get("schedule", "0"))
     try:
-        interval_minutes = int(raw_interval)
+        interval_minutes = float(raw_interval)
     except ValueError:
         raise CommandValidationError(f"Invalid --interval value: {raw_interval}")
 
@@ -366,6 +370,9 @@ def backup_config_add(remaining: list[str], flags: dict[str, str]) -> dict[str, 
 
     if interval_minutes < 0:
         raise CommandValidationError("--interval must be >= 0")
+    # Cap sub-minute intervals at 1 minute since the scheduler only checks every 60s
+    if 0 < interval_minutes < 0.9:
+        interval_minutes = 1.0
 
     target = flags.get("target", "local")
     enabled_raw = flags.get("enabled", "true")
@@ -419,8 +426,12 @@ def backup_config_modify(remaining: list[str], flags: dict[str, str]) -> dict[st
     updates: dict[str, Any] = {}
     if "label" in flags:
         updates["label"] = flags["label"]
-    if "interval" in flags:
-        updates["interval_minutes"] = flags["interval"]
+    if "interval" in flags or "schedule" in flags:
+        raw = flags.get("interval", flags.get("schedule", ""))
+        try:
+            updates["interval_minutes"] = float(raw)
+        except ValueError:
+            raise CommandValidationError(f"Invalid interval value: {raw}")
     if "max_copies" in flags:
         updates["max_copies"] = flags["max_copies"]
     if "target" in flags:
@@ -583,11 +594,14 @@ def backup_import(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     decisions: dict[str, str] = {}
     for key, value in flags.items():
         if key == "overwrite":
-            decisions[value] = "overwrite"
+            for fname in value.split(","):
+                decisions[fname.strip()] = "overwrite"
         elif key == "skip":
-            decisions[value] = "skip"
-
+            for fname in value.split(","):
+                decisions[fname.strip()] = "skip"
     try:
+        from lighterbird.server.deps import reset_services
+        reset_services()
         result = import_data(export_path, force=force, decisions=decisions or None)
     except (FileNotFoundError, ValueError, OSError) as e:
         raise CommandValidationError(f"Import failed: {e}")

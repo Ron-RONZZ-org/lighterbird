@@ -2,6 +2,7 @@
   /** Journal entry write form — used when !journal write is typed interactively. */
 
   import { drafts as draftsApi } from "./api.js";
+  import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
 
   let { initialData = {}, onsubmit, onDirtyChange = () => {} } = $props();
   // svelte-ignore state_referenced_locally
@@ -14,6 +15,16 @@
   let savingDraft = $state(false);
   let draftSaved = $state(false);
   let draftUuid = $state(_initial._draft_uuid || null);
+
+  // ── LLM co-writing ─────────────────────────────────────────────────
+  let cowrite = $state(createCowrite({
+    formType: "journal-write",
+    getCurrentContent: () => ({ title, text }),
+    applyEdit: (field, t) => {
+      if (field === "title") title = t;
+      else if (field === "text") text = t;
+    },
+  }));
 
   /** Save draft on Ctrl+S */
   async function saveDraft() {
@@ -77,7 +88,10 @@
   </div>
   <div class="field">
     <label for="text">Content</label>
-    <textarea id="text" bind:value={text} rows="12" placeholder="Write your journal entry here..."></textarea>
+    <div class="textarea-actions">
+      <textarea id="text" bind:value={text} rows="12" placeholder="Write your journal entry here..."></textarea>
+      <CowriteButton {cowrite} />
+    </div>
   </div>
   <div class="actions">
     <button type="button" class="draft-btn" onclick={saveDraft} disabled={savingDraft || !title && !text}>
@@ -93,12 +107,16 @@
       {writing ? "Saving..." : "Save Entry"}
     </button>
   </div>
+
+  {#if cowrite.isActive}
+    <CowritePanel {cowrite} />
+  {/if}
 </form>
 
 <svelte:window onkeydown={handleFormKeydown} />
 
 <style>
-  .journal-write-form { padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+  .journal-write-form { padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; position: relative; }
   .field { display: flex; flex-direction: column; gap: 0.25rem; }
   .field label { font-size: 0.8rem; color: #7c7c9a; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
   .field input, .field textarea {
@@ -106,6 +124,7 @@
     padding: 0.5rem; border-radius: 4px; font-family: inherit; font-size: 0.9rem;
   }
   .field textarea { resize: vertical; min-height: 200px; font-family: inherit; line-height: 1.5; }
+  .textarea-actions { display: flex; flex-direction: column; gap: 0.3rem; }
   .actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
   .actions button {
     background: #0f3460; color: #e0e0e0; border: none; padding: 0.5rem 1.5rem;

@@ -129,12 +129,14 @@ class EmailService:
                    bcc: list[str] | None = None, priority: int = 3,
                    body_format: str = "markdown",
                    attachments: list[str] | None = None,
-                   signature: str | None = None):
+                   signature: str | None = None,
+                   in_reply_to: str | None = None):
         self.msg_ops.send_email(account_email, to, subject, body, cc=cc,
                                 bcc=bcc, priority=priority,
                                 body_format=body_format,
                                 attachments=attachments,
-                                signature=signature)
+                                signature=signature,
+                                in_reply_to=in_reply_to)
 
     # ── MessageStore protocol (used by IMAP sync) ────────────────────────
 

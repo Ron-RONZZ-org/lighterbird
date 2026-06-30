@@ -3,6 +3,7 @@
 
   import { email as emailApi, drafts as draftsApi } from "./api.js";
   import FormField from "./FormField.svelte";
+  import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
 
   let { initialData = {}, onsubmit, onDirtyChange = () => {} } = $props();
   // svelte-ignore state_referenced_locally
@@ -22,6 +23,25 @@
   let draftSaved = $state(false);
   let draftUuid = $state(_initial._draft_uuid || null);
   let accounts = $state([]);
+
+  // ── LLM co-writing ─────────────────────────────────────────────────
+  let cowrite = $state(createCowrite({
+    formType: "email-send",
+    getCurrentContent: () => ({
+      to,
+      subject,
+      body,
+      cc,
+      bcc,
+    }),
+    applyEdit: (field, text) => {
+      if (field === "to") to = text;
+      else if (field === "subject") subject = text;
+      else if (field === "body") body = text;
+      else if (field === "cc") cc = text;
+      else if (field === "bcc") bcc = text;
+    },
+  }));
 
   /** Save draft on Ctrl+S */
   async function saveDraft() {
@@ -185,6 +205,8 @@
             <option value="html">HTML</option>
             <option value="plain">Plain Text</option>
           </select>
+          <span class="toolbar-spacer"></span>
+          <CowriteButton {cowrite} />
         </div>
         <textarea id="body" class="ff-textarea" bind:value={body} rows="8"
           placeholder="Message body (Markdown supported)"></textarea>
@@ -225,12 +247,16 @@
       {sending ? "Sending..." : "Send"}
     </button>
   </div>
+
+  {#if cowrite.isActive}
+    <CowritePanel {cowrite} />
+  {/if}
 </form>
 
 <svelte:window onkeydown={handleFormKeydown} />
 
 <style>
-  .email-form { padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+  .email-form { padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; position: relative; }
   .row-fields { display: flex; gap: 0.75rem; }
   .row-fields :global(.flex-1) { flex: 1; }
   :global(.ff-input) {
@@ -254,6 +280,7 @@
     color: #e0e0e0; border-radius: 4px; font-family: monospace; font-size: 0.78rem;
     cursor: pointer;
   }
+  .toolbar-spacer { flex: 1; }
   .attachment-area { display: flex; flex-direction: column; gap: 0.4rem; }
   .file-input {
     font-family: monospace; font-size: 0.8rem; color: #ccc;
