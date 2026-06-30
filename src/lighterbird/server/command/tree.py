@@ -82,6 +82,8 @@ def get_command_tree() -> list[CommandNode]:
                         {"name": "body-format", "type": "string", "help": "Body format: markdown (default), html, or plain"},
                         {"name": "in-reply-to", "type": "string", "help": "Message-ID being replied to (for threading)"},
                         {"name": "file", "short": "f", "type": "string", "help": "File attachment (name:base64, repeatable)"},
+                        {"name": "cowrite", "type": "string", "help": "LLM co-writing instruction (e.g. 'make it formal')"},
+                        {"name": "cowrite-diff", "type": "flag", "help": "Show unified diff before applying cowrite"},
                     ],
                 },
                 {
@@ -514,6 +516,7 @@ def get_command_tree() -> list[CommandNode]:
                     "name": "add",
                     "description": "Add a new todo",
                     "interactive": True,
+                    "listCommand": ["todo", "list"],
                     "params": [
                         {"name": "title", "required": True, "type": "string"},
                     ],
@@ -525,6 +528,8 @@ def get_command_tree() -> list[CommandNode]:
                         {"name": "dependency", "type": "string", "help": "Depends on UUID(s); comma-separated", "uuidSource": "todo.list"},
                         {"name": "file", "type": "string", "help": "Attach file(s); comma-separated paths/URLs"},
                         {"name": "template", "type": "string", "help": "Template name for structured fields"},
+                        {"name": "cowrite", "type": "string", "help": "LLM co-writing instruction (e.g. 'add more detail')"},
+                        {"name": "cowrite-diff", "type": "flag", "help": "Show unified diff before applying cowrite"},
                     ],
                 },
                 {
@@ -644,12 +649,15 @@ def get_command_tree() -> list[CommandNode]:
                     "name": "write",
                     "description": "Write a journal entry",
                     "interactive": True,
+                    "listCommand": ["journal", "list"],
                     "params": [
                         {"name": "title", "required": True, "type": "string"},
                     ],
                     "flags": [
                         {"name": "date", "type": "date", "help": "Date (YYYY-MM-DD, default: today)"},
                         {"name": "text", "type": "string", "help": "Entry text"},
+                        {"name": "cowrite", "type": "string", "help": "LLM co-writing instruction (e.g. 'make it more reflective')"},
+                        {"name": "cowrite-diff", "type": "flag", "help": "Show unified diff before applying cowrite"},
                     ],
                 },
                 {
