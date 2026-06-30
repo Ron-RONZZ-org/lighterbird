@@ -162,6 +162,7 @@
     if (/^!journal\s+list\s*$/i.test(t)) return "journal";
     if (/^!calendar\s+list\s*$/i.test(t)) return "calendar-events";
     if (/^!email\s+(list|search)\b/i.test(t)) return "email-list";
+    if (/^!email\s+signature\s+list\s*$/i.test(t)) return "signature-list";
     if (/^!user\s+saved-commands\s+list\s*$/i.test(t)) return "saved-commands";
     return null;
   }

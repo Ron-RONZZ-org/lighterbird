@@ -4,6 +4,8 @@ Registered paths:
     - email.list
     - email.read
     - email.send
+    - email.reply
+    - email.forward
     - email.search
     - email.trash
     - email.archive
@@ -11,6 +13,10 @@ Registered paths:
     - email.account.list
     - email.account.modify
     - email.account.remove
+    - email.signature.add
+    - email.signature.list
+    - email.signature.modify
+    - email.signature.delete
 """
 
 from __future__ import annotations
@@ -19,7 +25,7 @@ from typing import Any
 
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
-from lighterbird.server.command.response import normalize_account, normalize_message
+from lighterbird.server.command.response import normalize_message
 from lighterbird.server.deps import get_email_service
 from lighterbird.email.service import EmailService
 
@@ -39,6 +45,9 @@ def email_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "  !email list              — List inbox messages\n"
                 "  !email read <uuid>       — Read a message\n"
                 "  !email send              — Send an email\n"
+                "  !email reply <uuid>      — Reply to a message\n"
+                "  !email reply-all <uuid>  — Reply-all to a message\n"
+                "  !email forward <uuid>    — Forward a message\n"
                 "  !email search            — Search messages\n"
                 "  !email trash <uuid>      — Trash a message\n"
                 "  !email archive <uuid>    — Archive a message\n"
@@ -46,6 +55,10 @@ def email_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "  !email account add       — Add an email account\n"
                 "  !email account modify    — Modify an email account\n"
                 "  !email account remove    — Remove an email account\n"
+                "  !email signature list    — List account signatures\n"
+                "  !email signature add     — Set a signature for an account\n"
+                "  !email signature modify  — Modify an account signature\n"
+                "  !email signature delete  — Delete an account signature\n"
                 "  !email sieve list        — List Sieve scripts\n"
                 "  !email sieve add         — Add a Sieve script\n"
                 "  !email sieve modify      — Modify a Sieve script\n"
@@ -156,7 +169,16 @@ def email_read(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 @command("email.send")
 def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email send <to> <subject> [body] [--account <email>] [--cc email]"""
+    """!email send <to> <subject> [body] [--account <email>] [--cc email]
+                    [--bcc email] [--priority N] [--body-format fmt]
+                    [--file <name:base64>]
+
+    Sends an email.  ``<to>`` and ``<subject>`` are required; ``<body>``
+    is optional.  Use ``--cc`` / ``--bcc`` for additional recipients,
+    ``--priority`` (1-5) to set importance, ``--body-format`` to choose
+    markdown (default), html, or plain, and ``--file`` for attachments
+    (repeatable, format: ``<filename>:<base64>``).
+    """
     if len(remaining) < 2:
         raise CommandValidationError(
             "Missing required args: <to> <subject> [body]",
@@ -167,6 +189,10 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     body = " ".join(remaining[2:]) if len(remaining) > 2 else ""
     account_email = flags.get("account", "")
     cc_str = flags.get("cc", "")
+    bcc_str = flags.get("bcc", "")
+    priority_str = flags.get("priority", "3")
+    body_format = flags.get("body-format", "markdown")
+    file_flags = flags.get("file", "")
 
     svc: EmailService = get_email_service()
 
@@ -177,8 +203,134 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
             raise CommandValidationError("No email accounts configured.", "Add one with: !email account add")
         account_email = accounts[0]["email"]
 
-    svc.send_email(account_email, [to_str], subject, body, cc=[cc_str] if cc_str else None)
+    # Parse priority
+    try:
+        priority = int(priority_str)
+        if priority < 1 or priority > 5:
+            raise ValueError
+    except ValueError:
+        raise CommandValidationError(
+            f"Invalid priority: {priority_str}. Must be 1 (highest) to 5 (lowest)."
+        )
+
+    # Validate body-format
+    if body_format not in ("markdown", "html", "plain"):
+        raise CommandValidationError(
+            f"Invalid body-format: {body_format}. Choose markdown, html, or plain."
+        )
+
+    to_list = [t.strip() for t in to_str.split(",") if t.strip()]
+    cc_list = [t.strip() for t in cc_str.split(",") if t.strip()] if cc_str else None
+    bcc_list = [t.strip() for t in bcc_str.split(",") if t.strip()] if bcc_str else None
+
+    # Parse --file flags: "name:base64,..." or multiple --file occurrences
+    attachments = None
+    if file_flags:
+        attachments = []
+        for item in file_flags.split(","):
+            item = item.strip()
+            if ":" in item:
+                name, data = item.split(":", 1)
+                attachments.append({"name": name, "data": data})
+            else:
+                attachments.append({"name": item, "data": ""})
+
+    svc.send_email(account_email, to_list, subject, body,
+                   cc=cc_list, bcc=bcc_list, priority=priority,
+                   body_format=body_format,
+                   attachments=attachments)
     return {"type": "status", "title": "Sent", "data": {"to": to_str, "subject": subject}}
+
+
+@command("email.reply")
+def email_reply(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!email reply <uuid> [--all]
+
+    Opens the compose form pre-populated as a reply to the given message.
+    Use ``--all`` to Reply-All (include all original recipients).
+    """
+    if not remaining:
+        raise CommandValidationError(
+            "Missing message UUID.",
+            "Usage: !email reply <uuid> [--all]",
+        )
+    uuid = remaining[0]
+    svc: EmailService = get_email_service()
+    msg = svc.get_message(uuid)
+    if not msg:
+        raise CommandValidationError(f"Message not found: {uuid[:8]}")
+
+    reply_all = "all" in flags
+    to = msg.get("from_addr", "")
+    if reply_all:
+        # Include original To recipients (excluding self)
+        import json as json_mod
+        orig_to = json_mod.loads(msg.get("to_recipients", "[]")) if isinstance(msg.get("to_recipients"), str) else (msg.get("to_recipients") or [])
+        to_list = [to]
+        for r in orig_to:
+            if r.strip().lower() != msg.get("account_email", "").lower():
+                to_list.append(r.strip())
+        to = ", ".join(to_list)
+
+    subject = msg.get("subject", "")
+    if not subject.lower().startswith("re:"):
+        subject = f"Re: {subject}"
+
+    body = msg.get("body", "") or ""
+    quoted = "\n".join(f"> {line}" for line in body.split("\n"))
+
+    return {
+        "type": "form-required",
+        "title": "Reply",
+        "data": {
+            "form": "email-send",
+            "initialData": {
+                "to": to,
+                "subject": subject,
+                "body": f"\n\n{quoted}",
+                "account": msg.get("account_email", ""),
+            },
+        },
+    }
+
+
+@command("email.forward")
+def email_forward(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!email forward <uuid>
+
+    Opens the compose form pre-populated as a forward of the given message.
+    """
+    if not remaining:
+        raise CommandValidationError(
+            "Missing message UUID.",
+            "Usage: !email forward <uuid>",
+        )
+    uuid = remaining[0]
+    svc: EmailService = get_email_service()
+    msg = svc.get_message(uuid)
+    if not msg:
+        raise CommandValidationError(f"Message not found: {uuid[:8]}")
+
+    subject = msg.get("subject", "")
+    if not subject.lower().startswith("fwd:"):
+        subject = f"Fwd: {subject}"
+
+    body = msg.get("body", "") or ""
+    header = f"--- Forwarded message ---\nFrom: {msg.get('from_addr', '')}\nSubject: {msg.get('subject', '')}\nDate: {msg.get('received_at', '')}\n\n"
+    forwarded = f"{header}{body}"
+
+    return {
+        "type": "form-required",
+        "title": "Forward",
+        "data": {
+            "form": "email-send",
+            "initialData": {
+                "subject": subject,
+                "body": f"\n\n{forwarded}",
+                "account": msg.get("account_email", ""),
+            },
+        },
+    }
 
 
 @command("email.search")
@@ -249,104 +401,4 @@ def email_archive(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     return {"type": "status", "title": "Archived", "data": {"uuid": remaining[0][:8]}}
 
 
-# ── Account sub-commands ────────────────────────────────────────────────
-
-
-@command("email.account.list")
-def account_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email account list"""
-    svc: EmailService = get_email_service()
-    accounts = [normalize_account(a) for a in svc.list_accounts()]
-    return {"type": "status", "title": "Email Accounts", "data": {"accounts": accounts}}
-
-
-@command("email.account.add")
-def account_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email account add <email> [--imap HOST] [--smtp HOST] [--password PW] [--name NAME]
-
-    IMAP/SMTP servers are auto-detected for common providers.
-    Only specify --imap or --smtp to override auto-detection.
-    """
-    if not remaining:
-        raise CommandValidationError(
-            "Missing email address.",
-            "Usage: !email account add user@example.com [--imap imap.example.com] [--smtp smtp.example.com] [--password ...] [--name NAME]",
-        )
-    email_addr = remaining[0]
-    imap_server = flags.get("imap", "")
-    smtp_server = flags.get("smtp", "")
-    password = flags.get("password", "")
-    name = flags.get("name", "")
-
-    from lighterbird.server.schemas import AccountCreate
-    from lighterbird.email.server_detect import detect_servers
-
-    detected = detect_servers(email_addr, imap_server=imap_server, smtp_server=smtp_server)
-    acct_data = {
-        "name": name or email_addr.split("@")[0],
-        "email": email_addr.lower().strip(),
-        "imap_server": detected["imap"],
-        "imap_port": 993,
-        "imap_use_ssl": 1,
-        "smtp_server": detected["smtp"],
-        "smtp_port": 587,
-        "smtp_use_tls": 1,
-        "imap_username": email_addr,
-        "smtp_username": email_addr,
-    }
-    svc: EmailService = get_email_service()
-    acct = svc.create_account(acct_data, password)
-    return {
-        "type": "status",
-        "title": "Account Added",
-        "data": {"email": acct["email"]},
-    }
-
-
-@command("email.account.modify")
-def account_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email account modify <email> [--name NAME] [--password PW] [--imap-server HOST] [--smtp-server HOST]"""
-    if not remaining:
-        raise CommandValidationError("Missing account email.", "Usage: !email account modify <email> [--name ...] [--password ...]")
-    email = remaining[0]
-    svc: EmailService = get_email_service()
-    acct = svc.get_account(email)
-    if not acct:
-        raise CommandValidationError(f"Account not found: {email}")
-
-    updates = {}
-    if "name" in flags:
-        updates["name"] = flags["name"]
-    if "imap_server" in flags:
-        updates["imap_server"] = flags["imap_server"]
-    if "smtp_server" in flags:
-        updates["smtp_server"] = flags["smtp_server"]
-    if "managesieve_host" in flags:
-        updates["managesieve_host"] = flags["managesieve_host"]
-    if "managesieve_port" in flags:
-        updates["managesieve_port"] = int(flags["managesieve_port"])
-    if updates:
-        svc.accounts.update(email, updates)
-    if "password" in flags:
-        svc.accounts.set_password(email, flags["password"])
-    return {"type": "status", "title": "Account Modified", "data": {"email": email}}
-
-
-@command("email.account.remove")
-def account_remove(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email account remove <email> [email...]"""
-    if not remaining:
-        raise CommandValidationError("Missing account email(s).", "Usage: !email account remove <email> [email...]")
-    svc: EmailService = get_email_service()
-    succeeded = []
-    for email_addr in remaining:
-        try:
-            svc.delete_account(email_addr)
-            succeeded.append(email_addr)
-        except Exception:
-            pass
-    return {
-        "type": "status",
-        "title": "Account(s) Removed",
-        "data": {"removed": succeeded},
-    }
+# (Account sub-commands moved to email_account.py)

@@ -58,6 +58,27 @@ export let commandTree = [
         flags: [
           { name: "account", short: "a", type: "uuid", help: "Account UUID (default: first)", uuidSource: "email.listAccounts" },
           { name: "cc", type: "string", help: "CC recipient" },
+          { name: "bcc", type: "string", help: "BCC recipient" },
+          { name: "priority", short: "p", type: "number", help: "Priority 1 (highest) to 5 (lowest)" },
+          { name: "body-format", type: "string", help: "Body format: markdown (default), html, or plain" },
+          { name: "file", short: "f", type: "string", help: "File attachment (name:base64, repeatable)" },
+        ],
+      },
+      {
+        name: "reply",
+        description: "Reply to a message",
+        params: [
+          { name: "uuid", required: true, type: "uuid", placeholder: "message-uuid", uuidSource: "email.listMessages" },
+        ],
+        flags: [
+          { name: "all", type: "flag", help: "Reply to all recipients" },
+        ],
+      },
+      {
+        name: "forward",
+        description: "Forward a message",
+        params: [
+          { name: "uuid", required: true, type: "uuid", placeholder: "message-uuid", uuidSource: "email.listMessages" },
         ],
       },
       {
@@ -193,6 +214,7 @@ export let commandTree = [
               { name: "password", type: "string", help: "New password", sensitive: true },
               { name: "imap_server", type: "string", help: "New IMAP server" },
               { name: "smtp_server", type: "string", help: "New SMTP server" },
+              { name: "signature", type: "string", help: "Account email signature (plain text)" },
             ],
           },
           {
@@ -200,6 +222,42 @@ export let commandTree = [
             description: "Remove email account(s)",
             params: [
               { name: "uuid", required: true, type: "uuid", placeholder: "account-uuid", uuidSource: "email.listAccounts", repeatable: true },
+            ],
+          },
+        ],
+      },
+      {
+        name: "signature",
+        description: "Manage email account signatures",
+        children: [
+          {
+            name: "list",
+            description: "List account signatures",
+            flags: [
+              { name: "account", short: "a", type: "string", help: "Filter by account email" },
+            ],
+          },
+          {
+            name: "add",
+            description: "Set a signature for an account",
+            params: [
+              { name: "email", required: true, type: "string", placeholder: "account-email" },
+              { name: "text", required: true, type: "string" },
+            ],
+          },
+          {
+            name: "modify",
+            description: "Modify an account signature",
+            params: [
+              { name: "email", required: true, type: "string", placeholder: "account-email" },
+              { name: "text", required: true, type: "string" },
+            ],
+          },
+          {
+            name: "delete",
+            description: "Delete an account signature",
+            params: [
+              { name: "email", required: true, type: "string", placeholder: "account-email" },
             ],
           },
         ],

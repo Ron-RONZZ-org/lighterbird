@@ -123,6 +123,16 @@
             return;
           }
         }
+      } else if (d.signatures !== undefined) {
+        const resp = await fetch("/api/v1/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tokens: ["email", "signature", "list"], flags: {} }),
+        });
+        const cmdResult = await resp.json();
+        if (resp.ok) {
+          result = cmdResult.data;
+        }
       } else if (d.entries !== undefined) {
         result = await journalApi.list({ limit: 50 });
       }
@@ -212,6 +222,47 @@
       onRemove={(item) => removeItem("backup-strategy", item)}
       onTest={(item) => testStrategy(item)}
     />
+
+  {:else if d.signatures !== undefined}
+    <div class="section-header">
+      <h3 class="title">Email Signatures</h3>
+      <button class="btn-add" onclick={() =>
+        tabStore.open("form", "Add Email Signature", {
+          form: "email-signature-add",
+          initialData: {},
+        }, { idKey: "form-email-signature-add" })
+      }>+ Add Signature</button>
+    </div>
+    {#each d.signatures as sig}
+      <div class="row">
+        <span class="key">{sig.email || ""}</span>
+        <span class="val" title={sig.signature || ""}>
+          {sig.signature ? (sig.signature.length > 60 ? sig.signature.slice(0, 60) + "…" : sig.signature) : "(no signature)"}
+        </span>
+        <span class="hint">{sig.has_signature ? "✓" : "—"}</span>
+        <div class="row-actions">
+          <button class="btn-modify-sm" onclick={() =>
+            tabStore.open("form", "Modify Signature: " + sig.email, {
+              form: "email-signature-modify",
+              initialData: { email: sig.email, text: sig.signature || "" },
+            }, { idKey: "form-email-signature-modify" })
+          } title="Edit">✎</button>
+          <button class="btn-remove-sm" onclick={async () => {
+            if (!confirm(`Delete signature for ${sig.email}?`)) return;
+            try {
+              const resp = await fetch("/api/v1/command", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ tokens: ["email", "signature", "delete", sig.email], flags: {} }),
+              });
+              if (resp.ok) await refetchCurrentTab();
+            } catch { /* ignore */ }
+          }} title="Remove">✕</button>
+        </div>
+      </div>
+    {:else}
+      <p class="empty">No signatures configured.</p>
+    {/each}
 
   {:else if d.entries !== undefined}
     <div class="section-header">

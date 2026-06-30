@@ -77,6 +77,27 @@ def get_command_tree() -> list[CommandNode]:
                     "flags": [
                         {"name": "account", "short": "a", "type": "uuid", "help": "Account UUID (default: first)", "uuidSource": "email.listAccounts"},
                         {"name": "cc", "type": "string", "help": "CC recipient"},
+                        {"name": "bcc", "type": "string", "help": "BCC recipient"},
+                        {"name": "priority", "short": "p", "type": "number", "help": "Priority 1 (highest) to 5 (lowest)"},
+                        {"name": "body-format", "type": "string", "help": "Body format: markdown (default), html, or plain"},
+                        {"name": "file", "short": "f", "type": "string", "help": "File attachment (name:base64, repeatable)"},
+                    ],
+                },
+                {
+                    "name": "reply",
+                    "description": "Reply to a message (opens compose form)",
+                    "params": [
+                        {"name": "uuid", "required": True, "type": "uuid", "placeholder": "message-uuid", "uuidSource": "email.listMessages"},
+                    ],
+                    "flags": [
+                        {"name": "all", "type": "flag", "help": "Reply to all recipients"},
+                    ],
+                },
+                {
+                    "name": "forward",
+                    "description": "Forward a message (opens compose form)",
+                    "params": [
+                        {"name": "uuid", "required": True, "type": "uuid", "placeholder": "message-uuid", "uuidSource": "email.listMessages"},
                     ],
                 },
                 {
@@ -224,6 +245,7 @@ def get_command_tree() -> list[CommandNode]:
                                 {"name": "smtp_server", "type": "string", "help": "New SMTP server"},
                                 {"name": "managesieve_host", "type": "string", "help": "ManageSieve server hostname"},
                                 {"name": "managesieve_port", "type": "number", "help": "ManageSieve port (default 4190)"},
+                                {"name": "signature", "type": "string", "help": "Account email signature (plain text)"},
                             ],
                         },
                         {
@@ -231,6 +253,42 @@ def get_command_tree() -> list[CommandNode]:
                             "description": "Remove email account(s)",
                             "params": [
                                 {"name": "uuid", "required": True, "type": "uuid", "placeholder": "account-uuid", "uuidSource": "email.listAccounts", "repeatable": True},
+                            ],
+                        },
+                    ],
+                },
+                {
+                    "name": "signature",
+                    "description": "Manage email account signatures",
+                    "children": [
+                        {
+                            "name": "list",
+                            "description": "List account signatures",
+                            "flags": [
+                                {"name": "account", "short": "a", "type": "string", "help": "Filter by account email"},
+                            ],
+                        },
+                        {
+                            "name": "add",
+                            "description": "Set a signature for an account",
+                            "params": [
+                                {"name": "email", "required": True, "type": "string", "placeholder": "account-email"},
+                                {"name": "text", "required": True, "type": "string"},
+                            ],
+                        },
+                        {
+                            "name": "modify",
+                            "description": "Modify an account signature",
+                            "params": [
+                                {"name": "email", "required": True, "type": "string", "placeholder": "account-email"},
+                                {"name": "text", "required": True, "type": "string"},
+                            ],
+                        },
+                        {
+                            "name": "delete",
+                            "description": "Delete an account signature",
+                            "params": [
+                                {"name": "email", "required": True, "type": "string", "placeholder": "account-email"},
                             ],
                         },
                     ],

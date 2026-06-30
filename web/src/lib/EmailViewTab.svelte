@@ -75,23 +75,52 @@
 
   // ── Email actions ──────────────────────────────────────────────────────
 
+  /** Quote the message body for reply/forward. */
+  function quoteBody() {
+    return (msg.body || "").split("\n").map(l => `> ${l}`).join("\n");
+  }
+
   function reply() {
-    popup.show("status", "Reply", {
-      message: `Reply to: ${msg.subject}\nTo: ${msg.from}\n\n---\n${msg.body || ""}`,
+    const subject = (msg.subject || "").toLowerCase().startsWith("re:")
+      ? msg.subject : `Re: ${msg.subject}`;
+    tabStore.open("form", "Reply", {
+      form: "email-send",
+      initialData: {
+        to: msg.from || "",
+        subject,
+        body: `\n\n${quoteBody()}`,
+        account: msg.account_email || "",
+      },
     });
   }
 
   function replyAll() {
+    const subject = (msg.subject || "").toLowerCase().startsWith("re:")
+      ? msg.subject : `Re: ${msg.subject}`;
     const allTo = [msg.from, ...(Array.isArray(msg.to) ? msg.to : [msg.to || ""])]
       .filter(Boolean).join(", ");
-    popup.show("status", "Reply All", {
-      message: `Reply All to: ${msg.subject}\nTo: ${allTo}\n\n---\n${msg.body || ""}`,
+    tabStore.open("form", "Reply All", {
+      form: "email-send",
+      initialData: {
+        to: allTo,
+        subject,
+        body: `\n\n${quoteBody()}`,
+        account: msg.account_email || "",
+      },
     });
   }
 
   function forward() {
-    popup.show("status", "Forward", {
-      message: `Fwd: ${msg.subject}\n\n---\n${msg.body || ""}`,
+    const subject = (msg.subject || "").toLowerCase().startsWith("fwd:")
+      ? msg.subject : `Fwd: ${msg.subject}`;
+    const header = `--- Forwarded message ---\nFrom: ${msg.from || ""}\nSubject: ${msg.subject || ""}\nDate: ${msg.received_at || ""}\n\n`;
+    tabStore.open("form", "Forward", {
+      form: "email-send",
+      initialData: {
+        subject,
+        body: `\n\n${header}${msg.body || ""}`,
+        account: msg.account_email || "",
+      },
     });
   }
 

@@ -165,6 +165,7 @@ function resolveListIdKey(listTokens) {
   if (/^email\s+list$/i.test(path)) return "email-list";
   if (/^user\s+saved-commands\s+list$/i.test(path)) return "saved-commands";
   if (/^email\s+sieve\s+list$/i.test(path)) return "sieve-list";
+  if (/^email\s+signature\s+list$/i.test(path)) return "signature-list";
   return null;
 }
 
@@ -216,6 +217,8 @@ function resolveAddFormType(tokens, leafName) {
   if (/^llm\s+profile\s+set$/i.test(path)) return "llm-profile-set";
   if (/^backup\s+config\s+add$/i.test(path)) return "backup-config-add";
   if (/^backup\s+config\s+modify$/i.test(path)) return "backup-config-modify";
+  if (/^email\s+signature\s+add$/i.test(path)) return "email-signature-add";
+  if (/^email\s+signature\s+modify$/i.test(path)) return "email-signature-modify";
 
   // Fallback: use leaf name
   return leafName;
@@ -242,6 +245,8 @@ function resolveAddTitle(addFormType) {
     "llm-profile-set": "Set LLM Profile",
     "backup-config-add": "Add Backup Strategy",
     "backup-config-modify": "Modify Backup Strategy",
+    "email-signature-add": "Add Email Signature",
+    "email-signature-modify": "Modify Email Signature",
   };
   return titles[addFormType] || "Add";
 }
