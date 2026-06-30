@@ -108,11 +108,16 @@
       const activeId = tabStore.active?.id;
       if (activeId) tabStore.close(activeId);
 
+      // ── After letter send, open render page for print/PDF download ──
+      // (must happen before early returns below and before result tab open)
+      const renderUrl = result.data?.render_url;
+
       if (returnIdKey && highlightUuid && LIST_REFRESHERS[returnIdKey]) {
         // Navigate to list tab with highlight on the new item
         try {
           const freshData = await LIST_REFRESHERS[returnIdKey](highlightUuid);
           tabStore.open(returnType || "status", returnTitle || "Done", freshData, { idKey: returnIdKey });
+          if (renderUrl) window.open(renderUrl, "_blank");
           return;
         } catch {
           // Refresh failed — fall through to open result tab
@@ -120,6 +125,7 @@
       }
 
       tabStore.open(result.type || "status", result.title || "Done", result.data || {});
+      if (renderUrl) window.open(renderUrl, "_blank");
     } catch (err) {
       const msg = err.cause?.code === "ECONNREFUSED"
         ? "Cannot connect to the backend."

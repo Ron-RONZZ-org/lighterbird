@@ -236,7 +236,7 @@ def letter_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
             "uuid": letter["uuid"],
             "object": flags.get("object", ""),
             "recipient": recipient,
-            "html_body": html_body,
+            "render_url": f"/api/v1/letters/letters/{letter['uuid']}/render",
         },
     }
 

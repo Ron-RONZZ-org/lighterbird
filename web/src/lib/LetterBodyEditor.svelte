@@ -18,8 +18,6 @@
   } = $props();
 
   let useFile = $state(false);
-  let showPreview = $state(false);
-  let previewHtml = $state("");
 
   const FORMATS = [
     { value: "markdown", label: "Markdown" },
@@ -46,26 +44,35 @@
     onbodypathchange?.(bodyPath);
   }
 
-  async function togglePreview() {
-    if (!showPreview) {
-      // Send body to backend for rendering preview
-      try {
-        const resp = await fetch("/api/v1/letters/render-preview", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: body, format: bodyFormat }),
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          previewHtml = data.html || "<p>(empty)</p>";
-        } else {
-          previewHtml = `<p style="color:red">Preview unavailable</p>`;
+  async function openPreviewInTab() {
+    // Send body to backend for rendering, then open in new tab
+    try {
+      const resp = await fetch("/api/v1/letters/render-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: body, format: bodyFormat }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const html = data.html || "<p>(empty)</p>";
+        const win = window.open("", "_blank");
+        if (win) {
+          win.document.write(
+            '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
+            + '<title>Body Preview</title>'
+            + '<style>body{font-family:Georgia,"Times New Roman",serif;padding:2em;line-height:1.6;color:#000;background:#fff;max-width:21cm;margin:0 auto;}</style>'
+            + '</head><body>'
+            + html
+            + '</body></html>'
+          );
+          win.document.close();
         }
-      } catch {
-        previewHtml = `<p style="color:red">Preview unavailable</p>`;
+      } else {
+        alert("Preview unavailable");
       }
+    } catch {
+      alert("Preview unavailable");
     }
-    showPreview = !showPreview;
   }
 </script>
 
@@ -79,8 +86,8 @@
             <option value={fmt.value}>{fmt.label}</option>
           {/each}
         </select>
-        <button class="tool-btn" onclick={togglePreview}>
-          {showPreview ? "Edit" : "Preview"}
+        <button class="tool-btn" onclick={openPreviewInTab}>
+          Preview
         </button>
       {/if}
       <button class="tool-btn" onclick={toggleMode}>
@@ -99,10 +106,6 @@
         oninput={handleFilePathInput}
       />
       <span class="hint">Supports .md, .html, .txt — detected automatically</span>
-    </div>
-  {:else if showPreview}
-    <div class="preview-area">
-      <iframe srcdoc={previewHtml} sandbox="allow-same-origin" title="Body preview"></iframe>
     </div>
   {:else}
     <textarea
@@ -212,18 +215,5 @@
   .hint {
     font-size: 0.72rem;
     color: var(--clr-muted);
-  }
-  .preview-area {
-    border: 1px solid #444;
-    border-radius: 4px;
-    overflow: hidden;
-    background: #fff;
-    min-height: 120px;
-  }
-  .preview-area iframe {
-    width: 100%;
-    height: 300px;
-    border: none;
-    display: block;
   }
 </style>
