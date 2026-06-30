@@ -72,10 +72,26 @@ class EventService(CRUDService):
         return row
 
     def _enqueue_sync(
-        self, event_uuid: str, operation: str, remote_href: str | None = None,
+        self, event_uuid: str, operation: str, *,
+        remote_href: str | None = None,
+        calendar_uuid: str | None = None,
     ) -> None:
-        """Queue a push/delete sync job for a remote calendar event."""
-        cal = self._get_calendar(event_uuid)
+        """Queue a push/delete sync job for a remote calendar event.
+
+        Args:
+            event_uuid: The event's UUID.
+            operation: ``"push"`` or ``"delete"``.
+            remote_href: Server-provided resource path (if known).
+            calendar_uuid: The calendar UUID (avoids JOIN lookups that
+                fail when the event has already been deleted).
+        """
+        if calendar_uuid:
+            cal = self.db.execute_one(
+                "SELECT uuid, url, remote FROM calendars WHERE uuid = ?",
+                (calendar_uuid,),
+            )
+        else:
+            cal = self._get_calendar(event_uuid)
         if not cal or not cal.get("remote") or not cal.get("url"):
             return  # local-only calendar, no sync needed
         now = datetime.now(timezone.utc).isoformat()
@@ -89,12 +105,18 @@ class EventService(CRUDService):
     def _post_create(self, data: dict, result: dict) -> None:
         """After creating an event, queue a push to the remote server."""
         event_uuid = result.get("uuid", "")
+        cal_uuid = result.get("calendar_uuid", data.get("calendar_uuid", ""))
         if event_uuid:
-            self._enqueue_sync(event_uuid, "push")
+            self._enqueue_sync(event_uuid, "push", calendar_uuid=cal_uuid)
 
     def _post_update(self, pk: str, old_data: dict | None, new_data: dict) -> None:
         """After updating an event, queue a push to the remote server."""
-        self._enqueue_sync(pk, "push", remote_href=(old_data or {}).get("remote_href", ""))
+        if old_data:
+            self._enqueue_sync(
+                pk, "push",
+                remote_href=old_data.get("remote_href", ""),
+                calendar_uuid=old_data.get("calendar_uuid", ""),
+            )
 
     def _post_delete(self, pk: str, old_data: dict | None) -> None:
         """After deleting an event, queue a remote DELETE."""
@@ -102,7 +124,15 @@ class EventService(CRUDService):
             self._enqueue_sync(
                 pk, "delete",
                 remote_href=old_data.get("remote_href", ""),
+                calendar_uuid=old_data.get("calendar_uuid", ""),
             )
+
+    def _update_remote_href(self, event_uuid: str, remote_href: str) -> None:
+        """Store the remote_href returned after a successful push."""
+        self.db.execute(
+            "UPDATE events SET remote_href = ?, updated_at = ? WHERE uuid = ?",
+            (remote_href, datetime.now(timezone.utc).isoformat(), event_uuid),
+        )
 
     def process_sync_queue(self) -> list[dict[str, Any]]:
         """Process all pending sync jobs for remote CalDAV calendars.
@@ -156,6 +186,11 @@ class EventService(CRUDService):
                             url, username, password, ics_payload,
                             event_uuid, remote_href,
                         )
+                        # After successful push, store the remote_href
+                        # Use existing remote_href or derive from push URL
+                        new_href = remote_href or f"{url.rstrip('/')}/{event_uuid}.ics"
+                        if not event.get("remote_href"):
+                            self._update_remote_href(event_uuid, new_href)
                 elif operation == "delete":
                     delete_event(url, username, password, event_uuid, remote_href)
 
