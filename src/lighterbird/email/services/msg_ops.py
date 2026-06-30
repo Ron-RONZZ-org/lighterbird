@@ -25,12 +25,58 @@ class MessageOpsService:
         )
 
     def trash_message(self, msg_uuid: str) -> None:
-        """Soft-delete a message."""
+        """Move a message to the IMAP server's Trash folder.
+        
+        Performs the IMAP-level move (COPY + DELETE) to the Trash folder,
+        then updates the local DB to reflect the new folder. Falls back to
+        local soft-delete if the IMAP operation fails.
+        """
         now = datetime.now(timezone.utc).isoformat()
-        self.db.execute(
-            "UPDATE messages SET is_deleted = 1, updated_at = ? WHERE uuid = ?",
-            (now, msg_uuid),
+        msg = self.db.execute_one(
+            "SELECT * FROM messages WHERE uuid = ?", (msg_uuid,)
         )
+        if not msg:
+            return
+
+        imap_uid = msg.get("imap_uid")
+        account_email = msg.get("account_email", "")
+        folder_name = msg.get("folder_name", "")
+
+        # Try IMAP-level move to Trash
+        moved_on_server = False
+        if imap_uid is not None and account_email and folder_name:
+            try:
+                from lighterbird.email.imap.client import IMAPClient
+                acct = self._account_service.get_account_with_password(account_email)
+                if acct and acct.get("password"):
+                    client = IMAPClient(
+                        host=acct.get("imap_server", ""),
+                        port=acct.get("imap_port", 993),
+                        use_ssl=acct.get("imap_use_ssl", 1) == 1,
+                    )
+                    client.connect(
+                        username=acct.get("imap_username", "") or account_email,
+                        password=acct["password"],
+                    )
+                    try:
+                        client.move_message(imap_uid, folder_name, "Trash")
+                        moved_on_server = True
+                    finally:
+                        client.disconnect()
+            except Exception:
+                pass  # fall back to local soft-delete
+
+        if moved_on_server:
+            self.db.execute(
+                "UPDATE messages SET folder_name = 'Trash', is_deleted = 0, "
+                "updated_at = ? WHERE uuid = ?",
+                (now, msg_uuid),
+            )
+        else:
+            self.db.execute(
+                "UPDATE messages SET is_deleted = 1, updated_at = ? WHERE uuid = ?",
+                (now, msg_uuid),
+            )
 
     def move_message(self, msg_uuid: str, destination_folder_name: str) -> None:
         """Move a message to a different folder (by folder name)."""
@@ -52,6 +98,7 @@ class MessageOpsService:
         body_format: str = "markdown",
         attachments: list[str] | None = None,
         signature: str | None = None,
+        in_reply_to: str | None = None,
     ) -> None:
         """Send an email via SMTP.
 
@@ -67,6 +114,8 @@ class MessageOpsService:
             attachments: List of base64-encoded attachment content strings.
             signature: Optional override signature. If None, uses account's
                 stored signature from the database.
+            in_reply_to: Message-ID of the message being replied to, for
+                conversation threading (In-Reply-To / References headers).
         """
         from lighterbird.email.smtp import SMTPClient
 
@@ -129,6 +178,7 @@ class MessageOpsService:
                 html_body=html_body,
                 signature=signature,
                 message_id=message_id,
+                in_reply_to=in_reply_to,
             )
         finally:
             client.disconnect()
@@ -138,14 +188,16 @@ class MessageOpsService:
         now = datetime.now(timezone.utc).isoformat()
         self.db.execute(
             """INSERT INTO messages
-               (uuid, account_email, folder_name, message_id, de, al, kc,
+               (uuid, account_email, folder_name, message_id, in_reply_to, from_addr,
+                to_recipients, cc_recipients,
                 subject, body, is_read, received_at, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)""",
             (
                 str(uuid_mod.uuid4()),
                 account_email,
                 "Sent",
                 message_id,
+                in_reply_to or "",
                 sender_email,
                 json_mod.dumps(to),
                 json_mod.dumps(cc),

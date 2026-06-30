@@ -120,6 +120,46 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+
+def _checkpoint_db(db_path: Path) -> None:
+    """Force-checkpoint the WAL into the main database file.
+
+    Opens a temporary SQLite connection in WAL mode and runs
+    ``wal_checkpoint(TRUNCATE)`` to ensure all pending WAL data is
+    written to the main ``.db`` file before it is backed up.
+
+    If the file does not exist or is not a valid SQLite database, the
+    call is silently ignored.
+    """
+    if not db_path.exists():
+        return
+    import sqlite3
+    try:
+        conn = sqlite3.connect(str(db_path), timeout=5.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        conn.close()
+    except sqlite3.Error:
+        pass  # best-effort — may be a non-DB file or already in use
+
+
+def _checkpoint_known_dbs() -> None:
+    """Checkpoint all known lighterbird databases before backup.
+
+    This ensures that any data still in SQLite WAL files is flushed
+    to the main ``.db`` files so the backup (which only copies the
+    ``.db`` files) includes all committed data.
+    """
+    import sqlite3
+    for db_path in _known_db_paths():
+        try:
+            conn = sqlite3.connect(str(db_path), timeout=5.0)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            conn.close()
+        except sqlite3.Error:
+            pass  # best-effort
+
 def _copy_with_verify(src: Path, dst: Path) -> Path:
     """Copy *src* to *dst* and verify SHA-256 checksum matches.
 
@@ -484,6 +524,9 @@ def _create_strategy_archive(
     Returns:
         Path to the created archive, or ``None`` if no data files exist.
     """
+    # Flush WAL → main DB so backups include all committed data.
+    _checkpoint_known_dbs()
+
     db_paths = _known_db_paths()
     if not db_paths:
         return None
@@ -546,14 +589,20 @@ def _extract_archive(arc_path: Path, target_dir: Path) -> list[Path]:
     extracted: list[Path] = []
     with py7zr.SevenZipFile(arc_path, mode="r") as arc:
         arc.extractall(path=target_dir)
-    # List extracted files
+    # List extracted files (only those in the archive, not pre-existing SHM/WAL)
+    arc_names = set()
+    with py7zr.SevenZipFile(arc_path, mode="r") as arc:
+        arc_names = set(arc.getnames())
+
     for f in target_dir.iterdir():
-        if f.is_file():
+        if f.is_file() and f.name in arc_names:
             extracted.append(f)
     config_dir_path = target_dir / "config"
     if config_dir_path.is_dir():
         for f in config_dir_path.iterdir():
-            extracted.append(f)
+            rel = f"config/{f.name}"
+            if rel in arc_names:
+                extracted.append(f)
     return extracted
 
 
@@ -588,6 +637,9 @@ def backup_with_strategy(
     """
     if not db_path.exists():
         return None
+
+    # Flush WAL → main DB so the copy includes all committed data.
+    _checkpoint_db(db_path)
 
     backup_dir = _backup_dir()
     backup_dir.mkdir(parents=True, exist_ok=True)
@@ -1103,6 +1155,9 @@ def export_data(output_dir: str | Path) -> Path:
     export_dir = dst_root / f"export-{ts}"
     export_dir.mkdir(parents=True, exist_ok=True)
 
+    # Flush WAL → main DB before exporting.
+    _checkpoint_known_dbs()
+
     manifest: dict[str, Any] = {
         "exported_at": ts,
         "files": {},
@@ -1189,15 +1244,28 @@ def import_data(
             result["errors"].append(f"{rel_path_str} (not found in export)")
             continue
 
-        # Determine destination
+        # Verify against manifest SHA (tamper detection)
+        expected_sha = file_info.get("sha256", "")
+        if expected_sha:
+            actual_sha = _sha256(src_file)
+            if actual_sha != expected_sha:
+                result["errors"].append(
+                    f"{rel_path_str} (SHA-256 mismatch: expected {expected_sha[:12]}, "
+                    f"got {actual_sha[:12]})"
+                )
+                if not force:
+                    continue
+
+        # Determine destination (preserve config/ subdirectory structure)
         if rel_path_str.startswith("config/"):
-            dst_file = dst_config / src_file.name
+            rel_suffix = rel_path_str[len("config/"):]
+            dst_file = dst_config / rel_suffix
         else:
-            dst_file = dst_data / src_file.name
+            dst_file = dst_data / rel_path_str
 
         # Check if destination exists
         if dst_file.exists():
-            # Compare SHA-256 of actual source file vs destination
+            # Compare SHA-256 of export copy vs destination
             try:
                 source_sha = _sha256(src_file)
                 dest_sha = _sha256(dst_file)
@@ -1210,9 +1278,14 @@ def import_data(
                 result["identical"].append(rel_path_str)
                 continue
 
-            # File differs → check decisions/force
+            # Check decisions/force (support comma-separated file names)
             file_name = dst_file.name
-            file_decision = (decisions or {}).get(file_name, "")
+            file_decision = ""
+            if decisions:
+                for dec_file, dec_action in decisions.items():
+                    if dec_file in file_name or file_name in dec_file:
+                        file_decision = dec_action
+                        break
 
             if file_decision == "overwrite":
                 pass  # proceed to copy

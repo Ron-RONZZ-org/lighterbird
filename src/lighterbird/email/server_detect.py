@@ -1,48 +1,85 @@
-"""IMAP/SMTP server auto-detection from email domain.
+"""IMAP/SMTP/ManageSieve server auto-detection from email domain.
 
 Forked from A-lien's CLI auto-fill logic.
 
-Detection strategy:
+Detection strategy (in order):
 1. Check ``known_providers()`` by exact domain match
 2. Look up DNS MX record, check if the MX hostname matches a known
    provider pattern (e.g. ``*.migadu.com`` → Migadu IMAP/SMTP config)
-3. Fallback: ``imap.{domain}`` / ``smtp.{domain}``
+3. SRV record lookup: ``_sieve._tcp.{domain}`` (RFC 5804 standard)
+4. Implicit sieve via IMAP hostname (most common pattern)
+5. Fallback: ``imap.{domain}`` / ``smtp.{domain}`` / ``sieve.{domain}``
 
 Usage:
     from lighterbird.email.server_detect import detect_servers
 
     servers = detect_servers("user@example.com")
-    # => {"imap": "...", "smtp": "...", "method": "known_provider"}
+    # => {"imap": "...", "smtp": "...",
+    #     "managesieve_host": "...", "managesieve_port": 4190,
+    #     "method": "known_provider"}
 """
 
 from __future__ import annotations
 
 from typing import Any
 
+_SIEVE_PORT = 4190
+
 
 # ── Known provider patterns ────────────────────────────────────────────
-# Each entry: (domain_exact | mx_substring) -> {imap, smtp}
+# Each entry: (domain_exact | mx_substring) -> {imap, smtp, ...}
 # domain_exact matches the email domain directly.
 # mx_substring matches against the MX hostname (e.g. "migadu.com"
 # matches "aspmx1.migadu.com").
+# Extra keys like "managesieve" set the ManageSieve server hostname.
+# Omit "managesieve" to let the detection logic infer it from IMAP.
 
 _PROVIDER_DB: list[tuple[tuple[str, ...], dict[str, str]]] = [
-    (("migadu.com",), {"imap": "imap.migadu.com", "smtp": "smtp.migadu.com"}),
-    (("gmail.com", "googlemail.com"), {"imap": "imap.gmail.com", "smtp": "smtp.gmail.com"}),
-    (("outlook.com", "hotmail.com", "live.com"), {"imap": "outlook.office365.com", "smtp": "smtp.office365.com"}),
+    (("migadu.com",), {
+        "imap": "imap.migadu.com", "smtp": "smtp.migadu.com",
+        "managesieve": "imap.migadu.com",
+    }),
+    (("gmail.com", "googlemail.com"), {
+        "imap": "imap.gmail.com", "smtp": "smtp.gmail.com",
+    }),
+    (("outlook.com", "hotmail.com", "live.com"), {
+        "imap": "outlook.office365.com", "smtp": "smtp.office365.com",
+    }),
     (("icloud.com", "me.com"), {"imap": "imap.mail.me.com", "smtp": "smtp.mail.me.com"}),
     (("yahoo.com",), {"imap": "imap.mail.yahoo.com", "smtp": "smtp.mail.yahoo.com"}),
     (("yandex.com",), {"imap": "imap.yandex.com", "smtp": "smtp.yandex.com"}),
     (("fastmail.com",), {"imap": "imap.fastmail.com", "smtp": "smtp.fastmail.com"}),
     (("zoho.com",), {"imap": "imap.zoho.com", "smtp": "smtp.zoho.com"}),
     # MX substring patterns — matched against MX hostname
-    (("migadu.com",), {"imap": "imap.migadu.com", "smtp": "smtp.migadu.com"}),
-    (("google.com", "googlemail.com"), {"imap": "imap.gmail.com", "smtp": "smtp.gmail.com"}),
-    (("outlook.com", "protection.outlook.com"), {"imap": "outlook.office365.com", "smtp": "smtp.office365.com"}),
+    (("migadu.com",), {
+        "imap": "imap.migadu.com", "smtp": "smtp.migadu.com",
+        "managesieve": "imap.migadu.com",
+    }),
+    (("google.com", "googlemail.com"), {
+        "imap": "imap.gmail.com", "smtp": "smtp.gmail.com",
+    }),
+    (("outlook.com", "protection.outlook.com"), {
+        "imap": "outlook.office365.com", "smtp": "smtp.office365.com",
+    }),
     (("icloud.com",), {"imap": "imap.mail.me.com", "smtp": "smtp.mail.me.com"}),
     (("yahoodns.net",), {"imap": "imap.mail.yahoo.com", "smtp": "smtp.mail.yahoo.com"}),
     (("mx.zone.eu",), {"imap": "imap.zone.ee", "smtp": "smtp.zone.ee"}),
 ]
+
+# Additional known ManageSieve hostnames for providers where auto-detection
+# patterns won't produce the correct result (e.g. Google uses sieve.google.com
+# not sieve.gmail.com).
+_KNOWN_SIEVE_HOSTS: dict[str, str] = {
+    "gmail.com": "sieve.google.com",
+    "googlemail.com": "sieve.google.com",
+    "outlook.com": "outlook.office365.com",
+    "hotmail.com": "outlook.office365.com",
+    "live.com": "outlook.office365.com",
+    "fastmail.com": "sieve.fastmail.com",
+    "zoho.com": "sieve.zoho.com",
+    "yahoo.com": "sieve.yahoo.com",
+    "yandex.com": "sieve.yandex.com",
+}
 
 
 def _lookup_mx(domain: str) -> str | None:
@@ -85,6 +122,148 @@ def known_providers() -> dict[str, dict[str, str]]:
     return result
 
 
+# ── ManageSieve detection helpers ─────────────────────────────────────
+
+_SIEVE_HOSTNAME_PATTERNS = [
+    "sieve.{domain}",
+    "managesieve.{domain}",
+    "sieve.{mx}",
+    "managesieve.{mx}",
+    "{imap}",  # same as IMAP server (most common pattern)
+]
+
+
+def _extract_domain(hostname: str) -> str:
+    """Extract the registered domain from a hostname.
+
+    Handles common patterns:
+    - ``aspmx1.gmail.com`` → ``gmail.com``
+    - ``mx1.example.co.uk`` → ``example.co.uk``
+    - ``imap.migadu.com`` → ``migadu.com``
+
+    Uses a simple heuristic: take the last 2 or 3 dot-separated parts
+    depending on known 2-part TLDs.
+    """
+    import re
+    # Known 2-part TLDs (co.uk, com.au, co.jp, etc.)
+    two_part_tlds = {
+        "co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au",
+        "co.jp", "ne.jp", "or.jp", "co.nz", "net.nz", "co.za",
+        "com.br", "org.br", "com.ar",
+    }
+    parts = hostname.strip().lower().split(".")
+    if len(parts) < 2:
+        return hostname
+    # Check for 2-part TLD
+    if len(parts) >= 3 and ".".join(parts[-2:]) in two_part_tlds:
+        return ".".join(parts[-3:])
+    return ".".join(parts[-2:])
+
+
+def _lookup_srv(name: str) -> tuple[str, int] | None:
+    """Look up an SRV record and return (hostname, port).
+
+    Args:
+        name: Full SRV name, e.g. ``_sieve._tcp.example.com``.
+
+    Returns:
+        ``(hostname, port)`` or ``None`` if not found or on error.
+    """
+    try:
+        import dns.resolver
+        try:
+            answers = dns.resolver.resolve(name, "SRV")
+            if answers:
+                best = sorted(answers, key=lambda r: (r.priority, r.weight))[0]
+                target = str(best.target).rstrip(".")
+                return (target, best.port)
+        except Exception:
+            pass
+    except ImportError:
+        pass
+    return None
+
+
+def _probe_sieve_port(host: str, port: int = _SIEVE_PORT, timeout: float = 3.0) -> bool:
+    """Quick TCP connectivity check to see if a host:port accepts connections.
+
+    Returns True if the port is open (likely a ManageSieve server), False
+    otherwise.
+    """
+    try:
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        result = s.connect_ex((host, port))
+        s.close()
+        return result == 0
+    except Exception:
+        return False
+
+
+def _detect_managesieve(domain: str, imap_server: str, mx_hostname: str | None) -> dict[str, Any]:
+    """Detect ManageSieve server hostname and port for *domain*.
+
+    Tries in order:
+    1. SRV ``_sieve._tcp.<domain>``
+    2. SRV ``_sieve._tcp.<imap_server>`` (if different from domain)
+    3. Common hostname patterns (sieve.<d>, managesieve.<d>, …)
+    4. Fallback: same hostname as IMAP server, port 4190
+
+    Returns:
+        Dict with ``managesieve_host`` (str) and ``managesieve_port`` (int).
+        Returns empty dict if nothing works.
+    """
+    result: dict[str, Any] = {}
+    candidates: list[tuple[str, int]] = []
+
+    # 1. SRV on domain
+    srv = _lookup_srv(f"_sieve._tcp.{domain}")
+    if srv:
+        candidates.append(srv)
+
+    # 2. SRV on IMAP hostname
+    if imap_server and imap_server != domain:
+        srv = _lookup_srv(f"_sieve._tcp.{imap_server}")
+        if srv:
+            candidates.append(srv)
+
+    # 3. SRV on MX hostname
+    if mx_hostname and mx_hostname != domain and mx_hostname != imap_server:
+        srv = _lookup_srv(f"_sieve._tcp.{mx_hostname}")
+        if srv:
+            candidates.append(srv)
+
+    # 4. Common hostname patterns
+    for pattern in _SIEVE_HOSTNAME_PATTERNS:
+        host = pattern.format(domain=domain, mx=mx_hostname or domain, imap=imap_server or f"imap.{domain}")
+        if host:
+            candidates.append((host, _SIEVE_PORT))
+
+    # Deduplicate and probe
+    seen: set[tuple[str, int]] = set()
+    for host, port in candidates:
+        key = (host.lower(), port)
+        if key in seen:
+            continue
+        seen.add(key)
+        if _probe_sieve_port(host, port):
+            result["managesieve_host"] = host
+            result["managesieve_port"] = port
+            return result
+
+    # No probe succeeded — return the most likely candidate anyway
+    if candidates:
+        best = candidates[0]
+        result["managesieve_host"] = best[0]
+        result["managesieve_port"] = best[1]
+    elif imap_server:
+        result["managesieve_host"] = imap_server
+        result["managesieve_port"] = _SIEVE_PORT
+
+    return result
+
+
 def detect_servers(
     email: str,
     imap_server: str = "",
@@ -117,6 +296,7 @@ def detect_servers(
     # Resolve provider config
     provider = None
     method = "fallback"
+    mx: str | None = None
 
     # 1. Exact domain match
     for patterns, config, is_exact in _iter_providers():
@@ -143,6 +323,7 @@ def detect_servers(
     # Build result
     result: dict[str, Any] = {}
 
+    # Resolve IMAP
     if imap_server:
         result["imap"] = imap_server
     elif provider:
@@ -150,14 +331,37 @@ def detect_servers(
     else:
         result["imap"] = f"imap.{domain}"
 
+    # Resolve SMTP
     if smtp_server:
         result["smtp"] = smtp_server
     elif provider:
         result["smtp"] = provider["smtp"]
     elif method == "mx_hostname":
-        result["smtp"] = mx  # type: ignore[assignment]
+        result["smtp"] = mx
     else:
         result["smtp"] = f"smtp.{domain}"
 
+    # Resolve ManageSieve
+    sieve_host = ""
+    sieve_port = _SIEVE_PORT
+    if provider and "managesieve" in provider:
+        sieve_host = provider["managesieve"]
+    elif domain in _KNOWN_SIEVE_HOSTS:
+        sieve_host = _KNOWN_SIEVE_HOSTS[domain]
+    elif mx:
+        # Extract domain from MX hostname (e.g. aspmx1.gmail.com → gmail.com)
+        mx_domain = _extract_domain(mx)
+        if mx_domain in _KNOWN_SIEVE_HOSTS:
+            sieve_host = _KNOWN_SIEVE_HOSTS[mx_domain]
+    else:
+        detected = _detect_managesieve(domain, result.get("imap", ""), mx)
+        sieve_host = detected.get("managesieve_host", "")
+        sieve_port = detected.get("managesieve_port", _SIEVE_PORT)
+    if not sieve_host:
+        # Last-resort fallback: use IMAP hostname (most common pattern)
+        sieve_host = result.get("imap", f"imap.{domain}")
+
+    result["managesieve_host"] = sieve_host
+    result["managesieve_port"] = sieve_port
     result["method"] = method
     return result

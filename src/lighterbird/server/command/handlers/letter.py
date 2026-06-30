@@ -287,3 +287,101 @@ def letter_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
             "body": body,
         },
     }
+
+
+@command("letter.pdf")
+def letter_pdf(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!letter pdf <uuid> [--output PATH]
+
+    Generate a PDF file from a letter's body content.
+    Uses ``fpdf2`` (install with ``pip install lighterbird[pdf]``).
+
+    If --output is omitted, saves to
+    ``{data_dir}/letters/pdfs/{uuid}.pdf`` and returns the path.
+    """
+    if not remaining:
+        raise CommandValidationError(
+            "Missing letter UUID.", "Usage: !letter pdf <uuid> [--output path]"
+        )
+    uuid = remaining[0]
+    svc: LetterService = get_letter_service()
+    letter_data = svc.get(uuid)
+    if not letter_data:
+        raise CommandValidationError(f"Letter not found: {uuid[:8]}")
+
+    body = svc.get_body(uuid)
+    if not body:
+        # Generate minimal HTML if no body stored
+        body = _generate_letter_html(
+            uuid,
+            letter_data.get("sender_manual", ""),
+            letter_data.get("recipient_manual", ""),
+            letter_data.get("object", ""),
+        )
+
+    # Determine output path
+    output = flags.get("output", "")
+    if not output:
+        from lighterbird.core.paths import data_dir
+        pdf_dir = data_dir() / "letters" / "pdfs"
+        pdf_dir.mkdir(parents=True, exist_ok=True)
+        output = str(pdf_dir / f"{uuid}.pdf")
+
+    try:
+        from fpdf import FPDF
+    except ImportError:
+        raise CommandValidationError(
+            "fpdf2 is required for PDF generation. "
+            "Install it with: pip install lighterbird[pdf]"
+        )
+
+    try:
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_auto_page_break(auto=True, margin=20)
+
+        # Strip HTML tags for plain-text PDF content
+        import re
+        # Remove style/script blocks
+        clean = re.sub(r'<style[^>]*>.*?</style>', '', body, flags=re.DOTALL)
+        clean = re.sub(r'<script[^>]*>.*?</script>', '', clean, flags=re.DOTALL)
+        # Replace <br> and </p> with newlines
+        clean = re.sub(r'<br\s*/?>', '\n', clean)
+        clean = re.sub(r'</p>', '\n\n', clean)
+        clean = re.sub(r'</div>', '\n', clean)
+        # Remove remaining tags
+        clean = re.sub(r'<[^>]+>', '', clean)
+        # Unescape HTML entities
+        clean = clean.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
+        clean = clean.replace('&quot;', '"').replace('&#39;', "'")
+        # Decode multi-byte entities
+        clean = re.sub(r'&#(\d+);', lambda m: chr(int(m.group(1))), clean)
+        clean = clean.strip()
+
+        # Write as multi-line text
+        pdf.set_font("Times", size=12)
+        for line in clean.split('\n'):
+            line = line.strip()
+            if line:
+                try:
+                    pdf.multi_cell(0, 6, line)
+                except ValueError:
+                    # Fallback: encode as latin-1, replacing unsupported chars
+                    safe = line.encode('latin-1', errors='replace').decode('latin-1')
+                    pdf.multi_cell(0, 6, safe)
+            else:
+                pdf.ln(4)
+
+        pdf.output(output)
+    except Exception as e:
+        raise CommandValidationError(f"PDF generation failed: {e}")
+
+    return {
+        "type": "status",
+        "title": "PDF Generated",
+        "data": {
+            "uuid": uuid,
+            "output": output,
+            "pages": pdf.pages_count if 'pdf' in dir() else 0,
+        },
+    }

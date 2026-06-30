@@ -81,6 +81,7 @@ class SMTPClient:
         attachments: list[str | Path] | None = None,
         signature: str = "",
         message_id: str | None = None,
+        in_reply_to: str | None = None,
     ) -> str:
         """Send an email message with optional HTML, attachments, and signature.
 
@@ -96,6 +97,8 @@ class SMTPClient:
             signature: Optional signature appended to the plain text body.
             message_id: Optional Message-ID header value (without angle brackets).
                 If not provided, one is auto-generated.
+            in_reply_to: Optional Message-ID of the message being replied
+                to (sets In-Reply-To and References headers).
 
         Returns:
             The Message-ID that was set on the outgoing message (without angle brackets).
@@ -138,6 +141,9 @@ class SMTPClient:
             if cc:
                 msg["Cc"] = ", ".join(cc)
             msg["Message-ID"] = f"<{msg_id}>"
+            if in_reply_to:
+                msg["In-Reply-To"] = f"<{in_reply_to}>"
+                msg["References"] = f"<{in_reply_to}>"
 
             # If we have attachments, nest alternative inside mixed
             if has_attachments and (full_body or has_html):
@@ -163,6 +169,9 @@ class SMTPClient:
             if cc:
                 msg["Cc"] = ", ".join(cc)
             msg["Message-ID"] = f"<{msg_id}>"
+            if in_reply_to:
+                msg["In-Reply-To"] = f"<{in_reply_to}>"
+                msg["References"] = f"<{in_reply_to}>"
 
         try:
             failed = self.conn.sendmail(from_addr, all_recipients, msg.as_string())

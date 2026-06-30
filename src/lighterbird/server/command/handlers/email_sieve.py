@@ -137,7 +137,7 @@ def sieve_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
             "Missing script name.", "Usage: !email sieve modify <name> [--new-name N] [--content ...|--file path]"
         )
     name = remaining[0]
-    new_name = flags.get("new-name", None)
+    new_name = flags.get("name", None) or flags.get("new-name", None)
     content = flags.get("content", None)
     file_path = flags.get("file", "")
 

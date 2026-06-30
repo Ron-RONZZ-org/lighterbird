@@ -3,6 +3,7 @@
 
   import { todo as todoApi, drafts as draftsApi } from "./api.js";
   import TemplateFieldInput from "./TemplateFieldInput.svelte";
+  import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
 
   let { initialData = {}, onsubmit, onDirtyChange = () => {} } = $props();
   // svelte-ignore state_referenced_locally
@@ -19,6 +20,16 @@
   let savingDraft = $state(false);
   let draftSaved = $state(false);
   let draftUuid = $state(_initial._draft_uuid || null);
+
+  // ── LLM co-writing ─────────────────────────────────────────────────
+  let cowrite = $state(createCowrite({
+    formType: "todo-add",
+    getCurrentContent: () => ({ title, description }),
+    applyEdit: (field, t) => {
+      if (field === "title") title = t;
+      else if (field === "description") description = t;
+    },
+  }));
 
   /** Save draft on Ctrl+S */
   async function saveDraft() {
@@ -212,7 +223,10 @@
 
   <div class="field">
     <label for="description">Description</label>
-    <textarea id="description" bind:value={description} rows="4" placeholder="Optional details..."></textarea>
+    <div class="textarea-actions">
+      <textarea id="description" bind:value={description} rows="4" placeholder="Optional details..."></textarea>
+      <CowriteButton {cowrite} />
+    </div>
   </div>
 
   <!-- Template-specific fields -->
@@ -310,12 +324,16 @@
       {adding ? "Adding..." : "Add Todo"}
     </button>
   </div>
+
+  {#if cowrite.isActive}
+    <CowritePanel {cowrite} />
+  {/if}
 </form>
 
 <svelte:window onkeydown={handleFormKeydown} />
 
 <style>
-  .todo-add-form { padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+  .todo-add-form { padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; position: relative; }
   .row-fields { display: flex; gap: 0.75rem; }
   .row-fields .field { flex: 1; }
   .field { display: flex; flex-direction: column; gap: 0.25rem; }
@@ -337,6 +355,7 @@
   }
   .field select { cursor: pointer; }
   .field textarea { resize: vertical; min-height: 80px; font-family: inherit; line-height: 1.5; }
+  .textarea-actions { display: flex; flex-direction: column; gap: 0.3rem; }
   .required-badge {
     display: inline-block; font-size: 0.55rem; text-transform: uppercase;
     background: #5b2020; color: #e0a0a0; padding: 0.08rem 0.4rem;

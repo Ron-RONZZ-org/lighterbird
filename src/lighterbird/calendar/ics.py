@@ -5,6 +5,7 @@ Forked from A-organizi's utils/ics.py.
 
 from __future__ import annotations
 
+import uuid as uuid_mod
 from datetime import datetime, timezone
 from typing import Any
 
@@ -104,13 +105,24 @@ def event_exists(
 
 def insert_ics_events(
     db, calendar_uuid: str, text: str, *, now: str | None = None,
+    remote_href: str | None = None,
 ) -> list[str]:
     """Parse ICS text and insert events into the database.
 
     Skips duplicates (same calendar_uuid + title + start + end).
+    Uses the remote UID (from ICS UID property) as the local UUID when
+    available, preserving identity for two-way sync. Stores *remote_href*
+    so that subsequent PUT/DELETE operations know the server URL.
+
+    Args:
+        db: Database handle.
+        calendar_uuid: Local calendar UUID.
+        text: Raw ICS content.
+        now: Optional timestamp override.
+        remote_href: Server-provided resource path (from multistatus REPORT).
 
     Returns:
-        List of newly inserted event UUIDs.
+        List of newly inserted (or updated) event UUIDs.
     """
     ts = now or datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     added: list[str] = []
@@ -118,21 +130,43 @@ def insert_ics_events(
         start = _to_iso(ics_dt(str(event.get("DTSTART", ts))))
         end = _to_iso(ics_dt(str(event.get("DTEND", event.get("DTSTART", ts)))))
         title = str(event.get("SUMMARY", ""))
+        uid = str(event.get("UID", ""))
+        if not uid:
+            uid = str(uuid_mod.uuid4())
+
+        # Check if event with this UID already exists
+        existing = None
+        if uid:
+            existing = db.execute_one(
+                "SELECT uuid, remote_href FROM events WHERE uuid = ? AND calendar_uuid = ?",
+                (uid, calendar_uuid),
+            )
+
+        if existing:
+            # Update remote_href if not yet set
+            if remote_href and not existing["remote_href"]:
+                db.execute(
+                    "UPDATE events SET remote_href = ?, updated_at = ? WHERE uuid = ?",
+                    (remote_href, ts, uid),
+                )
+            continue
+
+        # Check content-based dedup
         if event_exists(db, calendar_uuid, title, start, end):
             continue
-        import uuid as uuid_mod
-        uid = str(uuid_mod.uuid4())
+
         with db.transaction() as conn:
             conn.execute(
                 "INSERT INTO events ("
                 "uuid, calendar_uuid, title, start, end, "
-                "category, location, description, created_at, updated_at"
-                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "category, location, description, remote_href, created_at, updated_at"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     uid, calendar_uuid, title, start, end,
                     str(event.get("CATEGORIES", "")),
                     str(event.get("LOCATION", "")),
                     str(event.get("DESCRIPTION", "")),
+                    remote_href or "",
                     ts, ts,
                 ),
             )
