@@ -57,6 +57,8 @@
       "backup-config-modify": ["backup", "config", "modify"],
       "backup-prune": ["backup", "prune"],
       "sync": ["sync"],
+      "email-signature-add": ["email", "signature", "add"],
+      "email-signature-modify": ["email", "signature", "modify"],
     };
     return map[formType] || [];
   }

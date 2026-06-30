@@ -109,6 +109,15 @@ lighterbird/
 
 ---
 
+## GUI + CLI Parity Requirement
+
+**All functionalities MUST be accessible via BOTH GUI and CLI.** No feature may be CLI-only or GUI-only. This means:
+
+- Every `!command` must have a corresponding GUI panel (form, tab, or overlay) accessible through the command bar or a toolbar button.
+- Every GUI form/panel must have a corresponding `!command` accessible via the centralized command box.
+- When adding a new feature, implement both the CLI handler (backend) and the GUI component (Svelte) simultaneously.
+- The `commandTree.js` / `tree.py` autocomplete metadata and the `commandRouter.js` interception rules must be kept in sync with both.
+
 ## Coding Guidelines
 
 1. **No file > 500 lines.** Split by functional unit (follow A-ecosystem pattern).
