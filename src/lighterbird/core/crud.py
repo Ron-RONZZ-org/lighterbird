@@ -107,13 +107,18 @@ class CRUDService:
         return result
 
     def update(self, uuid_: str, data: dict[str, Any]) -> dict[str, Any]:
-        """Update an entry, preserving creation timestamp."""
+        """Update an entry, preserving creation timestamp.
+
+        Uses prefix matching (``LIKE``) on the UUID to support short
+        UUID prefixes as well as full UUIDs — consistent with ``get()``
+        and ``delete()``.
+        """
         old_data = self.get(uuid_)
         data["updated_at"] = datetime.now(timezone.utc).isoformat()
 
         set_clauses = [f"{k} = ?" for k in data.keys()]
-        values = list(data.values()) + [uuid_]
-        sql = f"UPDATE {self.table} SET {', '.join(set_clauses)} WHERE uuid = ?"
+        values = list(data.values()) + [f"{uuid_}%"]
+        sql = f"UPDATE {self.table} SET {', '.join(set_clauses)} WHERE uuid LIKE ?"
 
         with self.db.transaction() as conn:
             conn.execute(sql, values)

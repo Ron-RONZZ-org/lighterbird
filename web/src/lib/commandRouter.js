@@ -164,6 +164,7 @@ function resolveListIdKey(listTokens) {
   if (/^calendar\s+list$/i.test(path)) return "calendar-events";
   if (/^email\s+list$/i.test(path)) return "email-list";
   if (/^user\s+saved-commands\s+list$/i.test(path)) return "saved-commands";
+  if (/^user\s+info\s+list$/i.test(path)) return "user-info-list";
   if (/^email\s+sieve\s+list$/i.test(path)) return "sieve-list";
   if (/^email\s+signature\s+list$/i.test(path)) return "signature-list";
   if (/^letter\s+list$/i.test(path)) return "letter-list";
@@ -212,6 +213,8 @@ function resolveAddFormType(tokens, leafName) {
   if (/^calendar\s+event\s+add$/i.test(path)) return "calendar-event-add";
   if (/^user\s+saved-commands\s+add$/i.test(path)) return "user-saved-commands-add";
   if (/^user\s+saved-commands\s+modify$/i.test(path)) return "user-saved-commands-modify";
+  if (/^user\s+info\s+add$/i.test(path)) return "user-info-add";
+  if (/^user\s+info\s+modify$/i.test(path)) return "user-info-modify";
   if (/^todo\s+template\s+add$/i.test(path)) return "todo-template-add";
   if (/^todo\s+template\s+modify$/i.test(path)) return "todo-template-modify";
   if (/^llm\s+profile\s+new$/i.test(path)) return "llm-profile-new";
@@ -242,6 +245,8 @@ function resolveAddTitle(addFormType) {
     "calendar-event-add": "Add Calendar Event",
     "user-saved-commands-add": "New Saved Command",
     "user-saved-commands-modify": "Edit Saved Command",
+    "user-info-add": "Add User Profile",
+    "user-info-modify": "Modify User Profile",
     "todo-template-add": "New Todo Template",
     "todo-template-modify": "Edit Todo Template",
     "llm-profile-new": "New LLM Profile",
