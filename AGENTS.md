@@ -118,7 +118,7 @@ lighterbird/
 - Every `!command` must have a corresponding GUI panel (form, tab, or overlay) accessible through the command bar or a toolbar button.
 - Every GUI form/panel must have a corresponding `!command` accessible via the centralized command box.
 - When adding a new feature, implement both the CLI handler (backend) and the GUI component (Svelte) simultaneously.
-- The `commandTree.js` / `tree.py` autocomplete metadata and the `commandRouter.js` interception rules must be kept in sync with both.
+- The authoritative command metadata lives in `src/lighterbird/server/command/tree.py` (backend). The frontend fetches it on startup via `GET /api/v1/command/tree`. There is no hardcoded frontend tree — `commandTree.js` starts empty and is populated dynamically.
 
 ## Coding Guidelines
 
@@ -131,7 +131,7 @@ lighterbird/
 7. **Async where it matters.** FastAPI routes are async; IMAP/SMTP sync can be sync workers.
 8. **Error messages include actionable suggestions.** "Set it with: `!account modify <uuid> --password <pw>`"
 9. **Use `tr()` or `tr_multi()` for i18n** — but only once i18n infrastructure is in place. For initial development, plain English strings are acceptable.
-10. **Missing CLI args → GUI redirect (default behaviour).** When a CLI command is invoked with missing required options and the command has an interactive form registered, the system shall redirect the user to the GUI with any already-specified options pre-filled. This is handled by the `_INTERACTIVE_FORMS` dict in `command.py` and the `form-required` response type. All interactive commands must be registered in both `_INTERACTIVE_FORMS` (backend) and `commandTree.js` (frontend, `interactive: true` flag).
+10. **Missing CLI args → GUI redirect (default behaviour).** When a CLI command is invoked with missing required options and the command has an interactive form registered, the system shall redirect the user to the GUI with any already-specified options pre-filled. This is handled by the `_INTERACTIVE_FORMS` dict in `command.py` and the `form-required` response type. All interactive commands must be registered in `tree.py` (backend) with `interactive: true` — the frontend fetches this metadata dynamically.
 
 ## List Tab Standard Feature Set
 
