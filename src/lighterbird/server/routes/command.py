@@ -24,8 +24,8 @@ _INTERACTIVE_FORMS: dict[str, str] = {
     "email.sieve.add": "email-sieve-add",
     "email.sieve.modify": "email-sieve-modify",
     "calendar.event.add": "calendar-event-add",
-    "contacts.add": "contacts-add",
-    "contacts.modify": "contacts-modify",
+    "contact.add": "contacts-add",
+    "contact.modify": "contacts-modify",
     "email.account.add": "email-account-add",
     "email.account.modify": "email-account-modify",
     "calendar.account.add": "calendar-account-add",
@@ -37,12 +37,23 @@ _INTERACTIVE_FORMS: dict[str, str] = {
     "journal.write": "journal-write",
     "user.saved-commands.add": "user-saved-commands-add",
     "user.saved-commands.modify": "user-saved-commands-modify",
+    "user.info.add": "user-info-add",
+    "user.info.modify": "user-info-modify",
     "llm.profile.new": "llm-profile-new",
     "llm.profile.set": "llm-profile-set",
     "backup.config.add": "backup-config-add",
     "backup.config.modify": "backup-config-modify",
     "backup.prune": "backup-prune",
     "sync": "sync",
+    "letter.add": "letter-add",
+    "letter.send": "letter-send",
+    "todo.delete": "todo-delete",
+    "todo.template.delete": "todo-template-delete",
+    "email.account.delete": "email-account-delete",
+    "calendar.event.delete": "calendar-event-delete",
+    "calendar.account.delete": "calendar-account-delete",
+    "backup.config.delete": "backup-config-delete",
+    "user.saved-commands.delete": "user-saved-commands-delete",
 }
 
 
@@ -84,8 +95,10 @@ def _extract_partial_data(tokens: list[str], flags: dict[str, str]) -> dict[str,
                 else:
                     break
 
-    # Flag values
+    # Flag values (skip meta-flags like --form)
     for k, v in flags.items():
+        if k == "form":
+            continue
         if v:
             data[k] = v
 
@@ -104,6 +117,19 @@ def execute_command(req: CommandRequest) -> dict[str, Any]:
     response so the frontend can open an interactive form with pre-filled data.
     """
     try:
+        # --form flag: skip dispatch, return form-required immediately
+        if "form" in req.flags:
+            form_type = _resolve_form_type(req.tokens)
+            if form_type:
+                return {
+                    "type": "form-required",
+                    "title": f"Complete {form_type.replace('-', ' ').title()}",
+                    "data": {
+                        "form": form_type,
+                        "initialData": _extract_partial_data(req.tokens, req.flags),
+                    },
+                }
+
         result = dispatch(req.tokens, req.flags)
         # Ensure type/title/data keys exist
         return {

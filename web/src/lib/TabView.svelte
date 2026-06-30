@@ -20,6 +20,8 @@
   import CalendarEventsListTab from "./CalendarEventsListTab.svelte";
   import SieveEditorForm from "./SieveEditorForm.svelte";
   import FormTab from "./FormTab.svelte";
+  import LetterListTab from "./LetterListTab.svelte";
+  import LetterViewTab from "./LetterViewTab.svelte";
   import KeyboardShortcutOverlay from "./KeyboardShortcutOverlay.svelte";
   import SavedCommandsTab from "./SavedCommandsTab.svelte";
 
@@ -171,6 +173,10 @@
         <SieveListTab data={tabStore.active.data} />
       {:else if tabStore.active.type === "sieve-editor"}
         <SieveEditorForm data={tabStore.active.data} />
+      {:else if tabStore.active.type === "letter-list"}
+        <LetterListTab data={tabStore.active.data} />
+      {:else if tabStore.active.type === "letter-view"}
+        <LetterViewTab data={tabStore.active.data} />
       {:else if tabStore.active.type === "saved-commands"}
         <SavedCommandsTab data={tabStore.active.data} />
       {:else if tabStore.active.type === "help"}
@@ -269,6 +275,8 @@
       "sieve-list": "🔍",
       "sieve-editor": "✏",
       "saved-commands": "⚡",
+      "letter-list": "✉",
+      "letter-view": "✉",
       events: "📅",
       error: "⚠",
       help: "?",

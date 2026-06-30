@@ -105,13 +105,13 @@ def account_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     return {"type": "status", "title": "Account Modified", "data": {"email": email}}
 
 
-@command("email.account.remove")
-def account_remove(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email account remove <email> [email...]"""
+@command("email.account.delete")
+def account_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!email account delete <email> [email...]"""
     if not remaining:
         raise CommandValidationError(
-            "Missing account email(s).",
-            "Usage: !email account remove <email> [email...]",
+            "Missing email (UUID or address).",
+            "Usage: !email account delete <email> [email...]",
         )
     svc: EmailService = get_email_service()
     succeeded = []
@@ -123,6 +123,6 @@ def account_remove(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
             pass
     return {
         "type": "status",
-        "title": "Account(s) Removed",
+        "title": "Account(s) Deleted",
         "data": {"removed": succeeded},
     }

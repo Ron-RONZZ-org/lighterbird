@@ -2,12 +2,29 @@
 
 from __future__ import annotations
 
+import json
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from lighterbird.server.deps import get_contact_service
 from lighterbird.contacts.services import ContactService
 
 router = APIRouter(prefix="/api/v1/contacts", tags=["contacts"])
+
+
+def _parse_multi_flag(raw: str) -> list[dict[str, str]]:
+    items = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if ":" in part:
+            tag, val = part.split(":", 1)
+            items.append({"tag": tag.strip(), "value": val.strip()})
+        else:
+            items.append({"tag": "", "value": part})
+    return items
 
 
 @router.get("/contacts")
@@ -26,14 +43,17 @@ def create_contact(
     svc: ContactService = Depends(get_contact_service),
 ):
     name = data.get("name", "")
-    contact_data = {
+    contact_data: dict[str, Any] = {
         "given_name": name,
         "full_name": name,
-        "email": data.get("email", ""),
-        "phone": data.get("phone", ""),
+        "emails": json.dumps(_parse_multi_flag(data.get("email", ""))),
+        "phones": json.dumps(_parse_multi_flag(data.get("phone", ""))),
         "organization": data.get("organization", ""),
         "notes": data.get("notes", ""),
     }
+    for key in ("middle_names", "date_of_birth", "place_of_birth", "address", "post_code", "position"):
+        if key in data:
+            contact_data[key] = data[key]
     contact = svc.create(contact_data)
     return contact
 
@@ -52,17 +72,27 @@ def update_contact(
     data: dict,
     svc: ContactService = Depends(get_contact_service),
 ):
-    updates = {}
-    field_map = {
+    updates: dict[str, Any] = {}
+    field_map: dict[str, str] = {
         "name": "given_name",
-        "email": "email",
-        "phone": "phone",
         "organization": "organization",
         "notes": "notes",
+        "middle_names": "middle_names",
+        "date_of_birth": "date_of_birth",
+        "place_of_birth": "place_of_birth",
+        "address": "address",
+        "post_code": "post_code",
+        "position": "position",
     }
     for json_key, db_key in field_map.items():
         if json_key in data:
             updates[db_key] = data[json_key]
+
+    if "email" in data:
+        updates["emails"] = json.dumps(_parse_multi_flag(data["email"]))
+    if "phone" in data:
+        updates["phones"] = json.dumps(_parse_multi_flag(data["phone"]))
+
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
     result = svc.update(uuid, updates)

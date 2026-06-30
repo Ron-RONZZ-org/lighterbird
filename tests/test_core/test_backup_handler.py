@@ -168,21 +168,21 @@ def test_backup_config_modify_empty_flags(tmp_data_dir: Path, monkeypatch):
         dispatch(["backup", "config", "modify", "default"], {})
 
 
-def test_backup_config_remove(tmp_data_dir: Path, monkeypatch):
-    """!backup config remove deletes a strategy."""
+def test_backup_config_delete(tmp_data_dir: Path, monkeypatch):
+    """!backup config delete deletes a strategy."""
     monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
     dispatch(["backup", "config", "add"], {"id": "torm", "label": "Remove me"})
-    result = dispatch(["backup", "config", "remove", "torm"], {})
+    result = dispatch(["backup", "config", "delete", "torm"], {})
     assert result["type"] == "status"
     assert result["data"]["strategy"] == "torm"
     assert get_strategy("torm") is None
 
 
-def test_backup_config_remove_not_found(tmp_data_dir: Path, monkeypatch):
-    """!backup config remove with unknown id raises error."""
+def test_backup_config_delete_not_found(tmp_data_dir: Path, monkeypatch):
+    """!backup config delete with unknown id raises error."""
     monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
     with pytest.raises(Exception, match="not found"):
-        dispatch(["backup", "config", "remove", "nope"], {})
+        dispatch(["backup", "config", "delete", "nope"], {})
 
 
 def test_backup_config_test(tmp_data_dir: Path, monkeypatch):

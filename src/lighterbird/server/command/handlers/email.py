@@ -12,7 +12,7 @@ Registered paths:
     - email.account.add
     - email.account.list
     - email.account.modify
-    - email.account.remove
+    - email.account.delete
     - email.signature.add
     - email.signature.list
     - email.signature.modify
@@ -54,7 +54,7 @@ def email_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "  !email account list      — List email accounts\n"
                 "  !email account add       — Add an email account\n"
                 "  !email account modify    — Modify an email account\n"
-                "  !email account remove    — Remove an email account\n"
+                "  !email account delete    — Delete an email account\n"
                 "  !email signature list    — List account signatures\n"
                 "  !email signature add     — Set a signature for an account\n"
                 "  !email signature modify  — Modify an account signature\n"

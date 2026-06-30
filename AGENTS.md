@@ -29,7 +29,7 @@ The backend is forked from proven code in [A-lien](../A-lien) (email, contacts),
 
 - **Source code**: English (variable names, comments, docstrings)
 - **User-facing strings**: English first (i18n can be added later — unlike the A-ecosystem, lighterbird does not mandate Esperanto)
-- **CLI command names**: English (`account`, `calendar`, `todo`, `search`) — the `!` commands are user-facing
+- **CLI command names**: English, **singular form** (`account`, `calendar`, `contact`, `todo`, `search`, `journal`, `letter`) — the `!` commands are user-facing. No plural command names (`!contacts` is legacy, use `!contact`).
 - **URL paths, route names**: lowercase with hyphens (`/api/email/messages`)
 - **Database columns**: English names throughout (e.g., `title`, `subject`, `created_at`, `email`). Migrated from the A-ecosystem's Esperanto convention in v0.3.0.
 
@@ -96,6 +96,8 @@ lighterbird/
 │   └── AGENTS-email.md
 ├── calendar/                    # Module-level AGENTS-calendar.md lives here
 │   └── AGENTS-calendar.md
+├── letter/                      # Module-level AGENTS-letter.md lives here
+│   └── AGENTS-letter.md
 ├── server/                      # Module-level AGENTS-server.md lives here
 │   └── AGENTS-server.md
 ├── web/                         # Svelte frontend (separate Node project)
@@ -129,6 +131,7 @@ lighterbird/
 7. **Async where it matters.** FastAPI routes are async; IMAP/SMTP sync can be sync workers.
 8. **Error messages include actionable suggestions.** "Set it with: `!account modify <uuid> --password <pw>`"
 9. **Use `tr()` or `tr_multi()` for i18n** — but only once i18n infrastructure is in place. For initial development, plain English strings are acceptable.
+10. **Missing CLI args → GUI redirect (default behaviour).** When a CLI command is invoked with missing required options and the command has an interactive form registered, the system shall redirect the user to the GUI with any already-specified options pre-filled. This is handled by the `_INTERACTIVE_FORMS` dict in `command.py` and the `form-required` response type. All interactive commands must be registered in both `_INTERACTIVE_FORMS` (backend) and `commandTree.js` (frontend, `interactive: true` flag).
 
 ## List Tab Standard Feature Set
 
@@ -171,6 +174,8 @@ Backend list commands return typed responses that map to frontend components:
 | `!todo list` / `!todo search` | `todo-list` | TodoListTab |
 | `!calendar list` / `!calendar event search` | `calendar-events` | CalendarEventsListTab |
 | `!email sieve list` | `sieve-list` | SieveListTab |
+| `!letter list` / `!letter search` | `letter-list` | LetterListTab |
+| `!user info list` | `status` (profiles list) | DynamicForm / StatusPopup |
 
 ---
 
@@ -210,6 +215,7 @@ The following module-specific AGENTS files are located in their respective direc
 | Core | `core/AGENTS-core.md` | DB, crypto, keyring, backup, AI providers, paths |
 | Email | `email/AGENTS-email.md` | IMAP sync, SMTP send, contacts, accounts, Sieve |
 | Calendar | `calendar/AGENTS-calendar.md` | CalDAV sync, events, todo, journal, labels |
+| Letter | `letter/AGENTS-letter.md` | Paper letter management, PDF rendering, templates |
 | Server | `server/AGENTS-server.md` | FastAPI routes, middleware, static serving |
 | Web | `web/AGENTS-web.md` | Svelte SPA, command-bar UI, build tooling |
 
@@ -225,6 +231,7 @@ Root AGENTS.md (global rules)
     ├── core/AGENTS-core.md       DB, crypto, keyring, AI providers
     ├── email/AGENTS-email.md     IMAP, SMTP, contacts, accounts
     ├── calendar/AGENTS-calendar.md  CalDAV, events, todo, journal
+    ├── letter/AGENTS-letter.md   Paper letters, PDF, templates
     ├── server/AGENTS-server.md   FastAPI backend, API routes
     └── web/AGENTS-web.md         Svelte SPA frontend
 ```

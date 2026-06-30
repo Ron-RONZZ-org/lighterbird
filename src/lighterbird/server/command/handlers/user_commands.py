@@ -4,7 +4,7 @@ Registered paths:
     - user.saved-commands.list
     - user.saved-commands.add
     - user.saved-commands.modify
-    - user.saved-commands.remove
+    - user.saved-commands.delete
 """
 
 from __future__ import annotations
@@ -15,24 +15,6 @@ from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_user_commands_service
 from lighterbird.user_commands.service import UserCommandsError, UserCommandsService
-
-
-@command("user")
-def user_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!user — Show available user subcommands."""
-    return {
-        "type": "status",
-        "title": "User Commands",
-        "data": {
-            "_summary": (
-                "Available !user commands:\n"
-                "  !user saved-commands list              — List saved commands\n"
-                "  !user saved-commands add               — Add a saved command\n"
-                "  !user saved-commands modify <alias>    — Modify a saved command\n"
-                "  !user saved-commands remove <alias>    — Remove saved command(s)"
-            ),
-        },
-    }
 
 
 @command("user.saved-commands")
@@ -169,16 +151,16 @@ def saved_commands_modify(remaining: list[str], flags: dict[str, str]) -> dict[s
     }
 
 
-@command("user.saved-commands.remove")
-def saved_commands_remove(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!user saved-commands remove <alias> [alias...]
+@command("user.saved-commands.delete")
+def saved_commands_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!user saved-commands delete <alias> [alias...]
 
-    Remove one or more saved commands by alias.
+    Delete one or more saved commands by alias.
     """
     if not remaining:
         raise CommandValidationError(
             "Missing alias(es).",
-            "Usage: !user saved-commands remove <alias> [alias...]",
+            "Usage: !user saved-commands delete <alias> [alias...]",
         )
 
     svc: UserCommandsService = get_user_commands_service()
@@ -199,6 +181,6 @@ def saved_commands_remove(remaining: list[str], flags: dict[str, str]) -> dict[s
 
     return {
         "type": "status",
-        "title": "Saved Command(s) Removed",
+        "title": "Saved Command(s) Deleted",
         "data": {"removed": removed, "not_found": not_found},
     }
