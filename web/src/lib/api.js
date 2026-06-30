@@ -292,6 +292,27 @@ export const sieve = {
   validate: (content) => request("POST", "/email/sieve/validate", { content }),
 };
 
+// ── Letters API ──────────────────────────────────────────────────────
+
+export const letters = {
+  list: (params = {}) => {
+    const q = new URLSearchParams();
+    if (params.direction) q.set("direction", params.direction);
+    if (params.sort) q.set("sort", params.sort);
+    if (params.group) q.set("group", params.group);
+    if (params.limit) q.set("limit", String(params.limit));
+    return request("GET", `/letters/letters?${q}`);
+  },
+
+  get: (uuid) => request("GET", `/letters/letters/${uuid}`),
+
+  getBody: (uuid) => request("GET", `/letters/letters/${uuid}/body`),
+
+  create: (data) => request("POST", "/letters/letters", data),
+
+  delete: (uuid) => request("DELETE", `/letters/letters/${uuid}`),
+};
+
 // ── Admin API ─────────────────────────────────────────────────────────
 
 export const admin = {

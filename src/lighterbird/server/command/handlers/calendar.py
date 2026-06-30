@@ -5,12 +5,12 @@ Registered paths:
     - calendar.event.add
     - calendar.event.view
     - calendar.event.modify
-    - calendar.event.remove
+    - calendar.event.delete
     - calendar.event.search
     - calendar.account.add
     - calendar.account.list
     - calendar.account.modify
-    - calendar.account.remove
+    - calendar.account.delete
 """
 
 from __future__ import annotations
@@ -40,12 +40,12 @@ def calendar_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
                 "  !calendar event add         — Add an event\n"
                 "  !calendar event view        — View an event\n"
                 "  !calendar event modify      — Modify an event\n"
-                "  !calendar event remove      — Remove an event\n"
+                "  !calendar event delete      — Delete an event\n"
                 "  !calendar event search      — Search events\n"
                 "  !calendar account list      — List calendars\n"
                 "  !calendar account add       — Add a calendar\n"
                 "  !calendar account modify    — Modify a calendar\n"
-                "  !calendar account remove    — Remove a calendar\n"
+                "  !calendar account delete    — Delete a calendar\n"
                 "  !calendar draft             — List / recall event drafts"
             ),
         },
@@ -156,11 +156,11 @@ def event_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "status", "title": "Event Modified", "data": {"uuid": uuid[:8]}}
 
 
-@command("calendar.event.remove")
-def event_remove(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!calendar event remove <uuid> [uuid...]"""
+@command("calendar.event.delete")
+def event_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!calendar event delete <uuid> [uuid...]"""
     if not remaining:
-        raise CommandValidationError("Missing event UUID(s).", "Usage: !calendar event remove <uuid> [uuid...]")
+        raise CommandValidationError("Missing event UUID(s).", "Usage: !calendar event delete <uuid> [uuid...]")
     svc: CalendarService = get_calendar_service()
     removed = []
     for uuid in remaining:
@@ -169,7 +169,7 @@ def event_remove(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
             removed.append(uuid[:8])
         except Exception:
             pass
-    return {"type": "status", "title": "Event(s) Removed", "data": {"removed": removed}}
+    return {"type": "status", "title": "Event(s) Deleted", "data": {"removed": removed}}
 
 
 @command("calendar.event.search")
@@ -237,11 +237,11 @@ def cal_account_modify(remaining: list[str], flags: dict[str, str]) -> dict[str,
     return {"type": "status", "title": "Calendar Modified", "data": {"uuid": uuid[:8]}}
 
 
-@command("calendar.account.remove")
-def cal_account_remove(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!calendar account remove <uuid> [uuid...]"""
+@command("calendar.account.delete")
+def cal_account_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!calendar account delete <uuid> [uuid...]"""
     if not remaining:
-        raise CommandValidationError("Missing calendar UUID(s).", "Usage: !calendar account remove <uuid> [uuid...]")
+        raise CommandValidationError("Missing calendar UUID(s).", "Usage: !calendar account delete <uuid> [uuid...]")
     svc: CalendarService = get_calendar_service()
     removed = []
     for uuid in remaining:
@@ -250,4 +250,4 @@ def cal_account_remove(remaining: list[str], flags: dict[str, str]) -> dict[str,
             removed.append(uuid[:8])
         except Exception:
             pass
-    return {"type": "status", "title": "Calendar(s) Removed", "data": {"removed": removed}}
+    return {"type": "status", "title": "Calendar(s) Deleted", "data": {"removed": removed}}

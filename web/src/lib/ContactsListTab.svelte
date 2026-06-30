@@ -46,6 +46,24 @@
   let uuidCopy = createCopyState();
   let emailCopy = createCopyState();
 
+  function getPrimaryEmail(contact) {
+    let raw = contact.emails;
+    if (!raw) return "";
+    let arr = typeof raw === "string" ? JSON.parse(raw || "[]") : (raw || []);
+    if (!arr.length) return "";
+    let primary = arr.find(e => (e.tag || "").toLowerCase() === "primary");
+    return primary ? primary.value : arr[0].value;
+  }
+
+  function getPrimaryPhone(contact) {
+    let raw = contact.phones;
+    if (!raw) return "";
+    let arr = typeof raw === "string" ? JSON.parse(raw || "[]") : (raw || []);
+    if (!arr.length) return "";
+    let primary = arr.find(p => (p.tag || "").toLowerCase() === "primary");
+    return primary ? primary.value : arr[0].value;
+  }
+
 
 
   // Sync filters from tab data
@@ -213,10 +231,12 @@
           {uuidCopy.copiedKey === contact.uuid ? "Copied!" : contact.uuid.slice(0, 8)}
         </span>
         <span class="name">{truncate(contact.given_name || contact.full_name || "(unnamed)", 24)}</span>
-        <span class="email" onclick={(e) => { e.stopPropagation(); emailCopy.copyToClipboard(contact.email || ""); }}
-              title="Click to copy email">
-          {emailCopy.copiedKey === contact.email ? "Copied!" : truncate(contact.email || "", 28)}
-        </span>
+        {#each [getPrimaryEmail(contact)] as primaryEmail}
+          <span class="email" onclick={(e) => { e.stopPropagation(); emailCopy.copyToClipboard(primaryEmail); }}
+                title="Click to copy email">
+            {emailCopy.copiedKey === primaryEmail ? "Copied!" : truncate(primaryEmail || "", 28)}
+          </span>
+        {/each}
         <span class="org">{truncate(contact.organization || "", 16)}</span>
       </div>
     {:else}

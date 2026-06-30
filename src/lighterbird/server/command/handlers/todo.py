@@ -6,7 +6,7 @@ Registered paths:
     - todo.view
     - todo.done
     - todo.modify
-    - todo.remove
+    - todo.delete
     - todo.search
     - todo.template.*
 """
@@ -37,7 +37,7 @@ def todo_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "  !todo view <uuid>         — View a todo\n"
                 "  !todo done <uuid> [...]   — Mark todo(s) as done\n"
                 "  !todo modify <uuid>       — Modify a todo\n"
-                "  !todo remove <uuid> [...] — Remove a todo(s)\n"
+                "  !todo delete <uuid> [...] — Delete a todo(s)\n"
                 "  !todo search <query>      — Search todos\n"
                 "  !todo draft               — List / recall todo drafts\n"
                 "  !todo template            — Manage templates\n"
@@ -295,12 +295,12 @@ def todo_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("todo.remove")
-def todo_remove(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!todo remove <uuid> [uuid...]"""
+@command("todo.delete")
+def todo_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!todo delete <uuid> [uuid...]"""
     if not remaining:
         raise CommandValidationError(
-            "Missing todo UUID(s).", "Usage: !todo remove <uuid> [uuid...]",
+            "Missing todo UUID(s).", "Usage: !todo delete <uuid> [uuid...]",
         )
     svc: TodoService = get_todo_service()
     removed = []
@@ -312,7 +312,7 @@ def todo_remove(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
             pass
     return {
         "type": "status",
-        "title": "Todo(s) Removed",
+        "title": "Todo(s) Deleted",
         "data": {"removed": removed},
     }
 
@@ -350,7 +350,7 @@ def todo_template_root(remaining: list[str],
                 "  !todo template add <name>      — Create a template\n"
                 "  !todo template view <name>     — View a template\n"
                 "  !todo template modify <name>   — Modify a template\n"
-                "  !todo template remove <name>   — Remove a template\n"
+                "  !todo template delete <name>   — Delete a template\n"
                 "\nFlags for !todo template add:\n"
                 "  --text <name>       Add a text field (repeatable)\n"
                 "  --file <name>       Add a file field (repeatable)\n"
@@ -509,14 +509,14 @@ def todo_template_modify(remaining: list[str],
     }
 
 
-@command("todo.template.remove")
-def todo_template_remove(remaining: list[str],
+@command("todo.template.delete")
+def todo_template_delete(remaining: list[str],
                          flags: dict[str, str]) -> dict[str, Any]:
-    """!todo template remove <name>"""
+    """!todo template delete <name>"""
     if not remaining:
         raise CommandValidationError(
             "Missing template name.",
-            "Usage: !todo template remove <name>",
+            "Usage: !todo template delete <name>",
         )
     svc: TodoService = get_todo_service()
     tpl = svc.get_template_by_name(" ".join(remaining))
@@ -527,6 +527,6 @@ def todo_template_remove(remaining: list[str],
     svc.delete_template(tpl["uuid"])
     return {
         "type": "status",
-        "title": "Template Removed",
+        "title": "Template Deleted",
         "data": {"name": tpl["name"]},
     }

@@ -5,13 +5,21 @@
   import { renderMarkdown } from "./markdown.js";
 
   let { data = {} } = $props();
+
+  function parseJson(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    try { return JSON.parse(raw || "[]"); } catch { return []; }
+  }
 </script>
 
 <div class="contact-view">
   <h1 class="name">{data.given_name || data.full_name || "(unnamed)"}</h1>
 
   {#if data.family_name}
-    <div class="subtitle">{data.family_name}</div>
+    <div class="subtitle">
+      {data.given_name} {#if data.middle_names}{data.middle_names} {/if}{data.family_name}
+    </div>
   {/if}
 
   <div class="meta-row">
@@ -24,28 +32,32 @@
   </div>
 
   <div class="fields">
-    {#if data.email}
+    <!-- Emails (multi-value with tags) -->
+    {#each parseJson(data.emails) as entry}
       <div class="field">
-        <span class="label">Email</span>
-        <span class="value">{data.email}</span>
+        <span class="label">Email{entry.tag ? ` (${entry.tag})` : ''}</span>
+        <span class="value">{entry.value}</span>
       </div>
-    {/if}
-    {#if data.phone}
+    {/each}
+
+    <!-- Phones (multi-value with tags) -->
+    {#each parseJson(data.phones) as entry}
       <div class="field">
-        <span class="label">Phone</span>
-        <span class="value">{data.phone}</span>
+        <span class="label">Phone{entry.tag ? ` (${entry.tag})` : ''}</span>
+        <span class="value">{entry.value}</span>
       </div>
-    {/if}
+    {/each}
+
     {#if data.organization}
       <div class="field">
         <span class="label">Organization</span>
         <span class="value">{data.organization}</span>
       </div>
     {/if}
-    {#if data.role}
+    {#if data.position}
       <div class="field">
-        <span class="label">Role</span>
-        <span class="value">{data.role}</span>
+        <span class="label">Position</span>
+        <span class="value">{data.position}</span>
       </div>
     {/if}
     {#if data.address}
@@ -54,10 +66,28 @@
         <span class="value">{data.address}</span>
       </div>
     {/if}
-    {#if data.note}
+    {#if data.post_code}
+      <div class="field">
+        <span class="label">Post Code</span>
+        <span class="value">{data.post_code}</span>
+      </div>
+    {/if}
+    {#if data.date_of_birth}
+      <div class="field">
+        <span class="label">Date of Birth</span>
+        <span class="value">{data.date_of_birth}</span>
+      </div>
+    {/if}
+    {#if data.place_of_birth}
+      <div class="field">
+        <span class="label">Place of Birth</span>
+        <span class="value">{data.place_of_birth}</span>
+      </div>
+    {/if}
+    {#if data.notes}
       <div class="field note-field">
         <span class="label">Notes</span>
-        <div class="value note-value">{@html renderMarkdown(data.note)}</div>
+        <div class="value note-value">{@html renderMarkdown(data.notes)}</div>
       </div>
     {/if}
   </div>

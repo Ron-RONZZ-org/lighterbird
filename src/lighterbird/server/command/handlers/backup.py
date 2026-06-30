@@ -10,7 +10,7 @@ Registered paths::
     backup.config.list      — List backup strategies (table)
     backup.config.add       — Add a backup strategy
     backup.config.modify    — Modify a backup strategy
-    backup.config.remove    — Remove a backup strategy
+    backup.config.delete    — Delete a backup strategy
     backup.config.test      — Test a strategy's target is writable
     backup.export           — Export all data to a portable directory
     backup.import           — Import data from an exported directory
@@ -98,7 +98,7 @@ def backup_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "  !backup config list      — List backup strategies\n"
                 "  !backup config add       — Add a backup strategy\n"
                 "  !backup config modify    — Modify a backup strategy\n"
-                "  !backup config remove    — Remove a backup strategy\n"
+                "  !backup config delete    — Delete a backup strategy\n"
                 "  !backup config test      — Test a strategy's target\n"
                 "  !backup config default-path — Show default backup directory path\n"
                 "  !backup export           — Export all data to a portable directory\n"
@@ -465,16 +465,16 @@ def backup_config_default_path(remaining: list[str], flags: dict[str, str]) -> d
     }
 
 
-@command("backup.config.remove")
-def backup_config_remove(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!backup config remove <id>
+@command("backup.config.delete")
+def backup_config_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!backup config delete <id>
 
-    Remove a backup strategy by id.  Existing backup files tagged with
+    Delete a backup strategy by id.  Existing backup files tagged with
     this strategy are NOT deleted (they remain for reference).
     """
     if not remaining:
         raise CommandValidationError(
-            "Missing strategy id.", "Usage: !backup config remove daily"
+            "Missing strategy id.", "Usage: !backup config delete daily"
         )
     sid = remaining[0]
 
@@ -485,8 +485,8 @@ def backup_config_remove(remaining: list[str], flags: dict[str, str]) -> dict[st
 
     return {
         "type": "status",
-        "title": "Strategy Removed",
-        "data": {"strategy": sid, "message": f"Removed backup strategy '{sid}'."},
+        "title": "Strategy Deleted",
+        "data": {"strategy": sid, "message": f"Deleted backup strategy '{sid}'."},
     }
 
 
