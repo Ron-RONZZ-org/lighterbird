@@ -173,6 +173,17 @@ class EventListResponse(BaseModel):
     events: list[EventResponse]
 
 
+class EventUpdate(BaseModel):
+    title: str | None = Field(default=None, description="Event title")
+    start: str | None = Field(default=None, description="ISO 8601 start datetime")
+    end: str | None = Field(default=None, description="ISO 8601 end datetime")
+    location: str | None = Field(default=None, description="Location")
+    description: str | None = Field(default=None, description="Description")
+    category: str | None = Field(default=None, description="Category")
+
+    model_config = {"extra": "forbid"}
+
+
 class EventQueryParams(BaseModel):
     start: str = Field(default="2000-01-01", description="Start date (ISO)")
     end: str = Field(default="2099-12-31", description="End date (ISO)")

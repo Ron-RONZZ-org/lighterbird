@@ -20,6 +20,7 @@ dependencies = [
     "keyring>=25.0.0",
     "dnspython>=2.6.0",
     "mistune>=3.3.2",
+    "py7zr>=1.1.0",
 ]
 
 [project.optional-dependencies]

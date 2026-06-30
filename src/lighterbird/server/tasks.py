@@ -7,6 +7,11 @@ facades to offload work (sync, push) to background threads.
 from __future__ import annotations
 
 import logging
+import threading
+import time as _time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 
 from lighterbird.core.worker import BackgroundWorker, Job, WorkerPool
 
@@ -27,6 +32,7 @@ def init_workers() -> WorkerPool:
     """
     _pool.add("email", EmailSyncWorker("email-sync"))
     _pool.add("caldav", CalDAVWorker("caldav-sync"))
+    _pool.add("backup", BackupScheduler("backup-scheduler"))
     _pool.start_all()
     logger.info("[tasks] All workers started")
     return _pool
@@ -254,6 +260,119 @@ class CalDAVWorker(BackgroundWorker):
         )
 
 
+# ── Backup scheduler ─────────────────────────────────────────────────────
+
+
+class BackupScheduler(BackgroundWorker):
+    """Background worker that runs scheduled backups per strategy.
+
+    On startup, checks if any strategy with a positive interval is overdue
+    (last_backup_at + interval > now) and runs it immediately.  Then
+    checks every 60 seconds and runs any strategy that is due.
+    """
+
+    CHECK_INTERVAL = 60  # seconds between scheduler checks
+
+    def __init__(self, name: str) -> None:
+        super().__init__(name)
+        self._last_checked: float = 0.0
+
+    def execute_job(self, job: Job) -> None:
+        if job.domain != "backup":
+            logger.debug("Ignoring non-backup job: %s/%s", job.domain, job.operation)
+            return
+        if job.operation == "scheduled_backup":
+            self._run_due_backups()
+        else:
+            logger.warning("Unknown backup operation: %s", job.operation)
+
+    def _run(self) -> None:
+        """Override _run to do initial startup check, then periodic checks."""
+        logger.info("[%s] Worker loop started", self.name)
+
+        # On startup, run an immediate check for overdue strategies
+        self._check_and_backup_if_due()
+
+        while not self._stop_event.is_set():
+            now = _time.monotonic()
+            if now - self._last_checked >= self.CHECK_INTERVAL:
+                self._last_checked = now
+                try:
+                    self._check_and_backup_if_due()
+                except Exception as exc:
+                    logger.error(
+                        "[%s] Backup check failed: %s", self.name, exc, exc_info=True
+                    )
+            # Sleep in short intervals so we can react to stop signal
+            self._stop_event.wait(10.0)
+
+        logger.info("[%s] Worker loop exited", self.name)
+
+    def _check_and_backup_if_due(self) -> None:
+        """Check all strategies and run backups for those that are due."""
+        try:
+            from lighterbird.core.backup import (
+                load_config,
+                backup_all_strategies,
+                save_config,
+            )
+
+            cfg = load_config()
+            strategies = cfg.get("strategies", [])
+            now = datetime.now(timezone.utc)
+            triggered: list[str] = []
+
+            for s in strategies:
+                interval = s.get("interval_minutes", 0)
+                if interval <= 0:
+                    continue
+                if not s.get("enabled", True):
+                    continue
+
+                last_raw = s.get("last_backup_at", "")
+                if last_raw:
+                    try:
+                        last_dt = datetime.fromisoformat(last_raw)
+                        elapsed = (now - last_dt).total_seconds() / 60.0
+                    except (ValueError, TypeError):
+                        elapsed = float("inf")
+                else:
+                    elapsed = float("inf")
+
+                if elapsed >= interval:
+                    logger.info(
+                        "[backup] Strategy '%s' is due (%.1f min elapsed, interval %d min)",
+                        s["id"], elapsed, interval,
+                    )
+                    triggered.append(s["id"])
+
+            if triggered:
+                logger.info("[backup] Running scheduled backup for: %s", triggered)
+                backup_all_strategies()
+                # Update last_backup_at for triggered strategies
+                now_iso = now.isoformat()
+                for s in cfg["strategies"]:
+                    if s["id"] in triggered:
+                        s["last_backup_at"] = now_iso
+                save_config(cfg)
+                logger.info("[backup] Scheduled backup complete for: %s", triggered)
+        except Exception as exc:
+            logger.error("[backup] Scheduler check error: %s", exc, exc_info=True)
+
+    # Override start/stop so we don't use the queue mechanism for the backup scheduler
+    def start(self) -> None:
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._stop_event.clear()
+        self._thread = threading.Thread(
+            target=self._run,
+            name=self.name,
+            daemon=True,
+        )
+        self._thread.start()
+        logger.info("[%s] Backup scheduler started", self.name)
+
+
 __all__ = [
     "init_workers",
     "shutdown_workers",
@@ -263,4 +382,5 @@ __all__ = [
     "enqueue_caldav_sync",
     "EmailSyncWorker",
     "CalDAVWorker",
+    "BackupScheduler",
 ]

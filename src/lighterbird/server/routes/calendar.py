@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from lighterbird.server.deps import get_calendar_service
 from lighterbird.server.schemas import (
     CalendarCreate, CalendarResponse, CalendarListResponse, CalendarUpdate,
-    EventCreate, EventResponse, EventListResponse, EventQueryParams,
+    EventCreate, EventUpdate, EventResponse, EventListResponse, EventQueryParams,
 )
 from lighterbird.calendar.service import CalendarService
 
@@ -153,6 +153,36 @@ def get_event(uuid: str, cal_svc: CalendarService = Depends(get_calendar_service
     if not evt:
         raise HTTPException(status_code=404, detail=f"Event not found: {uuid[:8]}")
     return _event_to_response(evt)
+
+
+@router.patch("/events/{uuid}", response_model=EventResponse)
+def update_event(
+    uuid: str,
+    data: EventUpdate,
+    cal_svc: CalendarService = Depends(get_calendar_service),
+):
+    """Update an event (partial)."""
+    evt = cal_svc.get_event(uuid)
+    if not evt:
+        raise HTTPException(status_code=404, detail=f"Event not found: {uuid[:8]}")
+    updates = {}
+    if data.title is not None:
+        updates["title"] = data.title
+    if data.start is not None:
+        updates["start"] = data.start
+    if data.end is not None:
+        updates["end"] = data.end
+    if data.location is not None:
+        updates["location"] = data.location
+    if data.description is not None:
+        updates["description"] = data.description
+    if data.category is not None:
+        updates["category"] = data.category
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    cal_svc.events.update(uuid, updates)
+    updated = cal_svc.get_event(uuid)
+    return _event_to_response(updated)
 
 
 @router.delete("/events/{uuid}", status_code=204)
