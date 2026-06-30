@@ -29,15 +29,15 @@ from typing import Any
 _PROVIDER_DB: list[tuple[tuple[str, ...], dict[str, str]]] = [
     (("migadu.com",), {
         "imap": "imap.migadu.com", "smtp": "smtp.migadu.com",
-        "managesieve": "managesieve.migadu.com",
+        "managesieve": "imap.migadu.com",
     }),
     (("gmail.com", "googlemail.com"), {
         "imap": "imap.gmail.com", "smtp": "smtp.gmail.com",
-        "managesieve": "sieve.google.com",
+        "managesieve": "imap.gmail.com",
     }),
     (("outlook.com", "hotmail.com", "live.com"), {
         "imap": "outlook.office365.com", "smtp": "smtp.office365.com",
-        "managesieve": "sieve.office365.com",
+        "managesieve": "outlook.office365.com",
     }),
     (("icloud.com", "me.com"), {"imap": "imap.mail.me.com", "smtp": "smtp.mail.me.com"}),
     (("yahoo.com",), {"imap": "imap.mail.yahoo.com", "smtp": "smtp.mail.yahoo.com"}),
@@ -47,15 +47,15 @@ _PROVIDER_DB: list[tuple[tuple[str, ...], dict[str, str]]] = [
     # MX substring patterns — matched against MX hostname
     (("migadu.com",), {
         "imap": "imap.migadu.com", "smtp": "smtp.migadu.com",
-        "managesieve": "managesieve.migadu.com",
+        "managesieve": "imap.migadu.com",
     }),
     (("google.com", "googlemail.com"), {
         "imap": "imap.gmail.com", "smtp": "smtp.gmail.com",
-        "managesieve": "sieve.google.com",
+        "managesieve": "imap.gmail.com",
     }),
     (("outlook.com", "protection.outlook.com"), {
         "imap": "outlook.office365.com", "smtp": "smtp.office365.com",
-        "managesieve": "sieve.office365.com",
+        "managesieve": "outlook.office365.com",
     }),
     (("icloud.com",), {"imap": "imap.mail.me.com", "smtp": "smtp.mail.me.com"}),
     (("yahoodns.net",), {"imap": "imap.mail.yahoo.com", "smtp": "smtp.mail.yahoo.com"}),

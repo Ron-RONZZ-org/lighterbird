@@ -104,10 +104,15 @@ class SieveManager:
         """
         if not self._client:
             raise RuntimeError("Not connected. Call connect() first.")
-        scripts = self._client.list_scripts() or []
+        raw = self._client.listscripts()
+        if isinstance(raw, tuple) and len(raw) >= 2:
+            raw = raw[1]  # ('OK', [...]) → [...]
+        scripts = raw or []
+        if not isinstance(scripts, list):
+            return []
         return [
             {"name": s[0], "active": bool(s[1]) if len(s) > 1 else False}
-            for s in scripts
+            for s in scripts if isinstance(s, (list, tuple)) and len(s) >= 1
         ]
 
     def get_script(self, name: str) -> str:
@@ -120,40 +125,32 @@ class SieveManager:
             Sieve script content as string.
         """
         if not self._client:
-            raise RuntimeError("Not connected.")
-        result = self._client.get_script(name)
-        return result if isinstance(result, str) else ""
+            raise RuntimeError("Not connected. Call connect() first.")
+        result = self._client.getscript(name)
+        # managesieve library returns ('OK', content) tuple for getscript
+        if isinstance(result, tuple) and len(result) >= 2:
+            return str(result[1]) if result[1] else ""
+        if isinstance(result, tuple) and len(result) >= 1:
+            return str(result[0]) if result[0] else ""
+        return str(result) if result else ""
 
     def put_script(self, name: str, content: str) -> None:
-        """Upload a Sieve script to the server.
-
-        Args:
-            name: Script name.
-            content: Sieve script source.
-        """
+        """Upload a Sieve script to the server."""
         if not self._client:
-            raise RuntimeError("Not connected.")
-        self._client.put_script(name, content)
+            raise RuntimeError("Not connected. Call connect() first.")
+        self._client.putscript(name, content)
 
     def delete_script(self, name: str) -> None:
-        """Delete a Sieve script from the server.
-
-        Args:
-            name: Script name.
-        """
+        """Delete a Sieve script from the server."""
         if not self._client:
-            raise RuntimeError("Not connected.")
-        self._client.delete_script(name)
+            raise RuntimeError("Not connected. Call connect() first.")
+        self._client.deletescript(name)
 
     def activate_script(self, name: str) -> None:
-        """Activate a Sieve script on the server.
-
-        Args:
-            name: Script name to activate.
-        """
+        """Activate a Sieve script on the server."""
         if not self._client:
-            raise RuntimeError("Not connected.")
-        self._client.activate_script(name)
+            raise RuntimeError("Not connected. Call connect() first.")
+        self._client.setactive(name)
 
     def __enter__(self) -> SieveManager:
         return self

@@ -94,7 +94,7 @@ def combine_scripts(
 
         # Strip require and wrap
         body = _strip_require(content)
-        script_bodies.append(f"// === Script: {name} ===\n{body}")
+        script_bodies.append(f"# === Script: {name} ===\n{body}")
 
     # 2. Generate warnings
     for target, names in seen_fileinto.items():
