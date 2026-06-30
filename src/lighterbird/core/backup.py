@@ -120,6 +120,46 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+
+def _checkpoint_db(db_path: Path) -> None:
+    """Force-checkpoint the WAL into the main database file.
+
+    Opens a temporary SQLite connection in WAL mode and runs
+    ``wal_checkpoint(TRUNCATE)`` to ensure all pending WAL data is
+    written to the main ``.db`` file before it is backed up.
+
+    If the file does not exist or is not a valid SQLite database, the
+    call is silently ignored.
+    """
+    if not db_path.exists():
+        return
+    import sqlite3
+    try:
+        conn = sqlite3.connect(str(db_path), timeout=5.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        conn.close()
+    except sqlite3.Error:
+        pass  # best-effort — may be a non-DB file or already in use
+
+
+def _checkpoint_known_dbs() -> None:
+    """Checkpoint all known lighterbird databases before backup.
+
+    This ensures that any data still in SQLite WAL files is flushed
+    to the main ``.db`` files so the backup (which only copies the
+    ``.db`` files) includes all committed data.
+    """
+    import sqlite3
+    for db_path in _known_db_paths():
+        try:
+            conn = sqlite3.connect(str(db_path), timeout=5.0)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            conn.close()
+        except sqlite3.Error:
+            pass  # best-effort
+
 def _copy_with_verify(src: Path, dst: Path) -> Path:
     """Copy *src* to *dst* and verify SHA-256 checksum matches.
 
@@ -484,6 +524,9 @@ def _create_strategy_archive(
     Returns:
         Path to the created archive, or ``None`` if no data files exist.
     """
+    # Flush WAL → main DB so backups include all committed data.
+    _checkpoint_known_dbs()
+
     db_paths = _known_db_paths()
     if not db_paths:
         return None
@@ -588,6 +631,9 @@ def backup_with_strategy(
     """
     if not db_path.exists():
         return None
+
+    # Flush WAL → main DB so the copy includes all committed data.
+    _checkpoint_db(db_path)
 
     backup_dir = _backup_dir()
     backup_dir.mkdir(parents=True, exist_ok=True)
@@ -1102,6 +1148,9 @@ def export_data(output_dir: str | Path) -> Path:
     ts = _timestamp()
     export_dir = dst_root / f"export-{ts}"
     export_dir.mkdir(parents=True, exist_ok=True)
+
+    # Flush WAL → main DB before exporting.
+    _checkpoint_known_dbs()
 
     manifest: dict[str, Any] = {
         "exported_at": ts,

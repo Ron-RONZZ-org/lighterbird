@@ -52,9 +52,13 @@ def _parse_list_response(line: bytes) -> dict[str, Any] | None:
 
     if len(parts) >= 3:
         delimiter = parts[1].decode("utf-8", errors="replace")
-        name = parts[2].strip().strip('"').strip()
+        name = parts[2].strip().strip(b'"').strip()
+        if isinstance(name, bytes):
+            name = name.decode("utf-8", errors="replace")
     elif len(parts) >= 2:
-        name = parts[-2].strip().strip('"').strip()
+        name = parts[-2].strip().strip(b'"').strip()
+        if isinstance(name, bytes):
+            name = name.decode("utf-8", errors="replace")
 
     if not name:
         return None

@@ -138,7 +138,7 @@ class MessageOpsService:
         now = datetime.now(timezone.utc).isoformat()
         self.db.execute(
             """INSERT INTO messages
-               (uuid, account_email, folder_name, message_id, de, al, kc,
+               (uuid, account_email, folder_name, message_id, from_addr, to_recipients, cc_recipients,
                 subject, body, is_read, received_at, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)""",
             (
