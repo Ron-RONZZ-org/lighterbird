@@ -218,8 +218,8 @@ export let commandTree = [
             ],
           },
           {
-            name: "remove",
-            description: "Remove email account(s)",
+        name: "delete",
+        description: "Delete email account(s)",
             params: [
               { name: "uuid", required: true, type: "uuid", placeholder: "account-uuid", uuidSource: "email.listAccounts", repeatable: true },
             ],
@@ -322,8 +322,8 @@ export let commandTree = [
             ],
           },
           {
-            name: "remove",
-            description: "Delete event(s)",
+        name: "delete",
+        description: "Delete event(s)",
             params: [
               { name: "uuid", required: true, type: "uuid", placeholder: "event-uuid", uuidSource: "calendar.listEvents", repeatable: true },
             ],
@@ -373,8 +373,8 @@ export let commandTree = [
             ],
           },
           {
-            name: "remove",
-            description: "Remove calendar(s)",
+        name: "delete",
+        description: "Delete calendar(s)",
             params: [
               { name: "uuid", required: true, type: "uuid", placeholder: "calendar-uuid", uuidSource: "calendar.listCalendars", repeatable: true },
             ],
@@ -384,9 +384,9 @@ export let commandTree = [
     ],
   },
 
-  // ── Contacts ─────────────────────────────────────────────────────────
+  // ── Contact ──────────────────────────────────────────────────────────
   {
-    name: "contacts",
+    name: "contact",
     description: "Contact management",
     children: [
       {
@@ -399,15 +399,21 @@ export let commandTree = [
       {
         name: "add",
         description: "Add a contact",
-        listCommand: ["contacts", "list"],
+        listCommand: ["contact", "list"],
         params: [
           { name: "name", required: true, type: "string", placeholder: "Full name" },
         ],
         flags: [
-          { name: "email", type: "string", help: "Email address" },
-          { name: "phone", type: "string", help: "Phone number" },
+          { name: "email", type: "string", help: "Email address(es), tag:value,..." },
+          { name: "phone", type: "string", help: "Phone number(s), tag:value,..." },
           { name: "org", type: "string", help: "Organization" },
           { name: "notes", type: "string", help: "Notes" },
+          { name: "middle-names", type: "string", help: "Middle names" },
+          { name: "dob", type: "date", help: "Date of birth (YYYY-MM-DD)" },
+          { name: "place-of-birth", type: "string", help: "Place of birth" },
+          { name: "address", type: "string", help: "Street address" },
+          { name: "post-code", type: "string", help: "Postal code" },
+          { name: "position", type: "string", help: "Job title / position" },
         ],
       },
       {
@@ -421,21 +427,27 @@ export let commandTree = [
         name: "modify",
         description: "Modify a contact",
         params: [
-          { name: "uuid", required: true, type: "uuid", placeholder: "contact-uuid", uuidSource: "contacts.list" },
+          { name: "uuid", required: true, type: "uuid", placeholder: "contact-uuid", uuidSource: "contact.list" },
         ],
         flags: [
           { name: "name", type: "string", help: "New name" },
-          { name: "email", type: "string", help: "New email" },
-          { name: "phone", type: "string", help: "New phone" },
+          { name: "email", type: "string", help: "Email address(es), tag:value,..." },
+          { name: "phone", type: "string", help: "Phone number(s), tag:value,..." },
           { name: "org", type: "string", help: "New organization" },
           { name: "notes", type: "string", help: "New notes" },
+          { name: "middle-names", type: "string", help: "Middle names" },
+          { name: "dob", type: "date", help: "Date of birth (YYYY-MM-DD)" },
+          { name: "place-of-birth", type: "string", help: "Place of birth" },
+          { name: "address", type: "string", help: "Street address" },
+          { name: "post-code", type: "string", help: "Postal code" },
+          { name: "position", type: "string", help: "Job title / position" },
         ],
       },
       {
-        name: "remove",
-        description: "Remove contact(s)",
+        name: "delete",
+        description: "Delete contact(s)",
         params: [
-          { name: "uuid", required: true, type: "uuid", placeholder: "contact-uuid", uuidSource: "contacts.list", repeatable: true },
+          { name: "uuid", required: true, type: "uuid", placeholder: "contact-uuid", uuidSource: "contact.list", repeatable: true },
         ],
       },
       {
@@ -515,8 +527,8 @@ export let commandTree = [
         ],
       },
       {
-        name: "remove",
-        description: "Remove todo(s)",
+        name: "delete",
+        description: "Delete todo(s)",
         params: [
           { name: "uuid", required: true, type: "uuid", placeholder: "todo-uuid", uuidSource: "todo.list", repeatable: true },
         ],
@@ -574,8 +586,8 @@ export let commandTree = [
             ],
           },
           {
-            name: "remove",
-            description: "Delete a template",
+        name: "delete",
+        description: "Delete a template",
             params: [
               { name: "name", required: true, type: "string", placeholder: "template-name" },
             ],
@@ -776,10 +788,10 @@ export let commandTree = [
     ],
   },
 
-  // ── User (saved commands) ────────────────────────────────────────────
+  // ── User (saved commands + profiles) ──────────────────────────────────
   {
     name: "user",
-    description: "User settings and saved commands",
+    description: "User settings, profiles, and saved commands",
     children: [
       {
         name: "saved-commands",
@@ -811,12 +823,132 @@ export let commandTree = [
             ],
           },
           {
-            name: "remove",
-            description: "Remove saved command(s)",
+        name: "delete",
+        description: "Delete saved command(s)",
             params: [
               { name: "alias", required: true, type: "string", placeholder: "alias", repeatable: true },
             ],
           },
+        ],
+      },
+      {
+        name: "info",
+        description: "Manage user identity profiles",
+        children: [
+          {
+            name: "list",
+            description: "List user profiles",
+          },
+          {
+            name: "add",
+            description: "Create a new user profile",
+            interactive: true,
+            params: [
+              { name: "profile-name", required: true, type: "string", placeholder: "work|home|..." },
+            ],
+            flags: [
+              { name: "first-name", type: "string" },
+              { name: "middle-names", type: "string" },
+              { name: "last-name", type: "string" },
+              { name: "dob", type: "string", help: "Date of birth (YYYY-MM-DD)" },
+              { name: "place-of-birth", type: "string" },
+              { name: "email", type: "string", help: "Email (tag:value, repeatable)" },
+              { name: "phone", type: "string", help: "Phone (tag:value, repeatable)" },
+              { name: "address", type: "string" },
+              { name: "post-code", type: "string" },
+              { name: "organization", type: "string" },
+              { name: "position", type: "string" },
+              { name: "custom", type: "string", help: "Custom field (key:value, repeatable)" },
+            ],
+          },
+          {
+            name: "view",
+            description: "View a profile",
+            params: [
+              { name: "uuid", required: true, type: "uuid", placeholder: "profile-uuid" },
+            ],
+          },
+          {
+            name: "modify",
+            description: "Modify a profile",
+            interactive: true,
+            params: [
+              { name: "uuid", required: true, type: "uuid", placeholder: "profile-uuid" },
+            ],
+            flags: [
+              { name: "first-name", type: "string" },
+              { name: "middle-names", type: "string" },
+              { name: "last-name", type: "string" },
+              { name: "dob", type: "string", help: "Date of birth (YYYY-MM-DD)" },
+              { name: "place-of-birth", type: "string" },
+              { name: "email", type: "string", help: "Email (tag:value, repeatable)" },
+              { name: "phone", type: "string", help: "Phone (tag:value, repeatable)" },
+              { name: "address", type: "string" },
+              { name: "post-code", type: "string" },
+              { name: "organization", type: "string" },
+              { name: "position", type: "string" },
+              { name: "custom", type: "string", help: "Custom field (key:value, repeatable)" },
+            ],
+          },
+          {
+            name: "delete",
+            description: "Delete a profile",
+            params: [
+              { name: "uuid", required: true, type: "uuid", placeholder: "profile-uuid", repeatable: true },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+
+  // ── Letter ──────────────────────────────────────────────────────────
+  {
+    name: "letter",
+    description: "Paper letter management",
+    children: [
+      {
+        name: "list",
+        description: "List letters",
+        flags: [
+          { name: "direction", type: "string", help: "sent|received|all (default: all)" },
+          { name: "limit", short: "l", type: "number", help: "Max results (default 20)" },
+          { name: "sort", short: "s", type: "string", help: "Sort: newest (default), oldest, sender" },
+          { name: "group", short: "g", type: "string", help: "Group by: conversation (default none)" },
+        ],
+      },
+      {
+        name: "add",
+        description: "Add a received letter",
+        interactive: true,
+        listCommand: ["letter", "list"],
+        params: [{ name: "object", required: true, type: "string" }],
+        flags: [
+          { name: "body", short: "b", type: "string", help: "Path to letter file (.md/.html/.txt)" },
+          { name: "sender", type: "string", help: "Sender name/address (free text)" },
+          { name: "recipient", type: "string", help: "Recipient name/address (free text)" },
+          { name: "respond-to", type: "uuid", help: "UUID of letter this responds to", uuidSource: "letter.list" },
+        ],
+      },
+      {
+        name: "send",
+        description: "Send a new letter",
+        interactive: true,
+        listCommand: ["letter", "list"],
+        params: [{ name: "recipient", required: true, type: "string" }],
+        flags: [
+          { name: "object", type: "string", help: "Letter subject/object" },
+          { name: "body", short: "b", type: "string", help: "Path to letter file (.md/.html/.txt)" },
+          { name: "sender-profile", type: "uuid", help: "Your profile UUID from !user info", uuidSource: "user.info.list" },
+          { name: "recipient-contact", type: "uuid", help: "Contact UUID from !contact", uuidSource: "contact.list" },
+          { name: "respond-to", type: "uuid", help: "UUID of letter this responds to", uuidSource: "letter.list" },
+        ],
+      },
+      {
+        name: "view",
+        description: "View a letter",
+        params: [
+          { name: "uuid", required: true, type: "uuid", placeholder: "letter-uuid", uuidSource: "letter.list" },
         ],
       },
     ],

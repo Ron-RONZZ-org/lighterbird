@@ -12,13 +12,14 @@
    */
 
   import { tabStore } from "./tabStore.svelte.js";
-  import { journal as journalApi, todo as todoApi, contacts as contactsApi, calendar as calendarApi } from "./api.js";
+  import { journal as journalApi, todo as todoApi, contacts as contactsApi, calendar as calendarApi, letters as lettersApi } from "./api.js";
   import ComposeEmail from "./ComposeEmail.svelte";
   import JournalWrite from "./JournalWrite.svelte";
   import TodoAddForm from "./TodoAddForm.svelte";
   import EventForm from "./EventForm.svelte";
   import DynamicForm from "./DynamicForm.svelte";
   import SieveEditorForm from "./SieveEditorForm.svelte";
+  import LetterForm from "./LetterForm.svelte";
 
   /** List refreshers keyed by _returnIdKey — fetch fresh data with highlight. */
   const LIST_REFRESHERS = {
@@ -26,6 +27,7 @@
     "persistent-todo-list":            (highlight) => todoApi.list({ limit: 50 }).then(r => ({ ...r, highlight })),
     "persistent-contacts-list":        (highlight) => contactsApi.list({ limit: 50 }).then(r => ({ ...r, highlight })),
     "persistent-calendar-events":      (highlight) => calendarApi.listEvents({ limit: 50 }).then(r => ({ ...r, highlight })),
+    "persistent-letter-list":          (highlight) => lettersApi.list({ limit: 50 }).then(r => ({ ...r, highlight })),
   };
 
   let { data = {} } = $props();
@@ -41,8 +43,8 @@
   /** Infer command path from form type name */
   function _inferCommandPath(formType) {
     const map = {
-      "contacts-add": ["contacts", "add"],
-      "contacts-modify": ["contacts", "modify"],
+      "contacts-add": ["contact", "add"],
+      "contacts-modify": ["contact", "modify"],
       "email-account-add": ["email", "account", "add"],
       "email-account-modify": ["email", "account", "modify"],
       "calendar-account-add": ["calendar", "account", "add"],
@@ -51,6 +53,8 @@
       "todo-template-modify": ["todo", "template", "modify"],
       "user-saved-commands-add": ["user", "saved-commands", "add"],
       "user-saved-commands-modify": ["user", "saved-commands", "modify"],
+      "user-info-add": ["user", "info", "add"],
+      "user-info-modify": ["user", "info", "modify"],
       "llm-profile-new": ["llm", "profile", "new"],
       "llm-profile-set": ["llm", "profile", "set"],
       "backup-config-add": ["backup", "config", "add"],
@@ -59,6 +63,8 @@
       "sync": ["sync"],
       "email-signature-add": ["email", "signature", "add"],
       "email-signature-modify": ["email", "signature", "modify"],
+      "letter-add": ["letter", "add"],
+      "letter-send": ["letter", "send"],
     };
     return map[formType] || [];
   }
@@ -141,6 +147,8 @@
     : formType === "calendar-event-add" ? "Add Calendar Event"
     : formType === "email-sieve-add" ? "New Sieve Script"
     : formType === "email-sieve-modify" ? "Edit Sieve Script"
+    : formType === "letter-add" ? "Add Received Letter"
+    : formType === "letter-send" ? "Send Letter"
     : formType.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
   );
 </script>
@@ -161,6 +169,8 @@
     <EventForm {initialData} onsubmit={handleFormSubmit} onDirtyChange={handleDirtyChange} />
   {:else if formType === "email-sieve-add" || formType === "email-sieve-modify"}
     <SieveEditorForm data={formType === "email-sieve-modify" ? { script: initialData } : {}} />
+  {:else if formType === "letter-add" || formType === "letter-send"}
+    <LetterForm {initialData} formType={formType === "letter-send" ? "send" : "add"} onsubmit={handleFormSubmit} onDirtyChange={handleDirtyChange} />
   {:else if commandPath.length > 0}
     <DynamicForm {commandPath} {initialData} onsubmit={handleFormSubmit} />
   {:else}

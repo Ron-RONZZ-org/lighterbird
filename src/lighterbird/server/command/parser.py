@@ -51,6 +51,11 @@ def parse_expanded(cmd_str: str) -> tuple[list[str], dict[str, str]]:
 
     for part in parts:
         if part.startswith("--"):
+            # If a previous flag is waiting for a value, treat it as boolean
+            if in_flag is not None:
+                flags[in_flag] = "true"
+                in_flag = None
+
             # Could be --flag or --flag=value
             if "=" in part:
                 name, value = part[2:].split("=", 1)
@@ -67,11 +72,8 @@ def parse_expanded(cmd_str: str) -> tuple[list[str], dict[str, str]]:
         else:
             tokens.append(part)
 
-    # If a flag was expected but not provided (trailing --flag), keep it as empty
+    # If a flag was expected but no following value, treat it as boolean
     if in_flag is not None:
-        # Check if it looks like a boolean flag in the tree (type: "flag")
-        # We can't check the tree here, so we treat it as empty string
-        # which the handler will interpret as unset
-        pass
+        flags[in_flag] = "true"
 
     return tokens, flags
