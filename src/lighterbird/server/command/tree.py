@@ -1003,6 +1003,8 @@ def get_command_tree() -> list[CommandNode]:
                     "params": [{"name": "object", "required": True, "type": "string"}],
                     "flags": [
                         {"name": "body", "short": "b", "type": "string", "help": "Path to letter file (.md/.html/.txt)"},
+                        {"name": "body-text", "type": "string", "help": "Inline body text content"},
+                        {"name": "body-format", "type": "string", "help": "Body format: markdown (default), html, text"},
                         {"name": "sender", "type": "string", "help": "Sender name/address (free text)"},
                         {"name": "recipient", "type": "string", "help": "Recipient name/address (free text)"},
                         {"name": "respond-to", "type": "uuid", "help": "UUID of letter this responds to", "uuidSource": "letter.list"},
@@ -1016,6 +1018,9 @@ def get_command_tree() -> list[CommandNode]:
                     "flags": [
                         {"name": "object", "type": "string", "help": "Letter subject/object"},
                         {"name": "body", "short": "b", "type": "string", "help": "Path to letter file (.md/.html/.txt)"},
+                        {"name": "body-text", "type": "string", "help": "Inline body text content"},
+                        {"name": "body-format", "type": "string", "help": "Body format: markdown (default), html, text"},
+                        {"name": "sender", "type": "string", "help": "Sender name/address (free text)"},
                         {"name": "sender-profile", "type": "uuid", "help": "Your profile UUID from !user info", "uuidSource": "user.info.list"},
                         {"name": "recipient-contact", "type": "uuid", "help": "Contact UUID from !contact", "uuidSource": "contact.list"},
                         {"name": "respond-to", "type": "uuid", "help": "UUID of letter this responds to", "uuidSource": "letter.list"},
