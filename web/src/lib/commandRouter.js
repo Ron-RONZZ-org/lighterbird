@@ -166,6 +166,7 @@ function resolveListIdKey(listTokens) {
   if (/^user\s+saved-commands\s+list$/i.test(path)) return "saved-commands";
   if (/^email\s+sieve\s+list$/i.test(path)) return "sieve-list";
   if (/^email\s+signature\s+list$/i.test(path)) return "signature-list";
+  if (/^letter\s+list$/i.test(path)) return "letter-list";
   return null;
 }
 
@@ -219,6 +220,8 @@ function resolveAddFormType(tokens, leafName) {
   if (/^backup\s+config\s+modify$/i.test(path)) return "backup-config-modify";
   if (/^email\s+signature\s+add$/i.test(path)) return "email-signature-add";
   if (/^email\s+signature\s+modify$/i.test(path)) return "email-signature-modify";
+  if (/^letter\s+add$/i.test(path)) return "letter-add";
+  if (/^letter\s+send$/i.test(path)) return "letter-send";
 
   // Fallback: use leaf name
   return leafName;
@@ -247,6 +250,8 @@ function resolveAddTitle(addFormType) {
     "backup-config-modify": "Modify Backup Strategy",
     "email-signature-add": "Add Email Signature",
     "email-signature-modify": "Modify Email Signature",
+    "letter-add": "Add Received Letter",
+    "letter-send": "Send Letter",
   };
   return titles[addFormType] || "Add";
 }

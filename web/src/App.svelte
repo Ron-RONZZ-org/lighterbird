@@ -7,7 +7,7 @@
   import { shouldIntercept } from "./lib/commandRouter.js";
   import { findNode } from "./lib/commandTree.js";
   import { parseCommand } from "./lib/parser.js";
-  import { email, calendar, contacts, todo, journal } from "./lib/api.js";
+  import { email, calendar, contacts, todo, journal, letters } from "./lib/api.js";
   import ComposeEmail from "./lib/ComposeEmail.svelte";
   import EventForm from "./lib/EventForm.svelte";
 
@@ -157,13 +157,14 @@
     const t = input.trim();
     if (/^!(email\s+)?account\s+list\s*$/i.test(t)) return "accounts";
     if (/^!(calendar\s+)?account\s+list\s*$/i.test(t)) return "calendars";
-    if (/^!contacts\s+list\s*$/i.test(t)) return "contacts-list";
+    if (/^!contact\s+list\s*$/i.test(t)) return "contacts-list";
     if (/^!todo\s+list\s*$/i.test(t)) return "todos";
     if (/^!journal\s+list\s*$/i.test(t)) return "journal";
     if (/^!calendar\s+list\s*$/i.test(t)) return "calendar-events";
     if (/^!email\s+(list|search)\b/i.test(t)) return "email-list";
     if (/^!email\s+signature\s+list\s*$/i.test(t)) return "signature-list";
     if (/^!user\s+saved-commands\s+list\s*$/i.test(t)) return "saved-commands";
+    if (/^!letter\s+list\s*$/i.test(t)) return "letter-list";
     return null;
   }
 
