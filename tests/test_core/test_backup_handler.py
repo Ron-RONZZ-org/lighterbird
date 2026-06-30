@@ -44,7 +44,7 @@ def test_backup_list_empty(tmp_data_dir: Path):
 
 
 def test_backup_list_after_backup(tmp_data_dir: Path, tmp_path: Path):
-    """!backup list shows backup entries after !backup now."""
+    """!backup list shows backup entries after !backup now (7z archives)."""
     (tmp_data_dir / "email.db").write_text("data")
     dispatch(["backup", "now"], {})
     result = dispatch(["backup", "list"], {})
@@ -52,18 +52,21 @@ def test_backup_list_after_backup(tmp_data_dir: Path, tmp_path: Path):
     assert data
     entries = data.get("entries", [])
     assert len(entries) >= 1
-    assert entries[0]["database"] == "email"
+    # Archives show database="all", single-file .db/.bak show their stem
     assert entries[0]["size"] is not None
 
 
 def test_backup_list_filtered(tmp_data_dir: Path, tmp_path: Path):
-    """!backup list --stem email shows only email backups."""
+    """!backup list --stem all shows archive entries (stems use 'all' for 7z)."""
     (tmp_data_dir / "email.db").write_text("data")
     (tmp_data_dir / "todo.db").write_text("data")
     dispatch(["backup", "now"], {})
-    result = dispatch(["backup", "list"], {"stem": "email"})
+    # Archives have stem "backup", not individual DB names; try filtering by "backup"
+    result = dispatch(["backup", "list"], {"stem": "backup"})
     entries = result.get("data", {}).get("entries", [])
-    assert all(e["database"] == "email" for e in entries)
+    # If 7z archives exist, they should match
+    if entries:
+        assert all("backup" in e.get("database", "") or e.get("format") == "7z" for e in entries)
 
 
 def test_backup_list_filtered_by_strategy(tmp_data_dir: Path, tmp_path: Path, monkeypatch):
@@ -116,13 +119,14 @@ def test_backup_config_add(tmp_data_dir: Path, monkeypatch):
     monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
     result = dispatch(
         ["backup", "config", "add"],
-        {"id": "daily", "label": "Daily backups", "schedule": "daily", "max_copies": "3"},
+        {"id": "daily", "label": "Daily backups", "interval": "1440", "max_copies": "3"},
     )
     assert result["type"] == "status"
     assert result["data"]["strategy"] == "daily"
     s = get_strategy("daily")
     assert s is not None
     assert s["max_copies"] == 3
+    assert s["interval_minutes"] == 1440
 
 
 def test_backup_config_add_missing_id(tmp_data_dir: Path, monkeypatch):

@@ -18,6 +18,7 @@ Registered paths::
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +41,7 @@ from lighterbird.core.backup import (
     prune_backups,
     restore_latest,
     save_config,
+    resolve_target_path,
 )
 from lighterbird.core.paths import data_dir
 from lighterbird.server.command.errors import CommandValidationError
@@ -64,13 +66,16 @@ def _fmt_ts(ts: str) -> str:
 
 def _fmt_location() -> str:
     """Return a human-readable backup location summary."""
-    lines = [f"  Local backup dir: {data_dir() / '.backups'}"]
+    lines = [f"  Local backup dir: {_backup_dir_abs()}"]
     cfg = load_config()
     for s in cfg.get("strategies", []):
-        target = s.get("target", "local")
-        if target and target != "local":
-            lines.append(f"  {s['id']}: external target → {target}")
+        lines.append(f"  {s['id']}: {resolve_target_path(s)}")
     return "\n".join(lines)
+
+
+def _backup_dir_abs() -> str:
+    """Return the absolute path of the default backup directory."""
+    return str((data_dir() / ".backups").resolve())
 
 
 # ── !backup now ────────────────────────────────────────────────────────────
@@ -85,7 +90,7 @@ def backup_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         "data": {
             "_summary": (
                 "Available !backup commands:\n"
-                "  !backup now              — Create timestamped backups for all strategies\n"
+                "  !backup now [--target P] — Create 7z backup archives for all strategies\n"
                 "  !backup list             — List available backup snapshots\n"
                 "  !backup restore          — Restore from the latest backup\n"
                 "  !backup prune            — Delete old backups, keeping N newest\n"
@@ -95,6 +100,7 @@ def backup_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "  !backup config modify    — Modify a backup strategy\n"
                 "  !backup config remove    — Remove a backup strategy\n"
                 "  !backup config test      — Test a strategy's target\n"
+                "  !backup config default-path — Show default backup directory path\n"
                 "  !backup export           — Export all data to a portable directory\n"
                 "  !backup import           — Import data (auto-skip identical; --overwrite/--skip per file)"
             ),
@@ -104,10 +110,13 @@ def backup_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 @command("backup.now")
 def backup_now(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!backup now [--kind data|config|all]
+    """!backup now [--kind data|config|all] [--target PATH]
 
     Create timestamped backups for all enabled strategies.
     If no strategies are configured, falls back to a single default backup.
+
+    --target: optional absolute path to copy backups to (in addition to normal
+              locations). Creates a portable timestamped directory.
     """
     kind = flags.get("kind", "all")
     created: list[str] = []
@@ -125,8 +134,19 @@ def backup_now(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     # inside backup_with_strategy already. For the legacy external_dir
     # path, we also copy to it.
     cfg = load_config()
-    # Check if any legacy config still uses external_dir
-    # (migration happens on load, but just in case)
+
+    # One-off --target: copy all created backups to the given path
+    one_off_target = flags.get("target", "")
+    if one_off_target and created:
+        try:
+            dst_root = Path(one_off_target).expanduser().resolve()
+            dst_root.mkdir(parents=True, exist_ok=True)
+            for p_str in created:
+                src = Path(p_str)
+                shutil.copy2(str(src), str(dst_root / src.name))
+            ext_copied.append(str(dst_root))
+        except OSError as e:
+            raise CommandValidationError(f"Failed to copy to --target: {e}")
 
     if not created:
         return {"type": "status", "title": "Backup", "data": {"message": "No data files found to back up."}}
@@ -153,7 +173,8 @@ def backup_now(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 def backup_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!backup list [--stem email|calendar|contacts|todo|journal] [--strategy ID]
 
-    List available backup snapshots. Optionally filter by stem or strategy.
+    List available backup snapshots (7z archives and legacy .db files).
+    Optionally filter by stem or strategy.
     """
     stem = flags.get("stem")
     strategy_filter = flags.get("strategy")
@@ -169,12 +190,14 @@ def backup_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
     entries = []
     for b in backups:
+        is_archive = b["path"].suffix == ".7z"
         entries.append({
             "file": b["path"].name,
             "timestamp": _fmt_ts(b["timestamp"]),
             "size": _fmt_size(b["size_bytes"]),
-            "database": b["stem"],
+            "database": "all" if is_archive else b["stem"],
             "strategy": b.get("strategy", "legacy"),
+            "format": "7z" if is_archive else b["path"].suffix.lstrip("."),
         })
 
     return {
@@ -269,11 +292,12 @@ def backup_config(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     )
     for s in strategies:
         status = "✓" if s.get("enabled", True) else "✗"
-        target = s.get("target", "local")
+        interval = s.get("interval_minutes", 0)
+        sched_str = f"{interval} min" if interval > 0 else "on-demand"
         summary += (
             f"  {status} {s['id']:12s}  {s.get('label', ''):20s}  "
-            f"max {s.get('max_copies', 10):3d}  target={target}  "
-            f"schedule={s.get('schedule', 'manual')}\n"
+            f"max {s.get('max_copies', 10):3d}  target={resolve_target_path(s)}  "
+            f"every {sched_str}\n"
         )
     summary += "\nUse !backup config list for interactive management."
 
@@ -292,9 +316,11 @@ def backup_config_list(remaining: list[str], flags: dict[str, str]) -> dict[str,
     """!backup config list
 
     List backup strategies in a format suitable for the interactive
-    frontend list component.
+    frontend list component.  The target is resolved to an absolute path.
     """
     strategies = list_strategies()
+    for s in strategies:
+        s["_resolved_target"] = resolve_target_path(s)
     return {
         "type": "status",
         "title": f"Backup Strategies ({len(strategies)})",
@@ -307,13 +333,13 @@ def backup_config_list(remaining: list[str], flags: dict[str, str]) -> dict[str,
 
 @command("backup.config.add")
 def backup_config_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!backup config add --id ID --label LABEL [--schedule SCHED] [--max-copies N] [--target PATH] [--enabled true|false]
+    """!backup config add --id ID --label LABEL [--interval MINUTES] [--max-copies N] [--target PATH] [--enabled true|false]
 
     Add a new backup strategy.
 
-    --schedule: manual (default), hourly, daily, weekly
+    --interval: minutes between automatic backups (default: 0 = on-demand via !backup now)
     --max-copies: how many old backups to keep (default: 10)
-    --target: "local" (default) or an absolute path
+    --target: "local" (default backup dir) or an absolute path
     --enabled: true (default) or false
     """
     sid = flags.get("id", "")
@@ -326,12 +352,20 @@ def backup_config_add(remaining: list[str], flags: dict[str, str]) -> dict[str, 
     if not label:
         label = sid  # fall back to id as label
 
-    schedule = flags.get("schedule", "manual")
+    raw_interval = flags.get("interval", "0")
+    try:
+        interval_minutes = int(raw_interval)
+    except ValueError:
+        raise CommandValidationError(f"Invalid --interval value: {raw_interval}")
+
     raw_max = flags.get("max_copies", "10")
     try:
         max_copies = int(raw_max)
     except ValueError:
         raise CommandValidationError(f"Invalid --max-copies value: {raw_max}")
+
+    if interval_minutes < 0:
+        raise CommandValidationError("--interval must be >= 0")
 
     target = flags.get("target", "local")
     enabled_raw = flags.get("enabled", "true")
@@ -341,7 +375,7 @@ def backup_config_add(remaining: list[str], flags: dict[str, str]) -> dict[str, 
         strategy = BackupStrategy(
             id=sid,
             label=label,
-            schedule=schedule,
+            interval_minutes=interval_minutes,
             max_copies=max_copies,
             target=target,
             enabled=enabled,
@@ -362,10 +396,13 @@ def backup_config_add(remaining: list[str], flags: dict[str, str]) -> dict[str, 
 
 @command("backup.config.modify")
 def backup_config_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!backup config modify <id> [--label LABEL] [--schedule SCHED] [--max-copies N] [--target PATH] [--enabled true|false]
+    """!backup config modify <id> [--label LABEL] [--interval MINUTES] [--max-copies N] [--target PATH] [--enabled true|false]
 
     Modify an existing backup strategy.  All flags except the strategy
     id are optional.
+
+    --interval: minutes between automatic backups (0 = on-demand)
+    --target: "local" (default) or an absolute path
 
     Pass --enabled "" to toggle; use "true" or "false" explicitly.
     """
@@ -382,8 +419,8 @@ def backup_config_modify(remaining: list[str], flags: dict[str, str]) -> dict[st
     updates: dict[str, Any] = {}
     if "label" in flags:
         updates["label"] = flags["label"]
-    if "schedule" in flags:
-        updates["schedule"] = flags["schedule"]
+    if "interval" in flags:
+        updates["interval_minutes"] = flags["interval"]
     if "max_copies" in flags:
         updates["max_copies"] = flags["max_copies"]
     if "target" in flags:
@@ -393,7 +430,7 @@ def backup_config_modify(remaining: list[str], flags: dict[str, str]) -> dict[st
         updates["enabled"] = raw.lower() in ("true", "1", "yes") if raw else not strategy.get("enabled", True)
 
     if not updates:
-        raise CommandValidationError("No changes specified.", "Use --label, --schedule, --max-copies, --target, or --enabled.")
+        raise CommandValidationError("No changes specified.", "Use --label, --interval, --max-copies, --target, or --enabled.")
 
     try:
         update_strategy(sid, updates)
@@ -413,6 +450,19 @@ def backup_config_modify(remaining: list[str], flags: dict[str, str]) -> dict[st
 
 
 # ── !backup config remove ──────────────────────────────────────────────────
+
+
+@command("backup.config.default-path")
+def backup_config_default_path(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!backup config default-path
+
+    Return the absolute path of the default backup directory.
+    """
+    return {
+        "type": "status",
+        "title": "Default Backup Path",
+        "data": {"path": _backup_dir_abs()},
+    }
 
 
 @command("backup.config.remove")
