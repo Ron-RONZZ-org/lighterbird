@@ -55,6 +55,9 @@ def account_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         "smtp_use_tls": 1,
         "imap_username": email_addr,
         "smtp_username": email_addr,
+        "managesieve_host": detected.get("managesieve", ""),
+        "managesieve_port": 4190,
+        "managesieve_use_tls": 1,
     }
     svc: EmailService = get_email_service()
     acct = svc.create_account(acct_data, password)

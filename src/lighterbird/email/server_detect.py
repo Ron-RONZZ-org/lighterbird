@@ -27,18 +27,36 @@ from typing import Any
 # matches "aspmx1.migadu.com").
 
 _PROVIDER_DB: list[tuple[tuple[str, ...], dict[str, str]]] = [
-    (("migadu.com",), {"imap": "imap.migadu.com", "smtp": "smtp.migadu.com"}),
-    (("gmail.com", "googlemail.com"), {"imap": "imap.gmail.com", "smtp": "smtp.gmail.com"}),
-    (("outlook.com", "hotmail.com", "live.com"), {"imap": "outlook.office365.com", "smtp": "smtp.office365.com"}),
+    (("migadu.com",), {
+        "imap": "imap.migadu.com", "smtp": "smtp.migadu.com",
+        "managesieve": "managesieve.migadu.com",
+    }),
+    (("gmail.com", "googlemail.com"), {
+        "imap": "imap.gmail.com", "smtp": "smtp.gmail.com",
+        "managesieve": "sieve.google.com",
+    }),
+    (("outlook.com", "hotmail.com", "live.com"), {
+        "imap": "outlook.office365.com", "smtp": "smtp.office365.com",
+        "managesieve": "sieve.office365.com",
+    }),
     (("icloud.com", "me.com"), {"imap": "imap.mail.me.com", "smtp": "smtp.mail.me.com"}),
     (("yahoo.com",), {"imap": "imap.mail.yahoo.com", "smtp": "smtp.mail.yahoo.com"}),
     (("yandex.com",), {"imap": "imap.yandex.com", "smtp": "smtp.yandex.com"}),
     (("fastmail.com",), {"imap": "imap.fastmail.com", "smtp": "smtp.fastmail.com"}),
     (("zoho.com",), {"imap": "imap.zoho.com", "smtp": "smtp.zoho.com"}),
     # MX substring patterns — matched against MX hostname
-    (("migadu.com",), {"imap": "imap.migadu.com", "smtp": "smtp.migadu.com"}),
-    (("google.com", "googlemail.com"), {"imap": "imap.gmail.com", "smtp": "smtp.gmail.com"}),
-    (("outlook.com", "protection.outlook.com"), {"imap": "outlook.office365.com", "smtp": "smtp.office365.com"}),
+    (("migadu.com",), {
+        "imap": "imap.migadu.com", "smtp": "smtp.migadu.com",
+        "managesieve": "managesieve.migadu.com",
+    }),
+    (("google.com", "googlemail.com"), {
+        "imap": "imap.gmail.com", "smtp": "smtp.gmail.com",
+        "managesieve": "sieve.google.com",
+    }),
+    (("outlook.com", "protection.outlook.com"), {
+        "imap": "outlook.office365.com", "smtp": "smtp.office365.com",
+        "managesieve": "sieve.office365.com",
+    }),
     (("icloud.com",), {"imap": "imap.mail.me.com", "smtp": "smtp.mail.me.com"}),
     (("yahoodns.net",), {"imap": "imap.mail.yahoo.com", "smtp": "smtp.mail.yahoo.com"}),
     (("mx.zone.eu",), {"imap": "imap.zone.ee", "smtp": "smtp.zone.ee"}),
@@ -155,9 +173,12 @@ def detect_servers(
     elif provider:
         result["smtp"] = provider["smtp"]
     elif method == "mx_hostname":
-        result["smtp"] = mx  # type: ignore[assignment]
+        result["smtp"] = mx
     else:
         result["smtp"] = f"smtp.{domain}"
+
+    if provider and "managesieve" in provider:
+        result["managesieve"] = provider["managesieve"]
 
     result["method"] = method
     return result

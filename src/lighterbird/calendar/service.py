@@ -69,12 +69,14 @@ class CalendarService:
         results = fetch_remote_calendar_payloads(url, username, password)
         total_imported = 0
         for href, ics_data in results:
-            added = insert_ics_events(self.db, uuid_, ics_data)
+            added = insert_ics_events(
+                self.db, uuid_, ics_data, remote_href=href,
+            )
             total_imported += len(added)
         return {"status": "ok", "remote_events": len(results), "new_events": total_imported}
 
     def sync_all_calendars(self) -> dict[str, dict]:
-        """Pull events from all remote calendars.
+        """Pull events from all remote calendars, then process push queue.
 
         Delegates to :meth:`sync_calendar` per calendar — errors (missing
         password, connection failure, etc.) are captured in each result's
@@ -92,6 +94,16 @@ class CalendarService:
                 results[uuid_] = {"status": "no_password", "error": str(e)}
             except Exception as e:
                 results[uuid_] = {"status": "error", "error": str(e)}
+
+        # Process any pending push/delete jobs in the sync queue
+        try:
+            self.events.process_sync_queue()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Calendar sync queue processing failed: %s", e,
+            )
+
         return results
 
     # ── Event operations ─────────────────────────────────────────────────

@@ -25,12 +25,58 @@ class MessageOpsService:
         )
 
     def trash_message(self, msg_uuid: str) -> None:
-        """Soft-delete a message."""
+        """Move a message to the IMAP server's Trash folder.
+        
+        Performs the IMAP-level move (COPY + DELETE) to the Trash folder,
+        then updates the local DB to reflect the new folder. Falls back to
+        local soft-delete if the IMAP operation fails.
+        """
         now = datetime.now(timezone.utc).isoformat()
-        self.db.execute(
-            "UPDATE messages SET is_deleted = 1, updated_at = ? WHERE uuid = ?",
-            (now, msg_uuid),
+        msg = self.db.execute_one(
+            "SELECT * FROM messages WHERE uuid = ?", (msg_uuid,)
         )
+        if not msg:
+            return
+
+        imap_uid = msg.get("imap_uid")
+        account_email = msg.get("account_email", "")
+        folder_name = msg.get("folder_name", "")
+
+        # Try IMAP-level move to Trash
+        moved_on_server = False
+        if imap_uid is not None and account_email and folder_name:
+            try:
+                from lighterbird.email.imap.client import IMAPClient
+                acct = self._account_service.get_account_with_password(account_email)
+                if acct and acct.get("password"):
+                    client = IMAPClient(
+                        host=acct.get("imap_server", ""),
+                        port=acct.get("imap_port", 993),
+                        use_ssl=acct.get("imap_use_ssl", 1) == 1,
+                    )
+                    client.connect(
+                        username=acct.get("imap_username", "") or account_email,
+                        password=acct["password"],
+                    )
+                    try:
+                        client.move_message(imap_uid, folder_name, "Trash")
+                        moved_on_server = True
+                    finally:
+                        client.disconnect()
+            except Exception:
+                pass  # fall back to local soft-delete
+
+        if moved_on_server:
+            self.db.execute(
+                "UPDATE messages SET folder_name = 'Trash', is_deleted = 0, "
+                "updated_at = ? WHERE uuid = ?",
+                (now, msg_uuid),
+            )
+        else:
+            self.db.execute(
+                "UPDATE messages SET is_deleted = 1, updated_at = ? WHERE uuid = ?",
+                (now, msg_uuid),
+            )
 
     def move_message(self, msg_uuid: str, destination_folder_name: str) -> None:
         """Move a message to a different folder (by folder name)."""

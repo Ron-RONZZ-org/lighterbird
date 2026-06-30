@@ -1019,6 +1019,16 @@ def get_command_tree() -> list[CommandNode]:
                         {"name": "uuid", "required": True, "type": "uuid", "placeholder": "letter-uuid", "uuidSource": "letter.list"},
                     ],
                 },
+                {
+                    "name": "pdf",
+                    "description": "Export a letter as PDF",
+                    "params": [
+                        {"name": "uuid", "required": True, "type": "uuid", "placeholder": "letter-uuid", "uuidSource": "letter.list"},
+                    ],
+                    "flags": [
+                        {"name": "output", "short": "o", "type": "string", "help": "Output PDF file path"},
+                    ],
+                },
             ],
         },
 

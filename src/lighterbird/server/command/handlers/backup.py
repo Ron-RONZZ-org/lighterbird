@@ -223,6 +223,10 @@ def backup_restore(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
 
     try:
         from lighterbird.core.paths import data_dir
+        from lighterbird.server.deps import reset_services
+
+        # Close all active DB connections before overwriting files
+        reset_services()
 
         target = str(data_dir())
         if timestamp:
@@ -590,11 +594,14 @@ def backup_import(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     decisions: dict[str, str] = {}
     for key, value in flags.items():
         if key == "overwrite":
-            decisions[value] = "overwrite"
+            for fname in value.split(","):
+                decisions[fname.strip()] = "overwrite"
         elif key == "skip":
-            decisions[value] = "skip"
-
+            for fname in value.split(","):
+                decisions[fname.strip()] = "skip"
     try:
+        from lighterbird.server.deps import reset_services
+        reset_services()
         result = import_data(export_path, force=force, decisions=decisions or None)
     except (FileNotFoundError, ValueError, OSError) as e:
         raise CommandValidationError(f"Import failed: {e}")

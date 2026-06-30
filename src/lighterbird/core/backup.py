@@ -1244,15 +1244,28 @@ def import_data(
             result["errors"].append(f"{rel_path_str} (not found in export)")
             continue
 
-        # Determine destination
+        # Verify against manifest SHA (tamper detection)
+        expected_sha = file_info.get("sha256", "")
+        if expected_sha:
+            actual_sha = _sha256(src_file)
+            if actual_sha != expected_sha:
+                result["errors"].append(
+                    f"{rel_path_str} (SHA-256 mismatch: expected {expected_sha[:12]}, "
+                    f"got {actual_sha[:12]})"
+                )
+                if not force:
+                    continue
+
+        # Determine destination (preserve config/ subdirectory structure)
         if rel_path_str.startswith("config/"):
-            dst_file = dst_config / src_file.name
+            rel_suffix = rel_path_str[len("config/"):]
+            dst_file = dst_config / rel_suffix
         else:
-            dst_file = dst_data / src_file.name
+            dst_file = dst_data / rel_path_str
 
         # Check if destination exists
         if dst_file.exists():
-            # Compare SHA-256 of actual source file vs destination
+            # Compare SHA-256 of export copy vs destination
             try:
                 source_sha = _sha256(src_file)
                 dest_sha = _sha256(dst_file)
@@ -1265,9 +1278,14 @@ def import_data(
                 result["identical"].append(rel_path_str)
                 continue
 
-            # File differs → check decisions/force
+            # Check decisions/force (support comma-separated file names)
             file_name = dst_file.name
-            file_decision = (decisions or {}).get(file_name, "")
+            file_decision = ""
+            if decisions:
+                for dec_file, dec_action in decisions.items():
+                    if dec_file in file_name or file_name in dec_file:
+                        file_decision = dec_action
+                        break
 
             if file_decision == "overwrite":
                 pass  # proceed to copy

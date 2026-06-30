@@ -158,6 +158,66 @@ class IMAPClient:
             pass
         return folder_name
 
+    # ── Write operations (move, copy, delete) ──────────────────────────
+
+    def _select_folder(self, folder: str) -> bool:
+        """Select a folder for write operations. Returns True on success."""
+        typ, data = self.conn.select(folder, readonly=False)
+        return typ == "OK"
+
+    def copy_message(self, uid: int, from_folder: str, to_folder: str) -> bool:
+        """Copy a message from *from_folder* to *to_folder* via IMAP UID COPY.
+
+        Requires folder to be selected (select is done internally).
+        Returns True on success, False on failure.
+        """
+        if not self._select_folder(from_folder):
+            return False
+        typ, data = self.conn.uid("COPY", str(uid), to_folder)
+        return typ == "OK"
+
+    def move_message(self, uid: int, from_folder: str, to_folder: str) -> bool:
+        """Move a message from *from_folder* to *to_folder* via IMAP UID MOVE.
+
+        Falls back to COPY + STORE + EXPUNGE if MOVE (RFC 6851) is not
+        supported by the server.
+        Returns True on success, False on failure.
+        """
+        if not self._select_folder(from_folder):
+            return False
+        try:
+            typ, data = self.conn.uid("MOVE", str(uid), to_folder)
+            if typ == "OK":
+                return True
+        except imaplib.IMAP4.error:
+            pass
+        # Fallback: COPY + STORE \Deleted + EXPUNGE
+        typ, data = self.conn.uid("COPY", str(uid), to_folder)
+        if typ != "OK":
+            return False
+        try:
+            self.conn.uid("STORE", str(uid), "+FLAGS", "(\\Deleted)")
+            self.conn.expunge()
+        except imaplib.IMAP4.error:
+            return False
+        return True
+
+    def delete_message(self, uid: int, folder: str) -> bool:
+        """Mark a message as deleted and expunge it from *folder*.
+
+        Returns True on success, False on failure.
+        """
+        if not self._select_folder(folder):
+            return False
+        try:
+            typ, data = self.conn.uid("STORE", str(uid), "+FLAGS", "(\\Deleted)")
+            if typ != "OK":
+                return False
+            self.conn.expunge()
+            return True
+        except imaplib.IMAP4.error:
+            return False
+
     def sync_folder(
         self, folder: str, account_email: str, folder_name: str,
         db_store: Any, force: bool = False,

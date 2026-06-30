@@ -181,7 +181,10 @@ class CalDAVWorker(BackgroundWorker):
 
         cal_uuid = payload.get("calendar_uuid", "")
         if cal_uuid:
-            CalendarService().sync_calendar(cal_uuid)
+            svc = CalendarService()
+            svc.sync_calendar(cal_uuid)
+            # Also process any pending push/delete jobs
+            svc.events.process_sync_queue()
 
     @staticmethod
     def _do_push(payload: dict) -> None:
