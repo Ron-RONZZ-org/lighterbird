@@ -589,14 +589,20 @@ def _extract_archive(arc_path: Path, target_dir: Path) -> list[Path]:
     extracted: list[Path] = []
     with py7zr.SevenZipFile(arc_path, mode="r") as arc:
         arc.extractall(path=target_dir)
-    # List extracted files
+    # List extracted files (only those in the archive, not pre-existing SHM/WAL)
+    arc_names = set()
+    with py7zr.SevenZipFile(arc_path, mode="r") as arc:
+        arc_names = set(arc.getnames())
+
     for f in target_dir.iterdir():
-        if f.is_file():
+        if f.is_file() and f.name in arc_names:
             extracted.append(f)
     config_dir_path = target_dir / "config"
     if config_dir_path.is_dir():
         for f in config_dir_path.iterdir():
-            extracted.append(f)
+            rel = f"config/{f.name}"
+            if rel in arc_names:
+                extracted.append(f)
     return extracted
 
 

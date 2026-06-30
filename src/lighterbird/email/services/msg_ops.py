@@ -52,6 +52,7 @@ class MessageOpsService:
         body_format: str = "markdown",
         attachments: list[str] | None = None,
         signature: str | None = None,
+        in_reply_to: str | None = None,
     ) -> None:
         """Send an email via SMTP.
 
@@ -67,6 +68,8 @@ class MessageOpsService:
             attachments: List of base64-encoded attachment content strings.
             signature: Optional override signature. If None, uses account's
                 stored signature from the database.
+            in_reply_to: Message-ID of the message being replied to, for
+                conversation threading (In-Reply-To / References headers).
         """
         from lighterbird.email.smtp import SMTPClient
 
@@ -129,6 +132,7 @@ class MessageOpsService:
                 html_body=html_body,
                 signature=signature,
                 message_id=message_id,
+                in_reply_to=in_reply_to,
             )
         finally:
             client.disconnect()
@@ -138,14 +142,16 @@ class MessageOpsService:
         now = datetime.now(timezone.utc).isoformat()
         self.db.execute(
             """INSERT INTO messages
-               (uuid, account_email, folder_name, message_id, from_addr, to_recipients, cc_recipients,
+               (uuid, account_email, folder_name, message_id, in_reply_to, from_addr,
+                to_recipients, cc_recipients,
                 subject, body, is_read, received_at, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)""",
             (
                 str(uuid_mod.uuid4()),
                 account_email,
                 "Sent",
                 message_id,
+                in_reply_to or "",
                 sender_email,
                 json_mod.dumps(to),
                 json_mod.dumps(cc),

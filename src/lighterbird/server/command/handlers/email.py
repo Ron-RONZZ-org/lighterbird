@@ -191,6 +191,7 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     cc_str = flags.get("cc", "")
     bcc_str = flags.get("bcc", "")
     priority_str = flags.get("priority", "3")
+    in_reply_to = flags.get("in-reply-to", "")
     body_format = flags.get("body-format", "markdown")
     file_flags = flags.get("file", "")
 
@@ -238,7 +239,8 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     svc.send_email(account_email, to_list, subject, body,
                    cc=cc_list, bcc=bcc_list, priority=priority,
                    body_format=body_format,
-                   attachments=attachments)
+                   attachments=attachments,
+                   in_reply_to=in_reply_to or None)
     return {"type": "status", "title": "Sent", "data": {"to": to_str, "subject": subject}}
 
 

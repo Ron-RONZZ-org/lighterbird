@@ -44,7 +44,7 @@ def sync_cmd(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
     if calendar_flag or sync_all:
         cal_svc = get_calendar_service()
-        cal_results = cal_svc.sync_all()
+        cal_results = cal_svc.sync_all_calendars()
         results["calendar"] = cal_results
 
     if todo_attach_flag or sync_all:

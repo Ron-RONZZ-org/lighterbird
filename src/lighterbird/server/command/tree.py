@@ -80,6 +80,7 @@ def get_command_tree() -> list[CommandNode]:
                         {"name": "bcc", "type": "string", "help": "BCC recipient"},
                         {"name": "priority", "short": "p", "type": "number", "help": "Priority 1 (highest) to 5 (lowest)"},
                         {"name": "body-format", "type": "string", "help": "Body format: markdown (default), html, or plain"},
+                        {"name": "in-reply-to", "type": "string", "help": "Message-ID being replied to (for threading)"},
                         {"name": "file", "short": "f", "type": "string", "help": "File attachment (name:base64, repeatable)"},
                     ],
                 },
@@ -715,7 +716,7 @@ def get_command_tree() -> list[CommandNode]:
                             "flags": [
                                 {"name": "id", "type": "string", "help": "Strategy identifier (kebab-case)"},
                                 {"name": "label", "type": "string", "help": "Human-readable name"},
-                                {"name": "schedule", "type": "string", "help": "manual|hourly|daily|weekly"},
+                                {"name": "interval", "short": "i", "type": "number", "help": "Interval in minutes (e.g., 0=manual, 0.5=30s, 60=hourly, 1440=daily)"},
                                 {"name": "max-copies", "short": "m", "type": "number", "help": "Max backups to keep"},
                                 {"name": "target", "type": "string", "help": "local or absolute path"},
                                 {"name": "enabled", "type": "string", "help": "true|false"},
@@ -729,7 +730,7 @@ def get_command_tree() -> list[CommandNode]:
                             ],
                             "flags": [
                                 {"name": "label", "type": "string"},
-                                {"name": "schedule", "type": "string", "help": "manual|hourly|daily|weekly"},
+                                {"name": "interval", "type": "number", "help": "Interval in minutes"},
                                 {"name": "max-copies", "type": "number", "help": "Max backups to keep"},
                                 {"name": "target", "type": "string", "help": "local or absolute path"},
                                 {"name": "enabled", "type": "string", "help": "true|false"},
