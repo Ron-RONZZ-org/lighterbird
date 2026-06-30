@@ -3,11 +3,26 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from lighterbird.server.deps import get_letter_service
 from lighterbird.letter.services.letters import LetterService
 
 router = APIRouter(prefix="/api/v1/letters", tags=["letters"])
+
+
+class RenderPreviewRequest(BaseModel):
+    content: str = ""
+    format: str = "markdown"
+
+
+@router.post("/render-preview")
+def render_preview(req: RenderPreviewRequest, svc: LetterService = Depends(get_letter_service)):
+    """Convert body content to HTML for preview rendering."""
+    if not req.content.strip():
+        return {"html": ""}
+    html = svc.convert_to_html(req.content, req.format)
+    return {"html": html}
 
 
 @router.get("/letters")
@@ -52,7 +67,9 @@ def create_letter(
 
     body = data.get("body", "")
     if body:
-        svc.store_body(letter["uuid"], body)
+        body_format = data.get("body_format", "html")
+        html_content = svc.convert_to_html(body, body_format) if body_format != "html" else body
+        svc.store_body(letter["uuid"], html_content)
 
     return dict(letter)
 

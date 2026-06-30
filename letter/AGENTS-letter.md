@@ -36,7 +36,7 @@ Paper letter management module for lighterbird. Provides CRUD for letters (sent 
 
 ## Domain-Specific Rules for Agents
 
-1. **Letterhead template**: generate letterhead as HTML+CSS programmatically. Sender details at top-right, recipient at top-left, date below, object line, body. Style mimics classic letter layout (serif fonts, appropriate margins).
+1. **Letterhead template**: generate letterhead as HTML+CSS programmatically. Sender details at top-left, recipient below and right-aligned (standard ISO/European letter layout), date below sender, object line, body. Style mimics classic letter layout (serif fonts, appropriate margins).
 2. **Body format detection**: on file upload, detect format from extension (.md, .html, .txt, .odt). Convert all non-HTML to HTML. For .odt, try `python-docx` or similar — fall back to text extraction if unavailable.
 3. **Conversation grouping**: use SQL recursive CTE to build thread tree. Each group shows the root letter with reply count.
 4. **Keep it lightweight**: letter data is mostly metadata + text. No attachments storage beyond the body content file.

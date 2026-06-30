@@ -320,6 +320,19 @@ export const admin = {
   syncAll: () => request("POST", "/sync/all"),
 };
 
+// ── Profiles API ──────────────────────────────────────────────────────
+
+export const profiles = {
+  list: (params = {}) => {
+    const q = new URLSearchParams();
+    if (params.query) q.set("query", params.query);
+    if (params.limit) q.set("limit", String(params.limit));
+    return request("GET", `/profiles/profiles?${q}`);
+  },
+
+  get: (uuid) => request("GET", `/profiles/profiles/${uuid}`),
+};
+
 // ── Drafts API (Ctrl+S save / !{domain} draft recall) ──────────────────
 
 export const drafts = {
