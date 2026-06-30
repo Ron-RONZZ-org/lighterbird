@@ -140,12 +140,54 @@ def dispatch(
 
 
 def get_definitions() -> list[dict]:
-    """Return registered command definitions for LLM tool schema."""
+    """Return command definitions for LLM tool schema.
+
+    Generated from the authoritative command tree so that every
+    flag and parameter is automatically available to the LLM.
+
+    Returns a list of dicts, each with:
+        - ``path``: token list (e.g. ``["email", "send"]``)
+        - ``canonical``: string form (e.g. ``"!email send"``)
+        - ``description``: human-readable help text
+        - ``params``: optional list of param definitions
+        - ``flags``: optional list of flag definitions
+    """
+    from lighterbird.server.command.tree import get_command_tree
+
     definitions: list[dict] = []
-    for path in _commands:
-        parts = path.split(".")
-        definitions.append({
-            "path": parts,
-            "canonical": f"!{' '.join(parts)}",
-        })
+
+    def _walk(nodes: list[dict], prefix: list[str] | None = None) -> None:
+        for node in nodes:
+            path = (prefix or []) + [node["name"]]
+            entry: dict = {
+                "path": path,
+                "canonical": f"!{' '.join(path)}",
+            }
+            desc = node.get("description")
+            if desc:
+                entry["description"] = desc
+
+            flags = node.get("flags")
+            if flags:
+                entry["flags"] = [
+                    {"name": f["name"], "type": f.get("type", "string"),
+                     "help": f.get("help", "")}
+                    for f in flags
+                ]
+
+            params = node.get("params")
+            if params:
+                entry["params"] = [
+                    {"name": p["name"], "required": p.get("required", False),
+                     "type": p.get("type", "string")}
+                    for p in params
+                ]
+
+            definitions.append(entry)
+
+            children = node.get("children")
+            if children:
+                _walk(children, path)
+
+    _walk(get_command_tree())
     return definitions
