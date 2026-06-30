@@ -51,6 +51,7 @@ class MessageOpsService:
         priority: int = 3,
         body_format: str = "markdown",
         attachments: list[str] | None = None,
+        signature: str | None = None,
     ) -> None:
         """Send an email via SMTP.
 
@@ -64,6 +65,8 @@ class MessageOpsService:
             priority: 1 (highest) to 5 (lowest), default 3.
             body_format: "markdown" (default), "html", or "plain".
             attachments: List of base64-encoded attachment content strings.
+            signature: Optional override signature. If None, uses account's
+                stored signature from the database.
         """
         from lighterbird.email.smtp import SMTPClient
 
@@ -84,6 +87,10 @@ class MessageOpsService:
         bcc = bcc or []
         attachments = attachments or []
         smtp_port = acct.get("smtp_port", 587)
+
+        # Use account's stored signature if no override provided
+        if signature is None:
+            signature = acct.get("signature", "") or ""
 
         import uuid as uuid_mod
         message_id = str(uuid_mod.uuid4())
@@ -120,6 +127,7 @@ class MessageOpsService:
                 from_addr=sender_email, to=to, subject=subject,
                 body=final_body, cc=cc, bcc=bcc,
                 html_body=html_body,
+                signature=signature,
                 message_id=message_id,
             )
         finally:
