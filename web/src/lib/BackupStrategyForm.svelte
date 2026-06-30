@@ -15,19 +15,74 @@
 
   let id = $state(_init.id || "");
   let label = $state(_init.label || _init.id || "");
-  let schedule = $state(_init.schedule || "manual");
+  let intervalMinutes = $state(_init.interval_minutes ?? 0);
   let maxCopies = $state(_init.max_copies || 10);
   let target = $state(_init.target || "local");
   let enabled = $state(_init.enabled !== undefined ? _init.enabled : true);
   let saving = $state(false);
   let error = $state("");
+  let defaultPath = $state("");
+
+  // Fetch default backup directory path on mount
+  $effect(() => {
+    fetch("/api/v1/command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tokens: ["backup", "config", "default-path"], flags: {} }),
+    })
+      .then((r) => r.json())
+      .then((result) => {
+        if (result?.data?.path) defaultPath = result.data.path;
+      })
+      .catch(() => {});
+  });
+
+  /** If the strategy has _resolved_target from the list command, prefer that. */
+  let initTarget = $derived.by(() => {
+    const raw = _init.target || "local";
+    const resolved = _init._resolved_target;
+    if (raw === "local" && resolved) return resolved;
+    return raw;
+  });
+  // Sync target state to resolved value on init
+  $effect(() => {
+    if (initTarget && target === _init.target) {
+      target = initTarget;
+    }
+  });
 
   let validationError = $derived.by(() => {
     if (!id.trim() && !isEdit) return "Strategy ID is required.";
     if (!isEdit && !/^[a-z][a-z0-9-]*$/.test(id.trim())) return "ID must start with a letter and contain only lowercase letters, digits, and hyphens.";
+    if (intervalMinutes < 0) return "Interval must be >= 0 minutes.";
     if (maxCopies < 1) return "Max copies must be >= 1.";
     return "";
   });
+
+  /** Check whether the current target value is the default location (either
+   *  the sentinel "local" or the resolved default path). */
+  function isDefaultLocation(val) {
+    return val === "local" || (defaultPath && val === defaultPath);
+  }
+
+  /** Set target to the default backup directory location, showing the path. */
+  function useDefaultLocation() {
+    if (defaultPath) {
+      target = defaultPath;
+    } else {
+      target = "local";
+    }
+  }
+
+  /** Resolve the target to whatever the user actually typed, converting back
+   *  to "local" if it matches the default path. */
+  function resolveTargetForSave(val) {
+    const trimmed = val.trim();
+    if (!trimmed || trimmed === "local" || (defaultPath && trimmed === defaultPath)) {
+      return "local";
+    }
+    return trimmed;
+  }
 
   async function handleSave() {
     if (validationError) {
@@ -43,9 +98,9 @@
         flags.id = id.trim();
       }
       flags.label = label.trim() || id.trim();
-      flags.schedule = schedule;
+      flags.interval = String(intervalMinutes);
       flags.max_copies = String(maxCopies);
-      flags.target = target.trim() || "local";
+      flags.target = resolveTargetForSave(target);
       flags.enabled = enabled ? "true" : "false";
 
       const tokens = isEdit
@@ -91,13 +146,9 @@
         <input type="text" class="text-input" bind:value={label} placeholder="Daily backups" />
       </label>
       <label class="field">
-        <span class="field-label">Schedule</span>
-        <select class="text-input" bind:value={schedule}>
-          <option value="manual">Manual (only via !backup now)</option>
-          <option value="hourly">Hourly</option>
-          <option value="daily">Daily</option>
-          <option value="weekly">Weekly</option>
-        </select>
+        <span class="field-label">Interval (minutes)</span>
+        <input type="number" class="text-input" bind:value={intervalMinutes} min="0" placeholder="0 = on-demand (only via !backup now)" />
+        <span class="field-hint">0 = on-demand. Any positive value = auto-backup every N minutes.</span>
       </label>
       <label class="field">
         <span class="field-label">Max Copies</span>
@@ -105,8 +156,15 @@
       </label>
       <label class="field">
         <span class="field-label">Target</span>
-        <input type="text" class="text-input" bind:value={target} placeholder="local" />
-        <span class="field-hint">"local" for default backups directory, or an absolute path.</span>
+        <div class="target-row">
+          <input type="text" class="text-input target-input" bind:value={target} placeholder="Type an absolute path or click Default" />
+          <button class="btn-default-loc" onclick={useDefaultLocation} title="Use default backup location">Default</button>
+        </div>
+        {#if isDefaultLocation(target)}
+          <span class="field-hint">Using default backup directory: {defaultPath || "(loading…)"}</span>
+        {:else}
+          <span class="field-hint">Custom path. Click "Default" to reset to the default backup directory.</span>
+        {/if}
       </label>
       <label class="field field-row">
         <input type="checkbox" bind:checked={enabled} />
@@ -116,7 +174,7 @@
         <p class="error">{error}</p>
       {/if}
       <div class="form-actions">
-        <button class="btn-primary" onclick={handleSave} disabled={saving || (!isEdit && !id.trim()) || maxCopies < 1}>
+        <button class="btn-primary" onclick={handleSave} disabled={saving || (!isEdit && !id.trim()) || intervalMinutes < 0 || maxCopies < 1}>
           {saving ? "Saving…" : isEdit ? "Update" : "Add Strategy"}
         </button>
         <button class="btn-secondary" onclick={onDismiss}>Cancel</button>
@@ -168,6 +226,21 @@
   }
   .text-input:focus { border-color: #7c7c9a; }
   select.text-input { cursor: pointer; }
+  .target-row { display: flex; gap: 0.4rem; }
+  .target-input { flex: 1; }
+  .btn-default-loc {
+    background: #2a3a5a;
+    color: #b0c0d0;
+    border: 1px solid #3a5a7a;
+    border-radius: 8px;
+    padding: 0.5rem 0.7rem;
+    font-family: monospace;
+    font-size: 0.8rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.1s;
+  }
+  .btn-default-loc:hover { background: #3a5a7a; }
   .error { color: #aa6a6a; font-size: 0.8rem; }
   .form-actions { display: flex; gap: 0.5rem; margin-top: 0.25rem; }
   .btn-primary, .btn-secondary {

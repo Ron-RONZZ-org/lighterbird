@@ -13,6 +13,20 @@
    */
 
   let { items = [], onAdd = () => {}, onModify = () => {}, onRemove = () => {}, onTest = () => {}, testing = new Set(), testResults = {} } = $props();
+
+  function resolveTarget(item) {
+    if (item._resolved_target) return item._resolved_target;
+    if (item.target === "local" || !item.target) return "(default backup directory)";
+    return item.target;
+  }
+
+  function fmtInterval(minutes) {
+    const m = Number(minutes);
+    if (!m || m <= 0) return "on-demand";
+    if (m < 60) return `${m} min`;
+    if (m < 1440) return `${Math.round(m / 60)} h`;
+    return `${Math.round(m / 1440)} d`;
+  }
 </script>
 
 <div class="strategy-list">
@@ -26,7 +40,7 @@
       <p class="empty-msg">No backup strategies configured.</p>
       <div class="hints">
         <code class="hint-cmd">!backup config add --id daily --label "Daily backups"</code>
-        <code class="hint-cmd">!backup config add --id hourly --label "Hourly snapshots" --schedule hourly --max-copies 5</code>
+        <code class="hint-cmd">!backup config add --id hourly --label "Hourly snapshots" --interval 60 --max-copies 5</code>
       </div>
     </div>
   {:else}
@@ -42,8 +56,8 @@
               {/if}
               {item.label || item.id}
             </span>
-            <span class="row-sub">{item.id} · {item.schedule} · max {item.max_copies} copies</span>
-            <span class="row-meta">target: {item.target}</span>
+            <span class="row-sub">{item.id} · {fmtInterval(item.interval_minutes)} · max {item.max_copies} copies</span>
+            <span class="row-meta">target: {resolveTarget(item)}</span>
           </div>
           <div class="row-actions">
             <button
@@ -171,6 +185,7 @@
   .row-meta {
     color: var(--clr-muted);
     font-size: 0.7rem;
+    word-break: break-all;
   }
   .row-actions {
     display: flex;
