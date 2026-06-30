@@ -161,6 +161,20 @@ class LetterService(CRUDService):
             return ""
         return path.read_text(encoding="utf-8")
 
+    @staticmethod
+    def _inline_markdown(text: str) -> str:
+        """Convert inline markdown syntax (**bold**, *italic*, `code`) to HTML."""
+        import re
+        # Bold: **text** or __text__
+        text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+        text = re.sub(r'__(.+?)__', r'<strong>\1</strong>', text)
+        # Italic: *text* or _text_
+        text = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'<em>\1</em>', text)
+        text = re.sub(r'(?<!_)_(?!_)(.+?)(?<!_)_(?!_)', r'<em>\1</em>', text)
+        # Inline code: `text`
+        text = re.sub(r'`([^`]+)`', r'<code>\1</code>', text)
+        return text
+
     def convert_to_html(self, content: str, fmt: str) -> str:
         """Convert markdown or plain text to HTML."""
         if fmt == "html":
@@ -173,8 +187,8 @@ class LetterService(CRUDService):
                 pass
             lines = []
             in_para = False
-            for line in content.split("\n"):
-                stripped = line.strip()
+            for raw_line in content.split("\n"):
+                stripped = raw_line.strip()
                 if not stripped:
                     if in_para:
                         lines.append("</p>")
@@ -184,22 +198,22 @@ class LetterService(CRUDService):
                     if in_para:
                         lines.append("</p>")
                         in_para = False
-                    lines.append(f"<h1>{stripped[2:]}</h1>")
+                    lines.append(f"<h1>{self._inline_markdown(stripped[2:])}</h1>")
                 elif stripped.startswith("## "):
                     if in_para:
                         lines.append("</p>")
                         in_para = False
-                    lines.append(f"<h2>{stripped[3:]}</h2>")
+                    lines.append(f"<h2>{self._inline_markdown(stripped[3:])}</h2>")
                 elif stripped.startswith("### "):
                     if in_para:
                         lines.append("</p>")
                         in_para = False
-                    lines.append(f"<h3>{stripped[4:]}</h3>")
+                    lines.append(f"<h3>{self._inline_markdown(stripped[4:])}</h3>")
                 else:
                     if not in_para:
                         lines.append("<p>")
                         in_para = True
-                    lines.append(stripped)
+                    lines.append(self._inline_markdown(stripped))
             if in_para:
                 lines.append("</p>")
             return "\n".join(lines)
