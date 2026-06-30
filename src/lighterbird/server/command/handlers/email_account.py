@@ -55,8 +55,8 @@ def account_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         "smtp_use_tls": 1,
         "imap_username": email_addr,
         "smtp_username": email_addr,
-        "managesieve_host": detected.get("managesieve", ""),
-        "managesieve_port": 4190,
+        "managesieve_host": detected.get("managesieve_host", ""),
+        "managesieve_port": detected.get("managesieve_port", 4190),
         "managesieve_use_tls": 1,
     }
     svc: EmailService = get_email_service()
@@ -98,7 +98,14 @@ def account_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     if "managesieve_host" in flags:
         updates["managesieve_host"] = flags["managesieve_host"]
     if "managesieve_port" in flags:
-        updates["managesieve_port"] = int(flags["managesieve_port"])
+        raw = flags["managesieve_port"]
+        try:
+            updates["managesieve_port"] = int(raw)
+        except ValueError:
+            raise CommandValidationError(f"Invalid managesieve_port: {raw}")
+    if "managesieve-use-tls" in flags or "managesieve_use_tls" in flags:
+        raw = flags.get("managesieve-use-tls", flags.get("managesieve_use_tls", ""))
+        updates["managesieve_use_tls"] = 1 if raw.lower() in ("true", "1", "yes") else 0
     if "signature" in flags:
         updates["signature"] = flags["signature"]
     if updates:

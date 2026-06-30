@@ -246,6 +246,7 @@ def get_command_tree() -> list[CommandNode]:
                                 {"name": "smtp_server", "type": "string", "help": "New SMTP server"},
                                 {"name": "managesieve_host", "type": "string", "help": "ManageSieve server hostname"},
                                 {"name": "managesieve_port", "type": "number", "help": "ManageSieve port (default 4190)"},
+                                {"name": "managesieve-use-tls", "type": "string", "help": "ManageSieve TLS: true/false (default true)"},
                                 {"name": "signature", "type": "string", "help": "Account email signature (plain text)"},
                             ],
                         },
