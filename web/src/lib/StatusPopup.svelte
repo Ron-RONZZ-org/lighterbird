@@ -1,6 +1,6 @@
 <script>
   import { tabStore } from "./tabStore.svelte.js";
-  import { calendar as calendarApi, llm as llmApi, email as emailApi } from "./api.js";
+  import { calendar as calendarApi, llm as llmApi, email as emailApi, drafts as draftsApi } from "./api.js";
   import AccountList from "./AccountList.svelte";
   import LlmProfileForm from "./LlmProfileForm.svelte";
   import EmailAccountForm from "./EmailAccountForm.svelte";
@@ -231,6 +231,58 @@
       <p class="empty">No journal entries.</p>
     {/each}
 
+  {:else if d.drafts !== undefined}
+    <div class="section-header">
+      <h3 class="title">Drafts ({d.drafts.length})</h3>
+    </div>
+    {#each d.drafts as draft}
+      <div class="row">
+        <span class="key">{draft.uuid?.slice(0, 8) || ""}</span>
+        <span class="val">{(draft.title || "").slice(0, 40)}</span>
+        <span class="hint">{draft.updated || ""}</span>
+        <div class="row-actions">
+          <button class="btn-modify-sm" onclick={async () => {
+            try {
+              const full = await draftsApi.get(draft.uuid);
+              const domain = full.domain || "";
+              const formType = domain === "email" ? "email-send"
+                : domain === "journal" ? "journal-write"
+                : domain === "todo" ? "todo-add"
+                : domain === "calendar-event" ? "calendar-event-add"
+                : null;
+              if (formType) {
+                tabStore.open("form", "Recall: " + (full.title || ""), {
+                  form: formType,
+                  initialData: { ...full.data, _draft_uuid: full.uuid },
+                }, { idKey: `form-${formType}` });
+              }
+            } catch { /* ignore */ }
+          }} title="Recall / Edit">✎</button>
+          <button class="btn-remove-sm" onclick={async () => {
+            if (!confirm("Delete this draft?")) return;
+            try {
+              await draftsApi.delete(draft.uuid);
+              // Refresh tab by re-executing command
+              const active = tabStore.active;
+              if (active) {
+                const resp = await fetch("/api/v1/command", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ tokens: active.idKey ? active.idKey.split("-") : [], flags: {} }),
+                });
+                if (resp.ok) {
+                  const result = await resp.json();
+                  tabStore.update(active.id, result.data || {});
+                }
+              }
+            } catch { /* ignore */ }
+          }} title="Remove">✕</button>
+        </div>
+      </div>
+    {:else}
+      <p class="empty">No drafts.</p>
+    {/each}
+
   {:else if d.uuid}
     <div class="row">
       <span class="key">{d.uuid?.slice(0, 8) || ""}</span>
@@ -330,6 +382,20 @@
   .btn-remove-sm:hover {
     background: #4a2a2a;
     color: #d0a0a0;
+  }
+  .btn-modify-sm {
+    background: transparent;
+    border: 1px solid #3a5a7a;
+    color: #8ab0d0;
+    border-radius: 4px;
+    padding: 0.1rem 0.35rem;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .btn-modify-sm:hover {
+    background: #3a5a7a;
+    color: #b0d0e0;
   }
   .empty {
     color: var(--clr-muted);

@@ -140,6 +140,8 @@ export const calendar = {
 
   getEvent: (uuid) => request("GET", `/calendar/events/${uuid}`),
 
+  updateEvent: (uuid, data) => request("PATCH", `/calendar/events/${uuid}`, data),
+
   deleteEvent: (uuid) => request("DELETE", `/calendar/events/${uuid}`),
 };
 
