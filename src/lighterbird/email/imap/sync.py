@@ -63,6 +63,44 @@ def sync_account(
             result.total += fr["total"]
             result.new += fr["new"]
             result.errors.extend(fr["errors"])
+
+        # Retry moving previously soft-deleted messages to IMAP Trash
+        _retry_pending_trash(client, db_store, account_email)
         return result
     finally:
         client.disconnect()
+
+
+def _retry_pending_trash(client: IMAPClient, db_store: Any, account_email: str) -> None:
+    """Find messages that are soft-deleted (is_deleted=1) but still in
+    their original folder, and attempt to move them to the IMAP Trash folder.
+
+    Called after each sync pass to catch messages that were trashed while
+    offline or when the IMAP connection was unavailable on the first attempt.
+    """
+    from datetime import datetime, timezone
+
+    pending = list(db_store.db.execute(
+        "SELECT uuid, imap_uid, folder_name FROM messages "
+        "WHERE account_email = ? AND is_deleted = 1 AND folder_name != 'Trash' "
+        "AND imap_uid IS NOT NULL",
+        (account_email,),
+    ))
+    if not pending:
+        return
+
+    now = datetime.now(timezone.utc).isoformat()
+    for msg in pending:
+        uid = msg["imap_uid"]
+        src_folder = msg["folder_name"]
+        if uid is None or not src_folder:
+            continue
+        try:
+            if client.move_message(uid, src_folder, "Trash"):
+                db_store.db.execute(
+                    "UPDATE messages SET folder_name = 'Trash', is_deleted = 0, "
+                    "updated_at = ? WHERE uuid = ?",
+                    (now, msg["uuid"]),
+                )
+        except Exception:
+            pass  # will retry on next sync
