@@ -76,8 +76,8 @@ def letter_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 @command("letter.add")
 def letter_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!letter add <object> [--body <file-path>] [--sender SENDER]
-                              [--recipient RECIPIENT] [--respond-to UUID]"""
+    """!letter add <object> [--body <file-path>] [--body-text CONTENT] [--body-format FORMAT]
+                              [--sender SENDER] [--recipient RECIPIENT] [--respond-to UUID]"""
     if not remaining:
         raise CommandValidationError(
             "Missing letter object/subject.",
@@ -103,7 +103,12 @@ def letter_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     letter = svc.create(data)
 
     body_file = flags.get("body", "")
-    if body_file:
+    body_text = flags.get("body-text", "")
+    if body_text:
+        body_format = flags.get("body-format", "markdown")
+        html = svc.convert_to_html(body_text, body_format)
+        svc.store_body(letter["uuid"], html)
+    elif body_file:
         try:
             from pathlib import Path
             body_path = Path(body_file)
@@ -133,8 +138,9 @@ def letter_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 @command("letter.send")
 def letter_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!letter send <recipient> [--object OBJECT] [--body <file-path>]
+                                  [--body-text CONTENT] [--body-format FORMAT]
                                   [--sender-profile UUID] [--recipient-contact UUID]
-                                  [--respond-to UUID]"""
+                                  [--sender SENDER] [--respond-to UUID]"""
     if not remaining:
         raise CommandValidationError(
             "Missing recipient.",
@@ -162,6 +168,10 @@ def letter_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         except Exception:
             pass
 
+    sender_manual = flags.get("sender", "")
+    if sender_manual:
+        data["sender_manual"] = sender_manual
+
     recipient_contact = flags.get("recipient-contact", "")
     if recipient_contact:
         try:
@@ -183,8 +193,14 @@ def letter_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     letter = svc.create(data)
 
     body_file = flags.get("body", "")
+    body_text = flags.get("body-text", "")
     html_body = ""
-    if body_file:
+    if body_text:
+        # Inline body text from GUI (takes precedence over file path)
+        body_format = flags.get("body-format", "markdown")
+        html_body = svc.convert_to_html(body_text, body_format)
+        svc.store_body(letter["uuid"], html_body)
+    elif body_file:
         try:
             from pathlib import Path
             body_path = Path(body_file)
@@ -242,23 +258,23 @@ def _generate_letter_html(uuid: str, sender: str, recipient: str, subject: str) 
       padding: 2.5cm 2cm; line-height: 1.6; font-size: 12pt;
       max-width: 21cm; margin: 0 auto;
     }}
-    .letterhead {{ text-align: right; margin-bottom: 2cm; }}
-    .letterhead .sender {{ font-size: 11pt; color: #444; }}
-    .letterhead .date {{ font-size: 11pt; color: #666; margin-top: 0.3cm; }}
-    .recipient {{ margin-bottom: 1.5cm; }}
-    .recipient .name {{ font-weight: bold; }}
+    .sender-block {{ margin-bottom: 0.5cm; font-size: 11pt; color: #444; }}
+    .sender-block .line {{ margin: 0; }}
+    .date {{ font-size: 11pt; color: #666; margin-top: 0.3cm; }}
+    .recipient-block {{ margin-top: 1.5cm; text-align: right; font-size: 11pt; }}
+    .recipient-block .line {{ margin: 0; }}
     .subject {{ font-weight: bold; margin-bottom: 1cm; font-size: 13pt; }}
     .body {{ text-align: justify; }}
     .signature {{ margin-top: 2cm; }}
   </style>
 </head>
 <body>
-  <div class="letterhead">
-    <div class="sender">{sender}</div>
-    <div class="date">{today}</div>
+  <div class="sender-block">
+    <p class="line">{sender}</p>
+    <p class="date">{today}</p>
   </div>
-  <div class="recipient">
-    <div class="name">{recipient}</div>
+  <div class="recipient-block">
+    <p class="line">{recipient}</p>
   </div>
   <div class="subject">Re: {subject}</div>
   <div class="body">
