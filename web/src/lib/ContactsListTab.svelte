@@ -226,13 +226,17 @@
             </span>
           {/if}
         </span>
-        <span class="cuuid" onclick={(e) => { e.stopPropagation(); uuidCopy.copyToClipboard(contact.uuid); }}
+        <span class="cuuid" role="button" tabindex="-1"
+              onclick={(e) => { e.stopPropagation(); uuidCopy.copyToClipboard(contact.uuid); }}
+              onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); uuidCopy.copyToClipboard(contact.uuid); } }}
               title="Click to copy UUID">
           {uuidCopy.copiedKey === contact.uuid ? "Copied!" : contact.uuid.slice(0, 8)}
         </span>
         <span class="name">{truncate(contact.given_name || contact.full_name || "(unnamed)", 24)}</span>
         {#each [getPrimaryEmail(contact)] as primaryEmail}
-          <span class="email" onclick={(e) => { e.stopPropagation(); emailCopy.copyToClipboard(primaryEmail); }}
+          <span class="email" role="button" tabindex="-1"
+                onclick={(e) => { e.stopPropagation(); emailCopy.copyToClipboard(primaryEmail); }}
+                onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); emailCopy.copyToClipboard(primaryEmail); } }}
                 title="Click to copy email">
             {emailCopy.copiedKey === primaryEmail ? "Copied!" : truncate(primaryEmail || "", 28)}
           </span>
@@ -296,22 +300,4 @@
   .email:hover { color: #ccc; text-decoration: underline; }
   .org { color: var(--clr-muted); min-width: 6rem; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.78rem; }
   .empty { color: var(--clr-muted); text-align: center; padding: 2rem; }
-  /* Modal overlay */
-  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 500; display: flex; align-items: center; justify-content: center; }
-  .modal { background: #1e1e32; border: 1px solid #444; border-radius: 16px; padding: 1.5rem; width: 380px; max-width: 90vw; }
-  .modal-header { margin-bottom: 1rem; }
-  .modal-header h3 { font-size: 1rem; color: #e0e0e0; font-weight: 600; }
-  .form { display: flex; flex-direction: column; gap: 0.75rem; }
-  .field { display: flex; flex-direction: column; gap: 0.3rem; }
-  .field-label { font-size: 0.78rem; color: #7c7c9a; font-family: monospace; }
-  .text-input { background: #2a2a3e; border: 1px solid #444; border-radius: 8px; padding: 0.5rem 0.7rem; color: #e0e0e0; font-size: 0.85rem; outline: none; font-family: monospace; }
-  .text-input:focus { border-color: #7c7c9a; }
-  .error { color: #aa6a6a; font-size: 0.8rem; }
-  .form-actions { display: flex; gap: 0.5rem; margin-top: 0.25rem; }
-  .btn-primary, .btn-secondary { padding: 0.45rem 1rem; border-radius: 8px; border: 1px solid #444; font-family: monospace; font-size: 0.85rem; cursor: pointer; transition: background 0.1s; }
-  .btn-primary { background: #3a6a3a; color: #e0e0e0; border-color: #4a8a4a; flex: 1; }
-  .btn-primary:hover { background: #4a8a4a; }
-  .btn-primary:disabled { opacity: 0.4; cursor: default; }
-  .btn-secondary { background: #2a2a3e; color: #b0b0c0; }
-  .btn-secondary:hover { background: #3a3a5a; }
 </style>

@@ -62,6 +62,7 @@
     <div class="form">
       <label class="field">
         <span class="field-label">CalDAV URL</span>
+        <!-- svelte-ignore a11y_autofocus -->
         <input type="url" class="text-input" bind:value={url} placeholder="https://your-caldav-server.com" autofocus />
       </label>
       <label class="field">

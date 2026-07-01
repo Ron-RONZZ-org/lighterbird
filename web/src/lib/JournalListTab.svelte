@@ -248,7 +248,9 @@
         </span>
 
         <!-- Entry data -->
-        <span class="journal-uuid" onclick={(e) => { e.stopPropagation(); uuidCopy.copyToClipboard(entry.uuid); }}
+        <span class="journal-uuid" role="button" tabindex="-1"
+              onclick={(e) => { e.stopPropagation(); uuidCopy.copyToClipboard(entry.uuid); }}
+              onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); uuidCopy.copyToClipboard(entry.uuid); } }}
               title="Click to copy UUID">
           {uuidCopy.copiedKey === entry.uuid ? "Copied!" : entry.uuid.slice(0, 8)}
         </span>

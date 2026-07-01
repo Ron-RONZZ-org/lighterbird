@@ -188,6 +188,7 @@
       <div class="form">
         <label class="field">
           <span class="field-label">API Key</span>
+          <!-- svelte-ignore a11y_autofocus -->
           <input
             type="password"
             class="text-input"
@@ -219,6 +220,7 @@
       <div class="form">
         <label class="field">
           <span class="field-label">Base URL</span>
+          <!-- svelte-ignore a11y_autofocus -->
           <input type="text" class="text-input" bind:value={baseUrl} placeholder="https://api.example.com" autofocus />
         </label>
         <label class="field">

@@ -268,7 +268,7 @@
   </div>
 </div>
 
-<script context="module">
+<script module>
   function priorityClass(p) {
     const n = typeof p === "string" ? parseInt(p, 10) : p;
     if (!n) return "low";

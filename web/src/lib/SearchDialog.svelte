@@ -130,16 +130,16 @@
   }
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="dialog-backdrop" onclick={onclose} onkeydown={handleKeydown}>
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="dialog" onclick={(e) => e.stopPropagation()} onkeydown={handleKeydown}>
+<div class="dialog-backdrop" onclick={onclose} onkeydown={handleKeydown} role="button" tabindex="-1" aria-label="Close">
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="dialog" onclick={(e) => e.stopPropagation()} onkeydown={handleKeydown}>
     <div class="dialog-header">
       <span class="dialog-title">{title}</span>
       <button class="close-btn" onclick={onclose} aria-label="Close">&times;</button>
     </div>
 
     <div class="search-row">
+      <!-- svelte-ignore a11y_autofocus -->
       <input
         type="text"
         class="search-input"

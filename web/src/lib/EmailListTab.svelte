@@ -461,14 +461,17 @@
           {/if}
         </span>
 
-        <span class="msg-uuid" onclick={(e) => { e.stopPropagation(); uuidCopy.copyToClipboard(msg.uuid); }}
+        <span class="msg-uuid" role="button" tabindex="-1"
+              onclick={(e) => { e.stopPropagation(); uuidCopy.copyToClipboard(msg.uuid); }}
+              onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); uuidCopy.copyToClipboard(msg.uuid); } }}
               title="Click to copy UUID">
           {uuidCopy.copiedKey === msg.uuid ? "Copied!" : msg.uuid.slice(0, 8)}
         </span>
-        <span class="from" class:unread={!msg.is_read}
+        <span class="from" class:unread={!msg.is_read} role="button" tabindex="-1"
               onclick={(e) => {
                 if (!sel.selectionMode) { e.stopPropagation(); emailCopy.copyToClipboard(msg.from || ""); }
               }}
+              onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (!sel.selectionMode) { e.stopPropagation(); emailCopy.copyToClipboard(msg.from || ""); } } }}
               title="Click to copy email address">
           {emailCopy.copiedKey === msg.from ? "Copied!" : truncate(msg.from || "", 24)}
         </span>

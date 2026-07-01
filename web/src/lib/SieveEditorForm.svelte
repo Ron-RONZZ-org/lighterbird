@@ -6,7 +6,9 @@
   let existingScript = $derived(data?.script || null);
   let isNew = $derived(!existingScript);
 
+  // svelte-ignore state_referenced_locally
   let name = $state(existingScript?.name || "");
+  // svelte-ignore state_referenced_locally
   let content = $state(existingScript?.content || "");
   let validationResult = $state(null);
   let saving = $state(false);

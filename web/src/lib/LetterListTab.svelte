@@ -262,7 +262,9 @@
 
         <span class="dir-icon" title={letter.direction}>{directionIcon(letter.direction)}</span>
 
-        <span class="letter-uuid" onclick={(e) => { e.stopPropagation(); uuidCopy.copyToClipboard(letter.uuid); }}
+        <span class="letter-uuid" role="button" tabindex="-1"
+              onclick={(e) => { e.stopPropagation(); uuidCopy.copyToClipboard(letter.uuid); }}
+              onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); uuidCopy.copyToClipboard(letter.uuid); } }}
               title="Click to copy UUID">
           {uuidCopy.copiedKey === letter.uuid ? "Copied!" : letter.uuid.slice(0, 8)}
         </span>

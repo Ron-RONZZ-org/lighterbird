@@ -233,7 +233,9 @@
           {/if}
         </span>
 
-        <span class="euuid" onclick={(e) => { e.stopPropagation(); uuidCopy.copyToClipboard(event.uuid); }}
+        <span class="euuid" role="button" tabindex="-1"
+              onclick={(e) => { e.stopPropagation(); uuidCopy.copyToClipboard(event.uuid); }}
+              onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); uuidCopy.copyToClipboard(event.uuid); } }}
               title="Click to copy UUID">
           {uuidCopy.copiedKey === event.uuid ? "Copied!" : event.uuid.slice(0, 8)}
         </span>

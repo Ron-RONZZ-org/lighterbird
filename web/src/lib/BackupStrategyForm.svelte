@@ -11,6 +11,7 @@
   let { strategy = null, onSaved = () => {}, onDismiss = () => {} } = $props();
 
   let isEdit = $derived(strategy !== null);
+  // svelte-ignore state_referenced_locally
   const _init = strategy || {};
 
   let id = $state(_init.id || "");
@@ -127,6 +128,7 @@
   }
 </script>
 
+<!-- svelte-ignore a11y_click_events_have_key_events -->
 <div class="modal-overlay" onclick={onDismiss} onkeydown={(e) => e.key === "Escape" && onDismiss()} role="button" tabindex="-1" aria-label="Dismiss">
   <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" tabindex="0">
     <div class="modal-header">
@@ -137,6 +139,7 @@
       {#if !isEdit}
         <label class="field">
           <span class="field-label">Strategy ID</span>
+          <!-- svelte-ignore a11y_autofocus -->
           <input type="text" class="text-input" bind:value={id} placeholder="daily" autofocus disabled={isEdit} />
           <span class="field-hint">Lowercase letters, digits, hyphens. Must start with a letter.</span>
         </label>
@@ -225,7 +228,7 @@
     font-family: monospace;
   }
   .text-input:focus { border-color: #7c7c9a; }
-  select.text-input { cursor: pointer; }
+
   .target-row { display: flex; gap: 0.4rem; }
   .target-input { flex: 1; }
   .btn-default-loc {
