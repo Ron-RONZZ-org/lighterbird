@@ -18,13 +18,9 @@
   }
 
   function printLetter() {
-    if (!body) return;
-    const printWin = window.open("", "_blank");
-    if (!printWin) return;
-    printWin.document.write(body);
-    printWin.document.close();
-    printWin.focus();
-    printWin.print();
+    if (!letter.uuid) return;
+    const renderUrl = `/api/v1/letters/letters/${letter.uuid}/render`;
+    window.open(renderUrl, "_blank");
   }
 
   function senderDisplay() {
