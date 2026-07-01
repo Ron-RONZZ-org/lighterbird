@@ -273,12 +273,12 @@
       e.preventDefault();
       handleSubmit(e);
     }
-    // q — prompt save draft if dirty
+    // q — close tab; prompt save draft if dirty
     if (e.key === "q" && !e.ctrlKey && !e.metaKey && dirty) {
-      e.preventDefault();
       if (confirm("You have unsaved changes. Save as draft?")) {
         saveDraft();
       }
+      // Don't preventDefault — let TabView's global q handler close the tab
     }
   }
 </script>
