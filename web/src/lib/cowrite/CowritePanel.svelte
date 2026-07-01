@@ -6,7 +6,7 @@
 
   import { popup } from "../popupStore.svelte.js";
 
-  /** @type {import("./CowriteEngine.js").ReturnType<typeof createCowrite>} */
+  /** @type {import("./CowriteEngine.svelte.js").ReturnType<typeof createCowrite>} */
   let { cowrite } = $props();
 
   let refinementText = $state("");

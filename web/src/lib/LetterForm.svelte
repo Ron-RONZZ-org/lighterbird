@@ -37,6 +37,11 @@
   let returnType = $derived(initialData._returnType || "letter-list");
   let returnTitle = $derived(initialData._returnTitle || "Letters");
 
+  // ── Dynamic labels based on form type ─────────────────────────────────
+  let senderLabel = $derived(formType === "add" ? "Sender" : "Your Address / Identity");
+  let recipientLabel = $derived(formType === "add" ? "Recipient" : "Recipient Address");
+  let submitLabel = $derived(formType === "add" ? "Add Letter" : "Send Letter");
+
   // ── Dialog states ──────────────────────────────────────────────────────
   let showSenderDialog = $state(false);
   let showRecipientDialog = $state(false);

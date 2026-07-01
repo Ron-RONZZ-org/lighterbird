@@ -4,7 +4,7 @@
    * Place this in each form's toolbar area.
    */
 
-  /** @type {import("./CowriteEngine.js").ReturnType<typeof createCowrite>} */
+  /** @type {import("./CowriteEngine.svelte.js").ReturnType<typeof createCowrite>} */
   let { cowrite } = $props();
 </script>
 

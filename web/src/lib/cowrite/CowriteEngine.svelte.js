@@ -2,7 +2,7 @@
  * CowriteEngine — shared state management for LLM co-writing sessions.
  *
  * Usage (in a form component):
- *   import { createCowrite } from "./cowrite/CowriteEngine.js";
+ *   import { createCowrite } from "./cowrite/CowriteEngine.svelte.js";
  *   let cowrite = $state(createCowrite({
  *     formType: "email-send",
  *     getCurrentContent: () => ({ subject, body }),
