@@ -5,6 +5,12 @@
   import { todo as todoApi } from "./api.js";
   import { tabStore } from "./tabStore.svelte.js";
   import { formatListItemDate } from "./listTabShared.svelte.js";
+  import { registerShortcuts } from "./keyboardShortcuts.svelte.js";
+
+  registerShortcuts("TodoViewTab", [
+    { key: "i", desc: "Toggle edit mode", category: "Todo Detail" },
+    { key: "Ctrl+Enter", desc: "Save changes", modifiers: "Ctrl", category: "Todo Detail" },
+  ]);
 
   let { data: _data = {} } = $props();
 

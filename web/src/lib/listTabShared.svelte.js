@@ -6,6 +6,22 @@
  * Call from the component's <script> to get local reactive state.
  */
 
+import { registerShortcuts } from "./keyboardShortcuts.svelte.js";
+
+// Standard list tab shortcuts (from AGENTS.md List Tab Standard Feature Set)
+registerShortcuts("list-tab-standard", [
+  { key: "v", desc: "Toggle selection mode", category: "List" },
+  { key: "n", desc: "New item", category: "List" },
+  { key: "Delete", desc: "Delete selected items", category: "List" },
+  { key: "/", desc: "Toggle search/filter bar", category: "List" },
+  { key: "↑/↓", desc: "Navigate rows", category: "List" },
+  { key: "PgUp/PgDn", desc: "Page up/down", category: "List" },
+  { key: "Home/End", desc: "First/last row", category: "List" },
+  { key: "Space", desc: "Toggle focused item", category: "List" },
+  { key: "Shift+click", desc: "Range select", category: "List" },
+  { key: "Esc", desc: "Exit selection mode", category: "List" },
+]);
+
 /**
  * Clipboard copy state for any key (UUID, email address, etc.).
  * Shows `copiedKey` for 1.2s then clears.

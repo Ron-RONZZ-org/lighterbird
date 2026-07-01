@@ -210,6 +210,8 @@ function resolveAddFormType(tokens, leafName) {
   if (/^journal\s+write$/i.test(path)) return "journal-write";
   if (/^email\s+sieve\s+add$/i.test(path)) return "email-sieve-add";
   if (/^email\s+send$/i.test(path)) return "email-send";
+  if (/^email\s+reply$/i.test(path)) return "email-send";
+  if (/^email\s+forward$/i.test(path)) return "email-send";
   if (/^calendar\s+event\s+add$/i.test(path)) return "calendar-event-add";
   if (/^user\s+saved-commands\s+add$/i.test(path)) return "user-saved-commands-add";
   if (/^user\s+saved-commands\s+modify$/i.test(path)) return "user-saved-commands-modify";

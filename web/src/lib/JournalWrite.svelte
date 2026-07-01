@@ -50,6 +50,10 @@
       e.preventDefault();
       saveDraft();
     }
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault();
+      handleSubmit(e);
+    }
   }
 
   // Dirty state — compare current against initial
@@ -104,7 +108,7 @@
       {/if}
     </button>
     <button type="submit" disabled={writing || !title}>
-      {writing ? "Saving..." : "Save Entry"}
+      {writing ? "Saving..." : "Save Entry"} <kbd>⌃Enter</kbd>
     </button>
   </div>
 

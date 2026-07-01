@@ -55,6 +55,10 @@
       e.preventDefault();
       saveDraft();
     }
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault();
+      handleSubmit(e);
+    }
   }
 
   // Template support
@@ -321,7 +325,7 @@
       {/if}
     </button>
     <button type="submit" disabled={adding || !title}>
-      {adding ? "Adding..." : "Add Todo"}
+      {adding ? "Adding..." : "Add Todo"} <kbd>⌃Enter</kbd>
     </button>
   </div>
 

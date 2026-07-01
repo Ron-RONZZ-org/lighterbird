@@ -150,7 +150,7 @@
       if (dataCompletions.length > 0) {
         const paramTokens = effectiveTokens.slice(cmdTokens);
         const usedUuids = new Set(paramTokens.map(t => t.toLowerCase()));
-        dataCompletions = dataCompletions.filter(dc => !usedUuids.has(dc.uuid.slice(0, 8).toLowerCase()));
+        dataCompletions = dataCompletions.filter(dc => !usedUuids.has((dc.uuid || "").slice(0, 8).toLowerCase()));
       }
     }
   }
@@ -230,7 +230,7 @@
       } else if (dataCompletions.length > 0) {
         const idx = selectedDataIndex >= 0 ? selectedDataIndex : 0;
         const dc = dataCompletions[idx];
-        applyCompletion(dc.value || dc.uuid.slice(0, 8));
+        applyCompletion(dc.value || (dc.uuid || "").slice(0, 8));
       }
       return;
     }
@@ -300,12 +300,12 @@
         const lastToken = cmd.split(/\s+/).pop() || "";
         if (selectedDataIndex >= 0) {
           const dc = dataCompletions[selectedDataIndex];
-          applyCompletion(dc.value || dc.uuid.slice(0, 8));
+          applyCompletion(dc.value || (dc.uuid || "").slice(0, 8));
           return;
         }
         if (!/^[0-9a-f]{8,}$/i.test(lastToken)) {
           const dc = dataCompletions[0];
-          applyCompletion(dc.value || dc.uuid.slice(0, 8));
+          applyCompletion(dc.value || (dc.uuid || "").slice(0, 8));
           return;
         }
       }
@@ -379,9 +379,9 @@
           role="option"
           class="suggestion"
           class:selected={i === selectedDataIndex}
-          onmousedown={(e) => { e.preventDefault(); applyCompletion(dc.value || dc.uuid.slice(0, 8)); }}
+          onmousedown={(e) => { e.preventDefault(); applyCompletion(dc.value || (dc.uuid || "").slice(0, 8)); }}
         >
-          <span class="suggestion-text">{dc.value || dc.uuid.slice(0, 8)}</span>
+          <span class="suggestion-text">{dc.value || (dc.uuid || "").slice(0, 8)}</span>
           <span class="hint-text">{dc.label}</span>
         </li>
       {/each}
