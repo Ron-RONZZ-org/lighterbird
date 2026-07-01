@@ -1,7 +1,7 @@
 <script>
   /** Email compose form — used when !email send is typed interactively. */
 
-  import { email as emailApi, drafts as draftsApi } from "./api.js";
+  import { email as emailApi, contacts as contactsApi, drafts as draftsApi } from "./api.js";
   import FormField from "./FormField.svelte";
   import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
 
@@ -23,6 +23,35 @@
   let draftSaved = $state(false);
   let draftUuid = $state(_initial._draft_uuid || null);
   let accounts = $state([]);
+  let contactSuggestions = $state([]); // email addresses from contacts
+
+  // ── Load contacts for recipient suggestions ──────────────────────────
+  $effect(() => {
+    contactsApi.list({ limit: 100 }).then((data) => {
+      const contacts = data.contacts || [];
+      const emails = new Set();
+      for (const c of contacts) {
+        const raw = c.emails;
+        if (Array.isArray(raw)) {
+          for (const e of raw) {
+            if (typeof e === "string" && e.includes("@")) emails.add(e);
+            else if (e?.value && e.value.includes("@")) emails.add(e.value);
+          }
+        } else if (typeof raw === "string") {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              for (const e of parsed) {
+                if (typeof e === "string" && e.includes("@")) emails.add(e);
+                else if (e?.value && e.value.includes("@")) emails.add(e.value);
+              }
+            }
+          } catch { /* ignore */ }
+        }
+      }
+      contactSuggestions = [...emails].sort();
+    }).catch(() => {});
+  });
 
   // ── LLM co-writing ─────────────────────────────────────────────────
   let cowrite = $state(createCowrite({
@@ -71,6 +100,13 @@
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
       handleSubmit(e);
+    }
+    // q — prompt save draft if dirty
+    if (e.key === "q" && !e.ctrlKey && !e.metaKey && dirty) {
+      e.preventDefault();
+      if (confirm("You have unsaved changes. Save as draft?")) {
+        saveDraft();
+      }
     }
   }
 
@@ -178,22 +214,28 @@
 
   <FormField label="To" required={true}>
     {#snippet children()}
-      <input id="to" type="email" class="ff-input" bind:value={to} required placeholder="recipient@example.com" />
+      <input id="to" type="email" class="ff-input" bind:value={to} required placeholder="recipient@example.com" list="contact-emails" />
     {/snippet}
   </FormField>
 
   <div class="row-fields">
     <FormField label="CC" class="flex-1">
       {#snippet children()}
-        <input id="cc" type="email" class="ff-input" bind:value={cc} placeholder="cc@example.com" />
+        <input id="cc" type="email" class="ff-input" bind:value={cc} placeholder="cc@example.com" list="contact-emails" />
       {/snippet}
     </FormField>
     <FormField label="BCC" class="flex-1">
       {#snippet children()}
-        <input id="bcc" type="email" class="ff-input" bind:value={bcc} placeholder="bcc@example.com" />
+        <input id="bcc" type="email" class="ff-input" bind:value={bcc} placeholder="bcc@example.com" list="contact-emails" />
       {/snippet}
     </FormField>
   </div>
+
+  <datalist id="contact-emails">
+    {#each contactSuggestions as email}
+      <option value={email}></option>
+    {/each}
+  </datalist>
 
   <FormField label="Subject" required={true}>
     {#snippet children()}

@@ -7,10 +7,15 @@
    *   - Inline body editor with format selection (markdown/html/text) and file upload toggle
    *   - Preview toggle for body content
    *   - Dirty-form guard with beforeunload
-   *   - Keyboard: Ctrl+Enter to submit
+   *   - Keyboard: Ctrl+Enter to submit, Ctrl+S to save draft
+   *   - q-key prompt to save draft on unsaved changes
+   *   - LLM co-writing integration (Ask LLM)
+   *   - Contact suggestions for recipient field
    */
+  import { contacts as contactsApi, drafts as draftsApi } from "./api.js";
   import SearchDialog from "./SearchDialog.svelte";
   import LetterBodyEditor from "./LetterBodyEditor.svelte";
+  import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
 
   let { initialData = {}, formType = "add", onsubmit, onDirtyChange } = $props();
 
@@ -36,6 +41,54 @@
   let returnIdKey = $derived(initialData._returnIdKey || "persistent-letter-list");
   let returnType = $derived(initialData._returnType || "letter-list");
   let returnTitle = $derived(initialData._returnTitle || "Letters");
+
+  // ── Draft state ─────────────────────────────────────────────────────────
+  let savingDraft = $state(false);
+  let draftSaved = $state(false);
+  // svelte-ignore state_referenced_locally
+  let draftUuid = $state(initialData._draft_uuid || null);
+
+  // ── Contact suggestions for recipient ──────────────────────────────────
+  let contactSuggestions = $state([]);
+  let showSuggestions = $state(false);
+  let filteredSuggestions = $derived(
+    contactSuggestions.filter((s) => {
+      if (!recipientText.trim()) return false;
+      const q = recipientText.toLowerCase();
+      return s.label.toLowerCase().includes(q);
+    }).slice(0, 8)
+  );
+
+  $effect(() => {
+    contactsApi.list({ limit: 100 }).then((data) => {
+      const contacts = data.contacts || [];
+      const entries = [];
+      for (const c of contacts) {
+        const name = c.full_name || c.given_name || c.name || "";
+        const addr = c.address || "";
+        let email = "";
+        const raw = c.emails;
+        if (Array.isArray(raw)) {
+          for (const e of raw) {
+            if (typeof e === "string" && e.includes("@")) { email = e; break; }
+            else if (e?.value && e.value.includes("@")) { email = e.value; break; }
+          }
+        } else if (typeof raw === "string") {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const first = parsed[0];
+              email = typeof first === "string" ? first : (first?.value || "");
+            }
+          } catch { /* ignore */ }
+        }
+        if (name || email || addr) {
+          entries.push({ label: [name, addr, email].filter(Boolean).join(" — "), name, addr, email });
+        }
+      }
+      contactSuggestions = entries;
+    }).catch(() => {});
+  });
 
   // ── Dynamic labels based on form type ─────────────────────────────────
   let senderLabel = $derived(formType === "add" ? "Sender" : "Your Address / Identity");
@@ -133,6 +186,49 @@
     recipientContact = contact.uuid || "";
   }
 
+  // ── LLM co-writing ─────────────────────────────────────────────────────
+  // svelte-ignore state_referenced_locally
+  const _formType = formType;
+  let cowrite = $state(createCowrite({
+    formType: _formType === "send" ? "letter-send" : "letter-add",
+    getCurrentContent: () => ({
+      ...(formType === "send" ? { object } : {}),
+      sender: senderText,
+      recipient: recipientText,
+      body: bodyContent,
+    }),
+    applyEdit: (field, text) => {
+      if (field === "object") object = text;
+      else if (field === "sender") senderText = text;
+      else if (field === "recipient") recipientText = text;
+      else if (field === "body") { bodyContent = text; bodyProvided = true; }
+    },
+  }));
+
+  // ── Save draft ─────────────────────────────────────────────────────────
+  async function saveDraft() {
+    if (savingDraft) return;
+    savingDraft = true;
+    draftSaved = false;
+    try {
+      const title = object || "(no subject)";
+      const data = {
+        object, sender: senderText, recipient: recipientText,
+        sender_profile: senderProfile, recipient_contact: recipientContact,
+        respond_to: respondTo, body: bodyContent, body_format: bodyFormat,
+        body_file_path: bodyFilePath, body_provided: bodyProvided,
+      };
+      if (formType === "add") {
+        data._formType = "add";
+      }
+      const result = await draftsApi.save("letter", title, data, draftUuid);
+      draftUuid = result.uuid;
+      draftSaved = true;
+      setTimeout(() => { draftSaved = false; }, 2000);
+    } catch { /* silent */ }
+    finally { savingDraft = false; }
+  }
+
   // ── Form submission ────────────────────────────────────────────────────
   async function handleSubmit(e) {
     e.preventDefault();
@@ -169,9 +265,20 @@
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────────
   function handleFormKeydown(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      e.preventDefault();
+      saveDraft();
+    }
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
       handleSubmit(e);
+    }
+    // q — prompt save draft if dirty
+    if (e.key === "q" && !e.ctrlKey && !e.metaKey && dirty) {
+      e.preventDefault();
+      if (confirm("You have unsaved changes. Save as draft?")) {
+        saveDraft();
+      }
     }
   }
 </script>
@@ -203,7 +310,7 @@
     ></textarea>
   </div>
 
-  <!-- Recipient field (multiline) -->
+  <!-- Recipient field (multiline) with contact suggestions -->
   <div class="field-row">
     <div class="field-header">
       <label for="recipient">{recipientLabel}</label>
@@ -217,7 +324,21 @@
       bind:value={recipientText}
       placeholder="Recipient name&#10;Street address&#10;email@example.com&#10;+1-234-567-8900"
       rows="4"
+      onfocus={() => { if (recipientText.trim()) showSuggestions = true; }}
+      onblur={() => setTimeout(() => { showSuggestions = false; }, 200)}
+      oninput={() => { showSuggestions = true; }}
     ></textarea>
+    {#if showSuggestions && filteredSuggestions.length > 0}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="suggestion-popup" role="listbox" onmousedown={(e) => e.preventDefault()}>
+        {#each filteredSuggestions as entry}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div class="suggestion-item" role="option" onmousedown={() => { recipientText = entry.label; showSuggestions = false; }}>
+            {entry.label}
+          </div>
+        {/each}
+      </div>
+    {/if}
   </div>
 
   {#if formType === "send"}
@@ -227,8 +348,12 @@
     </div>
   {/if}
 
-  <!-- Body editor -->
+  <!-- Body editor with cowrite button -->
   <div class="field-row">
+    <div class="body-header">
+      <span class="body-header-label">Body</span>
+      <CowriteButton {cowrite} />
+    </div>
     <LetterBodyEditor
       bind:body={bodyContent}
       bind:bodyFormat={bodyFormat}
@@ -245,6 +370,15 @@
   </div>
 
   <div class="button-row">
+    <button type="button" class="btn-draft" onclick={saveDraft} disabled={savingDraft || !dirty}>
+      {#if savingDraft}
+        Saving…
+      {:else if draftSaved}
+        Draft saved ✓
+      {:else}
+        Save Draft <kbd>Ctrl+S</kbd>
+      {/if}
+    </button>
     <button type="submit" class="submit-btn">{submitLabel} <kbd>⌃Enter</kbd></button>
   </div>
 </form>
@@ -271,6 +405,10 @@
   />
 {/if}
 
+{#if cowrite.isActive}
+  <CowritePanel {cowrite} />
+{/if}
+
 <style>
   .letter-form {
     display: flex;
@@ -279,6 +417,7 @@
     padding: 1rem;
     font-family: monospace;
     font-size: 0.85rem;
+    position: relative;
   }
   .field-row {
     display: flex;
@@ -352,6 +491,7 @@
     display: flex;
     gap: 0.5rem;
     margin-top: 0.5rem;
+    align-items: center;
   }
   .submit-btn {
     padding: 0.4rem 1rem;
@@ -377,5 +517,61 @@
     border-radius: 3px;
     color: #999;
     line-height: 1.3;
+  }
+  .btn-draft {
+    background: #2a2a3e;
+    border: 1px solid #444;
+    color: #ccc;
+    padding: 0.4rem 0.8rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 0.82rem;
+    transition: background 0.15s;
+    white-space: nowrap;
+  }
+  .btn-draft:hover:not(:disabled) { background: #3a3a5a; }
+  .btn-draft:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-draft kbd {
+    display: inline-block;
+    padding: 1px 4px;
+    background: #222;
+    border: 1px solid #555;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    margin-left: 0.2rem;
+  }
+  .body-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .body-header-label {
+    color: var(--clr-sub);
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+  .suggestion-popup {
+    background: #1e1e32;
+    border: 1px solid #444;
+    border-radius: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 10;
+  }
+  .suggestion-item {
+    padding: 0.3rem 0.5rem;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 0.78rem;
+    color: #d0d0e0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .suggestion-item:hover {
+    background: #2a2a44;
+    color: #fff;
   }
 </style>

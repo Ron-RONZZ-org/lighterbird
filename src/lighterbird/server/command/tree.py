@@ -264,6 +264,13 @@ def get_command_tree() -> list[CommandNode]:
                     ],
                 },
                 {
+                    "name": "draft",
+                    "description": "List / recall saved email drafts",
+                    "params": [
+                        {"name": "uuid", "required": False, "type": "uuid", "placeholder": "draft-uuid", "uuidSource": "email.drafts"},
+                    ],
+                },
+                {
                     "name": "signature",
                     "description": "Manage email account signatures",
                     "children": [
@@ -323,6 +330,13 @@ def get_command_tree() -> list[CommandNode]:
                     "name": "event",
                     "description": "Manage calendar events",
                     "children": [
+                        {
+                            "name": "draft",
+                            "description": "List / recall saved calendar event drafts",
+                            "params": [
+                                {"name": "uuid", "required": False, "type": "uuid", "placeholder": "draft-uuid", "uuidSource": "calendar.drafts"},
+                            ],
+                        },
                         {
                             "name": "add",
                             "description": "Create a new event",
@@ -508,6 +522,13 @@ def get_command_tree() -> list[CommandNode]:
                     ],
                 },
                 {
+                    "name": "draft",
+                    "description": "List / recall saved todo drafts",
+                    "params": [
+                        {"name": "uuid", "required": False, "type": "uuid", "placeholder": "draft-uuid", "uuidSource": "todo.drafts"},
+                    ],
+                },
+                {
                     "name": "tree",
                     "description": "List todos (tree view with expand/collapse)",
                     "flags": [
@@ -645,6 +666,13 @@ def get_command_tree() -> list[CommandNode]:
                     "flags": [
                         {"name": "date", "type": "date", "help": "Filter by date (YYYY-MM-DD)"},
                         {"name": "limit", "short": "l", "type": "number", "help": "Max results"},
+                    ],
+                },
+                {
+                    "name": "draft",
+                    "description": "List / recall saved journal drafts",
+                    "params": [
+                        {"name": "uuid", "required": False, "type": "uuid", "placeholder": "draft-uuid", "uuidSource": "journal.drafts"},
                     ],
                 },
                 {
@@ -996,6 +1024,13 @@ def get_command_tree() -> list[CommandNode]:
                         {"name": "limit", "short": "l", "type": "number", "help": "Max results (default 20)"},
                         {"name": "sort", "short": "s", "type": "string", "help": "Sort: newest (default), oldest, sender"},
                         {"name": "group", "short": "g", "type": "string", "help": "Group by: conversation (default none)"},
+                    ],
+                },
+                {
+                    "name": "draft",
+                    "description": "List / recall saved letter drafts",
+                    "params": [
+                        {"name": "uuid", "required": False, "type": "uuid", "placeholder": "draft-uuid", "uuidSource": "letter.drafts"},
                     ],
                 },
                 {
