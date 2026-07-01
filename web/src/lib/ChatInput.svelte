@@ -140,7 +140,7 @@
         const paramTokens = effectiveTokens.slice(cmdTokens);
         const usedValues = new Set(paramTokens.map(t => t.toLowerCase()));
         dataCompletions = dataCompletions.filter((dc) => {
-          const insertVal = (dc.value || dc.uuid.slice(0, 8)).toLowerCase();
+          const insertVal = (dc.value || dc.uuid?.slice(0, 8) || "").toLowerCase();
           return !usedValues.has(insertVal);
         });
       }
@@ -172,12 +172,12 @@
 
   /** Get the text to insert when a data completion is selected. */
   function getDataValue(dc) {
-    return dc.value || dc.uuid.slice(0, 8);
+    return dc.value || dc.uuid?.slice(0, 8) || "";
   }
 
   /** Get the display text for a data completion item. */
   function getDataLabel(dc) {
-    return dc.value || dc.uuid.slice(0, 8);
+    return dc.value || dc.uuid?.slice(0, 8) || "";
   }
 
   function applyCompletion(completion) {

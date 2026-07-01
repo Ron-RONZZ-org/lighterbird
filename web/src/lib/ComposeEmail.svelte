@@ -67,6 +67,11 @@
       e.preventDefault();
       saveDraft();
     }
+    // Ctrl+Enter — submit form from any field including textarea
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault();
+      handleSubmit(e);
+    }
   }
 
   // Dirty state — compare current against initial
@@ -244,7 +249,7 @@
       {/if}
     </button>
     <button type="submit" class="btn-primary" disabled={sending || !to || !subject}>
-      {sending ? "Sending..." : "Send"}
+      {sending ? "Sending..." : "Send"} <kbd>⌃Enter</kbd>
     </button>
   </div>
 

@@ -7,6 +7,7 @@
    *   - Inline body editor with format selection (markdown/html/text) and file upload toggle
    *   - Preview toggle for body content
    *   - Dirty-form guard with beforeunload
+   *   - Keyboard: Ctrl+Enter to submit
    */
   import SearchDialog from "./SearchDialog.svelte";
   import LetterBodyEditor from "./LetterBodyEditor.svelte";
@@ -161,11 +162,16 @@
     await onsubmit({ tokens, flags, remaining: [] });
   }
 
-  // ── Derived helpers ────────────────────────────────────────────────────
-  let submitLabel = $derived(formType === "add" ? "Add Received Letter" : "Send Letter");
-  let senderLabel = $derived(formType === "add" ? "Sender" : "Sender (your info)");
-  let recipientLabel = $derived(formType === "add" ? "Recipient" : "Recipient");
+  // ── Keyboard shortcuts ─────────────────────────────────────────────────
+  function handleFormKeydown(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  }
 </script>
+
+<svelte:window onkeydown={handleFormKeydown} />
 
 <form class="letter-form" onsubmit={handleSubmit}>
   {#if formType === "add"}
@@ -234,7 +240,7 @@
   </div>
 
   <div class="button-row">
-    <button type="submit" class="submit-btn">{submitLabel}</button>
+    <button type="submit" class="submit-btn">{submitLabel} <kbd>⌃Enter</kbd></button>
   </div>
 </form>
 
@@ -354,5 +360,17 @@
   }
   .submit-btn:hover {
     background: #2a4a2a;
+  }
+  .submit-btn kbd {
+    display: inline-block;
+    padding: 0 3px;
+    margin-left: 2px;
+    font-family: monospace;
+    font-size: 0.68rem;
+    background: #222;
+    border: 1px solid #555;
+    border-radius: 3px;
+    color: #999;
+    line-height: 1.3;
   }
 </style>
