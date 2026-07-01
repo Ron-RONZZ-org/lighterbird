@@ -1,46 +1,10 @@
 <script>
-  let { scope = "email-list", onDismiss = () => {} } = $props();
+  import { getAllShortcuts } from "./keyboardShortcuts.svelte.js";
 
-  let shortcuts = $derived(
-    scope === "global"
-      ? [
-          { category: "Navigation", keys: [
-            { key: "Alt + 1-9", desc: "Switch to tab" },
-            { key: "q / Esc", desc: "Close current tab" },
-          ]},
-          { category: "General", keys: [
-            { key: "h", desc: "Toggle help overlay" },
-            { key: "!command", desc: "Run a command" },
-          ]},
-        ]
-      : [
-          { category: "Navigation", keys: [
-            { key: "Alt + 1-9", desc: "Switch to tab" },
-            { key: "q / Esc", desc: "Close current tab" },
-          ]},
-          { category: "Email List", keys: [
-            { key: "f", desc: "Toggle search/filter bar" },
-            { key: "v", desc: "Toggle selection mode" },
-            { key: "↑ / ↓", desc: "Navigate rows (selection mode)" },
-            { key: "PgUp / PgDn", desc: "Navigate pages (selection mode)" },
-            { key: "Shift + ↑ / ↓", desc: "Select range (selection mode)" },
-            { key: "Home / End", desc: "First / last row (selection mode)" },
-            { key: "Space", desc: "Toggle focused row (selection mode)" },
-            { key: "Delete", desc: "Delete selected messages" },
-            { key: "Ctrl + M", desc: "Move selected messages" },
-          ]},
-          { category: "Email Detail", keys: [
-            { key: "Ctrl + R", desc: "Reply" },
-            { key: "Ctrl + Shift + R", desc: "Reply All" },
-            { key: "Ctrl + L", desc: "Forward" },
-          ]},
-          { category: "General", keys: [
-            { key: "h", desc: "Toggle help overlay" },
-            { key: "!command", desc: "Run a command" },
-            { key: "Alt + 1", desc: "Go to Home tab" },
-          ]},
-        ]
-  );
+  let { scope = "global", onDismiss = () => {} } = $props();
+
+  /** Flatten all registered shortcuts into the expected display format. */
+  let shortcuts = $derived(getAllShortcuts());
 
   function handleKeydown(e) {
     if (e.key === "Escape") {

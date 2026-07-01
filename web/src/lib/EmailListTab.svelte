@@ -13,6 +13,15 @@
     truncate,
   } from "./listTabShared.svelte.js";
   import { createEmailConfigStore } from "./emailConfigStore.svelte.js";
+  import { registerShortcuts } from "./keyboardShortcuts.svelte.js";
+
+  registerShortcuts("EmailListTab", [
+    { key: "f", desc: "Toggle folder tree", category: "Email List" },
+    { key: "s", desc: "Change sort order", category: "Email List" },
+    { key: "p", desc: "Toggle params dialog", category: "Email List" },
+    { key: "r", desc: "Reply to selected message", category: "Email List" },
+    { key: "Ctrl+M", desc: "Move selected messages", modifiers: "Ctrl", category: "Email List" },
+  ]);
 
   let { data = {} } = $props();
   let messages = $derived(data?.messages || []);

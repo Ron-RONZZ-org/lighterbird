@@ -21,6 +21,8 @@ router = APIRouter(prefix="/api/v1", tags=["command"])
 # Maps a command path (dotted) to its form type string.
 _INTERACTIVE_FORMS: dict[str, str] = {
     "email.send": "email-send",
+    "email.reply": "email-send",
+    "email.forward": "email-send",
     "email.sieve.add": "email-sieve-add",
     "email.sieve.modify": "email-sieve-modify",
     "calendar.event.add": "calendar-event-add",

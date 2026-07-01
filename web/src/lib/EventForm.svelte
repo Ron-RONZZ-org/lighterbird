@@ -42,6 +42,10 @@
       e.preventDefault();
       saveDraft();
     }
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault();
+      handleSubmit(e);
+    }
   }
 
   // Dirty state — compare current against initial
@@ -122,7 +126,7 @@
       {/if}
     </button>
     <button type="submit" disabled={creating || !calendarUuid || !title || !start || !end}>
-      {creating ? "Creating..." : "Create Event"}
+      {creating ? "Creating..." : "Create Event"} <kbd>⌃Enter</kbd>
     </button>
   </div>
 </form>

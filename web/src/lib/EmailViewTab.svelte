@@ -2,6 +2,13 @@
   import { popup } from "./popupStore.svelte.js";
   import { tabStore } from "./tabStore.svelte.js";
   import { email as emailApi } from "./api.js";
+  import { registerShortcuts } from "./keyboardShortcuts.svelte.js";
+
+  registerShortcuts("EmailViewTab", [
+    { key: "Ctrl+R", desc: "Reply", modifiers: "Ctrl", category: "Email Detail" },
+    { key: "Ctrl+Shift+R", desc: "Reply All", modifiers: "Ctrl+Shift", category: "Email Detail" },
+    { key: "Ctrl+L", desc: "Forward", modifiers: "Ctrl", category: "Email Detail" },
+  ]);
 
   let { data = {}, tabId } = $props();
   let msg = $derived(data || {});
