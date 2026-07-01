@@ -56,6 +56,12 @@
     tabStore.close(tabId);
   }
 
+  // Tab types that manage their own Escape (selection mode, search, dialogs)
+  const LIST_TAB_TYPES = new Set([
+    "email-list", "journal-list", "contacts-list", "todo-list",
+    "calendar-events", "sieve-list", "letter-list",
+  ]);
+
   function handleKeydown(e) {
     // Escape — context-sensitive: blur field → allow component → close tab
     if (e.key === "Escape") {
@@ -77,9 +83,9 @@
       // Level 3: When command input is focused on home tab, let ChatInput handle Escape
       if (tabStore.isHome && inputFocused) return;
 
-      // Level 4: Let email-list manage its own Escape (dialogs, search, selection)
+      // Level 4: Let list tabs manage their own Escape (selection mode exit, search close, dialog dismiss)
       const type = tabStore.active?.type;
-      if (type === "email-list") return;
+      if (type && LIST_TAB_TYPES.has(type)) return;
 
       // Level 5: Close current tab
       if (tabStore.active && tabStore.active.closable && !tabStore.isHome) {
@@ -235,7 +241,11 @@
         <kbd>h</kbd> help
         {#if !tabStore.isHome}
           <span class="hint-sep">·</span>
-          <kbd>q</kbd> <kbd>Esc</kbd> close
+          {#if tabStore.active && LIST_TAB_TYPES.has(tabStore.active.type)}
+            <kbd>q</kbd> close
+          {:else}
+            <kbd>q</kbd> <kbd>Esc</kbd> close
+          {/if}
         {/if}
       </span>
     </div>
