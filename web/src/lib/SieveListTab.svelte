@@ -14,6 +14,7 @@
   let selectedNames = $state(new Set());
   let focusedIndex = $state(-1);
 
+  // svelte-ignore state_referenced_locally
   let accountFilter = $state(initialAccountFilter);
   let confirmDelete = $state(false);
   let deleteTarget = $state("");
@@ -195,8 +196,8 @@
       <button class="btn" onclick={refreshList} title="Refresh list">⟳</button>
     </div>
     <div class="right">
-      <label class="act-label">Show activation for:</label>
-      <select class="account-select" onchange={handleAccountChange} value={accountFilter}>
+      <label class="act-label" for="sieve-account-filter">Show activation for:</label>
+      <select id="sieve-account-filter" class="account-select" onchange={handleAccountChange} value={accountFilter}>
         <option value="">(global view — no activation info)</option>
         {#each accounts as acct}
           <option value={acct.uuid}>{acct.email}</option>
@@ -228,7 +229,9 @@
             </span>
           {/if}
         </span>
-        <span class="uuid" onclick={(e) => { e.stopPropagation(); copyUuid(script.uuid); }}
+        <span class="uuid" role="button" tabindex="-1"
+              onclick={(e) => { e.stopPropagation(); copyUuid(script.uuid); }}
+              onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); copyUuid(script.uuid); } }}
               title="Click to copy UUID">
           {copiedUuid === script.uuid ? "Copied!" : script.uuid.slice(0, 8)}
         </span>
@@ -325,8 +328,7 @@
     white-space: nowrap;
   }
   .btn:hover { background: #3a3a5a; }
-  .btn.primary { border-color: #3a6a3a; color: #7fdb7f; }
-  .btn.primary:hover { background: #1e3a1e; }
+
   .btn.danger { border-color: #8a3a3a; color: #e07070; }
   .btn.danger:hover { background: #3a2020; }
   .btn.small { padding: 0.1rem 0.3rem; font-size: 0.72rem; }

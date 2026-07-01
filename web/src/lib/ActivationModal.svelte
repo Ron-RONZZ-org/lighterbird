@@ -91,10 +91,9 @@
 </script>
 
 {#if show}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <div class="modal-overlay" onclick={() => onClose?.()}>
+  <div class="modal-overlay" onclick={() => onClose?.()} role="button" tabindex="-1" aria-label="Dismiss" onkeydown={(e) => { if (e.key === "Escape") onClose?.(); }}>
     <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-label="Activation management">
+    <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-label="Activation management" tabindex="0">
       <div class="modal-header">
         <h3>Activation: {script?.name}</h3>
         <button class="close-btn" onclick={() => onClose?.()} title="Close">✕</button>

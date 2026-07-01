@@ -288,7 +288,9 @@
               </span>
             {/if}
 
-            <span class="tuuid" onclick={(e) => { e.stopPropagation(); uuidCopy.copyToClipboard(todo.uuid); }}
+            <span class="tuuid" role="button" tabindex="-1"
+                  onclick={(e) => { e.stopPropagation(); uuidCopy.copyToClipboard(todo.uuid); }}
+                  onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); uuidCopy.copyToClipboard(todo.uuid); } }}
                   title="Click to copy UUID">
               {uuidCopy.copiedKey === todo.uuid ? "Copied!" : todo.uuid.slice(0, 8)}
             </span>

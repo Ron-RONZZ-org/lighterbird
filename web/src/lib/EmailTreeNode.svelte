@@ -1,5 +1,7 @@
 <script>
   /** Recursive tree node for EmailFolderTree. */
+  import EmailTreeNode from "./EmailTreeNode.svelte";
+
   let {
     node = {},
     onToggle = () => {},
@@ -35,14 +37,15 @@
   {/if}
 
   <span class="node-label" class:account={!node.isFolder && (node.children?.length || 0) > 0}
-    role="button" tabindex="-1" onclick={() => { if (node.isFolder) onToggle(node.path); }}>
+    role="button" tabindex="-1" onclick={() => { if (node.isFolder) onToggle(node.path); }}
+    onkeydown={(e) => { if ((e.key === "Enter" || e.key === " ") && node.isFolder) { e.preventDefault(); onToggle(node.path); } }}>
     {node.name}
   </span>
 
   {#if node.expanded && node.children && node.children.length > 0}
     <div class="children">
       {#each node.children as child}
-        <svelte:self node={child} {onToggle} {onExpand} {depth} />
+        <EmailTreeNode node={child} {onToggle} {onExpand} {depth} />
       {/each}
     </div>
   {/if}

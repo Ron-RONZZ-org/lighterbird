@@ -69,6 +69,7 @@
     <div class="form">
       <label class="field">
         <span class="field-label">Email Address</span>
+        <!-- svelte-ignore a11y_autofocus -->
         <input type="email" class="text-input" bind:value={email} placeholder="user@example.com" disabled={isEdit} autofocus />
       </label>
       <label class="field">

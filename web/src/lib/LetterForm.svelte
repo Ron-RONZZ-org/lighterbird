@@ -14,14 +14,21 @@
   let { initialData = {}, formType = "add", onsubmit, onDirtyChange } = $props();
 
   // ── Form state ─────────────────────────────────────────────────────────
+  // svelte-ignore state_referenced_locally
   let object = $state(initialData.object || "");
+  // svelte-ignore state_referenced_locally
   let senderText = $state(initialData.sender_manual || initialData.sender || "");
+  // svelte-ignore state_referenced_locally
   let recipientText = $state(initialData.recipient_manual || initialData.recipient || "");
+  // svelte-ignore state_referenced_locally
   let senderProfile = $state(initialData["sender-profile"] || initialData.sender_profile || "");
+  // svelte-ignore state_referenced_locally
   let recipientContact = $state(initialData["recipient-contact"] || initialData.recipient_contact || "");
+  // svelte-ignore state_referenced_locally
   let respondTo = $state(initialData["respond-to"] || initialData.respond_to_uuid || "");
   let bodyContent = $state("");
   let bodyFormat = $state("markdown");
+  // svelte-ignore state_referenced_locally
   let bodyFilePath = $state(initialData.body || "");
   let bodyProvided = $state(false); // tracks if body was ever edited / file specified
 

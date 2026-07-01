@@ -120,6 +120,38 @@ lighterbird/
 - When adding a new feature, implement both the CLI handler (backend) and the GUI component (Svelte) simultaneously.
 - The authoritative command metadata lives in `src/lighterbird/server/command/tree.py` (backend). The frontend fetches it on startup via `GET /api/v1/command/tree`. There is no hardcoded frontend tree — `commandTree.js` starts empty and is populated dynamically.
 
+## Testing Requirements
+
+### GUI + Incomplete CLI → GUI Form Testing
+
+**All interactive commands MUST be tested via BOTH the API and the browser GUI.** Incomplete CLI commands that trigger a form popup (`form-required` response) are the primary UX pattern and must be explicitly verified end-to-end:
+
+1. **Test incomplete commands that trigger form popups** — for every command with `interactive: true` in `tree.py`:
+   - Type the command with missing required params (e.g. `!user info add` without a profile name)
+   - Verify the GUI opens the correct form with all fields visible
+   - Verify the form title matches the command
+   - Verify the "Save" button submits correctly
+   - Verify the result tab shows success
+
+2. **Test the frontend interception (`shouldIntercept` in `commandRouter.js`)** — for every `add`/`write` command:
+   - Verify `resolveAddFormType()` has a mapping for the command path
+   - Verify `resolveListIdKey()` has a mapping for the list command path
+   - Verify `resolveAddTitle()` has a title for the form type
+   - Verify `_inferCommandPath()` in `FormTab.svelte` has the form type → command path mapping
+   - If any of these mappings are missing, the form shows "Unknown form type" instead of the correct form.
+
+3. **The authoritative list of mappings to check** — when adding a new interactive command, update ALL of these:
+   - `_INTERACTIVE_FORMS` in `server/routes/command.py` (backend)
+   - `resolveAddFormType()` in `web/src/lib/commandRouter.js`
+   - `resolveListIdKey()` in `web/src/lib/commandRouter.js`
+   - `resolveAddTitle()` in `web/src/lib/commandRouter.js`
+   - `_inferCommandPath()` in `web/src/lib/FormTab.svelte`
+   - `detectPersistentType()` in `web/src/App.svelte` and `web/src/lib/HomeTab.svelte`
+
+4. **GUI tests use Playwright in headless mode** — run with `headed: false` by default. Always use `http://127.0.0.1:<port>` for local dev servers.
+
+5. **Cowriting via GUI** — test LLM co-writing through form editors (ComposeEmail, TodoAddForm, JournalWrite) by filling in text and invoking the cowrite feature. Also test via the cowrite API directly (`POST /api/v1/cowrite`).
+
 ## Coding Guidelines
 
 1. **No file > 500 lines.** Split by functional unit (follow A-ecosystem pattern).

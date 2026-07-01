@@ -31,6 +31,7 @@
     onchange = (v) => {},
   } = $props();
 
+  // svelte-ignore state_referenced_locally
   let inputValue = $state(value || "");
   let suggestions = $state([]);
   let showDropdown = $state(false);
@@ -149,6 +150,7 @@
                 class:active={i === activeIndex}
                 role="option"
                 aria-selected={i === activeIndex}
+                tabindex="-1"
                 onmousedown={() => selectItem(item)}
               >
                 <span class="item-uuid">{item.uuid.slice(0, 8)}</span>
@@ -188,6 +190,7 @@
             class:active={i === activeIndex}
             role="option"
             aria-selected={i === activeIndex}
+            tabindex="-1"
             onmousedown={() => selectItem(item)}
           >
             <span class="item-uuid">{item.uuid.slice(0, 8)}</span>
