@@ -89,6 +89,7 @@ def get_command_tree() -> list[CommandNode]:
                 {
                     "name": "reply",
                     "description": "Reply to a message (opens compose form)",
+                    "interactive": True,
                     "params": [
                         {"name": "uuid", "required": True, "type": "uuid", "placeholder": "message-uuid", "uuidSource": "email.listMessages"},
                     ],
@@ -99,6 +100,7 @@ def get_command_tree() -> list[CommandNode]:
                 {
                     "name": "forward",
                     "description": "Forward a message (opens compose form)",
+                    "interactive": True,
                     "params": [
                         {"name": "uuid", "required": True, "type": "uuid", "placeholder": "message-uuid", "uuidSource": "email.listMessages"},
                     ],

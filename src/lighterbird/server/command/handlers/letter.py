@@ -259,10 +259,10 @@ def _generate_letter_html(uuid: str, sender: str, recipient: str, subject: str) 
       max-width: 21cm; margin: 0 auto;
     }}
     .sender-block {{ margin-bottom: 0.5cm; font-size: 11pt; color: #444; }}
-    .sender-block .line {{ margin: 0; }}
+    .sender-block .line {{ margin: 0; white-space: pre-wrap; }}
     .date {{ font-size: 11pt; color: #666; margin-top: 0.3cm; }}
     .recipient-block {{ margin-top: 1.5cm; text-align: right; font-size: 11pt; }}
-    .recipient-block .line {{ margin: 0; }}
+    .recipient-block .line {{ margin: 0; white-space: pre-wrap; }}
     .subject {{ font-weight: bold; margin-bottom: 1cm; font-size: 13pt; }}
     .body {{ text-align: justify; }}
     .signature {{ margin-top: 2cm; }}
