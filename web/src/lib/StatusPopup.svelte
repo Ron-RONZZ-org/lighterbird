@@ -352,8 +352,82 @@
     <p class="message">Done: {d.done.join(", ")}</p>
   {:else if d._summary}
     <p class="message" style="white-space:pre-wrap">{d._summary}</p>
+
+  {:else if d.user_profiles !== undefined}
+    <div class="section-header">
+      <h3 class="title">User Profiles ({d.user_profiles.length})</h3>
+      <button class="btn-add" onclick={() =>
+        tabStore.open("form", "Add User Profile", {
+          form: "user-info-add",
+          initialData: {},
+        }, { idKey: "form-user-info-add" })
+      }>+ Add Profile</button>
+    </div>
+    {#each d.user_profiles as p}
+      <div class="row">
+        <span class="key">{p.uuid || ""}</span>
+        <span class="val">{(p.profile_name || "") + (p.full_name ? " — " + p.full_name : "")}</span>
+        <span class="hint">{p.primary_email || p.organization || ""}</span>
+      </div>
+    {:else}
+      <p class="empty">No profiles.</p>
+    {/each}
+
+  {:else if d.templates !== undefined}
+    <div class="section-header">
+      <h3 class="title">Todo Templates ({d.templates.length})</h3>
+    </div>
+    {#each d.templates as t}
+      <div class="row">
+        <span class="key">{t.uuid ? t.uuid.slice(0, 8) : ""}</span>
+        <span class="val">{t.name || ""}</span>
+        <span class="hint">{t.field_count ? t.field_count + " fields" : ""}</span>
+      </div>
+    {:else}
+      <p class="empty">No templates.</p>
+    {/each}
+
+  {:else if d.scripts !== undefined}
+    <div class="section-header">
+      <h3 class="title">Sieve Scripts ({d.scripts.length})</h3>
+    </div>
+    {#each d.scripts as s}
+      <div class="row">
+        <span class="key">{s.name || ""}</span>
+        <span class="val">{s.size ? s.size + " bytes" : ""}</span>
+        <span class="hint">{(s.active ? "✓ active" : "") + (s.accounts ? " (" + s.accounts + ")" : "")}</span>
+      </div>
+    {:else}
+      <p class="empty">No sieve scripts.</p>
+    {/each}
+
   {:else}
-    <p class="message">Done.</p>
+    {#each Object.entries(d) as [key, val]}
+      {#if typeof val === "string" && val}
+        <div class="row">
+          <span class="key">{key}</span>
+          <span class="val">{val}</span>
+        </div>
+      {:else if typeof val === "number"}
+        <div class="row">
+          <span class="key">{key}</span>
+          <span class="val">{val}</span>
+        </div>
+      {:else if typeof val === "boolean"}
+        <div class="row">
+          <span class="key">{key}</span>
+          <span class="val">{val ? "✓" : "—"}</span>
+        </div>
+      {:else if Array.isArray(val) && val.length > 0}
+        <div class="row">
+          <span class="key">{key}</span>
+          <span class="val">{val.length} item{val.length !== 1 ? "s" : ""}</span>
+        </div>
+      {/if}
+    {/each}
+    {#if Object.keys(d).length === 0}
+      <p class="message">No data.</p>
+    {/if}
   {/if}
 </div>
 
