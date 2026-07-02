@@ -69,17 +69,27 @@ export function createCowrite(opts) {
   let sessionId = $state("");
 
   /**
+   * Open the co-writing panel (even without an instruction yet).
+   * The user can then type an instruction and hit "Ask LLM".
+   */
+  function openPanel() {
+    isActive = true;
+    error = "";
+  }
+
+  /**
    * Start a co-writing request with the given instruction.
    * @param {string} instr
    */
   async function startCowrite(instr) {
     const trimmed = (instr || instruction).trim();
+    isActive = true;
     if (!trimmed) return;
-
     instruction = trimmed;
+
     isLoading = true;
     error = "";
-    isActive = true;
+    fieldEdits = [];
 
     const fields = getCurrentContent();
 
@@ -186,6 +196,7 @@ export function createCowrite(opts) {
     get sessionId() { return sessionId; },
     get hasUnprocessed() { return hasUnprocessed; },
     startCowrite,
+    openPanel,
     acceptAll,
     rejectAll,
     acceptEdit,

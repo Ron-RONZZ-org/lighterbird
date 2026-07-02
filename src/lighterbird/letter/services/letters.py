@@ -29,40 +29,50 @@ class LetterService(CRUDService):
         object_query: str | None = None,
         date_after: str | None = None,
         date_before: str | None = None,
+        tags: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         conditions: list[str] = []
         params: list[Any] = []
 
         if direction and direction != "all":
-            conditions.append("direction = ?")
+            conditions.append("l.direction = ?")
             params.append(direction)
 
         if sender:
-            conditions.append("(LOWER(sender_manual) LIKE LOWER(?) OR sender_profile = ?)")
+            conditions.append("(LOWER(l.sender_manual) LIKE LOWER(?) OR l.sender_profile = ?)")
             params.extend([f"%{sender}%", sender])
 
         if recipient:
-            conditions.append("(LOWER(recipient_manual) LIKE LOWER(?) OR recipient_contact = ?)")
+            conditions.append("(LOWER(l.recipient_manual) LIKE LOWER(?) OR l.recipient_contact = ?)")
             params.extend([f"%{recipient}%", recipient])
 
         if object_query:
-            conditions.append("LOWER(object) LIKE LOWER(?)")
+            conditions.append("LOWER(l.object) LIKE LOWER(?)")
             params.append(f"%{object_query}%")
 
         if date_after:
-            conditions.append("created_at >= ?")
+            conditions.append("l.created_at >= ?")
             params.append(date_after)
 
         if date_before:
-            conditions.append("created_at <= ?")
+            conditions.append("l.created_at <= ?")
             params.append(date_before)
 
+        # Tag filter: letters must have ALL specified tags (AND semantics)
+        if tags:
+            for tag in tags:
+                conditions.append(
+                    "EXISTS (SELECT 1 FROM letter_tags lt WHERE lt.letter_uuid = l.uuid AND lt.tag = ?)"
+                )
+                params.append(tag)
+
+        from_clause = f"{self.table} l"
         where = ""
         if conditions:
             where = " WHERE " + " AND ".join(conditions)
 
         sort_order = "DESC" if desc else "ASC"
-        sql = f"SELECT * FROM {self.table}{where} ORDER BY {order_by} {sort_order}"
+        sql = f"SELECT l.* FROM {from_clause}{where} ORDER BY l.{order_by} {sort_order}"
 
         if limit is not None:
             sql += " LIMIT ?"
@@ -72,7 +82,8 @@ class LetterService(CRUDService):
             sql += " OFFSET ?"
             params.append(offset)
 
-        return self.db.execute(sql, tuple(params))
+        results = self.db.execute(sql, tuple(params))
+        return self._attach_tags(results)
 
     # ── Get with conversation thread ───────────────────────────────────
 
@@ -107,7 +118,7 @@ class LetterService(CRUDService):
         if not query:
             return self.list(limit=limit)
         like_q = f"%{query}%"
-        return self.db.execute(
+        results = self.db.execute(
             "SELECT * FROM letters WHERE"
             " LOWER(object) LIKE LOWER(?)"
             " OR LOWER(sender_manual) LIKE LOWER(?)"
@@ -115,6 +126,7 @@ class LetterService(CRUDService):
             " ORDER BY created_at DESC LIMIT ?",
             (like_q, like_q, like_q, limit),
         )
+        return self._attach_tags(results)
 
     # ── Conversation-grouped listing ───────────────────────────────────
 
@@ -134,7 +146,76 @@ class LetterService(CRUDService):
             )
             root["replies"] = replies
             result.append(root)
+        return self._attach_tags(result)
+
+    # ── Tag management ────────────────────────────────────────────────
+
+    @staticmethod
+    def normalize_tags(raw_tags: list[str]) -> list[str]:
+        """Normalize tag strings: lowercase, strip, filter empty, expand commas.
+
+        Handles both ``--tag a --tag b`` (list of single tags) and
+        ``--tag a,b`` (comma-separated in one flag).
+        """
+        seen: set[str] = set()
+        result: list[str] = []
+        for raw in raw_tags:
+            for part in raw.split(","):
+                t = part.strip().lower()
+                if t and t not in seen:
+                    seen.add(t)
+                    result.append(t)
         return result
+
+    def set_tags(self, uuid_: str, tags: list[str]) -> None:
+        """Replace all tags for a letter."""
+        self.db.execute("DELETE FROM letter_tags WHERE letter_uuid = ?", (uuid_,))
+        for tag in tags:
+            self.db.execute(
+                "INSERT OR IGNORE INTO letter_tags (letter_uuid, tag) VALUES (?, ?)",
+                (uuid_, tag),
+            )
+
+    def add_tags(self, uuid_: str, tags: list[str]) -> None:
+        """Add tags to a letter (merging with existing)."""
+        for tag in tags:
+            self.db.execute(
+                "INSERT OR IGNORE INTO letter_tags (letter_uuid, tag) VALUES (?, ?)",
+                (uuid_, tag),
+            )
+
+    def remove_tags(self, uuid_: str, tags: list[str]) -> None:
+        """Remove specific tags from a letter."""
+        for tag in tags:
+            self.db.execute(
+                "DELETE FROM letter_tags WHERE letter_uuid = ? AND tag = ?",
+                (uuid_, tag),
+            )
+
+    def get_tags(self, uuid_: str) -> list[str]:
+        """Get all tags for a letter."""
+        rows = self.db.execute(
+            "SELECT tag FROM letter_tags WHERE letter_uuid = ? ORDER BY tag",
+            (uuid_,),
+        )
+        return [r["tag"] for r in rows]
+
+    def _attach_tags(self, letters: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Attach tags to a list of letter dicts (batch query)."""
+        if not letters:
+            return letters
+        uuids = [l["uuid"] for l in letters]
+        placeholders = ",".join("?" for _ in uuids)
+        rows = self.db.execute(
+            f"SELECT letter_uuid, tag FROM letter_tags WHERE letter_uuid IN ({placeholders}) ORDER BY tag",
+            tuple(uuids),
+        )
+        tag_map: dict[str, list[str]] = {}
+        for r in rows:
+            tag_map.setdefault(r["letter_uuid"], []).append(r["tag"])
+        for l in letters:
+            l["tags"] = tag_map.get(l["uuid"], [])
+        return letters
 
     # ── Body content management ────────────────────────────────────────
 

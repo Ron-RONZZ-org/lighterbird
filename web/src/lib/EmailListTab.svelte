@@ -3,6 +3,7 @@
   import { email as emailApi } from "./api.js";
   import EmailListToolbar from "./EmailListToolbar.svelte";
   import EmailFolderTree from "./EmailFolderTree.svelte";
+  import SortDropdown from "./SortDropdown.svelte";
   import MoveDialog from "./MoveDialog.svelte";
   import KeyboardShortcutOverlay from "./KeyboardShortcutOverlay.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
@@ -291,6 +292,18 @@
     applyFolderFilter();
   }
 
+  async function handleCreateFolder(folderName) {
+    // Determine the account from the first folder in the list
+    const firstFolder = folders[0];
+    if (!firstFolder || !firstFolder.account_email) {
+      throw new Error("No email account found. Configure an account first.");
+    }
+    await emailApi.createFolder(firstFolder.account_email, folderName);
+    // Auto-sync: re-fetch folder list
+    const res = await emailApi.listFolders();
+    folders = res.folders || [];
+  }
+
   function applyFolderFilter() {
     // Determine which folders to show
     const visibleFolders = Object.entries(folderVisibility)
@@ -380,9 +393,9 @@
   />
 
   <!-- Folder tree dropdown overlay -->
-  {#if showFolderTree || showSortDropdown}
+  {#if showFolderTree}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="dropdown-backdrop" onclick={() => { showFolderTree = false; showSortDropdown = false; }} role="presentation"></div>
+    <div class="dropdown-backdrop" onclick={() => { showFolderTree = false; }} role="presentation"></div>
     <div class="dropdown-panel folder-panel">
       <EmailFolderTree
         {folders}
@@ -392,6 +405,21 @@
         {groupByConversation}
         onToggleFolder={handleToggleFolder}
         onToggleExpand={handleToggleExpand}
+        onSortChange={handleSortChange}
+        onGroupChange={handleGroupChange}
+        onCreateFolder={handleCreateFolder}
+      />
+    </div>
+  {/if}
+
+  <!-- Sort dropdown overlay -->
+  {#if showSortDropdown}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div class="dropdown-backdrop" onclick={() => { showSortDropdown = false; }} role="presentation"></div>
+    <div class="dropdown-panel sort-panel">
+      <SortDropdown
+        {sort}
+        {groupByConversation}
         onSortChange={handleSortChange}
         onGroupChange={handleGroupChange}
       />

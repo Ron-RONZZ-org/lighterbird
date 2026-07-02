@@ -6,6 +6,7 @@ Registered paths:
     journal.draft        — List / recall journal drafts
     todo.draft           — List / recall todo drafts
     calendar.draft       — List / recall calendar event drafts
+    letter.draft         — List / recall letter drafts
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ DOMAIN_MAP = {
     "journal": "journal",
     "todo": "todo",
     "calendar": "calendar-event",
+    "letter": "letter",
 }
 
 DOMAIN_LABELS = {
@@ -29,6 +31,7 @@ DOMAIN_LABELS = {
     "journal": "Journal",
     "todo": "Todo",
     "calendar": "Calendar Event",
+    "letter": "Letter",
 }
 
 
@@ -185,3 +188,32 @@ def calendar_draft(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
             },
         }
     return _handle_draft_list("calendar", remaining)
+
+@command("letter.draft")
+def letter_draft(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!letter draft [<uuid>]
+
+    List saved letter drafts or recall a specific draft by UUID.
+    When recalled, opens the send form with pre-filled data.
+    """
+    if remaining:
+        uuid = remaining[0]
+        draft = get_draft(uuid)
+        if not draft:
+            raise CommandValidationError(f"Draft not found: {uuid}")
+        if draft.get("domain") != "letter":
+            raise CommandValidationError(f"Draft {uuid} is not a letter draft.")
+        return {
+            "type": "form-required",
+            "title": "Recall Draft: " + draft.get("title", "(untitled)"),
+            "data": {
+                "form": "letter-send",
+                "initialData": {
+                    **draft.get("data", {}),
+                    "_returnType": "letter-list",
+                    "_returnTitle": "Letters",
+                    "_returnIdKey": "persistent-letter-list",
+                },
+            },
+        }
+    return _handle_draft_list("letter", remaining)

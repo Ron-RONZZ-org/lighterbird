@@ -158,6 +158,17 @@ class IMAPClient:
             pass
         return folder_name
 
+    def create_folder(self, folder_name: str) -> bool:
+        """Create a new IMAP folder/mailbox on the server.
+
+        Sends ``CREATE`` command via imaplib.
+
+        Returns:
+            True if the folder was created successfully.
+        """
+        typ, _data = self.conn.create(folder_name)
+        return typ == "OK"
+
     # ── Write operations (move, copy, delete) ──────────────────────────
 
     def _select_folder(self, folder: str) -> bool:

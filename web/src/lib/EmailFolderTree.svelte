@@ -1,7 +1,8 @@
 <script>
   /**
    * EmailFolderTree.svelte — Multi-level folder tree dropdown with
-   * checkbox visibility toggles, sort options, and group-by toggle.
+   * checkbox visibility toggles, sort options, group-by toggle,
+   * and new folder creation.
    */
   import EmailTreeNode from "./EmailTreeNode.svelte";
 
@@ -15,9 +16,14 @@
     onToggleExpand = () => {},
     onSortChange = () => {},
     onGroupChange = () => {},
+    onCreateFolder = null,
   } = $props();
 
   let tree = $derived(buildTree(folders));
+  let showNewFolderInput = $state(false);
+  let newFolderName = $state("");
+  let creating = $state(false);
+  let createError = $state("");
 
   function buildTree(flatFolders) {
     const root = {};
@@ -63,16 +69,33 @@
     onToggleExpand(path);
   }
 
-  let sortOptions = [
-    { value: "newest", label: "Newest First" },
-    { value: "oldest", label: "Oldest First" },
-    { value: "sender", label: "Group by Sender" },
-  ];
+  async function handleCreateFolder() {
+    const name = newFolderName.trim();
+    if (!name) return;
+    if (!onCreateFolder) return;
+    creating = true;
+    createError = "";
+    try {
+      await onCreateFolder(name);
+      newFolderName = "";
+      showNewFolderInput = false;
+    } catch (err) {
+      createError = err.message || "Failed to create folder";
+    } finally {
+      creating = false;
+    }
+  }
 </script>
 
 <div class="folder-tree">
   <div class="tree-section">
-    <h4 class="section-title">Folders</h4>
+    <div class="section-header">
+      <h4 class="section-title">Folders</h4>
+      {#if onCreateFolder}
+        <button class="new-folder-btn" onclick={() => { showNewFolderInput = !showNewFolderInput; newFolderName = ""; createError = ""; }}
+                title="Create new folder">+ New</button>
+      {/if}
+    </div>
     <div class="tree-scroll">
       {#each tree as node}
         <EmailTreeNode {node} onToggle={handleToggle} onExpand={handleExpand} depth={0} />
@@ -81,35 +104,27 @@
         <p class="empty-tree">No folders found.</p>
       {/if}
     </div>
-  </div>
-
-  <div class="sort-section">
-    <h4 class="section-title">Sort</h4>
-    <div class="sort-options">
-      {#each sortOptions as opt}
-        <label class="sort-radio">
-          <input
-            type="radio"
-            name="sort"
-            value={opt.value}
-            checked={sort === opt.value}
-            onchange={() => onSortChange(opt.value)}
-          />
-          <span>{opt.label}</span>
-        </label>
-      {/each}
-    </div>
-  </div>
-
-  <div class="group-section">
-    <label class="group-check">
-      <input
-        type="checkbox"
-        checked={groupByConversation}
-        onchange={(e) => onGroupChange(e.target.checked)}
-      />
-      <span>Group by Conversations</span>
-    </label>
+    {#if showNewFolderInput}
+      <div class="new-folder-form">
+        <input
+          type="text"
+          class="new-folder-input"
+          placeholder="Folder name (e.g. My Folder)"
+          bind:value={newFolderName}
+          onkeydown={(e) => { if (e.key === "Enter") handleCreateFolder(); if (e.key === "Escape") { showNewFolderInput = false; } }}
+          disabled={creating}
+        />
+        <div class="new-folder-actions">
+          <button class="tool-btn primary" onclick={handleCreateFolder} disabled={creating || !newFolderName.trim()}>
+            {creating ? "Creating…" : "Create"}
+          </button>
+          <button class="tool-btn" onclick={() => { showNewFolderInput = false; }}>Cancel</button>
+        </div>
+        {#if createError}
+          <p class="new-folder-error">{createError}</p>
+        {/if}
+      </div>
+    {/if}
   </div>
 </div>
 
@@ -121,14 +136,32 @@
     font-family: monospace;
     font-size: 0.82rem;
   }
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.3rem;
+  }
   .section-title {
-    margin: 0 0 0.3rem;
+    margin: 0;
     font-size: 0.72rem;
     color: var(--clr-muted);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     font-weight: 600;
   }
+  .new-folder-btn {
+    padding: 0.15rem 0.4rem;
+    border: 1px solid #3a6a3a;
+    border-radius: 3px;
+    background: transparent;
+    color: #7fdb7f;
+    font-family: monospace;
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .new-folder-btn:hover { background: #1e3a1e; }
   .tree-scroll {
     max-height: 250px;
     overflow-y: auto;
@@ -143,35 +176,45 @@
     padding: 1rem;
     font-size: 0.78rem;
   }
-  .sort-section {
-    border-top: 1px solid #2a2a3e;
-    padding-top: 0.5rem;
-  }
-  .sort-options {
+  .new-folder-form {
+    margin-top: 0.4rem;
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
   }
-  .sort-radio {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    cursor: pointer;
+  .new-folder-input {
+    padding: 0.3rem 0.4rem;
+    border: 1px solid #444;
+    border-radius: 4px;
+    background: #12122a;
+    color: #e0e0e0;
+    font-family: monospace;
     font-size: 0.8rem;
-    color: #ccc;
+    outline: none;
   }
-  .sort-radio input { accent-color: #4a6fa5; }
-  .group-section {
-    border-top: 1px solid #2a2a3e;
-    padding-top: 0.5rem;
-  }
-  .group-check {
+  .new-folder-input:focus { border-color: #6a6a9a; }
+  .new-folder-actions {
     display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    cursor: pointer;
-    font-size: 0.8rem;
-    color: #ccc;
+    gap: 0.3rem;
   }
-  .group-check input { width: 0.9rem; height: 0.9rem; accent-color: #4a6fa5; }
+  .tool-btn {
+    padding: 0.2rem 0.5rem;
+    border: 1px solid #444;
+    border-radius: 4px;
+    background: #2a2a3e;
+    color: #e0e0e0;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 0.75rem;
+    transition: background 0.1s;
+  }
+  .tool-btn:hover:not(:disabled) { background: #3a3a5e; }
+  .tool-btn:disabled { opacity: 0.4; cursor: default; }
+  .tool-btn.primary { border-color: #3a6a3a; color: #7fdb7f; }
+  .tool-btn.primary:hover:not(:disabled) { background: #1e3a1e; }
+  .new-folder-error {
+    color: #d06;
+    font-size: 0.72rem;
+    margin: 0;
+  }
 </style>

@@ -264,6 +264,13 @@ def get_command_tree() -> list[CommandNode]:
                     ],
                 },
                 {
+                    "name": "draft",
+                    "description": "List / recall saved email drafts",
+                    "params": [
+                        {"name": "uuid", "required": False, "type": "uuid", "placeholder": "draft-uuid", "uuidSource": "email.drafts"},
+                    ],
+                },
+                {
                     "name": "signature",
                     "description": "Manage email account signatures",
                     "children": [
@@ -323,6 +330,13 @@ def get_command_tree() -> list[CommandNode]:
                     "name": "event",
                     "description": "Manage calendar events",
                     "children": [
+                        {
+                            "name": "draft",
+                            "description": "List / recall saved calendar event drafts",
+                            "params": [
+                                {"name": "uuid", "required": False, "type": "uuid", "placeholder": "draft-uuid", "uuidSource": "calendar.drafts"},
+                            ],
+                        },
                         {
                             "name": "add",
                             "description": "Create a new event",
@@ -435,13 +449,13 @@ def get_command_tree() -> list[CommandNode]:
                 {
                     "name": "add",
                     "description": "Add a contact",
-                    "params": [
-                        {"name": "name", "required": True, "type": "string", "placeholder": "Full name"},
-                    ],
+                    "params": [],
                     "flags": [
+                        {"name": "first-name", "type": "string", "help": "Given name (required)"},
+                        {"name": "last-name", "type": "string", "help": "Family name"},
                         {"name": "email", "type": "string", "help": "Email address(es), tag:value,..."},
                         {"name": "phone", "type": "string", "help": "Phone number(s), tag:value,..."},
-                        {"name": "org", "type": "string", "help": "Organization"},
+                        {"name": "organization", "type": "string", "help": "Organization"},
                         {"name": "notes", "type": "string", "help": "Notes"},
                         {"name": "middle-names", "type": "string", "help": "Middle names"},
                         {"name": "dob", "type": "date", "help": "Date of birth (YYYY-MM-DD)"},
@@ -449,6 +463,7 @@ def get_command_tree() -> list[CommandNode]:
                         {"name": "address", "type": "string", "help": "Street address"},
                         {"name": "post-code", "type": "string", "help": "Postal code"},
                         {"name": "position", "type": "string", "help": "Job title / position"},
+                        {"name": "custom", "type": "string", "help": "Custom field (key:value, repeatable)"},
                     ],
                 },
                 {
@@ -465,10 +480,11 @@ def get_command_tree() -> list[CommandNode]:
                         {"name": "uuid", "required": True, "type": "uuid", "placeholder": "contact-uuid", "uuidSource": "contact.list"},
                     ],
                     "flags": [
-                        {"name": "name", "type": "string", "help": "New name"},
+                        {"name": "first-name", "type": "string", "help": "New given name"},
+                        {"name": "last-name", "type": "string", "help": "New family name"},
                         {"name": "email", "type": "string", "help": "Email address(es), tag:value,..."},
                         {"name": "phone", "type": "string", "help": "Phone number(s), tag:value,..."},
-                        {"name": "org", "type": "string", "help": "New organization"},
+                        {"name": "organization", "type": "string", "help": "New organization"},
                         {"name": "notes", "type": "string", "help": "New notes"},
                         {"name": "middle-names", "type": "string", "help": "Middle names"},
                         {"name": "dob", "type": "date", "help": "Date of birth (YYYY-MM-DD)"},
@@ -476,6 +492,7 @@ def get_command_tree() -> list[CommandNode]:
                         {"name": "address", "type": "string", "help": "Street address"},
                         {"name": "post-code", "type": "string", "help": "Postal code"},
                         {"name": "position", "type": "string", "help": "Job title / position"},
+                        {"name": "custom", "type": "string", "help": "Custom field (key:value, repeatable)"},
                     ],
                 },
                 {
@@ -505,6 +522,13 @@ def get_command_tree() -> list[CommandNode]:
                     "description": "List all todos (flat view)",
                     "flags": [
                         {"name": "status", "type": "string", "help": "Filter by status (pending|done)"},
+                    ],
+                },
+                {
+                    "name": "draft",
+                    "description": "List / recall saved todo drafts",
+                    "params": [
+                        {"name": "uuid", "required": False, "type": "uuid", "placeholder": "draft-uuid", "uuidSource": "todo.drafts"},
                     ],
                 },
                 {
@@ -645,6 +669,13 @@ def get_command_tree() -> list[CommandNode]:
                     "flags": [
                         {"name": "date", "type": "date", "help": "Filter by date (YYYY-MM-DD)"},
                         {"name": "limit", "short": "l", "type": "number", "help": "Max results"},
+                    ],
+                },
+                {
+                    "name": "draft",
+                    "description": "List / recall saved journal drafts",
+                    "params": [
+                        {"name": "uuid", "required": False, "type": "uuid", "placeholder": "draft-uuid", "uuidSource": "journal.drafts"},
                     ],
                 },
                 {
@@ -939,6 +970,7 @@ def get_command_tree() -> list[CommandNode]:
                                 {"name": "post-code", "type": "string"},
                                 {"name": "organization", "type": "string"},
                                 {"name": "position", "type": "string"},
+                                {"name": "notes", "type": "string", "help": "Free-text notes"},
                                 {"name": "custom", "type": "string", "help": "Custom field (key:value, repeatable)"},
                             ],
                         },
@@ -968,6 +1000,7 @@ def get_command_tree() -> list[CommandNode]:
                                 {"name": "post-code", "type": "string"},
                                 {"name": "organization", "type": "string"},
                                 {"name": "position", "type": "string"},
+                                {"name": "notes", "type": "string", "help": "Free-text notes"},
                                 {"name": "custom", "type": "string", "help": "Custom field (key:value, repeatable)"},
                             ],
                         },
@@ -996,6 +1029,14 @@ def get_command_tree() -> list[CommandNode]:
                         {"name": "limit", "short": "l", "type": "number", "help": "Max results (default 20)"},
                         {"name": "sort", "short": "s", "type": "string", "help": "Sort: newest (default), oldest, sender"},
                         {"name": "group", "short": "g", "type": "string", "help": "Group by: conversation (default none)"},
+                        {"name": "tag", "type": "string", "help": "Filter by tag(s); comma-separated (AND semantics)"},
+                    ],
+                },
+                {
+                    "name": "draft",
+                    "description": "List / recall saved letter drafts",
+                    "params": [
+                        {"name": "uuid", "required": False, "type": "uuid", "placeholder": "draft-uuid", "uuidSource": "letter.drafts"},
                     ],
                 },
                 {
@@ -1010,6 +1051,7 @@ def get_command_tree() -> list[CommandNode]:
                         {"name": "sender", "type": "string", "help": "Sender name/address (free text)"},
                         {"name": "recipient", "type": "string", "help": "Recipient name/address (free text)"},
                         {"name": "respond-to", "type": "uuid", "help": "UUID of letter this responds to", "uuidSource": "letter.list"},
+                        {"name": "tag", "type": "string", "help": "Add tag(s); comma-separated"},
                     ],
                 },
                 {
@@ -1026,6 +1068,7 @@ def get_command_tree() -> list[CommandNode]:
                         {"name": "sender-profile", "type": "uuid", "help": "Your profile UUID from !user info", "uuidSource": "user.info.list"},
                         {"name": "recipient-contact", "type": "uuid", "help": "Contact UUID from !contact", "uuidSource": "contact.list"},
                         {"name": "respond-to", "type": "uuid", "help": "UUID of letter this responds to", "uuidSource": "letter.list"},
+                        {"name": "tag", "type": "string", "help": "Add tag(s); comma-separated"},
                     ],
                 },
                 {

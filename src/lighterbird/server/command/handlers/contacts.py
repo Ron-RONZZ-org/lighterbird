@@ -21,6 +21,24 @@ from lighterbird.server.deps import get_contact_service
 from lighterbird.contacts.services import ContactService
 
 
+def _parse_custom_fields(raw: str) -> dict[str, str]:
+    """Parse ``key:value`` pairs, comma-separated.
+
+    ``--custom "key1:val1,key2:val2"`` → ``{"key1":"val1","key2":"val2"}``
+    """
+    result: dict[str, str] = {}
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if ":" in part:
+            key, _, value = part.partition(":")
+            result[key.strip()] = value.strip()
+        else:
+            result[part] = ""
+    return result
+
+
 def _parse_multi_flag(raw: str) -> list[dict[str, str]]:
     """Parse a comma-separated list of tag:value pairs.
 
@@ -49,12 +67,12 @@ def contacts_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
         "data": {
             "_summary": (
                 "Available !contact commands:\n"
-                "  !contact list       — List contacts\n"
-                "  !contact add        — Add a contact\n"
-                "  !contact view       — View a contact\n"
-                "  !contact modify     — Modify a contact\n"
-                "  !contact delete     — Delete a contact\n"
-                "  !contact search     — Search contacts"
+                "  !contact list                                   — List contacts\n"
+                "  !contact add --first-name GIVEN --last-name FAMILY  — Add a contact\n"
+                "  !contact view <uuid>                            — View a contact\n"
+                "  !contact modify <uuid>                          — Modify a contact\n"
+                "  !contact delete <uuid> [uuid...]                — Delete a contact\n"
+                "  !contact search <query>                         — Search contacts"
             ),
         },
     }
@@ -71,32 +89,33 @@ def contact_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 @command("contact.add")
 def contact_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!contact add <name> [--email tag:value,tag:value] [--phone tag:value,...]
-    [--org ORG] [--notes NOTES] [--middle-names M] [--dob YYYY-MM-DD]
-    [--place-of-birth PLACE] [--address ADDR] [--post-code CODE] [--position POS]
+    """!contact add --first-name GIVEN --last-name FAMILY [--middle-names M]
+    [--email tag:value,...] [--phone tag:value,...] [--organization ORG]
+    [--notes NOTES] [--dob YYYY-MM-DD] [--place-of-birth PLACE]
+    [--address ADDR] [--post-code CODE] [--position POS] [--custom key:val,...]
     """
-    if not remaining:
+    given_name = flags.get("first-name", "")
+    family_name = flags.get("last-name", "")
+    if not given_name and not family_name:
         raise CommandValidationError(
             "Missing contact name.",
-            "Usage: !contact add \"Full Name\" "
-            "[--email tag:value,...] [--phone tag:value,...] [--org ORG] "
+            "Usage: !contact add --first-name GIVEN --last-name FAMILY "
+            "[--email tag:value,...] [--phone tag:value,...] [--organization ORG] "
             "[--notes NOTES] [--middle-names M] [--dob YYYY-MM-DD] "
             "[--place-of-birth PLACE] [--address ADDR] [--post-code CODE] "
-            "[--position POS]",
+            "[--position POS] [--custom key:val,...]",
         )
-    name = remaining[0]
 
     svc: ContactService = get_contact_service()
     data: dict[str, Any] = {
-        "given_name": name,
-        "full_name": name,
+        "given_name": given_name,
+        "family_name": family_name,
         "emails": json.dumps(_parse_multi_flag(flags.get("email", ""))),
         "phones": json.dumps(_parse_multi_flag(flags.get("phone", ""))),
-        "organization": flags.get("org", ""),
+        "organization": flags.get("organization", ""),
         "notes": flags.get("notes", ""),
     }
 
-    # Optional new fields
     for key, flag in (
         ("middle_names", "middle-names"),
         ("date_of_birth", "dob"),
@@ -108,14 +127,12 @@ def contact_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         if flag in flags:
             data[key] = flags[flag]
 
-    # Legacy simple email/phone flags (single value, no tag)
-    if "email" in flags and not flags["email"]:
-        pass  # already handled above
-    if "phone" in flags and not flags["phone"]:
-        pass
+    if "custom" in flags:
+        data["custom_fields"] = json.dumps(_parse_custom_fields(flags["custom"]), ensure_ascii=False)
 
+    display_name = " ".join(p for p in (given_name, flags.get("middle-names", ""), family_name) if p)
     contact = svc.create(data)
-    return {"type": "status", "title": "Contact Added", "data": {"uuid": contact["uuid"], "name": name}}
+    return {"type": "status", "title": "Contact Added", "data": {"uuid": contact["uuid"], "name": display_name}}
 
 
 @command("contact.view")
@@ -135,20 +152,21 @@ def contact_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 @command("contact.modify")
 def contact_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!contact modify <uuid> [--name NAME] [--email tag:value,...]
-    [--phone tag:value,...] [--org ORG] [--notes NOTES]
-    [--middle-names M] [--dob YYYY-MM-DD] [--place-of-birth PLACE]
-    [--address ADDR] [--post-code CODE] [--position POS]
+    """!contact modify <uuid> [--first-name GIVEN] [--last-name FAMILY]
+    [--email tag:value,...] [--phone tag:value,...] [--organization ORG]
+    [--notes NOTES] [--middle-names M] [--dob YYYY-MM-DD]
+    [--place-of-birth PLACE] [--address ADDR] [--post-code CODE]
+    [--position POS] [--custom key:val,...]
     """
     if not remaining:
-        raise CommandValidationError("Missing contact UUID.", "Usage: !contact modify <uuid> [--name ...]")
+        raise CommandValidationError("Missing contact UUID.", "Usage: !contact modify <uuid> [--first-name ...]")
     uuid = remaining[0]
     svc: ContactService = get_contact_service()
     updates: dict[str, Any] = {}
     field_map: dict[str, str] = {
-        "name": "given_name",
+        "first-name": "given_name",
+        "last-name": "family_name",
         "organization": "organization",
-        "org": "organization",
         "notes": "notes",
         "middle-names": "middle_names",
         "dob": "date_of_birth",
@@ -165,9 +183,11 @@ def contact_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
         updates["emails"] = json.dumps(_parse_multi_flag(flags["email"]))
     if "phone" in flags:
         updates["phones"] = json.dumps(_parse_multi_flag(flags["phone"]))
+    if "custom" in flags:
+        updates["custom_fields"] = json.dumps(_parse_custom_fields(flags["custom"]), ensure_ascii=False)
 
     if not updates:
-        raise CommandValidationError("No fields to modify.", "Usage: !contact modify <uuid> [--name NAME] [--email ...] ...")
+        raise CommandValidationError("No fields to modify.", "Usage: !contact modify <uuid> [--first-name ...] [--email ...] ...")
     svc.update(uuid, updates)
     return {"type": "status", "title": "Contact Modified", "data": {"uuid": uuid[:8]}}
 

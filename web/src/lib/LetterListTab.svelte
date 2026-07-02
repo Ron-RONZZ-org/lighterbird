@@ -1,6 +1,7 @@
 <script>
   import { tabStore } from "./tabStore.svelte.js";
   import { letters as lettersApi } from "./api.js";
+  import SortDropdown from "./SortDropdown.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import {
     createSelectionManager,
@@ -37,6 +38,9 @@
   });
 
   let showSearch = $state(false);
+  let showSortDropdown = $state(false);
+  let showTagFilter = $state(false);
+  let tagFilterQuery = $state("");
   let searchQuery = $state("");
   let currentFilters = $state({});
   let searchTimeout;
@@ -85,6 +89,9 @@
     if (query && query.length >= 2) {
       params.query = query;
     }
+    if (tagFilterQuery) {
+      params.tag = tagFilterQuery;
+    }
 
     lettersApi.list(params)
       .then((result) => {
@@ -117,9 +124,32 @@
       if (searchQuery && searchQuery.length >= 2) {
         params.query = searchQuery;
       }
+      if (tagFilterQuery) {
+        params.tag = tagFilterQuery;
+      }
       const result = await lettersApi.list(params);
       tabStore.update(tabStore.active.id, result);
     } catch { /* silent */ }
+  }
+
+  function handleSortChange(sort) {
+    currentFilters = { ...currentFilters, sort };
+    refreshList();
+  }
+
+  function handleGroupChange(enabled) {
+    currentFilters = { ...currentFilters, group: enabled ? "conversation" : "" };
+    refreshList();
+  }
+
+  function applyTagFilter() {
+    performSearch(searchQuery);
+    showTagFilter = false;
+  }
+
+  function clearTagFilter() {
+    tagFilterQuery = "";
+    applyTagFilter();
   }
 
   function handleWindowKeydown(e) {
@@ -141,7 +171,17 @@
           e.preventDefault();
         }
         return;
+      case "s":
+      case "S":
+        if (plain) { showSortDropdown = !showSortDropdown; e.preventDefault(); }
+        return;
+      case "f":
+      case "F":
+        if (plain) { showTagFilter = !showTagFilter; e.preventDefault(); }
+        return;
       case "Escape":
+        if (showSortDropdown) { showSortDropdown = false; e.preventDefault(); return; }
+        if (showTagFilter) { showTagFilter = false; e.preventDefault(); return; }
         if (showSearch) { closeSearch(); e.preventDefault(); return; }
         if (sel.selectionMode) { sel.toggleSelectionMode(); e.preventDefault(); return; }
         return;
@@ -174,6 +214,16 @@
     if (l.recipient_manual) return l.recipient_manual;
     if (l.recipient_contact) return l.recipient_contact.slice(0, 8);
     return "—";
+  }
+
+  function tagList(tags) {
+    if (!tags || tags.length === 0) return [];
+    return tags.slice(0, 3);
+  }
+
+  function tagOverflow(tags) {
+    if (!tags || tags.length <= 3) return 0;
+    return tags.length - 3;
   }
 </script>
 
@@ -218,6 +268,8 @@
     {:else}
       <div class="toolbar-left">
         <button class="tool-btn" title="Toggle selection mode (V)" onclick={() => sel.toggleSelectionMode()}>Select <kbd>V</kbd></button>
+        <button class="tool-btn" title="Toggle sort (S)" onclick={() => { showSortDropdown = !showSortDropdown; }}>Sort <kbd>S</kbd></button>
+        <button class="tool-btn" title="Filter by tag (F)" onclick={() => { showTagFilter = !showTagFilter; }}>Tags <kbd>F</kbd></button>
       </div>
       <div class="toolbar-center">
         <span class="search-hint"><kbd>/</kbd> search</span>
@@ -234,6 +286,48 @@
       </div>
     {/if}
   </div>
+
+  <!-- Sort dropdown -->
+  {#if showSortDropdown}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div class="dropdown-backdrop" onclick={() => { showSortDropdown = false; }} role="presentation"></div>
+    <div class="dropdown-panel sort-panel">
+      <SortDropdown
+        sort={currentFilters.sort || "newest"}
+        groupByConversation={currentFilters.group === "conversation"}
+        sortOptions={[
+          { value: "newest", label: "Newest First" },
+          { value: "oldest", label: "Oldest First" },
+          { value: "sender", label: "Group by Sender" },
+        ]}
+        onSortChange={handleSortChange}
+        onGroupChange={handleGroupChange}
+      />
+    </div>
+  {/if}
+
+  <!-- Tag filter -->
+  {#if showTagFilter}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div class="dropdown-backdrop" onclick={() => { showTagFilter = false; }} role="presentation"></div>
+    <div class="dropdown-panel tag-filter-panel">
+      <div class="tag-filter-form">
+        <h4 class="section-title">Filter by Tags</h4>
+        <input
+          type="text"
+          class="tag-filter-input"
+          placeholder="e.g. family,important"
+          value={tagFilterQuery}
+          oninput={(e) => { tagFilterQuery = e.target.value; }}
+          onkeydown={(e) => { if (e.key === "Enter") applyTagFilter(); }}
+        />
+        <div class="tag-filter-actions">
+          <button class="tool-btn primary" onclick={applyTagFilter}>Apply</button>
+          <button class="tool-btn" onclick={clearTagFilter}>Clear</button>
+        </div>
+      </div>
+    </div>
+  {/if}
 
   <div class="list" role="listbox" aria-label="Letters" aria-multiselectable="true">
     {#each letters as letter, i (letter.uuid)}
@@ -270,8 +364,18 @@
         </span>
         <span class="date">{formatListItemDate(letter.created_at)}</span>
         <span class="object">{truncate(letter.object || "(untitled)", 28)}</span>
-        <span class="sender">{truncate(senderDisplay(letter), 20)}</span>
-        <span class="recipient">{truncate(recipientDisplay(letter), 20)}</span>
+        <span class="sender">{truncate(senderDisplay(letter), 16)}</span>
+        <span class="recipient">{truncate(recipientDisplay(letter), 16)}</span>
+        {#if letter.tags && letter.tags.length > 0}
+          <span class="tags-cell">
+            {#each tagList(letter.tags) as t}
+              <span class="tag-pill">{t}</span>
+            {/each}
+            {#if tagOverflow(letter.tags) > 0}
+              <span class="tag-overflow">+{tagOverflow(letter.tags)}</span>
+            {/if}
+          </span>
+        {/if}
         {#if letter.respond_to_uuid}
           <span class="reply-badge" title="Reply to {letter.respond_to_uuid.slice(0, 8)}">↩</span>
         {/if}
@@ -378,8 +482,8 @@
   .row {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.4rem 0.5rem;
+    gap: 0.4rem;
+    padding: 0.35rem 0.5rem;
     border-bottom: 1px solid #2a2a3e;
     cursor: default;
     transition: background 0.08s;
@@ -419,20 +523,20 @@
   .letter-uuid {
     color: var(--clr-muted);
     font-size: 0.72rem;
-    min-width: 5rem;
+    min-width: 4.5rem;
     flex-shrink: 0;
     cursor: pointer;
   }
   .letter-uuid:hover { color: #7c7c9a; text-decoration: underline; }
   .date {
     color: var(--clr-muted);
-    min-width: 6rem;
+    min-width: 5.5rem;
     flex-shrink: 0;
     font-size: 0.78rem;
   }
   .object {
     color: #e0e0e0;
-    min-width: 10rem;
+    min-width: 8rem;
     flex-shrink: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -440,13 +544,38 @@
   }
   .sender, .recipient {
     color: #b0b0c0;
-    min-width: 8rem;
+    min-width: 6rem;
     flex-shrink: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 0.8rem;
   }
+
+  .tags-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 0;
+    max-width: 8rem;
+    overflow: hidden;
+  }
+  .tag-pill {
+    display: inline-block;
+    padding: 0.05rem 0.35rem;
+    font-size: 0.68rem;
+    background: #2a3a4a;
+    color: #8ab4d0;
+    border: 1px solid #3a4a5a;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .tag-overflow {
+    font-size: 0.65rem;
+    color: #6a7a8a;
+    flex-shrink: 0;
+  }
+
   .reply-badge {
     color: #6a9a6a;
     font-size: 0.8rem;
@@ -457,5 +586,48 @@
     color: var(--clr-muted);
     text-align: center;
     padding: 2rem;
+  }
+
+  /* Dropdown panels */
+  :global(.dropdown-backdrop) {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 99; background: transparent;
+  }
+  :global(.dropdown-panel) {
+    position: absolute; top: 2.4rem; z-index: 100;
+    background: #1a1a30; border: 1px solid #444; border-radius: 6px;
+    padding: 0.75rem; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    min-width: 200px; max-height: 70vh; overflow-y: auto;
+  }
+  .sort-panel { right: 5rem; }
+  .tag-filter-panel { left: 0.5rem; }
+
+  .section-title {
+    margin: 0 0 0.4rem;
+    font-size: 0.72rem;
+    color: var(--clr-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+  }
+  .tag-filter-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .tag-filter-input {
+    padding: 0.35rem 0.4rem;
+    border: 1px solid #444;
+    border-radius: 4px;
+    background: #12122a;
+    color: #e0e0e0;
+    font-family: monospace;
+    font-size: 0.82rem;
+    outline: none;
+  }
+  .tag-filter-input:focus { border-color: #6a6a9a; }
+  .tag-filter-actions {
+    display: flex;
+    gap: 0.4rem;
   }
 </style>

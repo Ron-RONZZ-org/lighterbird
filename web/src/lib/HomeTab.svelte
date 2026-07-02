@@ -322,6 +322,7 @@
     if (/^!calendar\s+(list|search)\b/i.test(t)) return "calendar-events";
     if (/^!email\s+(list|search)\b/i.test(t)) return "email-list";
     if (/^!user\s+saved-commands\s+list\s*$/i.test(t)) return "saved-commands";
+    if (/^!letter\s+(list|search)\b/i.test(t)) return "letter-list";
     return null;
   }
 

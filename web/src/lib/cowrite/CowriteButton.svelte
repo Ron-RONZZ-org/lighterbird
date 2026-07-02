@@ -11,7 +11,7 @@
 <button
   class="cowrite-btn"
   class:active={cowrite.isActive}
-  onclick={() => { if (!cowrite.isActive) cowrite.startCowrite(""); else cowrite.close(); }}
+  onclick={() => { if (!cowrite.isActive) cowrite.openPanel(); else cowrite.close(); }}
   title="Ask LLM to help write or edit this content"
 >
   <span class="cowrite-icon">✨</span>

@@ -24,7 +24,7 @@ from lighterbird.core.paths import data_dir
 
 _DRAFTS_FILE = ".drafts.json"
 
-_VALID_DOMAINS = frozenset({"email", "journal", "todo", "calendar-event"})
+_VALID_DOMAINS = frozenset({"email", "journal", "todo", "calendar-event", "letter"})
 
 
 def _drafts_path() -> Path:

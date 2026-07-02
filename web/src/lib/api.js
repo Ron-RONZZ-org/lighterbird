@@ -112,6 +112,9 @@ export const email = {
     request("POST", "/email/messages/batch-move", { uuids, destination_folder: destinationFolder }),
 
   listFolders: () => request("GET", "/email/folders"),
+
+  createFolder: (accountEmail, folderName) =>
+    request("POST", `/email/folders?account_email=${encodeURIComponent(accountEmail)}&folder_name=${encodeURIComponent(folderName)}`),
 };
 
 // ── Calendar API ──────────────────────────────────────────────────────
