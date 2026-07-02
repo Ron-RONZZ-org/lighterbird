@@ -29,11 +29,16 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     organization    TEXT NOT NULL DEFAULT '',
     position        TEXT NOT NULL DEFAULT '',
     custom_fields   TEXT NOT NULL DEFAULT '{}', -- JSON: {"key1":"value1","key2":"value2"}
+    notes           TEXT NOT NULL DEFAULT '',
     created_at      TEXT NOT NULL,
     updated_at      TEXT NOT NULL
 );
 """,
 }
+
+_MIGRATE_NOTES = """
+ALTER TABLE user_profiles ADD COLUMN notes TEXT NOT NULL DEFAULT '';
+"""
 
 _db: LighterbirdDB | None = None
 
@@ -44,6 +49,10 @@ def get_db() -> LighterbirdDB:
     if _db is None:
         _db = LighterbirdDB(_DB_PATH)
         _db.init_schema(_SCHEMA)
+        try:
+            _db.execute(_MIGRATE_NOTES)
+        except Exception:
+            pass  # column already exists
     return _db
 
 

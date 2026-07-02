@@ -41,12 +41,15 @@ def letter_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 @command("letter.list")
 def letter_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!letter list [--direction sent|received|all] [--sort newest|oldest|sender]
-                    [--group conversation] [--limit N]"""
+                    [--group conversation] [--limit N] [--tag TAG,...]"""
     svc: LetterService = get_letter_service()
     direction = flags.get("direction", "all")
     sort_by = flags.get("sort", "newest")
     group_by = flags.get("group", "")
     limit = int(flags.get("limit", 20))
+
+    # Parse tags (supports comma-separated: --tag a,b)
+    tags = svc.normalize_tags([flags["tag"]]) if "tag" in flags else None
 
     order_by = "created_at"
     desc = True
@@ -61,6 +64,7 @@ def letter_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     else:
         letters = [_normalize_letter(l) for l in svc.list(
             limit=limit, direction=direction, order_by=order_by, desc=desc,
+            tags=tags,
         )]
 
     return {
@@ -77,11 +81,13 @@ def letter_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 @command("letter.add")
 def letter_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!letter add <object> [--body <file-path>] [--body-text CONTENT] [--body-format FORMAT]
-                              [--sender SENDER] [--recipient RECIPIENT] [--respond-to UUID]"""
+                              [--sender SENDER] [--recipient RECIPIENT] [--respond-to UUID]
+                              [--tag TAG,...]"""
     if not remaining:
         raise CommandValidationError(
             "Missing letter object/subject.",
-            "Usage: !letter add \"Object\" [--body <path>] [--sender SENDER] [--recipient RECIPIENT]",
+            "Usage: !letter add \"Object\" [--body <path>] [--sender SENDER] [--recipient RECIPIENT]"
+            " [--tag TAG,...]",
         )
     subject = remaining[0]
     svc: LetterService = get_letter_service()
@@ -101,6 +107,12 @@ def letter_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         data["respond_to_uuid"] = parent["uuid"]
 
     letter = svc.create(data)
+
+    # Set tags
+    if "tag" in flags:
+        tags = svc.normalize_tags([flags["tag"]])
+        if tags:
+            svc.set_tags(letter["uuid"], tags)
 
     body_file = flags.get("body", "")
     body_text = flags.get("body-text", "")
@@ -140,11 +152,13 @@ def letter_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!letter send <recipient> [--object OBJECT] [--body <file-path>]
                                   [--body-text CONTENT] [--body-format FORMAT]
                                   [--sender-profile UUID] [--recipient-contact UUID]
-                                  [--sender SENDER] [--respond-to UUID]"""
+                                  [--sender SENDER] [--respond-to UUID]
+                                  [--tag TAG,...]"""
     if not remaining:
         raise CommandValidationError(
             "Missing recipient.",
-            "Usage: !letter send \"Recipient Name\" [--object OBJECT] [--body <path>]",
+            "Usage: !letter send \"Recipient Name\" [--object OBJECT] [--body <path>]"
+            " [--tag TAG,...]",
         )
     recipient = remaining[0]
     svc: LetterService = get_letter_service()
@@ -191,6 +205,12 @@ def letter_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         data["respond_to_uuid"] = parent["uuid"]
 
     letter = svc.create(data)
+
+    # Set tags
+    if "tag" in flags:
+        tags = svc.normalize_tags([flags["tag"]])
+        if tags:
+            svc.set_tags(letter["uuid"], tags)
 
     body_file = flags.get("body", "")
     body_text = flags.get("body-text", "")

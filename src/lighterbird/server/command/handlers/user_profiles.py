@@ -138,6 +138,7 @@ def _extract_profile_data(
         ("post_code", "post-code"),
         ("organization", "organization"),
         ("position", "position"),
+        ("notes", "notes"),
     ]:
         if flag_key in flags:
             data[key] = flags[flag_key]

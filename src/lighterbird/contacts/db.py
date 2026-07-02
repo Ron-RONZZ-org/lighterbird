@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS contacts (
     place_of_birth  TEXT NOT NULL DEFAULT '',
     notes           TEXT NOT NULL DEFAULT '',
     category        TEXT NOT NULL DEFAULT '',
+    custom_fields   TEXT NOT NULL DEFAULT '{}',
     created_at      TEXT NOT NULL,
     updated_at      TEXT NOT NULL
 );
@@ -64,12 +65,20 @@ CREATE TRIGGER IF NOT EXISTS contacts_au AFTER UPDATE ON contacts BEGIN
 END;
 """
 
+_MIGRATE_CUSTOM_FIELDS = """
+ALTER TABLE contacts ADD COLUMN custom_fields TEXT NOT NULL DEFAULT '{}';
+"""
+
 _SCHEMA_STMTS: list[str] = [
     _CREATE_CONTACTS,
     _CREATE_CONTACTS_FTS5,
     _CREATE_FTS_TRIGGER_INSERT,
     _CREATE_FTS_TRIGGER_DELETE,
     _CREATE_FTS_TRIGGER_UPDATE,
+]
+
+_MIGRATIONS: list[str] = [
+    _MIGRATE_CUSTOM_FIELDS,
 ]
 
 
@@ -82,4 +91,9 @@ def get_db(path: Path | str | None = None) -> LighterbirdDB:
     db = LighterbirdDB(resolved)
     for stmt in _SCHEMA_STMTS:
         db.execute(stmt)
+    for stmt in _MIGRATIONS:
+        try:
+            db.execute(stmt)
+        except Exception:
+            pass  # column already exists
     return db

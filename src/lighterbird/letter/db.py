@@ -28,9 +28,23 @@ _CREATE_LETTERS_RESPOND_INDEX = """
 CREATE INDEX IF NOT EXISTS idx_letters_respond_to ON letters(respond_to_uuid);
 """
 
+_CREATE_LETTER_TAGS = """
+CREATE TABLE IF NOT EXISTS letter_tags (
+    letter_uuid TEXT NOT NULL REFERENCES letters(uuid) ON DELETE CASCADE,
+    tag         TEXT NOT NULL,
+    PRIMARY KEY (letter_uuid, tag)
+);
+"""
+
+_CREATE_LETTER_TAGS_INDEX = """
+CREATE INDEX IF NOT EXISTS idx_letter_tags_tag ON letter_tags(tag);
+"""
+
 _SCHEMA_STMTS: list[str] = [
     _CREATE_LETTERS,
     _CREATE_LETTERS_RESPOND_INDEX,
+    _CREATE_LETTER_TAGS,
+    _CREATE_LETTER_TAGS_INDEX,
 ]
 
 

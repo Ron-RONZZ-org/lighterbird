@@ -300,6 +300,7 @@
                 : domain === "journal" ? "journal-write"
                 : domain === "todo" ? "todo-add"
                 : domain === "calendar-event" ? "calendar-event-add"
+                : domain === "letter" ? "letter-send"
                 : null;
               if (formType) {
                 tabStore.open("form", "Recall: " + (full.title || ""), {

@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api/v1/drafts", tags=["drafts"])
 
 
 class DraftSaveRequest(BaseModel):
-    domain: str = Field(..., pattern=r"^(email|journal|todo|calendar-event)$")
+    domain: str = Field(..., pattern=r"^(email|journal|todo|calendar-event|letter)$")
     title: str = ""
     data: dict = Field(default_factory=dict)
     uuid: str | None = None
