@@ -61,6 +61,7 @@ This project uses **uv** for development:
 | Install project in dev mode | `uv pip install -e .` |
 | Install dev deps | `uv pip install -e ".[dev]"` |
 | Run tests | `uv run pytest tests/` |
+| Run isolated dev server | `uv run lighterbird-dev --seed` |
 | Add dependency | `uv add <pkg>` |
 | Add dev dependency | `uv pip install <pkg>` |
 
@@ -81,6 +82,10 @@ lighterbird/
 │   └── lighterbird/             # Main Python package
 │       ├── __init__.py
 │       ├── __main__.py          # python -m lighterbird entry point
+│       ├── scripts/             # Dev tooling: seed data generator, dev CLI
+│       │   ├── __init__.py
+│       │   ├── dev_cli.py       # lighterbird-dev CLI entry point
+│       │   └── seed.py          # Seed data generator for test databases
 │       ├── core/                # Forked from A-core: DB, crypto, keyring, AI, paths
 │       ├── email/               # Forked from A-lien: IMAP, SMTP, contacts, accounts
 │       ├── calendar/            # Forked from A-organizi: CalDAV, events, todo, journal
@@ -149,6 +154,19 @@ lighterbird/
    - `detectPersistentType()` in `web/src/App.svelte` and `web/src/lib/HomeTab.svelte`
 
 4. **GUI tests use Playwright in headless mode** — run with `headed: false` by default. Always use `http://127.0.0.1:<port>` for local dev servers.
+
+5. **Use `lighterbird-dev --seed` for isolated E2E testing** — instead of starting the production server, use the isolated dev server which creates a temporary data directory and seeds it with test data from ``.dev``:
+
+   ```bash
+   # Terminal 1: start isolated seeded server
+   uv run lighterbird-dev --seed
+
+   # Terminal 2: run Playwright E2E tests
+   node tests/playwright_e2e.mjs
+   node tests/e2e_comprehensive.mjs
+   ```
+
+   The seeded data includes an email account (from ``.dev`` credentials with auto-detected IMAP/SMTP), a calendar account with a sample event, a test contact, sample todos, a journal entry, and a user profile. See ``scripts/AGENTS-scripts.md`` for details.
 
 5. **Cowriting via GUI** — test LLM co-writing through form editors (ComposeEmail, TodoAddForm, JournalWrite) by filling in text and invoking the cowrite feature. Also test via the cowrite API directly (`POST /api/v1/cowrite`).
 
@@ -248,6 +266,7 @@ The following module-specific AGENTS files are located in their respective direc
 | Email | `email/AGENTS-email.md` | IMAP sync, SMTP send, contacts, accounts, Sieve |
 | Calendar | `calendar/AGENTS-calendar.md` | CalDAV sync, events, todo, journal, labels |
 | Letter | `letter/AGENTS-letter.md` | Paper letter management, PDF rendering, templates |
+| Scripts | `scripts/AGENTS-scripts.md` | Dev CLI, seed data generator, test infrastructure |
 | Server | `server/AGENTS-server.md` | FastAPI routes, middleware, static serving |
 | Web | `web/AGENTS-web.md` | Svelte SPA, command-bar UI, build tooling |
 
@@ -264,6 +283,7 @@ Root AGENTS.md (global rules)
     ├── email/AGENTS-email.md     IMAP, SMTP, contacts, accounts
     ├── calendar/AGENTS-calendar.md  CalDAV, events, todo, journal
     ├── letter/AGENTS-letter.md   Paper letters, PDF, templates
+    ├── scripts/AGENTS-scripts.md Dev CLI, seed data, test infra
     ├── server/AGENTS-server.md   FastAPI backend, API routes
     └── web/AGENTS-web.md         Svelte SPA frontend
 ```

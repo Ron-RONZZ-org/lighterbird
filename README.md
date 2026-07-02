@@ -60,6 +60,27 @@ npm run dev
 
 Open http://localhost:5173 — the Vite dev server proxies API calls to the Python backend on port 8000.
 
+## Development Server
+
+For E2E testing or isolated development, use the `lighterbird-dev` CLI. It creates a temporary data directory, optionally seeds it with test credentials, and starts the server:
+
+```bash
+# Start with seed data from .dev
+uv run lighterbird-dev --seed
+
+# Start with clean temp database (no seed)
+uv run lighterbird-dev
+```
+
+The seed data includes:
+- An email account with auto-detected IMAP/SMTP servers
+- A calendar account with a sample event
+- A test contact (from ``test-contact.toml`` if present)
+- Sample todos, journal entry, and letter
+- A user profile (from ``test-profile.toml`` if present)
+
+Use ``--seed-from <archive.7z>`` to restore from a backup archive.
+
 ## Status
 
 **Pre-alpha.** The code is being forked from the frozen [A-lien](../A-lien), [A-organizi](../A-organizi), and [A-core](../A-core) projects. Backend logic exists and is proven; the frontend is being built from scratch.
