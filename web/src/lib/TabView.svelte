@@ -83,11 +83,12 @@
       // Level 3: When command input is focused on home tab, let ChatInput handle Escape
       if (tabStore.isHome && inputFocused) return;
 
-      // Level 4: List tabs manage their own keyboard (selection, navigation, search) via
-      // `svelte:window` handlers that fire after this handler. Since TabView handles keys
-      // (Escape, Q, H, I) that list tabs don't use, we simply fall through to Level 5.
-      // The list tabs' window-level handlers will also fire for the same event, allowing
-      // them to exit selection mode, dismiss dialogs, etc. in addition to the tab close.
+      // Level 4: List tabs manage their own Escape (selection mode exit, search close,
+      // dialog dismiss). TabView's handler fires before the list tab's window handler,
+      // so we return here and let the list tab process Escape first. The list tab's
+      // handler will close the tab itself if Escape is not needed by any active UI state.
+      const type = tabStore.active?.type;
+      if (type && LIST_TAB_TYPES.has(type)) return;
 
       // Level 5: Close current tab
       if (tabStore.active && tabStore.active.closable && !tabStore.isHome) {

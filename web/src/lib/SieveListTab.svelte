@@ -53,6 +53,12 @@
   /** Global keyboard handler for this tab. */
   function handleGlobalKeydown(e) {
     if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable) return;
+    if (e.key === "Escape") {
+      if (selectionMode) { toggleSelectionMode(); e.preventDefault(); return; }
+      // No active UI state — close the tab
+      tabStore.close(tabStore.active?.id);
+      return;
+    }
     if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key === "n") {
       if (!selectionMode) { addNew(); e.preventDefault(); }
     }
