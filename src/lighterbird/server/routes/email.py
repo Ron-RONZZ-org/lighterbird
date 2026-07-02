@@ -142,6 +142,61 @@ def list_folders(email_svc: EmailService = Depends(get_email_service)):
     return {"folders": folders}
 
 
+@router.post("/folders")
+def create_folder(
+    account_email: str = Query(...),
+    folder_name: str = Query(...),
+    email_svc: EmailService = Depends(get_email_service),
+):
+    """Create a new IMAP folder on the server.
+
+    Uses the account's IMAP credentials to send the CREATE command.
+    On success, also inserts the folder into the local DB.
+    """
+    accounts = email_svc.list_accounts()
+    target = None
+    for acct in accounts:
+        if acct["email"] == account_email:
+            target = acct
+            break
+    if not target:
+        raise HTTPException(status_code=404, detail=f"Account not found: {account_email}")
+
+    # Connect to IMAP and create the folder
+    host = target.get("imap_server", "")
+    port = target.get("imap_port", 993)
+    use_ssl = target.get("imap_use_ssl", True)
+    password = email_svc.get_password(account_email)
+    if not password:
+        raise HTTPException(status_code=400, detail=f"No password configured for account: {account_email}")
+
+    try:
+        from lighterbird.email.imap.client import IMAPClient
+        client = IMAPClient(host, port, use_ssl)
+        client.connect(account_email, password)
+        success = client.create_folder(folder_name)
+        client.disconnect()
+        if not success:
+            raise HTTPException(status_code=500, detail=f"IMAP CREATE failed for folder: {folder_name}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create folder: {e}")
+
+    # Insert into local DB
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        email_svc.db.execute(
+            "INSERT OR IGNORE INTO folders (account_email, name, created_at, updated_at) VALUES (?, ?, ?, ?)",
+            (account_email, folder_name, now, now),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save folder to local DB: {e}")
+
+    return {"status": "ok", "folder_name": folder_name, "account_email": account_email}
+
+
 @router.get("/messages")
 def list_messages(
     account_email: str | None = Query(default=None, alias="account_email"),

@@ -165,7 +165,7 @@ def _validate_response(
 ) -> dict[str, str]:
     """Validate and normalize the LLM response.
 
-    Ensures every expected field is present and non-empty.
+    Ensures every expected field is present (empty strings OK for optional fields).
 
     Args:
         result: Parsed JSON from the LLM.
@@ -180,7 +180,7 @@ def _validate_response(
     validated: dict[str, str] = {}
     for field in expected_fields:
         val = result.get(field)
-        if not val or not isinstance(val, str) or not val.strip():
+        if val is None or not isinstance(val, str) or not val.strip():
             raise ValueError(
                 f"LLM response missing or empty field '{field}'. "
                 f"Expected fields: {expected_fields}"
