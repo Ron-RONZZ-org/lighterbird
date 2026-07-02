@@ -1,6 +1,6 @@
 <script>
   import { tabStore } from "./tabStore.svelte.js";
-  import { calendar as calendarApi, llm as llmApi, email as emailApi, drafts as draftsApi } from "./api.js";
+  import { calendar as calendarApi, llm as llmApi, email as emailApi, journal as journalApi, drafts as draftsApi } from "./api.js";
   import AccountList from "./AccountList.svelte";
   import LlmProfileForm from "./LlmProfileForm.svelte";
   import EmailAccountForm from "./EmailAccountForm.svelte";

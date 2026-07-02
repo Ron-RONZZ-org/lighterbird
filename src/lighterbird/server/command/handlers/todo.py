@@ -389,7 +389,7 @@ def todo_template_list(remaining: list[str],
     svc: TodoService = get_todo_service()
     templates = svc.list_templates()
     return {
-        "type": "status",
+        "type": "templates",
         "title": "Templates",
         "data": {"templates": templates},
     }

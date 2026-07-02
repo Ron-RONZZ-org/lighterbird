@@ -3,6 +3,7 @@
 
   import { tabStore } from "./tabStore.svelte.js";
   import ConfirmDialog from "./ConfirmDialog.svelte";
+  import { contacts as contactsApi } from "./api.js";
   import {
     createSelectionManager,
     createCopyState,
@@ -156,6 +157,8 @@
       case "Escape":
         if (showSearch) { closeSearch(); e.preventDefault(); return; }
         if (sel.selectionMode) { sel.toggleSelectionMode(); e.preventDefault(); return; }
+        // No active UI state — close the tab
+        tabStore.close(tabStore.active?.id);
         return;
     }
     sel.handleKeydown(e);
