@@ -291,24 +291,53 @@ def user_info_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, A
     }
 
 
+def _resolve_uuid(svc: ProfileService, raw: str) -> str | None:
+    """Resolve a profile identifier to its UUID.
+
+    If *raw* looks like a UUID (hex of 6+ chars), try direct delete first.
+    Otherwise, look up by profile_name.
+    """
+    import re
+    # UUID-like: hex with optional hyphens, at least 6 chars
+    is_uuid_like = bool(re.match(r'^[0-9a-fA-F-]{6,}$', raw))
+    if is_uuid_like:
+        profiles = svc.list()
+        for p in profiles:
+            puid = p.get("uuid", "")
+            if puid.replace("-", "").startswith(raw.replace("-", "")):
+                return puid
+    # Fall back to profile name lookup
+    profiles = svc.list()
+    for p in profiles:
+        if p.get("profile_name", "").lower() == raw.lower():
+            return p["uuid"]
+    return None
+
+
 @command("user.info.delete")
 def user_info_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!user info delete <uuid> [uuid...] — Delete one or more profiles."""
+    """!user info delete <uuid-or-name> [uuid-or-name...] — Delete one or more profiles.
+
+    Accepts both UUID prefixes and profile names.
+    """
     if not remaining:
         raise CommandValidationError(
-            "Missing profile UUID(s).",
-            "Usage: !user info delete <uuid> [uuid...]",
+            "Missing profile UUID or name.",
+            "Usage: !user info delete <uuid-or-name> [uuid-or-name...]",
         )
 
     svc: ProfileService = get_profiles_service()
-    removed = []
-    not_found = []
+    removed: list[str] = []
+    not_found: list[str] = []
 
-    for uuid_str in remaining:
-        if svc.delete(uuid_str):
-            removed.append(uuid_str[:8])
+    for raw in remaining:
+        resolved = _resolve_uuid(svc, raw)
+        if resolved and svc.delete(resolved):
+            removed.append(resolved[:8])
         else:
-            not_found.append(uuid_str[:8])
+            # Show raw input truncated for non-found — no misleading truncation
+            display = raw[:16] + "…" if len(raw) > 16 else raw
+            not_found.append(display)
 
     return {
         "type": "status",

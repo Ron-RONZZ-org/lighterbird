@@ -5,6 +5,7 @@ Registered paths:
     - journal.write
     - journal.view
     - journal.search
+    - journal.delete
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ def journal_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "  !journal write        — Write a journal entry\n"
                 "  !journal view         — View a journal entry\n"
                 "  !journal search       — Search journal entries\n"
+                "  !journal delete       — Delete journal entry(s)\n"
                 "  !journal draft        — List / recall journal drafts"
             ),
         },
@@ -106,3 +108,31 @@ def journal_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     query = " ".join(remaining) if remaining else flags.get("query", "")
     entries = [normalize_journal_entry(e) for e in svc.search(query)]
     return {"type": "journal-list", "title": "Journal Search", "data": {"entries": entries, "total": len(entries)}}
+
+
+@command("journal.delete")
+def journal_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!journal delete <uuid> [uuid...] — Delete one or more journal entries."""
+    if not remaining:
+        raise CommandValidationError(
+            "Missing journal entry UUID(s).",
+            "Usage: !journal delete <uuid> [uuid...]",
+        )
+
+    svc: JournalService = get_journal_service()
+    removed: list[str] = []
+    not_found: list[str] = []
+
+    for raw in remaining:
+        entry = svc.get(raw)
+        if entry:
+            svc.delete(raw)
+            removed.append(raw[:8])
+        else:
+            not_found.append(raw[:8])
+
+    return {
+        "type": "status",
+        "title": "Journal Entry(s) Deleted",
+        "data": {"removed": removed, "not_found": not_found},
+    }

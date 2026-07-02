@@ -707,6 +707,13 @@ def get_command_tree() -> list[CommandNode]:
                         {"name": "query", "required": False, "type": "string", "placeholder": "search text"},
                     ],
                 },
+                {
+                    "name": "delete",
+                    "description": "Delete journal entry(s) by UUID",
+                    "params": [
+                        {"name": "uuid", "required": True, "type": "uuid", "placeholder": "entry-uuid", "uuidSource": "journal.list", "repeatable": True},
+                    ],
+                },
             ],
         },
 
