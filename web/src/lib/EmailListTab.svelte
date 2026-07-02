@@ -117,7 +117,10 @@
             if (showFolderTree) { showFolderTree = false; e.preventDefault(); return true; }
             if (showSortDropdown) { showSortDropdown = false; e.preventDefault(); return true; }
             if (showParamsDialog) { showParamsDialog = false; e.preventDefault(); return true; }
-            return false;
+            if (sel.selectionMode) { sel.toggleSelectionMode(); e.preventDefault(); return true; }
+            // No active UI state — close the tab
+            tabStore.close(tabStore.active?.id);
+            return true;
         }
 
         if ((e.ctrlKey || e.metaKey) && e.key === "m") {

@@ -24,7 +24,17 @@ async function typeCommand(cmd) {
     console.log(`      ${tag} visible=${visible} placeholder="${await el.getAttribute('placeholder')}"`);
   }
 
+  // Ensure we're on the home tab (Alt+1) so the input is visible
   const input = page.locator("[aria-label='Message input']");
+  const isVisible = await input.isVisible().catch(() => false);
+  if (!isVisible) {
+    // Press Escape twice (blur then close) then wait for home tab
+    await page.keyboard.press("Escape");
+    await sleep(300);
+    await page.keyboard.press("Escape");
+    await sleep(500);
+  }
+
   await input.waitFor({ state: "visible", timeout: 5000 });
   await input.click();
   await input.fill("");
@@ -60,9 +70,15 @@ async function getPopupText() {
 
 async function closePopupOrSkip() {
   try {
-    // Switch to home tab (Alt+1), then press Escape to close the last result tab
-    await page.keyboard.press("Escape");
-    await sleep(500);
+    // Close all open result tabs: navigate to home via Alt+1, then press
+    // Escape once per result tab (first Escape blurs input, subsequent
+    // Escapes close tabs since home tab auto-focuses the input).
+    // We use a loop to close any open tabs.
+    for (let i = 0; i < 5; i++) {
+      // Alt+1 switches to home tab (handled by TabView's global shortcut)
+      await page.keyboard.press("Escape");
+      await sleep(300);
+    }
     // Also dismiss any notice
     try {
       const dismissBtn = page.locator("button", { hasText: "Dismiss notice" });

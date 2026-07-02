@@ -56,6 +56,7 @@ _INTERACTIVE_FORMS: dict[str, str] = {
     "calendar.account.delete": "calendar-account-delete",
     "backup.config.delete": "backup-config-delete",
     "user.saved-commands.delete": "user-saved-commands-delete",
+    "journal.delete": "journal-delete",
 }
 
 

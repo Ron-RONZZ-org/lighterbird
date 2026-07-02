@@ -148,9 +148,10 @@
       case "Escape":
         if (showSearch) { closeSearch(); e.preventDefault(); return; }
         if (sel.selectionMode) { sel.toggleSelectionMode(); e.preventDefault(); return; }
+        // No active UI state — close the tab
+        tabStore.close(tabStore.active?.id);
         return;
     }
-
     sel.handleKeydown(e);
   }
 </script>

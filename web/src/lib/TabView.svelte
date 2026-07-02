@@ -83,7 +83,10 @@
       // Level 3: When command input is focused on home tab, let ChatInput handle Escape
       if (tabStore.isHome && inputFocused) return;
 
-      // Level 4: Let list tabs manage their own Escape (selection mode exit, search close, dialog dismiss)
+      // Level 4: List tabs manage their own Escape (selection mode exit, search close,
+      // dialog dismiss). TabView's handler fires before the list tab's window handler,
+      // so we return here and let the list tab process Escape first. The list tab's
+      // handler will close the tab itself if Escape is not needed by any active UI state.
       const type = tabStore.active?.type;
       if (type && LIST_TAB_TYPES.has(type)) return;
 
@@ -185,6 +188,8 @@
         <LetterViewTab data={tabStore.active.data} />
       {:else if tabStore.active.type === "saved-commands"}
         <SavedCommandsTab data={tabStore.active.data} />
+      {:else if tabStore.active.type === "templates"}
+        <StatusPopup data={tabStore.active.data} />
       {:else if tabStore.active.type === "help"}
         <HelpPopup data={tabStore.active.data} />
       {:else if tabStore.active.type === "form"}
@@ -285,6 +290,7 @@
       "sieve-list": "🔍",
       "sieve-editor": "✏",
       "saved-commands": "⚡",
+      "templates": "📋",
       "letter-list": "✉",
       "letter-view": "✉",
       events: "📅",
