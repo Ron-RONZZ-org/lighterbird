@@ -33,6 +33,9 @@ pdf = [
     "fpdf2>=2.7.0",
 ]
 
+[project.scripts]
+lighterbird-dev = "lighterbird.scripts.dev_cli:dev_main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/lighterbird"]
 
