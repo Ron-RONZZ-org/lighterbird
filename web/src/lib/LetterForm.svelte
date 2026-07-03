@@ -293,6 +293,16 @@
 <svelte:window onkeydown={handleFormKeydown} />
 
 <form class="letter-form" onsubmit={handleSubmit}>
+  <!-- Toolbar -->
+  <div class="form-toolbar">
+    <div class="toolbar-left">
+      <span class="toolbar-title">{formType === "add" ? "Add Letter" : "Send Letter"}</span>
+    </div>
+    <div class="toolbar-right">
+      <CowriteButton {cowrite} />
+    </div>
+  </div>
+
   {#if formType === "add"}
     <div class="field-row">
       <label for="object">Subject/Object</label>
@@ -355,12 +365,9 @@
     </div>
   {/if}
 
-  <!-- Body editor with cowrite button -->
+  <!-- Body editor -->
   <div class="field-row">
-    <div class="body-header">
-      <span class="body-header-label">Body</span>
-      <CowriteButton {cowrite} />
-    </div>
+    <label for="letter-body">Body</label>
     <LetterBodyEditor
       bind:body={bodyContent}
       bind:bodyFormat={bodyFormat}
@@ -396,7 +403,7 @@
         Save Draft <kbd>Ctrl+S</kbd>
       {/if}
     </button>
-    <button type="submit" class="submit-btn">{submitLabel} <kbd>⌃Enter</kbd></button>
+    <button type="submit" class="submit-btn">{submitLabel} <kbd>Ctrl+Enter</kbd></button>
   </div>
 </form>
 
@@ -431,11 +438,20 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    padding: 1rem;
+    padding: 1rem 1rem 0 1rem;
     font-family: monospace;
     font-size: 0.85rem;
     position: relative;
   }
+  .form-toolbar {
+    display: flex; align-items: center; gap: 0.5rem;
+    margin: -1rem -1rem 0 -1rem; padding: 0.4rem 0.5rem;
+    background: #16162a; border-bottom: 1px solid #333; min-height: 2.2rem;
+    flex-shrink: 0; font-family: monospace; font-size: 0.82rem;
+  }
+  .toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 0.5rem; }
+  .toolbar-right { margin-left: auto; }
+  .toolbar-title { color: #b0b0c0; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; }
   .field-row {
     display: flex;
     flex-direction: column;
@@ -557,17 +573,6 @@
     border-radius: 3px;
     font-size: 0.7rem;
     margin-left: 0.2rem;
-  }
-  .body-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-  }
-  .body-header-label {
-    color: var(--clr-sub);
-    font-size: 0.8rem;
-    font-weight: 600;
   }
   .suggestion-popup {
     background: #1e1e32;

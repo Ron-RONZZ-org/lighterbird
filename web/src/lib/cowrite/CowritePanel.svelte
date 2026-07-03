@@ -156,6 +156,7 @@
           disabled={cowrite.isLoading}
         />
         <button
+          type="button"
           class="btn-ask"
           onclick={() => cowrite.startCowrite(refinementText)}
           disabled={cowrite.isLoading || !refinementText.trim()}

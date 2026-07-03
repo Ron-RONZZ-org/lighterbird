@@ -17,7 +17,7 @@
   let parentUuid = $state(_initial.parent_uuid || "");
   let dependencyUuids = $state([]);
   let tags = $state(_initial.tags || []);
-  let filePath = $state("");
+  let filePaths = $state([]);
   let adding = $state(false);
   let savingDraft = $state(false);
   let draftSaved = $state(false);
@@ -87,7 +87,7 @@
     || parentUuid !== (_initial.parent_uuid || "")
     || dependencyUuids.length > 0
     || tags.length > 0
-    || filePath !== ""
+    || filePaths.length > 0
     || selectedTemplate !== (_initial.template || "")
     || shallowDiff(templateValues, {})
   );
@@ -151,7 +151,7 @@
     try {
       const result = await todoApi.searchTitles(q);
       return (result.results || []).map((item) => ({
-        label: item.titolo,
+        label: item.title,
         value: item.uuid,
       }));
     } catch {
@@ -160,7 +160,7 @@
   }
 
   function selectParent(item) {
-    parentUuid = item.title;
+    parentUuid = item.uuid;
     parentSuggestions = [];
     showParentSuggestions = false;
   }
@@ -183,7 +183,7 @@
       if (parentUuid) flags.parent = parentUuid;
       if (dependencyUuids.length > 0) flags.dependency = dependencyUuids.join(",");
       if (tags.length > 0) flags.tags = tags.join(",");
-      if (filePath) flags.file = filePath;
+      if (filePaths.length > 0) flags.file = filePaths.join(",");
       if (selectedTemplate) {
         flags.template = selectedTemplate;
         // Add template field values as --text name:value flags
@@ -206,6 +206,16 @@
 </script>
 
 <form onsubmit={handleSubmit} class="todo-add-form">
+  <!-- Toolbar -->
+  <div class="form-toolbar">
+    <div class="toolbar-left">
+      <span class="toolbar-title">Add Todo</span>
+    </div>
+    <div class="toolbar-right">
+      <CowriteButton {cowrite} />
+    </div>
+  </div>
+
   <!-- Template selector (first field) -->
   <div class="field">
     <label for="template">Template <span class="field-hint">(optional — changes available fields)</span></label>
@@ -225,10 +235,7 @@
 
   <div class="field">
     <label for="description">Description</label>
-    <div class="textarea-actions">
-      <textarea id="description" bind:value={description} rows="4" placeholder="Optional details..."></textarea>
-      <CowriteButton {cowrite} />
-    </div>
+    <textarea id="description" bind:value={description} rows="4" placeholder="Optional details..."></textarea>
   </div>
 
   <!-- Template-specific fields -->
@@ -303,10 +310,12 @@
   />
 
   <!-- File attachment -->
-  <div class="field">
-    <label for="file">File Attachment <span class="field-hint">(local path or URL)</span></label>
-    <input id="file" type="text" bind:value={filePath} placeholder="/path/to/file or https://..." />
-  </div>
+  <MultiEntryField
+    label="File Attachment"
+    hint="Local path or URL — one per chip"
+    bind:entries={filePaths}
+    placeholder="/path/to/file or https://..."
+  />
 
   <div class="actions">
     <button type="button" class="draft-btn" onclick={saveDraft} disabled={savingDraft || !title && !description}>
@@ -319,7 +328,7 @@
       {/if}
     </button>
     <button type="submit" disabled={adding || !title}>
-      {adding ? "Adding..." : "Add Todo"} <kbd>⌃Enter</kbd>
+      {adding ? "Adding..." : "Add Todo"} <kbd>Ctrl+Enter</kbd>
     </button>
   </div>
 
@@ -331,7 +340,16 @@
 <svelte:window onkeydown={handleFormKeydown} />
 
 <style>
-  .todo-add-form { padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; position: relative; }
+  .todo-add-form { padding: 1rem 1rem 0 1rem; display: flex; flex-direction: column; gap: 0.75rem; position: relative; }
+  .form-toolbar {
+    display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0;
+    margin: -1rem -1rem 0 -1rem; padding: 0.4rem 0.5rem;
+    background: #16162a; border-bottom: 1px solid #333; min-height: 2.2rem;
+    flex-shrink: 0; font-family: monospace; font-size: 0.82rem;
+  }
+  .toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 0.5rem; }
+  .toolbar-right { margin-left: auto; }
+  .toolbar-title { color: #b0b0c0; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; }
   .row-fields { display: flex; gap: 0.75rem; }
   .row-fields .field { flex: 1; }
   .field { display: flex; flex-direction: column; gap: 0.25rem; }
@@ -353,7 +371,6 @@
   }
   .field select { cursor: pointer; }
   .field textarea { resize: vertical; min-height: 80px; font-family: inherit; line-height: 1.5; }
-  .textarea-actions { display: flex; flex-direction: column; gap: 0.3rem; }
   .required-badge {
     display: inline-block; font-size: 0.55rem; text-transform: uppercase;
     background: #5b2020; color: #e0a0a0; padding: 0.08rem 0.4rem;

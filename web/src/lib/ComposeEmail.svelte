@@ -210,6 +210,16 @@
 </script>
 
 <form onsubmit={handleSubmit} class="email-form">
+  <!-- Toolbar -->
+  <div class="form-toolbar">
+    <div class="toolbar-left">
+      <span class="toolbar-title">Compose Email</span>
+    </div>
+    <div class="toolbar-right">
+      <CowriteButton {cowrite} />
+    </div>
+  </div>
+
   <div class="row-fields">
     <FormField label="Account" class="flex-1">
       {#snippet children()}
@@ -279,8 +289,6 @@
             <option value="html">HTML</option>
             <option value="plain">Plain Text</option>
           </select>
-          <span class="toolbar-spacer"></span>
-          <CowriteButton {cowrite} />
         </div>
         <textarea id="body" class="ff-textarea" bind:value={body} rows="8"
           placeholder="Message body (Markdown supported)"></textarea>
@@ -330,7 +338,16 @@
 <svelte:window onkeydown={handleFormKeydown} />
 
 <style>
-  .email-form { padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; position: relative; }
+  .email-form { padding: 1rem 1rem 0 1rem; display: flex; flex-direction: column; gap: 0.75rem; position: relative; }
+  .form-toolbar {
+    display: flex; align-items: center; gap: 0.5rem;
+    margin: -1rem -1rem 0 -1rem; padding: 0.4rem 0.5rem;
+    background: #16162a; border-bottom: 1px solid #333; min-height: 2.2rem;
+    flex-shrink: 0; font-family: monospace; font-size: 0.82rem;
+  }
+  .toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 0.5rem; }
+  .toolbar-right { margin-left: auto; }
+  .toolbar-title { color: #b0b0c0; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; }
   .row-fields { display: flex; gap: 0.75rem; }
   .row-fields :global(.flex-1) { flex: 1; }
   :global(.ff-input) {
@@ -354,7 +371,6 @@
     color: #e0e0e0; border-radius: 4px; font-family: monospace; font-size: 0.78rem;
     cursor: pointer;
   }
-  .toolbar-spacer { flex: 1; }
   .attachment-area { display: flex; flex-direction: column; gap: 0.4rem; }
   .file-input {
     font-family: monospace; font-size: 0.8rem; color: #ccc;

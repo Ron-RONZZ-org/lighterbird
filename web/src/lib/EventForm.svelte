@@ -126,7 +126,7 @@
       {/if}
     </button>
     <button type="submit" disabled={creating || !calendarUuid || !title || !start || !end}>
-      {creating ? "Creating..." : "Create Event"} <kbd>⌃Enter</kbd>
+      {creating ? "Creating..." : "Create Event"} <kbd>Ctrl+Enter</kbd>
     </button>
   </div>
 </form>
