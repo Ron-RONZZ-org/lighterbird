@@ -509,11 +509,11 @@
         </span>
         <span class="from" class:unread={!msg.is_read} role="button" tabindex="-1"
               onclick={(e) => {
-                if (!sel.selectionMode) { e.stopPropagation(); emailCopy.copyToClipboard(msg.from || ""); }
+                if (!sel.selectionMode) { e.stopPropagation(); emailCopy.copyToClipboard(msg.from_addr || ""); }
               }}
-              onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (!sel.selectionMode) { e.stopPropagation(); emailCopy.copyToClipboard(msg.from || ""); } } }}
+              onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (!sel.selectionMode) { e.stopPropagation(); emailCopy.copyToClipboard(msg.from_addr || ""); } } }}
               title="Click to copy email address">
-          {emailCopy.copiedKey === msg.from ? "Copied!" : truncate(msg.from || "", 24)}
+          {emailCopy.copiedKey === msg.from_addr ? "Copied!" : truncate(msg.from_addr || "", 24)}
         </span>
         <span class="subject" class:unread={!msg.is_read}>{truncate(msg.subject || "(no subject)", 40)}</span>
         <span class="date">{formatListItemDate(msg.received_at)}</span>
