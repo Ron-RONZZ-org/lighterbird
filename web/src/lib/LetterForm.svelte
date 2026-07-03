@@ -16,6 +16,7 @@
   import SearchDialog from "./SearchDialog.svelte";
   import LetterBodyEditor from "./LetterBodyEditor.svelte";
   import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
+  import MultiEntryField from "./MultiEntryField.svelte";
 
   let { initialData = {}, formType = "add", onsubmit, onDirtyChange } = $props();
 
@@ -37,6 +38,9 @@
   // svelte-ignore state_referenced_locally
   let bodyFilePath = $state(initialData.body || "");
   let bodyProvided = $state(false); // tracks if body was ever edited / file specified
+
+  // svelte-ignore state_referenced_locally
+  let tags = $state(initialData.tags ? (Array.isArray(initialData.tags) ? initialData.tags : initialData.tags.split(",").map((s) => s.trim()).filter(Boolean)) : []);
 
   let returnIdKey = $derived(initialData._returnIdKey || "persistent-letter-list");
   let returnType = $derived(initialData._returnType || "letter-list");
@@ -102,7 +106,7 @@
   // ── Dirty tracking ─────────────────────────────────────────────────────
   let dirty = $derived(
     object || senderText || recipientText || senderProfile || recipientContact
-    || respondTo || bodyProvided
+    || respondTo || bodyProvided || tags.length > 0
   );
   $effect(() => { onDirtyChange?.(dirty); });
 
@@ -217,6 +221,7 @@
         sender_profile: senderProfile, recipient_contact: recipientContact,
         respond_to: respondTo, body: bodyContent, body_format: bodyFormat,
         body_file_path: bodyFilePath, body_provided: bodyProvided,
+        tags: tags.join(","),
       };
       if (formType === "add") {
         data._formType = "add";
@@ -242,6 +247,7 @@
       if (senderText.trim()) flags.sender = senderText.trim();
       if (recipientText.trim()) flags.recipient = recipientText.trim();
       if (respondTo.trim()) flags["respond-to"] = respondTo.trim();
+      if (tags.length > 0) flags.tag = tags.join(",");
     } else {
       if (!recipientText.trim() && !recipientContact.trim()) return;
       tokens = ["letter", "send", recipientText.trim() || recipientContact.trim()];
@@ -250,6 +256,7 @@
       if (respondTo.trim()) flags["respond-to"] = respondTo.trim();
       if (senderProfile) flags["sender-profile"] = senderProfile;
       if (recipientContact) flags["recipient-contact"] = recipientContact;
+      if (tags.length > 0) flags.tag = tags.join(",");
     }
 
     // Body: prefer inline text, fall back to file path
@@ -367,6 +374,16 @@
   <div class="field-row">
     <label for="respond-to">Respond To (UUID)</label>
     <input id="respond-to" type="text" bind:value={respondTo} placeholder="UUID of letter this responds to" />
+  </div>
+
+  <!-- Tags -->
+  <div class="field-row">
+    <MultiEntryField
+      label="Tags"
+      hint="Add labels to organize"
+      bind:entries={tags}
+      placeholder="Enter tag name"
+    />
   </div>
 
   <div class="button-row">
