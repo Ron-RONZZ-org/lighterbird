@@ -1,6 +1,6 @@
 <script>
   import { tick } from "svelte";
-  import { createDialogTrap } from "./listTabShared.svelte.js";
+  import { createDialogTrap, sanitizeFilename } from "./listTabShared.svelte.js";
 
   let {
     domain = "",
@@ -16,7 +16,7 @@
   let statusMessage = $state("");
 
   const DOMAIN_CONFIG = {
-    email: { type: "download", filename: (item) => `${item.title || item.uuid}.eml` },
+    email: { type: "download", filename: (item) => sanitizeFilename(item.title || item.uuid, ".eml") },
     calendar: { type: "json", dataKey: "ics", filenameKey: "filename", defaultFilename: "calendar.ics" },
     contacts: { type: "json", dataKey: "vcf", defaultFilename: "contacts.vcf" },
     todo: { type: "text", defaultFilename: "todo.md" },

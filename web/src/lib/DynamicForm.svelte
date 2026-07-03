@@ -134,7 +134,16 @@
       .join(" ")
       .replace(/\b\w/g, (c) => c.toUpperCase()),
   );
+
+  function handleKeydown(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  }
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <form onsubmit={handleSubmit} class="dynamic-form">
   <h3 class="form-title">{formTitle}</h3>

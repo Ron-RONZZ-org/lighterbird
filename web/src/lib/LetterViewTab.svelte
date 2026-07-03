@@ -1,5 +1,6 @@
 <script>
   import { tabStore } from "./tabStore.svelte.js";
+  import { sanitizeFilename } from "./listTabShared.svelte.js";
 
   let { data = {} } = $props();
   let letter = $derived(data?.letter || {});
@@ -38,7 +39,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${letter.object || "letter"}.md`.replace(/[^a-zA-Z0-9._ -]/g, "_");
+      a.download = sanitizeFilename(letter.object || "letter", ".md");
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -215,7 +216,7 @@
     font-size: 0.72rem;
   }
 
-  /* Print styles — hide non-essential UI */
+  /* Print styles — hide non-essential UI, show full content */
   @media print {
     :global(.tab-bar),
     :global(.command-bar),
@@ -228,9 +229,12 @@
     .letter-view {
       padding: 0 !important;
       height: auto !important;
+      overflow: visible !important;
+      flex: none !important;
     }
     .headers {
       color: #000 !important;
+      break-inside: avoid;
     }
     .headers .value {
       color: #000 !important;
@@ -241,9 +245,14 @@
     .body-area {
       overflow: visible !important;
       background: #fff !important;
+      flex: none !important;
+      height: auto !important;
+      min-height: 300px;
     }
     .letter-frame {
       color: #000 !important;
+      height: auto !important;
+      min-height: 300px;
     }
     hr {
       border-top-color: #ccc !important;
