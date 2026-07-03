@@ -25,6 +25,19 @@
     }
   });
 
+  let showImportDialog = $state(false);
+  let showExportDialog = $state(false);
+
+  let exportItems = $derived(contacts.filter(c => sel.selectedKeys.has(c.uuid)));
+
+  function openImportDialog() {
+    showImportDialog = true;
+  }
+
+  function openExportDialog() {
+    showExportDialog = true;
+  }
+
   let showSearch = $state(false);
   let searchQuery = $state("");
   let currentFilters = $state({});
@@ -195,6 +208,8 @@
         {/if}
       </div>
       <div class="right">
+        <button class="tool-btn" disabled={sel.numSelected === 0} title="Export selected (E)"
+          onclick={openExportDialog}>Export <kbd>E</kbd></button>
         <button class="tool-btn danger" disabled={sel.numSelected === 0} title="Delete selected (Delete key)"
           onclick={() => { sel.confirmDelete = true; }}>Delete <kbd>Del</kbd></button>
       </div>
@@ -207,6 +222,7 @@
       </div>
       <div class="right">
         <button class="tool-btn primary" onclick={handleNew} title="Add new contact">+ New <kbd>N</kbd></button>
+        <button class="tool-btn" onclick={openImportDialog} title="Import contacts (M)">Import <kbd>M</kbd></button>
       </div>
     {/if}
   </div>
@@ -255,6 +271,22 @@
     <ConfirmDialog message="Delete {sel.numSelected} contact{sel.numSelected !== 1 ? 's' : ''}?"
       onConfirm={async () => { sel.confirmDelete = false; await sel.deleteSelected(); }}
       onDismiss={() => { sel.confirmDelete = false; }} />
+  {/if}
+
+  {#if showExportDialog}
+    <ExportDialog
+      domain="contact"
+      items={exportItems}
+      format="vcf"
+      onClose={() => showExportDialog = false}
+    />
+  {/if}
+  {#if showImportDialog}
+    <ImportDialog
+      domain="contact"
+      format="vcf"
+      onClose={() => showImportDialog = false}
+    />
   {/if}
 </div>
 

@@ -307,6 +307,32 @@ def get_command_tree() -> list[CommandNode]:
                         },
                     ],
                 },
+                {
+                    "name": "export",
+                    "description": "Export operations",
+                    "children": [
+                        {
+                            "name": "eml",
+                            "description": "Export a message as .eml (RFC 822) file",
+                            "params": [
+                                {"name": "uuid", "required": True, "type": "uuid", "placeholder": "message-uuid", "uuidSource": "email.listMessages"},
+                            ],
+                        },
+                    ],
+                },
+                {
+                    "name": "import",
+                    "description": "Import operations",
+                    "children": [
+                        {
+                            "name": "eml",
+                            "description": "Import a .eml file as an email draft",
+                            "params": [
+                                {"name": "path", "required": True, "type": "string", "placeholder": "/path/to/file.eml"},
+                            ],
+                        },
+                    ],
+                },
             ],
         },
 
@@ -389,6 +415,35 @@ def get_command_tree() -> list[CommandNode]:
                                 {"name": "start", "type": "date", "help": "Start date (YYYY-MM-DD)"},
                                 {"name": "end", "type": "date", "help": "End date (YYYY-MM-DD)"},
                                 {"name": "calendar", "short": "c", "type": "uuid", "help": "Calendar UUID filter", "uuidSource": "calendar.listCalendars"},
+                            ],
+                        },
+                        {
+                            "name": "export",
+                            "description": "Export event(s) as ICS",
+                            "children": [
+                                {
+                                    "name": "ics",
+                                    "description": "Export event(s) as ICS text",
+                                    "params": [
+                                        {"name": "uuid", "required": True, "type": "uuid", "placeholder": "event-uuid", "uuidSource": "calendar.listEvents", "repeatable": True},
+                                    ],
+                                },
+                            ],
+                        },
+                        {
+                            "name": "import",
+                            "description": "Import events from ICS file",
+                            "children": [
+                                {
+                                    "name": "ics",
+                                    "description": "Import events from .ics file",
+                                    "params": [
+                                        {"name": "path", "required": True, "type": "string", "placeholder": "/path/to/file.ics"},
+                                    ],
+                                    "flags": [
+                                        {"name": "calendar", "short": "c", "type": "uuid", "help": "Target calendar UUID", "uuidSource": "calendar.listCalendars"},
+                                    ],
+                                },
                             ],
                         },
                     ],
@@ -510,6 +565,35 @@ def get_command_tree() -> list[CommandNode]:
                     "description": "Search contacts",
                     "params": [
                         {"name": "query", "required": False, "type": "string", "placeholder": "search text"},
+                    ],
+                },
+                {
+                    "name": "export",
+                    "description": "Export contacts in VCF format",
+                    "children": [
+                        {
+                            "name": "vcf",
+                            "description": "Export contact(s) as .vcf",
+                            "params": [
+                                {"name": "uuid", "required": False, "type": "uuid", "placeholder": "contact-uuid", "uuidSource": "contact.list"},
+                            ],
+                            "flags": [
+                                {"name": "all", "type": "flag", "help": "Export all contacts"},
+                            ],
+                        },
+                    ],
+                },
+                {
+                    "name": "import",
+                    "description": "Import contacts from file",
+                    "children": [
+                        {
+                            "name": "vcf",
+                            "description": "Import contacts from .vcf file",
+                            "params": [
+                                {"name": "path", "required": True, "type": "string", "placeholder": "/path/to/file.vcf"},
+                            ],
+                        },
                     ],
                 },
             ],
@@ -666,6 +750,35 @@ def get_command_tree() -> list[CommandNode]:
                         },
                     ],
                 },
+                {
+                    "name": "export",
+                    "description": "Export todos to Markdown",
+                    "children": [
+                        {
+                            "name": "md",
+                            "description": "Export todo(s) as .md file",
+                            "params": [
+                                {"name": "uuid", "required": False, "type": "uuid", "placeholder": "todo-uuid", "uuidSource": "todo.list"},
+                            ],
+                            "flags": [
+                                {"name": "all", "type": "flag", "help": "Export all todos"},
+                            ],
+                        },
+                    ],
+                },
+                {
+                    "name": "import",
+                    "description": "Import todos from Markdown",
+                    "children": [
+                        {
+                            "name": "md",
+                            "description": "Import todo(s) from .md file",
+                            "params": [
+                                {"name": "path", "required": True, "type": "string", "placeholder": "/path/to/todos.md"},
+                            ],
+                        },
+                    ],
+                },
             ],
         },
 
@@ -724,6 +837,32 @@ def get_command_tree() -> list[CommandNode]:
                     "description": "Delete journal entry(s) by UUID",
                     "params": [
                         {"name": "uuid", "required": True, "type": "uuid", "placeholder": "entry-uuid", "uuidSource": "journal.list", "repeatable": True},
+                    ],
+                },
+                {
+                    "name": "export",
+                    "description": "Export journal entry(s) as .md",
+                    "children": [
+                        {
+                            "name": "md",
+                            "description": "Export entry(s) to .md with YAML frontmatter",
+                            "params": [
+                                {"name": "uuid", "required": True, "type": "uuid", "placeholder": "entry-uuid", "uuidSource": "journal.list", "repeatable": True},
+                            ],
+                        },
+                    ],
+                },
+                {
+                    "name": "import",
+                    "description": "Import journal entry(s) from .md",
+                    "children": [
+                        {
+                            "name": "md",
+                            "description": "Import entry(s) from a .md file with YAML frontmatter",
+                            "params": [
+                                {"name": "path", "required": True, "type": "string", "placeholder": "/path/to/entry.md"},
+                            ],
+                        },
                     ],
                 },
             ],
@@ -1105,6 +1244,32 @@ def get_command_tree() -> list[CommandNode]:
                     ],
                     "flags": [
                         {"name": "output", "short": "o", "type": "string", "help": "Output PDF file path"},
+                    ],
+                },
+                {
+                    "name": "export",
+                    "description": "Export letters",
+                    "children": [
+                        {
+                            "name": "md",
+                            "description": "Export a letter as YAML-frontmatter markdown",
+                            "params": [
+                                {"name": "uuid", "required": True, "type": "uuid", "placeholder": "letter-uuid", "uuidSource": "letter.list"},
+                            ],
+                        },
+                    ],
+                },
+                {
+                    "name": "import",
+                    "description": "Import letters",
+                    "children": [
+                        {
+                            "name": "md",
+                            "description": "Import a letter from a YAML-frontmatter markdown file",
+                            "params": [
+                                {"name": "path", "required": True, "type": "string", "placeholder": "/path/to/letter.md"},
+                            ],
+                        },
                     ],
                 },
             ],

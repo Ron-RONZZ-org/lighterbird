@@ -5,8 +5,11 @@ Composes AccountService, MessageService, and MessageOpsService.
 
 from __future__ import annotations
 
+import email.parser
+from pathlib import Path
 from typing import Any
 
+from lighterbird.core.drafts import save_draft
 from lighterbird.email.services import AccountService, MessageService, MessageOpsService, SieveService
 from lighterbird.email.db import get_db
 
@@ -101,6 +104,48 @@ class EmailService:
 
     def search_messages(self, filters: dict, limit=50):
         return self.messages.search_messages(filters, limit=limit)
+
+    def export_eml(self, uuid_: str) -> str | None:
+        """Export a message as .eml (RFC 822) string."""
+        return self.messages.export_eml(uuid_)
+
+    def import_eml(self, path: str) -> dict[str, Any]:
+        """Import a .eml file and save it as an email draft.
+
+        Returns the created draft dict.
+        """
+        eml_path = Path(path)
+        if not eml_path.exists():
+            raise FileNotFoundError(f"File not found: {path}")
+
+        with open(eml_path, "rb") as f:
+            parsed = email.parser.BytesParser().parse(f)
+
+        subject = parsed.get("Subject", "(imported)")
+        from_addr = parsed.get("From", "")
+        to_addr = parsed.get("To", "")
+        body = ""
+        if parsed.is_multipart():
+            for part in parsed.walk():
+                ctype = part.get_content_type()
+                if ctype == "text/plain":
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        body = payload.decode("utf-8", errors="replace")
+                    break
+        else:
+            payload = parsed.get_payload(decode=True)
+            if payload:
+                body = payload.decode("utf-8", errors="replace")
+
+        draft_data = {
+            "subject": subject,
+            "from_addr": from_addr,
+            "to_addr": to_addr,
+            "body": body,
+        }
+        draft = save_draft(domain="email", title=subject, data=draft_data)
+        return draft
 
     def get_conversation(self, uuid_: str, limit: int = 20) -> list[dict[str, Any]]:
         msg = self.get_message(uuid_)

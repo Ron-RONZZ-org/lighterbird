@@ -7,6 +7,8 @@ Registered paths:
     - contact.modify
     - contact.delete
     - contact.search
+    - contact.export.vcf
+    - contact.import.vcf
 """
 
 from __future__ import annotations
@@ -215,3 +217,32 @@ def contact_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     query = " ".join(remaining) if remaining else flags.get("query", "")
     contacts = [normalize_contact(c) for c in svc.search(query)]
     return {"type": "contacts-list", "title": "Contact Search", "data": {"contacts": contacts}}
+
+
+@command("contact.export.vcf")
+def contact_export_vcf(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!contact export vcf <uuid> [--all]"""
+    svc: ContactService = get_contact_service()
+    if "all" in flags:
+        vcf_text = svc.export_vcf(uuid=None)
+        return {"type": "status", "title": "VCF Export", "data": {"vcf": vcf_text}}
+    if not remaining:
+        raise CommandValidationError(
+            "Missing contact UUID or --all flag.",
+            "Usage: !contact export vcf <uuid> or !contact export vcf --all",
+        )
+    vcf_text = svc.export_vcf(uuid=remaining[0])
+    return {"type": "status", "title": "VCF Export", "data": {"vcf": vcf_text}}
+
+
+@command("contact.import.vcf")
+def contact_import_vcf(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!contact import vcf <path>"""
+    if not remaining:
+        raise CommandValidationError(
+            "Missing VCF file path.",
+            "Usage: !contact import vcf <path/to/file.vcf>",
+        )
+    svc: ContactService = get_contact_service()
+    count = svc.import_vcf(remaining[0])
+    return {"type": "status", "title": "VCF Import", "data": {"imported": count}}

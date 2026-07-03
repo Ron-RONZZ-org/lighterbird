@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import PlainTextResponse
 
 from lighterbird.server.deps import get_todo_service
 from lighterbird.server.command.response import normalize_todo
@@ -186,6 +187,61 @@ def remove_todo_attachment(
 ):
     svc.remove_attachment(att_uuid)
     return {"status": "ok"}
+
+
+# ── Markdown Export / Import ─────────────────────────────────────────
+
+
+@router.get("/export-md/{uuid}")
+def export_todo_md(
+    uuid: str,
+    svc: TodoService = Depends(get_todo_service),
+):
+    """Export a single todo (with tree hierarchy) as Markdown."""
+    result = svc.export_md(uuid=uuid)
+    if not result:
+        raise HTTPException(
+            status_code=404, detail=f"Todo not found: {uuid[:8]}",
+        )
+    return PlainTextResponse(result, media_type="text/markdown")
+
+
+@router.get("/export-md")
+def export_todos_md(
+    uuids: str | None = Query(None, description="Comma-separated UUIDs"),
+    svc: TodoService = Depends(get_todo_service),
+):
+    """Export one or more todos as Markdown.
+
+    If ``uuids`` is omitted, exports all todos.
+    """
+    if uuids:
+        uuid_list = [u.strip() for u in uuids.split(",") if u.strip()]
+        result = svc.export_md(uuids=uuid_list)
+    else:
+        result = svc.export_md()
+    return PlainTextResponse(result, media_type="text/markdown")
+
+
+@router.post("/import-md")
+def import_todo_md(
+    data: dict,
+    svc: TodoService = Depends(get_todo_service),
+):
+    """Import todos from a .md file path.
+
+    Expects ``{"path": "/path/to/todos.md"}``.
+    """
+    path = data.get("path", "")
+    if not path:
+        raise HTTPException(status_code=400, detail="Missing 'path' field")
+    try:
+        created = svc.import_md(path)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return {"created": created, "count": len(created)}
 
 
 # ── Templates ────────────────────────────────────────────────────────

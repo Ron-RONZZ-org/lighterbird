@@ -19,6 +19,8 @@
     onToggleFolderTree = () => {},
     onToggleSortDropdown = () => {},
     onToggleParamsDialog = () => {},
+    onImport = () => {},
+    onExport = () => {},
   } = $props();
 
   function handleSearchKeydown(e) {
@@ -66,6 +68,7 @@
       {/if}
     </div>
     <div class="right">
+      <button class="tool-btn" disabled={numSelected === 0} onclick={onExport} title="Export selected (E)">Export <kbd>E</kbd></button>
       <button class="tool-btn" disabled={numSelected === 0} onclick={onMove} title="Move selected (Ctrl+M)">Move <kbd>⌃M</kbd></button>
       <button class="tool-btn danger" disabled={numSelected === 0} onclick={onDelete} title="Delete selected (Delete key)">Delete <kbd>Del</kbd></button>
     </div>
@@ -87,6 +90,7 @@
       {#if onNew}
         <button class="tool-btn primary" onclick={onNew} title="New message">+ New <kbd>N</kbd></button>
       {/if}
+      <button class="tool-btn" onclick={onImport} title="Import messages (M)">Import <kbd>M</kbd></button>
     </div>
   {/if}
 </div>

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from pathlib import Path
+
 from lighterbird.core.crud import CRUDService
+from lighterbird.core.yaml_frontmatter import unwrap, wrap
 
 
 class JournalService(CRUDService):
@@ -12,6 +15,71 @@ class JournalService(CRUDService):
 
     def __init__(self, db):
         super().__init__(db, "journal")
+
+    # ── Markdown export / import ────────────────────────────────────────
+
+    def export_md(self, uuid: str | None = None, uuids: list[str] | None = None) -> str:
+        """Export one or more journal entries as a .md string with YAML frontmatter.
+
+        Args:
+            uuid: Single entry UUID.
+            uuids: Multiple entry UUIDs.
+
+        Returns:
+            Full markdown string(s) concatenated with ``---`` separators.
+        """
+        ids: list[str] = []
+        if uuids:
+            ids.extend(uuids)
+        if uuid:
+            ids.append(uuid)
+
+        parts: list[str] = []
+        for eid in ids:
+            entry = self.get(eid)
+            if not entry:
+                continue
+            meta = {
+                "uuid": entry["uuid"],
+                "domain": "journal",
+                "created_at": entry.get("created_at"),
+                "updated_at": entry.get("updated_at"),
+                "date": entry.get("date"),
+                "title": entry.get("title", ""),
+            }
+            body = entry.get("text", "")
+            parts.append(wrap(body, meta))
+        return "\n---\n".join(parts)
+
+    def import_md(self, path: str) -> list[str]:
+        """Import a .md file with YAML frontmatter as journal entry(s).
+
+        Parses the frontmatter block (``---...---``) from the file and
+        creates a journal entry from the metadata and body text.
+
+        Args:
+            path: Path to the .md file.
+
+        Returns:
+            List of created UUIDs.
+        """
+        text = Path(path).read_text(encoding="utf-8")
+        meta, body = unwrap(text)
+        if not meta:
+            return []
+
+        entry_data = {
+            "uuid": meta.get("uuid"),
+            "title": meta.get("title", ""),
+            "text": body,
+            "date": meta.get("date", ""),
+        }
+        if meta.get("created_at"):
+            entry_data["created_at"] = meta["created_at"]
+        if meta.get("updated_at"):
+            entry_data["updated_at"] = meta["updated_at"]
+        entry = self.create(entry_data)
+        return [entry["uuid"]]
 
     # ── Search ──────────────────────────────────────────────────────────
 

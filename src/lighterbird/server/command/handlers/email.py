@@ -65,7 +65,9 @@ def email_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "  !email sieve delete      — Delete a Sieve script\n"
                 "  !email sieve activate    — Activate on an account\n"
                 "  !email sieve deactivate  — Deactivate on an account\n"
-                "  !email draft             — List / recall email drafts"
+                "  !email draft             — List / recall email drafts\n"
+                "  !email export eml <uuid> — Export message as .eml file\n"
+                "  !email import eml <path> — Import .eml file as draft"
             ),
         },
     }
@@ -433,6 +435,64 @@ def email_archive(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     svc: EmailService = get_email_service()
     svc.trash_message(remaining[0])
     return {"type": "status", "title": "Archived", "data": {"uuid": remaining[0][:8]}}
+
+
+
+@command("email.export_eml")
+def email_export_eml(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!email export eml <uuid>
+
+    Export a message as .eml (RFC 822) attachment download.
+    """
+    if not remaining:
+        raise CommandValidationError(
+            "Missing message UUID.",
+            "Usage: !email export eml <uuid>",
+        )
+    uuid = remaining[0]
+    svc: EmailService = get_email_service()
+    eml_text = svc.export_eml(uuid)
+    if eml_text is None:
+        raise CommandValidationError(f"Message not found: {uuid[:8]}")
+    return {
+        "type": "status",
+        "title": "Export .eml",
+        "data": {
+            "_summary": f"Exported message {uuid[:8]} as .eml",
+            "uuid": uuid,
+            "eml_size": len(eml_text),
+        },
+    }
+
+
+@command("email.import_eml")
+def email_import_eml(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!email import eml <path>
+
+    Import a .eml file as a new email draft.
+    """
+    if not remaining:
+        raise CommandValidationError(
+            "Missing file path.",
+            "Usage: !email import eml /path/to/file.eml",
+        )
+    path = remaining[0]
+    svc: EmailService = get_email_service()
+    try:
+        draft = svc.import_eml(path)
+    except FileNotFoundError:
+        raise CommandValidationError(f"File not found: {path}")
+    except Exception as e:
+        raise CommandValidationError(f"Import failed: {e}")
+    return {
+        "type": "status",
+        "title": "Import .eml",
+        "data": {
+            "_summary": f"Imported {path} as draft {draft['uuid']}",
+            "draft_uuid": draft["uuid"],
+            "subject": draft["data"].get("subject", ""),
+        },
+    }
 
 
 # (Account sub-commands moved to email_account.py)
