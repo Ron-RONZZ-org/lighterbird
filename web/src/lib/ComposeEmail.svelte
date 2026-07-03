@@ -4,6 +4,7 @@
   import { email as emailApi, contacts as contactsApi, drafts as draftsApi } from "./api.js";
   import FormField from "./FormField.svelte";
   import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
+  import MultiEntryField from "./MultiEntryField.svelte";
 
   let { initialData = {}, onsubmit, onDirtyChange = () => {} } = $props();
   // svelte-ignore state_referenced_locally
@@ -13,8 +14,8 @@
   let to = $state(_initial.to || "");
   let subject = $state(_initial.subject || "");
   let body = $state(_initial.body || "");
-  let cc = $state(_initial.cc || "");
-  let bcc = $state(_initial.bcc || "");
+  let ccList = $state(_initial.cc ? _initial.cc.split(",").map((s) => s.trim()).filter(Boolean) : []);
+  let bccList = $state(_initial.bcc ? _initial.bcc.split(",").map((s) => s.trim()).filter(Boolean) : []);
   let priority = $state(_initial.priority || "3");
   let bodyFormat = $state("markdown"); // "markdown" | "html" | "plain"
   let attachmentFiles = $state([]); // Array of {name, data} (base64)
@@ -53,6 +54,14 @@
     }).catch(() => {});
   });
 
+  /** Autocomplete query for MultiEntryField: filter contact suggestions by partial match */
+  function searchContactEmails(partial) {
+    if (!partial || partial.length < 1) return [];
+    const q = partial.toLowerCase();
+    const matches = contactSuggestions.filter((e) => e.toLowerCase().includes(q));
+    return matches.map((email) => ({ label: email, value: email }));
+  }
+
   // ── LLM co-writing ─────────────────────────────────────────────────
   let cowrite = $state(createCowrite({
     formType: "email-send",
@@ -60,15 +69,15 @@
       to,
       subject,
       body,
-      cc,
-      bcc,
+      cc: ccList.join(", "),
+      bcc: bccList.join(", "),
     }),
     applyEdit: (field, text) => {
       if (field === "to") to = text;
       else if (field === "subject") subject = text;
       else if (field === "body") body = text;
-      else if (field === "cc") cc = text;
-      else if (field === "bcc") bcc = text;
+      else if (field === "cc") ccList = text.split(",").map((s) => s.trim()).filter(Boolean);
+      else if (field === "bcc") bccList = text.split(",").map((s) => s.trim()).filter(Boolean);
     },
   }));
 
@@ -81,7 +90,7 @@
       const result = await draftsApi.save(
         "email",
         subject || "(no subject)",
-        { account: accountUuid, to, subject, body, cc, bcc, priority, bodyFormat },
+        { account: accountUuid, to, subject, body, cc: ccList.join(","), bcc: bccList.join(","), priority, bodyFormat },
         draftUuid,
       );
       draftUuid = result.uuid;
@@ -115,8 +124,8 @@
     to !== (_initial.to || "")
     || subject !== (_initial.subject || "")
     || body !== (_initial.body || "")
-    || cc !== (_initial.cc || "")
-    || bcc !== (_initial.bcc || "")
+    || ccList.length > 0
+    || bccList.length > 0
     || priority !== (_initial.priority || "3")
     || bodyFormat !== "markdown"
     || attachmentFiles.length > 0
@@ -164,8 +173,8 @@
     try {
       const flags = {
         ...(accountUuid ? { account: accountUuid } : {}),
-        ...(cc ? { cc } : {}),
-        ...(bcc ? { bcc } : {}),
+        ...(ccList.length > 0 ? { cc: ccList.join(",") } : {}),
+        ...(bccList.length > 0 ? { bcc: bccList.join(",") } : {}),
         priority,
         ...(bodyFormat !== "markdown" ? { [`body-format`]: bodyFormat } : {}),
       };
@@ -218,17 +227,23 @@
     {/snippet}
   </FormField>
 
-  <div class="row-fields">
-    <FormField label="CC" class="flex-1">
-      {#snippet children()}
-        <input id="cc" type="email" class="ff-input" bind:value={cc} placeholder="cc@example.com" list="contact-emails" />
-      {/snippet}
-    </FormField>
-    <FormField label="BCC" class="flex-1">
-      {#snippet children()}
-        <input id="bcc" type="email" class="ff-input" bind:value={bcc} placeholder="bcc@example.com" list="contact-emails" />
-      {/snippet}
-    </FormField>
+  <div class="row-fields multi-row">
+    <div class="multi-field-wrapper flex-1">
+      <MultiEntryField
+        label="CC"
+        bind:entries={ccList}
+        placeholder="cc@example.com"
+        autocompleteQuery={searchContactEmails}
+      />
+    </div>
+    <div class="multi-field-wrapper flex-1">
+      <MultiEntryField
+        label="BCC"
+        bind:entries={bccList}
+        placeholder="bcc@example.com"
+        autocompleteQuery={searchContactEmails}
+      />
+    </div>
   </div>
 
   <datalist id="contact-emails">
@@ -350,6 +365,8 @@
     font-size: 0.8rem; padding: 0.1rem 0.3rem;
   }
   .att-remove:hover { color: #cc6a6a; }
+  .multi-row { align-items: flex-start; }
+  .multi-field-wrapper { position: relative; }
   .form-actions { display: flex; align-items: center; gap: 0.5rem; }
   .btn-draft {
     background: #2a2a3e;

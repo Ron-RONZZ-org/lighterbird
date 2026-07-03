@@ -214,7 +214,7 @@ All list tab components (`EmailListTab`, `JournalListTab`, `SieveListTab`, `Cont
 |---------|---------------|
 | **Selection mode** | Toggle via `V` key + toolbar "Select"/"Exit" button; checkboxes appear in reserved column |
 | **Range selection** | Shift+click selects contiguous range; anchor point set on first click |
-| **Keyboard navigation** | Arrow keys (up/down), PgUp/PgDn, Home/End, Space to toggle focused item |
+| **Keyboard navigation** | Arrow keys (up/down), PgUp/PgDn, Home/End, Space to toggle focused item, `T` key to toggle tree/flat view (todo only) |
 | **"+ New" action** | `N` key (view mode) or toolbar "+ New" <kbd>N</kbd> button → opens add form |
 | **Batch delete** | `Delete` key or toolbar button → ConfirmDialog → deletes all selected items |
 | **UUID copy** | Click on truncated UUID (first 8 chars) → `navigator.clipboard.writeText()` → "Copied!" flash for 1.2s |
@@ -222,7 +222,7 @@ All list tab components (`EmailListTab`, `JournalListTab`, `SieveListTab`, `Cont
 | **Search** | `f` key toggles search bar; debounced 300ms with AbortController; min 2 chars |
 | **Tags display** | Colored tag pills rendered inline in the row; batch-fetched via junction table |
 | **Sort dropdown** | `sort` param sent to backend; options: created, priority, due, title |
-| **Mode toggle** | Tree/flat toggle button re-queries backend with opposite mode |
+| **Mode toggle** | `T` key or tree/flat toggle button re-queries backend with opposite mode |
 | **Context-appropriate toolbar** | View mode: [Select] [hint] [+ New <kbd>N</kbd>]; Selection mode: [Exit] [count] [Delete]; Search mode: full-width search input |
 | **Unsaved-changes guard** | Tab close → ConfirmDialog if form dirty; browser `beforeunload` if any dirty form exists; forms expose `dirty` derived rune + `onDirtyChange` callback |
 
@@ -248,6 +248,17 @@ Common logic lives in `web/src/lib/listTabShared.svelte.js`:
 | `formatListItemDate(iso)` | Context-aware date formatting (today=time, this year=month+day, older=full) |
 | `truncate(s, max)` | String truncation with ellipsis |
 | `preview(s, max)` | First line, stripped of markdown, truncated |
+
+### Shared Form Components
+
+Reusable components for form inputs live in `web/src/lib/`:
+
+| Component | Purpose |
+|-----------|---------|
+| `FormField.svelte` | Unified form field wrapper (label, hint, error, required badge) |
+| `MultiEntryField.svelte` | Chip-based multi-value input with autocomplete; props: `label`, `entries` (Svelte 5 `$bindable` array), `autocompleteQuery`, `placeholder`, `hint`, `allowDuplicates`, `maxEntries`, `onDirtyChange` |
+| | Used by: ComposeEmail (cc, bcc), TodoAddForm (dependency, tags), LetterForm (tags), LetterListTab (tag filter) |
+| | Behavior: ENTER adds chip, X removes, double-click edits, Backspace on empty removes last |
 
 ### Response Type Mapping
 

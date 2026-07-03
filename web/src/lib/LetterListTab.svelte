@@ -10,6 +10,7 @@
     truncate,
     preview,
   } from "./listTabShared.svelte.js";
+  import MultiEntryField from "./MultiEntryField.svelte";
 
   let { data = {} } = $props();
   let letters = $derived(data?.letters || []);
@@ -53,7 +54,7 @@
   let showSearch = $state(false);
   let showSortDropdown = $state(false);
   let showTagFilter = $state(false);
-  let tagFilterQuery = $state("");
+  let tagFilterEntries = $state([]);
   let searchQuery = $state("");
   let currentFilters = $state({});
   let searchTimeout;
@@ -102,8 +103,8 @@
     if (query && query.length >= 2) {
       params.query = query;
     }
-    if (tagFilterQuery) {
-      params.tag = tagFilterQuery;
+    if (tagFilterEntries.length > 0) {
+      params.tag = tagFilterEntries.join(",");
     }
 
     lettersApi.list(params)
@@ -137,8 +138,8 @@
       if (searchQuery && searchQuery.length >= 2) {
         params.query = searchQuery;
       }
-      if (tagFilterQuery) {
-        params.tag = tagFilterQuery;
+      if (tagFilterEntries.length > 0) {
+        params.tag = tagFilterEntries.join(",");
       }
       const result = await lettersApi.list(params);
       tabStore.update(tabStore.active.id, result);
@@ -155,14 +156,15 @@
     refreshList();
   }
 
-  function applyTagFilter() {
+  function onTagFilterChange() {
     performSearch(searchQuery);
-    showTagFilter = false;
+    // Keep panel open so user can see chips and add more
   }
 
   function clearTagFilter() {
-    tagFilterQuery = "";
-    applyTagFilter();
+    tagFilterEntries = [];
+    performSearch(searchQuery);
+    showTagFilter = false;
   }
 
   function handleWindowKeydown(e) {
@@ -331,16 +333,14 @@
     <div class="dropdown-panel tag-filter-panel">
       <div class="tag-filter-form">
         <h4 class="section-title">Filter by Tags</h4>
-        <input
-          type="text"
-          class="tag-filter-input"
-          placeholder="e.g. family,important"
-          value={tagFilterQuery}
-          oninput={(e) => { tagFilterQuery = e.target.value; }}
-          onkeydown={(e) => { if (e.key === "Enter") applyTagFilter(); }}
+        <MultiEntryField
+          label=""
+          bind:entries={tagFilterEntries}
+          placeholder="Type tag and press Enter"
+          hint="AND logic — letters must have ALL tags"
+          onDirtyChange={onTagFilterChange}
         />
         <div class="tag-filter-actions">
-          <button class="tool-btn primary" onclick={applyTagFilter}>Apply</button>
           <button class="tool-btn" onclick={clearTagFilter}>Clear</button>
         </div>
       </div>
@@ -649,17 +649,6 @@
     flex-direction: column;
     gap: 0.5rem;
   }
-  .tag-filter-input {
-    padding: 0.35rem 0.4rem;
-    border: 1px solid #444;
-    border-radius: 4px;
-    background: #12122a;
-    color: #e0e0e0;
-    font-family: monospace;
-    font-size: 0.82rem;
-    outline: none;
-  }
-  .tag-filter-input:focus { border-color: #6a6a9a; }
   .tag-filter-actions {
     display: flex;
     gap: 0.4rem;
