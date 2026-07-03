@@ -96,6 +96,18 @@ npm run build        # Build to web/dist/
 
 The Vite dev server proxies `/api/` requests to the FastAPI backend (port 8000).
 
+## Post-Send Banner
+
+When `!email send` / reply / forward completes, a temporary confirmation banner is shown:
+
+- **`bannerStore.svelte.js`** — Reactive store exposing `banner.show(msg, type, duration?)` and `banner.dismiss()`.
+- **`BannerContainer.svelte`** — Mounted once in `App.svelte`. Renders a fixed-position auto-dismissing banner (3s default).
+- **`FormTab.svelte`** — After successful email send, calls `banner.show("Email sent ✓", "success")` before redirecting to the email list tab.
+
+## HTML/Plain Text Persistence
+
+The HTML/plain text toggle in `EmailViewTab.svelte` is persisted across emails via `localStorage` key `lighterbird:email:viewHtml`. Default is `true` (HTML).
+
 ## Domain-Specific Rules for Agents
 
 1. **The command bar is the star.** Spend 80% of effort getting the command bar right (autocomplete, history, suggestions, keyboard navigation). The rest of the UI is secondary.

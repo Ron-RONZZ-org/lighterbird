@@ -130,8 +130,8 @@ def parse_email_message(
         # Store metadata as JSON in the message (backward compat)
         meta_list = [
             {
-                "dosiernomo": a["filename"],
-                "mime_tipo": a["mime_type"],
+                "filename": a["filename"],
+                "mime_type": a["mime_type"],
                 "size": a["size"],
                 "content_id": a["content_id"],
             }

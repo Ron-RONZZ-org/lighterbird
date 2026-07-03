@@ -38,6 +38,15 @@ Email and contacts module, forked from [A-lien](../../A-lien). Provides IMAP syn
 - [A-lien retposto_sync.py](../../A-lien/src/A_lien/service/retposto_sync.py) — sync mixin source
 - [A-lien imap/client.py](../../A-lien/src/A_lien/imap/client.py) — IMAPClient source
 
+## Sync Backlog (IMAP Flag Sync)
+
+Flag changes (read/delete) are synced back to the IMAP server via a backlog queue:
+
+1. **`_imap_sync_flags()` in `MessageOpsService`** — Attempts an immediate IMAP `STORE` via `set_flags()`. Falls back to enqueuing if the connection fails.
+2. **`_sync_backlog` table** — Stores pending flag changes with account, folder, IMAP UID, and desired flag state.
+3. **`process_sync_backlog()`** — Called after each IMAP sync (`sync_account`) and exposed via `EmailService.process_sync_backlog()`. Connects per-account and flushes up to 500 entries.
+4. **IMAP `set_flags()`** in `client.py` — Sends `+FLAGS.SILENT` / `-FLAGS.SILENT` for add/remove operations.
+
 ## Domain-Specific Rules for Agents
 
 1. **Fork the service layer, not the CLI.** A-lien's CLI code (Typer commands) stays behind. The services are what matter — they expose the `RetpostoService` and `KontaktoService` APIs.
