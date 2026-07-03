@@ -439,6 +439,7 @@ def _seed_letters(data_dir: Path) -> None:
     if not body:
         body = "this is the 1st test letter"
 
+    letter_uuid = _gen_uuid()
     db.execute(
         """INSERT OR IGNORE INTO letters
            (uuid, direction, object, body_path, body_format,
@@ -446,7 +447,7 @@ def _seed_letters(data_dir: Path) -> None:
             created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            _gen_uuid(),
+            letter_uuid,
             "sent",
             "Candidature DVUC-001-3",
             "",
@@ -459,6 +460,13 @@ def _seed_letters(data_dir: Path) -> None:
             now,
         ),
     )
+
+    # Store the body content so it's available for viewing/export/print
+    if body:
+        from lighterbird.letter.services.letters import LetterService
+        svc = LetterService(db)
+        html_body = svc.convert_to_html(body, "markdown")
+        svc.store_body(letter_uuid, html_body)
 
 
 def _seed_profiles(data_dir: Path) -> None:
