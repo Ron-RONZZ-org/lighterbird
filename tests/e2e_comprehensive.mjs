@@ -3,8 +3,8 @@
 import { chromium } from "playwright";
 import { strict as assert } from "assert";
 
-const FRONTEND_URL = "http://127.0.0.1:8000";
-const CHROME_PATH = "/home/rongzhou/.cache/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell-linux64/chrome-headless-shell";
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://127.0.0.1:8000";
+const CHROME_PATH = process.env.CHROME_PATH || "chromium";
 
 let browser, page;
 let passed = 0, failed = 0;
