@@ -39,6 +39,7 @@
   let groupBySender = $state(false);
 
   // Sync config when tab data changes (e.g., !email list --sort oldest)
+  // and re-query the backend so the sort/group/folder params take effect.
   $effect(() => {
     if (data?.filters) {
       const cliFlags = {};
@@ -46,6 +47,7 @@
       if (data.filters.sort) cliFlags.sort = data.filters.sort;
       if (data.filters.group === "conversation") cliFlags.group = "conversation";
       if (data.filters.group === "sender") cliFlags.group = "sender";
+      let needsRequery = true;
       if (Object.keys(cliFlags).length > 0) {
         const merged = config.mergeWithCliFlags(cliFlags);
         folderVisibility = merged.folderVisibility || {};
@@ -60,6 +62,11 @@
         sort = lastCfg.sort || "newest";
         groupByConversation = !!lastCfg.groupByConversation;
         groupBySender = !!lastCfg.groupBySender;
+        // When restoring from lastConfig, only re-query if sort differs from default
+        needsRequery = lastCfg.sort !== "newest" || !!lastCfg.groupByConversation || !!lastCfg.groupBySender;
+      }
+      if (needsRequery) {
+        applyFolderFilter();
       }
     }
   });

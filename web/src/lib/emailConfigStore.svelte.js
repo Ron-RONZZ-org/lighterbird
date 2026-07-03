@@ -27,11 +27,12 @@ const LS_LAST = "lighterbird:email:lastConfig";
 const LS_USER = "lighterbird:email:userConfigs";
 
 const DEFAULT_CONFIG = {
-  version: 1,
+  version: 2,
   folderVisibility: {},   // { "account/folder": true/false }
   expandedFolders: [],    // ["account", "account/folder"]
-  sort: "newest",         // "newest" | "oldest" | "sender"
+  sort: "newest",         // "newest" | "oldest"
   groupByConversation: false,
+  groupBySender: false,
 };
 
 function loadFromStorage(key, fallback) {
@@ -135,9 +136,13 @@ export function createEmailConfigStore() {
       merged.sort = cliFlags.sort;
     }
 
-    // CLI --group overrides groupByConversation
+    // CLI --group overrides groupByConversation / groupBySender
     if (cliFlags.group === "conversation") {
       merged.groupByConversation = true;
+      merged.groupBySender = false;
+    } else if (cliFlags.group === "sender") {
+      merged.groupBySender = true;
+      merged.groupByConversation = false;
     } else if (cliFlags.group === "") {
       // Explicitly no group
     }

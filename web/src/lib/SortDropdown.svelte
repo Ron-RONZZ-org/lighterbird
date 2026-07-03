@@ -36,17 +36,18 @@
     </div>
   </div>
 
-  <div class="group-section">
-    <label class="group-check">
-      <input
-        type="checkbox"
-        checked={groupBySender}
-        onchange={(e) => onGroupBySenderChange(e.target.checked)}
-      />
-      <span>Group by Sender</span>
-    </label>
-  </div>
-
+  {#if onGroupBySenderChange !== undefined}
+    <div class="group-section">
+      <label class="group-check">
+        <input
+          type="checkbox"
+          checked={groupBySender}
+          onchange={(e) => onGroupBySenderChange(e.target.checked)}
+        />
+        <span>Group by Sender</span>
+      </label>
+    </div>
+  {/if}
   {#if onGroupChange !== undefined}
     <div class="group-section">
       <label class="group-check">

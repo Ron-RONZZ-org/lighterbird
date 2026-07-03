@@ -318,7 +318,6 @@
         sortOptions={[
           { value: "newest", label: "Newest First" },
           { value: "oldest", label: "Oldest First" },
-          { value: "sender", label: "Group by Sender" },
         ]}
         onSortChange={handleSortChange}
         onGroupChange={handleGroupChange}
