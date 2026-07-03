@@ -28,30 +28,46 @@ def sync_cmd(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     sync_all = "all" in flags
     force = "complete" in flags
 
-    results: dict[str, Any] = {}
+    summary_parts: list[str] = []
+
     if email_flag or sync_all:
         email_svc = get_email_service()
         if email_flag and email_flag != "true":
             sr = email_svc.sync_account(email_flag)
-            results["email"] = sr.to_dict()
+            result = sr.to_dict()
+            new_count = result.get("new", 0)
+            errs = result.get("errors", [])
+            summary_parts.append(f"Email ({email_flag}): {new_count} new")
+            if errs:
+                summary_parts.append(f"{len(errs)} error(s)")
         else:
             email_results = email_svc.sync_all()
-            total = sum(r.get("new", 0) for r in email_results.values())
-            errors = []
-            for r in email_results.values():
-                errors.extend(r.get("errors", []))
-            results["email"] = {"total": total, "new": total, "errors": errors}
+            total_new = sum(r.get("new", 0) for r in email_results.values())
+            total_errors = sum(len(r.get("errors", [])) for r in email_results.values())
+            summary_parts.append(f"Email: {total_new} new")
+            if total_errors:
+                summary_parts.append(f"{total_errors} error(s)")
 
     if calendar_flag or sync_all:
         cal_svc = get_calendar_service()
         cal_results = cal_svc.sync_all_calendars()
-        results["calendar"] = cal_results
+        cal_new = sum(r.get("new", 0) for r in cal_results.values())
+        cal_errs = sum(len(r.get("errors", [])) for r in cal_results.values())
+        summary_parts.append(f"Calendar: {cal_new} synced")
+        if cal_errs:
+            summary_parts.append(f"{cal_errs} error(s)")
 
     if todo_attach_flag or sync_all:
         attach_results = _sync_todo_attachments(force=force)
-        results["todo_attachments"] = attach_results
+        synced = attach_results.get("synced", 0)
+        attach_errs = attach_results.get("errors", [])
+        summary_parts.append(f"Attachments: {synced} synced")
+        if attach_errs:
+            summary_parts.append(f"{len(attach_errs)} error(s)")
 
-    return {"type": "status", "title": "Sync Results", "data": results}
+    message = " — ".join(summary_parts) if summary_parts else "Nothing to sync."
+
+    return {"type": "status", "title": "Sync Complete", "data": {"message": message}}
 
 
 def _sync_todo_attachments(force: bool = False) -> dict[str, Any]:
