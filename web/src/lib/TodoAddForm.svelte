@@ -4,6 +4,7 @@
   import { todo as todoApi, drafts as draftsApi } from "./api.js";
   import TemplateFieldInput from "./TemplateFieldInput.svelte";
   import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
+  import MultiEntryField from "./MultiEntryField.svelte";
 
   let { initialData = {}, onsubmit, onDirtyChange = () => {} } = $props();
   // svelte-ignore state_referenced_locally
@@ -14,7 +15,8 @@
   let priority = $state(_initial.priority || "5");
   let due = $state(_initial.due || "");
   let parentUuid = $state(_initial.parent_uuid || "");
-  let dependencyUuid = $state("");
+  let dependencyUuids = $state([]);
+  let tags = $state(_initial.tags || []);
   let filePath = $state("");
   let adding = $state(false);
   let savingDraft = $state(false);
@@ -40,7 +42,7 @@
       const result = await draftsApi.save(
         "todo",
         title || "(untitled)",
-        { title, description, priority, due, parent_uuid: parentUuid, template: selectedTemplate },
+        { title, description, priority, due, parent_uuid: parentUuid, template: selectedTemplate, tags: tags.join(",") },
         draftUuid,
       );
       draftUuid = result.uuid;
@@ -83,18 +85,17 @@
     || priority !== (_initial.priority || "5")
     || due !== (_initial.due || "")
     || parentUuid !== (_initial.parent_uuid || "")
-    || dependencyUuid !== ""
+    || dependencyUuids.length > 0
+    || tags.length > 0
     || filePath !== ""
     || selectedTemplate !== (_initial.template || "")
     || shallowDiff(templateValues, {})
   );
   $effect(() => { onDirtyChange(dirty); });
 
-  // Autocomplete for parent/dependency
+  // Autocomplete for parent
   let parentSuggestions = $state([]);
-  let depSuggestions = $state([]);
   let showParentSuggestions = $state(false);
-  let showDepSuggestions = $state(false);
 
   // Load templates on mount
   $effect(() => {
@@ -146,13 +147,15 @@
   }
 
   async function searchDepTitle(q) {
-    if (!q || q.length < 2) { depSuggestions = []; showDepSuggestions = false; return; }
+    if (!q || q.length < 2) return [];
     try {
       const result = await todoApi.searchTitles(q);
-      depSuggestions = result.results || [];
-      showDepSuggestions = depSuggestions.length > 0;
+      return (result.results || []).map((item) => ({
+        label: item.titolo,
+        value: item.uuid,
+      }));
     } catch {
-      depSuggestions = [];
+      return [];
     }
   }
 
@@ -160,12 +163,6 @@
     parentUuid = item.title;
     parentSuggestions = [];
     showParentSuggestions = false;
-  }
-
-  function selectDep(item) {
-    dependencyUuid = item.title;
-    depSuggestions = [];
-    showDepSuggestions = false;
   }
 
   function highlightMatch(text, query) {
@@ -184,7 +181,8 @@
       if (due) flags.due = due;
       if (description) flags.description = description;
       if (parentUuid) flags.parent = parentUuid;
-      if (dependencyUuid) flags.dependency = dependencyUuid;
+      if (dependencyUuids.length > 0) flags.dependency = dependencyUuids.join(",");
+      if (tags.length > 0) flags.tags = tags.join(",");
       if (filePath) flags.file = filePath;
       if (selectedTemplate) {
         flags.template = selectedTemplate;
@@ -287,26 +285,22 @@
     </div>
   </div>
 
-  <!-- Dependency with autocomplete -->
-  <div class="field autocomplete-field">
-    <label for="dependency">Depends On <span class="field-hint">(UUID of blocker)</span></label>
-    <div class="autocomplete-wrapper">
-      <input id="dependency" type="text" bind:value={dependencyUuid}
-        placeholder="Search by title or enter UUID(s); comma-separated"
-        onfocus={() => { if (depSuggestions.length > 0) showDepSuggestions = true; }}
-        onblur={() => setTimeout(() => showDepSuggestions = false, 200)} />
-      {#if showDepSuggestions && depSuggestions.length > 0}
-        <div class="autocomplete-dropdown">
-          {#each depSuggestions as item}
-            <div class="autocomplete-item" onmousedown={() => selectDep(item)} role="button" tabindex="-1">
-              <span class="ac-uuid">{item.uuid.slice(0, 8)}</span>
-              <span class="ac-title">{@html highlightMatch(item.titolo, dependencyUuid)}</span>
-            </div>
-          {/each}
-        </div>
-      {/if}
-    </div>
-  </div>
+  <!-- Dependencies — MultiEntryField with autocomplete -->
+  <MultiEntryField
+    label="Depends On"
+    hint="UUID or title of blocker"
+    bind:entries={dependencyUuids}
+    placeholder="Search by title or enter UUID"
+    autocompleteQuery={searchDepTitle}
+  />
+
+  <!-- Tags — free-text MultiEntryField -->
+  <MultiEntryField
+    label="Tags"
+    hint="Add labels to organize (creates new tags if needed)"
+    bind:entries={tags}
+    placeholder="Enter tag name"
+  />
 
   <!-- File attachment -->
   <div class="field">

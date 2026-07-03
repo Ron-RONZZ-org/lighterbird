@@ -220,6 +220,9 @@
           e.preventDefault();
         }
         return;
+      case "t":
+        if (plain) { toggleMode(); e.preventDefault(); }
+        return;
       case "Escape":
         if (showSearch) { closeSearch(); e.preventDefault(); return; }
         if (sel.selectionMode) { sel.toggleSelectionMode(); e.preventDefault(); return; }
