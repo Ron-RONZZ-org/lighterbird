@@ -1,0 +1,78 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.13"
+  NODE_VERSION: "20"
+
+jobs:
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Python setup ──────────────────────────────────────────────
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install project + dev deps
+        run: uv pip install -e ".[dev]"
+
+      # ── Node setup (for Playwright) ───────────────────────────────
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install Node dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Install Playwright Chromium browser
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      # ── Build Svelte SPA ──────────────────────────────────────────
+      - name: Build frontend
+        working-directory: web
+        run: npm run build
+
+      # ── Run main tests ───────────────────────────────────────────
+      - name: Run pytest (non-E2E)
+        run: uv run pytest tests/ -m "not e2e" -v --junitxml=junit-unit.xml
+
+      # ── Run E2E tests ────────────────────────────────────────────
+      - name: Run Playwright E2E tests
+        run: uv run pytest tests/test_e2e.py --e2e -v --junitxml=junit-e2e.xml
+
+      # ── Upload artifacts on failure ───────────────────────────────
+      - name: Upload failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-screenshots
+          path: /tmp/e2e-fail-*.png
+          if-no-files-found: ignore
+
+      - name: Upload E2E JUnit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-junit-report
+          path: junit-e2e.xml

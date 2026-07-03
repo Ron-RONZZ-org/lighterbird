@@ -65,6 +65,48 @@ npm run dev
 
 Open http://localhost:5173 — the Vite dev server proxies API calls to the Python backend on port 8000.
 
+## Testing
+
+### Unit Tests (pytest)
+
+```bash
+uv run pytest tests/ -m "not e2e"
+```
+
+This runs all backend tests (currently **203**). E2E tests are automatically skipped.
+
+### E2E Browser Tests (Playwright)
+
+E2E tests simulate real user interactions in a headless Chromium browser. They require:
+
+1. Playwright Node dependencies installed:
+   ```bash
+   cd web && npm ci && npx playwright install chromium
+   ```
+2. The Svelte frontend built:
+   ```bash
+   cd web && npm run build
+   ```
+
+Run via pytest (auto-starts seeded server on a dynamic port):
+
+```bash
+uv run pytest tests/test_e2e.py --e2e -v
+```
+
+To preserve the temporary data directory for debugging after a failure:
+
+```bash
+uv run pytest tests/test_e2e.py --e2e --keep-e2e-data -v
+```
+
+The pytest fixture automatically:
+- Allocates a free TCP port
+- Seeds databases with test data
+- Starts the uvicorn server
+- Runs the Playwright scripts
+- Tears down both server and temp data on completion
+
 ## Development Server
 
 For E2E testing or isolated development, use the `lighterbird-dev` CLI. It creates a temporary data directory, optionally seeds it with test credentials, and starts the server:
