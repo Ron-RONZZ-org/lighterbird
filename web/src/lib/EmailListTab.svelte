@@ -295,17 +295,22 @@
     finally { syncing = false; }
   }
 
-  // Live-update read status when a message is viewed in EmailViewTab
+  // Live-update read status in ALL email list tabs when a message is viewed
   $effect(() => {
     function handler(e) {
       const { uuid, is_read } = e.detail || {};
       if (!uuid) return;
-      const active = tabStore.active;
-      if (!active || !active.data?.messages) return;
-      const updatedMessages = active.data.messages.map((m) =>
-        m.uuid === uuid ? { ...m, is_read } : m,
-      );
-      tabStore.update(active.id, { ...active.data, messages: updatedMessages });
+      for (const t of tabStore.tabs) {
+        if (t.data?.messages && Array.isArray(t.data.messages)) {
+          const updatedMessages = t.data.messages.map((m) =>
+            m.uuid === uuid ? { ...m, is_read } : m,
+          );
+          // Only update if something actually changed
+          if (updatedMessages.some((m, i) => m !== t.data.messages[i])) {
+            tabStore.update(t.id, { ...t.data, messages: updatedMessages });
+          }
+        }
+      }
     }
     window.addEventListener("email-read-status-changed", handler);
     return () => window.removeEventListener("email-read-status-changed", handler);
@@ -565,6 +570,11 @@
               title="Click to copy email address">
           {emailCopy.copiedKey === msg.from_addr ? "Copied!" : truncate(msg.from_addr || "", 24)}
         </span>
+        {#if msg.priority === 1}
+          <span class="priority high" title="Highest priority">‼</span>
+        {:else if msg.priority === 2}
+          <span class="priority" title="High priority">❗</span>
+        {/if}
         <span class="subject" class:unread={!msg.is_read}>{truncate(msg.subject || "(no subject)", 40)}</span>
         <span class="date">{formatListItemDate(msg.received_at)}</span>
       </div>
@@ -689,6 +699,8 @@
     white-space: nowrap;
   }
   .subject.unread { font-weight: 600; color: #e0e0e0; }
+  .priority { font-size: 0.75rem; flex-shrink: 0; margin-right: 0.15rem; opacity: 0.85; }
+  .priority.high { color: #e06060; opacity: 1; }
   .date {
     color: var(--clr-muted);
     min-width: 6rem;

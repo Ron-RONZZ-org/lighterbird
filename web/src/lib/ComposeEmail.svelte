@@ -191,14 +191,11 @@
         ...(bccList.length > 0 ? { bcc: bccList.join(",") } : {}),
         priority,
         ...(bodyFormat !== "markdown" ? { [`body-format`]: bodyFormat } : {}),
+        // File attachments as proper --file flag (never in remaining/body)
+        ...(attachmentFiles.length > 0 ? { file: attachmentFiles.map((att) => `${att.name}:${att.data}`).join(",") } : {}),
       };
       const toStr = toList.join(",");
       const remaining = [toStr, subject, body];
-      // Attachments passed as --file flags
-      for (const att of attachmentFiles) {
-        remaining.push(`--file`);
-        remaining.push(`${att.name}:${att.data}`);
-      }
       await onsubmit({
         tokens: ["email", "send"],
         flags,
