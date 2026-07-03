@@ -87,13 +87,19 @@
     return (msg.body || "").split("\n").map(l => `> ${l}`).join("\n");
   }
 
+  function parseRecipients(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw.filter(Boolean);
+    try { return JSON.parse(raw).filter(Boolean); } catch { return [raw].filter(Boolean); }
+  }
+
   function reply() {
     const subject = (msg.subject || "").toLowerCase().startsWith("re:")
       ? msg.subject : `Re: ${msg.subject}`;
     tabStore.open("form", "Reply", {
       form: "email-send",
       initialData: {
-        to: msg.from || "",
+        to: msg.from_addr || "",
         subject,
         body: `\n\n${quoteBody()}`,
         account: msg.account_email || "",
@@ -104,12 +110,16 @@
   function replyAll() {
     const subject = (msg.subject || "").toLowerCase().startsWith("re:")
       ? msg.subject : `Re: ${msg.subject}`;
-    const allTo = [msg.from, ...(Array.isArray(msg.to) ? msg.to : [msg.to || ""])]
-      .filter(Boolean).join(", ");
+    const allTo = [
+      msg.from_addr || "",
+      ...parseRecipients(msg.to_recipients),
+    ].filter(Boolean).join(", ");
+    const allCc = parseRecipients(msg.cc_recipients).join(", ");
     tabStore.open("form", "Reply All", {
       form: "email-send",
       initialData: {
         to: allTo,
+        cc: allCc,
         subject,
         body: `\n\n${quoteBody()}`,
         account: msg.account_email || "",
@@ -120,7 +130,7 @@
   function forward() {
     const subject = (msg.subject || "").toLowerCase().startsWith("fwd:")
       ? msg.subject : `Fwd: ${msg.subject}`;
-    const header = `--- Forwarded message ---\nFrom: ${msg.from || ""}\nSubject: ${msg.subject || ""}\nDate: ${msg.received_at || ""}\n\n`;
+    const header = `--- Forwarded message ---\nFrom: ${msg.from_addr || ""}\nSubject: ${msg.subject || ""}\nDate: ${msg.received_at || ""}\n\n`;
     tabStore.open("form", "Forward", {
       form: "email-send",
       initialData: {
@@ -190,12 +200,12 @@
     <div class="headers">
       <div class="field">
         <span class="label">From</span>
-        <span class="value">{msg.from || ""}</span>
+        <span class="value">{msg.from_addr || ""}</span>
       </div>
       <div class="field">
         <span class="label">To</span>
         <span class="value">
-          {Array.isArray(msg.to) ? msg.to.join(", ") : msg.to || ""}
+          {Array.isArray(msg.to_recipients) ? msg.to_recipients.join(", ") : (msg.to_recipients || "")}
         </span>
       </div>
       <div class="field">
