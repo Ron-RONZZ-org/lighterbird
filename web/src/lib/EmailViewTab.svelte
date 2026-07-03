@@ -29,10 +29,11 @@
   // Persisted across emails via localStorage — if user toggles to plain,
   // new emails open in plain text until toggled back.
   const LS_KEY = "lighterbird:email:viewHtml";
-  let useHtml = $state(() => {
+  function _loadHtmlPref() {
     try { const v = localStorage.getItem(LS_KEY); return v !== null ? JSON.parse(v) : true; }
     catch { return true; }
-  }());
+  }
+  let useHtml = $state(_loadHtmlPref());
   $effect(() => {
     try { localStorage.setItem(LS_KEY, JSON.stringify(useHtml)); } catch { /* best-effort */ }
   });
