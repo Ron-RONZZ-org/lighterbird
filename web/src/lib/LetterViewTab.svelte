@@ -1,6 +1,6 @@
 <script>
   import { tabStore } from "./tabStore.svelte.js";
-  import { sanitizeFilename } from "./listTabShared.svelte.js";
+  import { sanitizeFilename, openPrintWindow } from "./listTabShared.svelte.js";
 
   let { data = {} } = $props();
   let letter = $derived(data?.letter || {});
@@ -26,7 +26,16 @@
   }
 
   function printLetter() {
-    window.print();
+    const headers = [
+      { label: "Direction", value: letter.direction === "sent" ? "Sent" : "Received" },
+      { label: "Sender", value: letter.sender_manual || (letter.sender_profile ? `Profile: ${letter.sender_profile.slice(0, 8)}` : "") },
+      { label: "Recipient", value: letter.recipient_manual || (letter.recipient_contact ? `Contact: ${letter.recipient_contact.slice(0, 8)}` : "") },
+      { label: "Date", value: letter.created_at || "" },
+    ];
+    const bodyContent = body
+      ? body
+      : "<p>(No body content)</p>";
+    openPrintWindow(letter.object || "(untitled)", headers, bodyContent);
   }
 
   async function exportMarkdown() {
@@ -216,46 +225,5 @@
     font-size: 0.72rem;
   }
 
-  /* Print styles — hide non-essential UI, show full content */
-  @media print {
-    :global(.tab-bar),
-    :global(.command-bar),
-    :global(.home-content),
-    :global(.top-progress),
-    .toolbar,
-    .thread-bar {
-      display: none !important;
-    }
-    .letter-view {
-      padding: 0 !important;
-      height: auto !important;
-      overflow: visible !important;
-      flex: none !important;
-    }
-    .headers {
-      color: #000 !important;
-      break-inside: avoid;
-    }
-    .headers .value {
-      color: #000 !important;
-    }
-    .headers .label {
-      color: #444 !important;
-    }
-    .body-area {
-      overflow: visible !important;
-      background: #fff !important;
-      flex: none !important;
-      height: auto !important;
-      min-height: 300px;
-    }
-    .letter-frame {
-      color: #000 !important;
-      height: auto !important;
-      min-height: 300px;
-    }
-    hr {
-      border-top-color: #ccc !important;
-    }
-  }
+  /* Print — handled by dedicated print window, no SPA print styles needed */
 </style>

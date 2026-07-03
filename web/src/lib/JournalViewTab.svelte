@@ -4,7 +4,7 @@
   import { renderMarkdown } from "./markdown.js";
   import { journal as journalApi } from "./api.js";
   import { tabStore } from "./tabStore.svelte.js";
-  import { formatListItemDate } from "./listTabShared.svelte.js";
+  import { formatListItemDate, openPrintWindow } from "./listTabShared.svelte.js";
 
   let { data: _data = {} } = $props();
 
@@ -42,7 +42,7 @@
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "p") {
       e.preventDefault();
-      window.print();
+      printJournal();
     }
   }
 
@@ -55,6 +55,16 @@
 
   function cancelEdit() {
     editing = false;
+  }
+
+  function printJournal() {
+    const mdBody = entry.text || "(No content)";
+    const htmlBody = `<div class="journal-body">${renderMarkdown(mdBody)}</div>`;
+    const headers = [
+      { label: "Date", value: formatListItemDate(entry.date || entry.created_at) },
+      { label: "UUID", value: entry.uuid?.slice(0, 8) || "" },
+    ];
+    openPrintWindow(entry.title || "(untitled)", headers, htmlBody);
   }
 
   async function saveEdit() {
@@ -83,7 +93,7 @@
         <button class="tool-btn" onclick={cancelEdit}>Cancel</button>
       {:else}
         <button class="tool-btn" onclick={startEdit} title="Edit (i)">✎ Edit <kbd>i</kbd></button>
-        <button class="tool-btn" onclick={() => window.print()} title="Print / Export PDF (Ctrl+P)">
+        <button class="tool-btn" onclick={printJournal} title="Print / Export PDF (Ctrl+P)">
           <kbd>Ctrl+P</kbd> Print / PDF
         </button>
       {/if}
@@ -253,23 +263,5 @@
   .field input:focus, .field textarea:focus { border-color: #5a5a8a; }
   .field textarea { resize: vertical; min-height: 120px; font-family: inherit; line-height: 1.5; }
 
-  /* Print styles — hide non-essential UI */
-  @media print {
-    :global(.tab-bar),
-    :global(.command-bar),
-    :global(.home-content),
-    :global(.top-progress),
-    .toolbar {
-      display: none !important;
-    }
-    .journal-view {
-      padding: 0 !important;
-    }
-    .content {
-      color: #000 !important;
-    }
-    .rendered :global(a) {
-      color: #0000ee !important;
-    }
-  }
+  /* Print — handled by dedicated print window, no SPA print styles needed */
 </style>

@@ -358,6 +358,68 @@ export function sanitizeFilename(name, extension = "", maxLen = 64) {
   return `${base || "export"}${extension}`;
 }
 
+function escHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/**
+ * Open a print-friendly window with proper styling for letters/emails.
+ *
+ * Creates a clean document with white background, serif fonts, page margins,
+ * header fields, and the body content. Automatically triggers the print dialog
+ * after the document loads.
+ *
+ * @param {string} title — document title / subject line
+ * @param {Array<{label:string, value:string}>} headers — header rows (From, To, Date, etc.)
+ * @param {string} bodyHtml — HTML body content (or plain text wrapped in <pre>)
+ */
+export function openPrintWindow(title, headers, bodyHtml) {
+  const win = window.open("", "_blank");
+  if (!win) {
+    alert("Print window was blocked. Please allow popups and try again.");
+    return;
+  }
+  const headerRows = headers
+    .filter((h) => h.value)
+    .map((h) => `<div class="field"><span class="label">${escHtml(h.label)}</span><span class="value">${escHtml(h.value)}</span></div>`)
+    .join("\n    ");
+  win.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>${escHtml(title)}</title>
+  <style>
+    @page { margin: 2cm; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Georgia, 'Times New Roman', serif; font-size: 12pt; line-height: 1.6; color: #000; background: #fff; padding: 0; max-width: 21cm; }
+    .header { margin-bottom: 1.5cm; border-bottom: 2px solid #333; padding-bottom: 0.5cm; }
+    .header h1 { font-size: 18pt; margin-bottom: 0.3cm; line-height: 1.3; }
+    .field { display: flex; gap: 0.5cm; padding: 0.08cm 0; font-size: 11pt; }
+    .label { color: #555; min-width: 3cm; flex-shrink: 0; font-weight: 600; }
+    .value { color: #000; word-break: break-word; }
+    hr { border: none; border-top: 1px solid #ccc; margin: 0.5cm 0; }
+    .body { font-size: 12pt; line-height: 1.8; white-space: pre-wrap; padding: 0.5cm 0; }
+    .body iframe, .body img { max-width: 100%; }
+    @media print {
+      body { margin: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>${escHtml(title)}</h1>
+    ${headerRows}
+  </div>
+  <hr>
+  <div class="body">${bodyHtml}</div>
+  <script>
+    window.onload = function () { setTimeout(function () { window.print(); }, 300); };
+  <\/script>
+</body>
+</html>`);
+  win.document.close();
+}
+
 /**
  * Preview text: first line, stripped of markdown, truncated.
  */
