@@ -153,7 +153,10 @@ lighterbird/
    - `_inferCommandPath()` in `web/src/lib/FormTab.svelte`
    - `detectPersistentType()` in `web/src/App.svelte` and `web/src/lib/HomeTab.svelte`
 
-4. **GUI tests use Playwright in headless mode** — run with `headed: false` by default. Always use `http://127.0.0.1:<port>` for local dev servers.
+4. **GUI tests use headless Playwright — ALWAYS prefer E2E scripts over the interactive browser tool.**
+   - **Run the E2E test scripts (`node tests/e2e_comprehensive.mjs`, `node tests/playwright_e2e.mjs`)** as the primary verification method. These are fast, reliable, and catch regressions automatically.
+   - **Use the `browser` tool (headed mode) ONLY as a last resort** when an E2E script cannot reproduce the issue and you need to manually inspect the UI. Headed mode sessions are fragile: tool calls are interrupted if the user types "continue" while an action is in-flight, leaving the browser in an inconsistent state.
+   - Always use `http://127.0.0.1:<port>` for local dev servers (IPv4, not `localhost` which can resolve to IPv6 `::1`).
 
 5. **Use `lighterbird-dev --seed` for isolated E2E testing** — instead of starting the production server, use the isolated dev server which creates a temporary data directory and seeds it with test data from ``.dev``:
 
