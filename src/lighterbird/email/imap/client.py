@@ -229,6 +229,39 @@ class IMAPClient:
         except imaplib.IMAP4.error:
             return False
 
+    def set_flags(
+        self, uid: int, folder: str,
+        add: list[str] | None = None,
+        remove: list[str] | None = None,
+    ) -> bool:
+        """Add or remove IMAP flags on a message by UID.
+
+        Args:
+            uid: IMAP UID of the message.
+            folder: Folder name to select.
+            add: List of flags to add (e.g. ``["\\Seen"]``).
+            remove: List of flags to remove.
+
+        Returns:
+            True on success, False on failure.
+        """
+        if not self._select_folder(folder):
+            return False
+        try:
+            if add:
+                flag_str = " ".join(add)
+                typ, _ = self.conn.uid("STORE", str(uid), "+FLAGS.SILENT", f"({flag_str})")
+                if typ != "OK":
+                    return False
+            if remove:
+                flag_str = " ".join(remove)
+                typ, _ = self.conn.uid("STORE", str(uid), "-FLAGS.SILENT", f"({flag_str})")
+                if typ != "OK":
+                    return False
+            return True
+        except imaplib.IMAP4.error:
+            return False
+
     def sync_folder(
         self, folder: str, account_email: str, folder_name: str,
         db_store: Any, force: bool = False,
@@ -325,7 +358,7 @@ class IMAPClient:
                                     )
                         # Insert or update message
                         msg_uuid = store_message(db_store.db, data, force=force, account_email=account_email, folder_name=folder_name)
-                        # Store attachment metadata in aldonajxoj table
+                        # Store attachment metadata in email_attachments table
                         if "_attachments_meta" in data:
                             now_ts = datetime.now(timezone.utc).isoformat()
                             for meta in data["_attachments_meta"]:
@@ -333,10 +366,10 @@ class IMAPClient:
                                     att_uuid = str(uuid_mod.uuid4())
                                     store_path = f"{uid_str}/{meta['content_id']}"
                                     db_store.db.execute(
-                                        "INSERT OR IGNORE INTO aldonajxoj "
+                                        "INSERT OR IGNORE INTO email_attachments "
                                         "(uuid, message_uuid, filename, mime_type, size, content_id, storage_path, created_at, updated_at) "
                                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                                        (att_uuid, msg_uuid, meta["dosiernomo"], meta["mime_tipo"],
+                                        (att_uuid, msg_uuid, meta["filename"], meta["mime_type"],
                                          meta["size"], meta["content_id"], store_path,
                                          now_ts, now_ts),
                                     )

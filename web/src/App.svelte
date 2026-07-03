@@ -1,5 +1,6 @@
 <script>
   import PopupOverlay from "./lib/PopupOverlay.svelte";
+  import BannerContainer from "./lib/BannerContainer.svelte";
   import { popup } from "./lib/popupStore.svelte.js";
   import { tabStore } from "./lib/tabStore.svelte.js";
   import { dirtyFormStore } from "./lib/dirtyFormStore.svelte.js";
@@ -151,9 +152,13 @@
             );
             popup.updateCache(listResult.data || {});
             // Then open the add form directly (not via autoAdd in list data)
+            const enrichedInitial = {
+              ...(routing.initialData || {}),
+              _returnIdKey: routing.listIdKey ? `persistent-${routing.listIdKey}` : undefined,
+            };
             tabStore.open("form", routing.addTitle || "Add", {
               form: routing.addFormType,
-              initialData: routing.initialData || {},
+              initialData: enrichedInitial,
             }, { idKey: `form-${routing.addFormType}` });
           }
           isLoading = false;
@@ -232,6 +237,7 @@
       <button class="notice-close" onclick={() => { noticeDismissed = true; }} aria-label="Dismiss notice">✕</button>
     </div>
   {/if}
+  <BannerContainer />
   {#if isLoading}
     <div class="loading-bar" aria-label="Loading"></div>
   {/if}

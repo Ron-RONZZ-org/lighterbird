@@ -240,7 +240,23 @@ def list_messages(
         msgs = email_svc.search_messages(filters, limit=limit)
     else:
         msgs = email_svc.list_messages(limit=limit, offset=offset, sort=sort)
-    return {"messages": [normalize_message(m) for m in msgs], "total": len(msgs)}
+    # Enrich messages with attachment count
+    uuids = [m["uuid"] for m in msgs if m.get("uuid")]
+    att_counts: dict[str, int] = {}
+    if uuids:
+        placeholders = ",".join("?" for _ in uuids)
+        rows = list(email_svc.db.execute(
+            f"SELECT message_uuid, COUNT(*) AS cnt FROM email_attachments "
+            f"WHERE message_uuid IN ({placeholders}) GROUP BY message_uuid",
+            uuids,
+        ))
+        att_counts = {r["message_uuid"]: r["cnt"] for r in rows}
+    enriched = []
+    for m in msgs:
+        d = normalize_message(m)
+        d["attachment_count"] = att_counts.get(m.get("uuid", ""), 0)
+        enriched.append(d)
+    return {"messages": enriched, "total": len(msgs)}
 
 
 @router.get("/messages/{uuid}")

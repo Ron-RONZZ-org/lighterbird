@@ -75,6 +75,10 @@ class EmailService:
                 db_store=self,
                 force=force,
             )
+            # Process pending flag syncs after fetch
+            backlog = self.msg_ops.process_sync_backlog()
+            if backlog:
+                result.total += backlog
         except ConnectionError as e:
             result = SyncResult()
             result.errors.append(str(e))
@@ -157,6 +161,10 @@ class EmailService:
             in_reply_to=msg.get("in_reply_to", ""),
             limit=limit,
         )
+
+    def process_sync_backlog(self) -> int:
+        """Process pending IMAP flag syncs."""
+        return self.msg_ops.process_sync_backlog()
 
     # ── Message operations ───────────────────────────────────────────────
 
