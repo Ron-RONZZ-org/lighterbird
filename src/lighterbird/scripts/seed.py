@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -24,7 +24,6 @@ def _parse_dot_dev(dot_dev_path: str | Path | None) -> dict[str, str]:
     """Parse the ``.dev`` file into a dict of key→value."""
     result: dict[str, str] = {}
     if dot_dev_path is None:
-        # Auto-discover from project root
         candidate = Path(__file__).resolve().parent.parent.parent.parent / ".dev"
         if not candidate.exists():
             return result
@@ -49,33 +48,31 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _ts(days_ago: int = 0, hours_ago: int = 0) -> str:
+    """Return an ISO timestamp offset from now."""
+    dt = datetime.now(timezone.utc) - timedelta(days=days_ago, hours=hours_ago)
+    return dt.isoformat()
+
+
 def _gen_uuid() -> str:
     return str(uuid.uuid4())
 
 
-# ── Domain seeders ──────────────────────────────────────────────────────────
+# ── Helpers ─────────────────────────────────────────────────────────────────
 
 
-def _seed_email(data_dir: Path, creds: dict[str, str]) -> None:
-    """Seed email.db with a test account from .dev credentials."""
-    from lighterbird.email.db import get_db, _SCHEMA_STATEMENTS
-
-    db_path = data_dir / "email.db"
-    db = get_db(db_path)
-    # Schema is auto-initialized by get_db()
-
-    email = creds.get("TEST_EMAIL_1", "test@example.com")
-    password = creds.get("TEST_EMAIL_1_PASS", "")
-    name = email.split("@")[0]
-
-    # Detect IMAP/SMTP servers — import the detection function
+def _create_account(db, email: str, password: str, sort_order: int,
+                    creds: dict[str, str], now: str) -> None:
+    """Insert a single email account and its folders."""
     from lighterbird.email.server_detect import detect_servers
+
+    name = email.split("@")[0]
     try:
         detected = detect_servers(email)
     except Exception:
         detected = {"imap": f"imap.{email.split('@')[1]}", "smtp": f"smtp.{email.split('@')[1]}"}
 
-    now = _now()
+    domain = email.split("@")[1]
     db.execute(
         """INSERT OR IGNORE INTO accounts
            (email, sort_order, name, imap_server, imap_port, imap_use_ssl,
@@ -85,45 +82,153 @@ def _seed_email(data_dir: Path, creds: dict[str, str]) -> None:
             signature, auth_type, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            email,
-            0,
-            name,
-            detected.get("imap", f"imap.{email.split('@')[1]}"),
-            993,
-            1,
-            detected.get("smtp", f"smtp.{email.split('@')[1]}"),
-            587,
-            1,
-            email,
-            email,
+            email, sort_order, name,
+            detected.get("imap", f"imap.{domain}"), 993, 1,
+            detected.get("smtp", f"smtp.{domain}"), 587, 1,
+            email, email,
             detected.get("managesieve_host", ""),
-            detected.get("managesieve_port", 4190),
-            1,
-            "",
-            "password",
-            now,
-            now,
+            detected.get("managesieve_port", 4190), 1,
+            "", "password", now, now,
         ),
     )
 
-    # Store password in system keyring
     if password:
         from lighterbird.email.keyring import set_password
         set_password(email, password)
 
-    # Create INBOX folder
+    for folder in ("INBOX", "Sent"):
+        db.execute(
+            "INSERT OR IGNORE INTO folders (account_email, name, created_at, updated_at) VALUES (?, ?, ?, ?)",
+            (email, folder, now, now),
+        )
+
+
+# ── Domain seeders ──────────────────────────────────────────────────────────
+
+
+def _seed_email(data_dir: Path, creds: dict[str, str]) -> None:
+    """Seed email.db with both test accounts from .dev credentials."""
+    from lighterbird.email.db import get_db
+
+    db_path = data_dir / "email.db"
+    db = get_db(db_path)
+
+    now = _now()
+
+    # ── Account 1 ────────────────────────────────────────────────────────
+    email1 = creds.get("TEST_EMAIL_1", "test1@example.com")
+    pw1 = creds.get("TEST_EMAIL_1_PASS", "")
+    _create_account(db, email1, pw1, 0, creds, now)
+
+    # ── Account 2 ────────────────────────────────────────────────────────
+    email2 = creds.get("TEST_EMAIL_2", "test2@example.com")
+    pw2 = creds.get("TEST_EMAIL_2_PASS", "")
+    _create_account(db, email2, pw2, 1, creds, now)
+
+    # ── Sample messages ──────────────────────────────────────────────────
+    _seed_email_messages(db, email1, email2, now)
+
+
+def _seed_email_messages(db, email1: str, email2: str, now: str) -> None:
+    """Create a conversation thread between the two seeded accounts.
+
+    Thread::
+
+        1. email1 → email2              (original, subject: "test email 1")
+        2. email2 → email1              (reply,   subject: "Re: test email 1")
+        3. email1 → third@party.com     (forward, subject: "Fwd: test email 1",
+                   cc: email2                     body quotes original)
+        4. email2 → email1              (reply-all, subject: "Re: Fwd: test email 1",
+                   cc: third@party.com             references previous)
+    """
+    domain1 = email1.split("@")[1]
+    domain2 = email2.split("@")[1]
+
+    # Message 1: original from email1 → email2
+    msg1_uuid = _gen_uuid()
+    msg1_id = "<test-001@" + domain1 + ">"
     db.execute(
-        "INSERT OR IGNORE INTO folders (account_email, name, created_at, updated_at) VALUES (?, ?, ?, ?)",
-        (email, "INBOX", now, now),
+        """INSERT OR IGNORE INTO messages
+           (uuid, account_email, folder_name, message_id, in_reply_to,
+            from_addr, to_recipients, cc_recipients,
+            subject, body, html_body, priority, is_read,
+            received_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            msg1_uuid, email1, "INBOX", msg1_id, "",
+            email1, json.dumps([email2]), json.dumps([]),
+            "test email 1", "this is the 1st test email", "", 5, 1,
+            _ts(days_ago=5), now, now,
+        ),
+    )
+
+    # Message 2: reply from email2 → email1
+    msg2_uuid = _gen_uuid()
+    msg2_id = "<test-002@" + domain2 + ">"
+    db.execute(
+        """INSERT OR IGNORE INTO messages
+           (uuid, account_email, folder_name, message_id, in_reply_to,
+            from_addr, to_recipients, cc_recipients,
+            subject, body, html_body, priority, is_read,
+            received_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            msg2_uuid, email2, "INBOX", msg2_id, msg1_id,
+            email2, json.dumps([email1]), json.dumps([]),
+            "Re: test email 1", "this is the 2nd test email — reply to test email 1", "", 5, 0,
+            _ts(days_ago=4, hours_ago=12), now, now,
+        ),
+    )
+
+    # Message 3: email1 forwards msg1 to third@party.com, cc email2
+    msg3_uuid = _gen_uuid()
+    msg3_id = "<test-003@" + domain1 + ">"
+    third_party = "third@party.com"
+    forwarded_body = (
+        "this is the 3rd test email — forward of test email 1\n\n"
+        "---------- Forwarded message ---------\n"
+        f"From: {email1}\n"
+        f"Subject: test email 1\n"
+        f"Date: {_ts(days_ago=5)}\n\n"
+        "this is the 1st test email"
     )
     db.execute(
-        "INSERT OR IGNORE INTO folders (account_email, name, created_at, updated_at) VALUES (?, ?, ?, ?)",
-        (email, "Sent", now, now),
+        """INSERT OR IGNORE INTO messages
+           (uuid, account_email, folder_name, message_id, in_reply_to,
+            from_addr, to_recipients, cc_recipients,
+            subject, body, html_body, priority, is_read,
+            received_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            msg3_uuid, email1, "INBOX", msg3_id, "",
+            email1, json.dumps([third_party]), json.dumps([email2]),
+            "Fwd: test email 1", forwarded_body, "", 5, 1,
+            _ts(days_ago=3), now, now,
+        ),
+    )
+
+    # Message 4: reply-all from email2 → email1 + third@party.com (cc)
+    msg4_uuid = _gen_uuid()
+    msg4_id = "<test-004@" + domain2 + ">"
+    db.execute(
+        """INSERT OR IGNORE INTO messages
+           (uuid, account_email, folder_name, message_id, in_reply_to,
+            from_addr, to_recipients, cc_recipients,
+            subject, body, html_body, priority, is_read,
+            received_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            msg4_uuid, email2, "INBOX", msg4_id, msg3_id,
+            email2, json.dumps([email1, third_party]), json.dumps([]),
+            "Re: Fwd: test email 1",
+            "this is the 4th test email — reply-all to forward", "", 5, 0,
+            _ts(days_ago=2, hours_ago=6), now, now,
+        ),
     )
 
 
 def _seed_calendar(data_dir: Path, creds: dict[str, str]) -> None:
-    """Seed calendar.db with a test calendar from .dev credentials."""
+    """Seed calendar.db with a test calendar from .dev credentials + filler events."""
     from lighterbird.calendar.db import get_db
 
     db_path = data_dir / "calendar.db"
@@ -134,7 +239,7 @@ def _seed_calendar(data_dir: Path, creds: dict[str, str]) -> None:
     password = creds.get("TEST_CALENDAR_PASSWORD", "")
 
     if not url:
-        return  # No calendar to seed
+        return
 
     now = _now()
     cal_uuid = _gen_uuid()
@@ -144,47 +249,42 @@ def _seed_calendar(data_dir: Path, creds: dict[str, str]) -> None:
         (cal_uuid, url, username, 1, now, now),
     )
 
-    # Store calendar password in keyring (pattern: lighterbird/calendar/{uuid}/password)
     if password:
         from lighterbird.core.keyring import set_password
         set_password(f"lighterbird/calendar/{cal_uuid}", "password", password)
 
-    # Add a sample event
-    from datetime import timedelta
-    event_start = datetime.now(timezone.utc).replace(hour=10, minute=0, second=0, microsecond=0) + timedelta(days=1)
-    event_end = event_start + timedelta(hours=1)
-    db.execute(
-        """INSERT OR IGNORE INTO events
-           (uuid, calendar_uuid, title, start, end, category, location, description, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (
-            _gen_uuid(),
-            cal_uuid,
-            "Test Event (from seed)",
-            event_start.isoformat(),
-            event_end.isoformat(),
-            "meeting",
-            "Office",
-            "Auto-generated test event from seed script.",
-            now,
-            now,
-        ),
-    )
+    # Filler events
+    base = datetime.now(timezone.utc).replace(hour=10, minute=0, second=0, microsecond=0)
+    for i in range(3):
+        start = base + timedelta(days=1 + i)
+        end = start + timedelta(hours=1)
+        db.execute(
+            """INSERT OR IGNORE INTO events
+               (uuid, calendar_uuid, title, start, end, category, location, description, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                _gen_uuid(), cal_uuid,
+                f"test event {i+1}",
+                start.isoformat(), end.isoformat(),
+                "meeting", "Office",
+                f"this is the {i+1}{'st' if i==0 else 'nd' if i==1 else 'rd'} test event",
+                now, now,
+            ),
+        )
 
 
 def _seed_contacts(data_dir: Path) -> None:
-    """Seed contacts.db with a test contact."""
+    """Seed contacts.db with test contacts."""
     from lighterbird.contacts.db import get_db
 
     db_path = data_dir / "contacts.db"
     db = get_db(db_path)
 
     now = _now()
-
-    # Try to import contact from test-contact.toml if it exists
     project_root = Path(__file__).resolve().parent.parent.parent.parent
     contact_toml_path = project_root / "test-contact.toml"
 
+    # Contact 1: from test-contact.toml or default
     contact_data: dict[str, Any] = {
         "uuid": _gen_uuid(),
         "given_name": "Jane",
@@ -199,7 +299,7 @@ def _seed_contacts(data_dir: Path) -> None:
         "post_code": "12345",
         "date_of_birth": "1990-01-01",
         "place_of_birth": "Testville",
-        "notes": "Test contact from seed.",
+        "notes": "test contact 1",
         "category": "test",
         "custom_fields": "{}",
         "created_at": now,
@@ -222,7 +322,7 @@ def _seed_contacts(data_dir: Path) -> None:
             if raw.get("dob"):
                 contact_data["date_of_birth"] = raw["dob"]
         except Exception:
-            pass  # Fall back to default
+            pass
 
     cols = list(contact_data.keys())
     vals = list(contact_data.values())
@@ -232,9 +332,37 @@ def _seed_contacts(data_dir: Path) -> None:
         tuple(vals),
     )
 
+    # Contact 2: second test email address
+    contact_data2 = {
+        "uuid": _gen_uuid(),
+        "given_name": "Test",
+        "middle_names": "",
+        "family_name": "Account",
+        "full_name": "Test Account",
+        "emails": json.dumps([{"tag": "work", "value": "test@ronzz.org"}]),
+        "phones": json.dumps([]),
+        "organization": "",
+        "position": "",
+        "address": "",
+        "post_code": "",
+        "date_of_birth": "",
+        "place_of_birth": "",
+        "notes": "test contact 2 — second seeded account",
+        "category": "test",
+        "custom_fields": "{}",
+        "created_at": now,
+        "updated_at": now,
+    }
+    cols2 = list(contact_data2.keys())
+    vals2 = list(contact_data2.values())
+    db.execute(
+        f"INSERT OR IGNORE INTO contacts ({', '.join(cols2)}) VALUES ({placeholders})",
+        tuple(vals2),
+    )
+
 
 def _seed_todo(data_dir: Path) -> None:
-    """Seed todo.db with sample tasks."""
+    """Seed todo.db with filler tasks."""
     from lighterbird.todo.db import get_db
 
     db_path = data_dir / "todo.db"
@@ -244,37 +372,16 @@ def _seed_todo(data_dir: Path) -> None:
     tasks = [
         {
             "uuid": _gen_uuid(),
-            "title": "Buy milk",
-            "description": "Get 2% milk from the grocery store",
-            "priority": "3",
-            "status": "pending",
+            "title": f"test todo {i+1}",
+            "description": f"this is the {i+1}{'st' if i==0 else 'nd' if i==1 else 'rd'} test todo",
+            "priority": str(5 - i if i < 5 else i - 3),
+            "status": status,
             "due_date": None,
-            "sort_order": 0,
+            "sort_order": i,
             "created_at": now,
             "updated_at": now,
-        },
-        {
-            "uuid": _gen_uuid(),
-            "title": "Review PR #42",
-            "description": "Code review for the new API endpoint",
-            "priority": "1",
-            "status": "pending",
-            "due_date": None,
-            "sort_order": 1,
-            "created_at": now,
-            "updated_at": now,
-        },
-        {
-            "uuid": _gen_uuid(),
-            "title": "Write documentation",
-            "description": "Document the new CLI commands",
-            "priority": "5",
-            "status": "completed",
-            "due_date": None,
-            "sort_order": 2,
-            "created_at": now,
-            "updated_at": now,
-        },
+        }
+        for i, status in enumerate(["pending", "pending", "completed", "pending", "pending"])
     ]
 
     for t in tasks:
@@ -288,38 +395,50 @@ def _seed_todo(data_dir: Path) -> None:
 
 
 def _seed_journal(data_dir: Path) -> None:
-    """Seed journal.db with a sample journal entry."""
+    """Seed journal.db with filler entries."""
     from lighterbird.journal.db import get_db
 
     db_path = data_dir / "journal.db"
     db = get_db(db_path)
 
     now = _now()
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    db.execute(
-        """INSERT OR IGNORE INTO journal
-           (uuid, title, text, date, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?)""",
-        (
-            _gen_uuid(),
-            "First Entry",
-            "This is a test journal entry created by the seed script.",
-            today,
-            now,
-            now,
-        ),
-    )
+    for i in range(3):
+        day = datetime.now(timezone.utc) - timedelta(days=2 - i)
+        db.execute(
+            """INSERT OR IGNORE INTO journal
+               (uuid, title, text, date, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                _gen_uuid(),
+                f"test journal entry {i+1}",
+                f"this is the {i+1}{'st' if i==0 else 'nd' if i==1 else 'rd'} test journal entry",
+                day.strftime("%Y-%m-%d"),
+                now, now,
+            ),
+        )
 
 
 def _seed_letters(data_dir: Path) -> None:
-    """Seed letters.db with a sample letter."""
+    """Seed letters.db with a real cover letter example."""
     from lighterbird.letter.db import get_db
 
     db_path = data_dir / "letters.db"
     db = get_db(db_path)
 
     now = _now()
+
+    # Try to load a real cover letter from ronCV project
+    cover_letter_path = Path("/home/rongzhou/kodo/ronCV/lettre-de-motivation/DVUC-001-3/DVUC-001-3.md")
+    body = ""
+    if cover_letter_path.exists():
+        try:
+            body = cover_letter_path.read_text(encoding="utf-8")
+        except Exception:
+            body = ""
+    if not body:
+        body = "this is the 1st test letter"
+
     db.execute(
         """INSERT OR IGNORE INTO letters
            (uuid, direction, object, body_path, body_format,
@@ -329,13 +448,13 @@ def _seed_letters(data_dir: Path) -> None:
         (
             _gen_uuid(),
             "sent",
-            "Test Letter",
+            "Candidature DVUC-001-3",
             "",
-            "html",
+            "markdown",
             None,
-            "sender@test.com",
+            "rong.zhou6@etu.univ-lorraine.fr",
             None,
-            "recipient@test.com",
+            "Naomie JACQ <naomie.jacq@univ-lorraine.fr>",
             now,
             now,
         ),
@@ -344,19 +463,14 @@ def _seed_letters(data_dir: Path) -> None:
 
 def _seed_profiles(data_dir: Path) -> None:
     """Seed profiles.db with a test user profile."""
-    # profiles/db.py computes _DB_PATH at module level from data_dir().
-    # We set the env var, then reset the singleton before calling get_db().
     os.environ["LIGHTERBIRD_DATA_DIR"] = str(data_dir)
 
-    # Reset the singleton so get_db() reinitializes from the new path
     from lighterbird.profiles import db as profiles_db
     profiles_db.reset_db()
 
     db = profiles_db.get_db()
 
     now = _now()
-
-    # Try to load from test-profile.toml
     project_root = Path(__file__).resolve().parent.parent.parent.parent
     profile_toml_path = project_root / "test-profile.toml"
 
@@ -376,7 +490,7 @@ def _seed_profiles(data_dir: Path) -> None:
         "organization": "",
         "position": "",
         "custom_fields": "{}",
-        "notes": "Auto-generated test profile.",
+        "notes": "test profile 1 — from seed",
         "created_at": now,
         "updated_at": now,
     }
@@ -416,7 +530,6 @@ def _seed_profiles(data_dir: Path) -> None:
 
 def _seed_user_commands(data_dir: Path) -> None:
     """Seed user_commands.db is intentionally left empty for seed."""
-    # user_commands/db.py computes _DB_PATH at module level from data_dir().
     os.environ["LIGHTERBIRD_DATA_DIR"] = str(data_dir)
 
     from lighterbird.user_commands import db as uc_db
@@ -432,7 +545,6 @@ def _seed_llm_config(creds: dict[str, str]) -> None:
     if not api_key:
         return
 
-    # Check if already configured
     configured = get_password("lighterbird-llm", "active-provider")
     if configured:
         return
@@ -474,10 +586,10 @@ def seed_data_dir(
     """Initialize and populate all lighterbird databases in *target_dir*.
 
     Creates eight database files (email, calendar, contacts, todo, journal,
-    letters, profiles, user_commands) with schemas initialized and minimal
-    seed data inserted.
+    letters, profiles, user_commands) with schemas initialized and seed
+    data inserted.
 
-    Passwords for the test email account are stored in the system keyring.
+    Passwords for test accounts are stored in the system keyring.
     The LLM provider is auto-configured from ``.dev`` if not already set.
 
     Args:
@@ -504,3 +616,36 @@ def seed_data_dir(
     _seed_user_commands(target)
     _seed_llm_config(creds)
     _seed_backup_config(target)
+
+
+def seed_test_seed_7z(output_path: str | Path) -> Path:
+    """Generate a test-seed.7z archive from .dev credentials.
+
+    Uses a temporary directory to generate all seed data, then creates a
+    7z archive containing the databases.  Cleans up the temp dir.
+    """
+    import shutil
+    import tempfile
+
+    from lighterbird.core.backup import BackupStrategy
+    from lighterbird.core.backup import _create_strategy_archive as _create_archive
+    from dataclasses import asdict
+
+    tmp = Path(tempfile.mkdtemp(prefix="lighterbird-seed-"))
+    data_tmp = tmp / "data"
+    config_tmp = tmp / "config"
+    data_tmp.mkdir(parents=True, exist_ok=True)
+    config_tmp.mkdir(parents=True, exist_ok=True)
+
+    try:
+        seed_data_dir(data_tmp)
+        strategy = asdict(BackupStrategy(id="default", label="Default"))
+        archive = _create_archive(strategy)
+        if archive:
+            dst = Path(output_path)
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(str(archive), str(dst))
+            return dst
+        raise RuntimeError("Seed archive creation returned None")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
