@@ -168,7 +168,27 @@ lighterbird/
 
    The seeded data includes an email account (from ``.dev`` credentials with auto-detected IMAP/SMTP), a calendar account with a sample event, a test contact, sample todos, a journal entry, and a user profile. See ``scripts/AGENTS-scripts.md`` for details.
 
-5. **Cowriting via GUI** — test LLM co-writing through form editors (ComposeEmail, TodoAddForm, JournalWrite) by filling in text and invoking the cowrite feature. Also test via the cowrite API directly (`POST /api/v1/cowrite`).
+6. **Cowriting via GUI** — test LLM co-writing through form editors (ComposeEmail, TodoAddForm, JournalWrite) by filling in text and invoking the cowrite feature. Also test via the cowrite API directly (`POST /api/v1/cowrite`).
+
+### E2E Test Automation
+
+Playwright E2E tests are integrated into pytest via the ``--e2e`` flag:
+
+| Command | Behavior |
+|---------|----------|
+| `uv run pytest tests/` | Unit tests only (203 tests, E2E skipped) |
+| `uv run pytest --e2e tests/test_e2e.py` | E2E tests only (auto-starts seeded server) |
+| `uv run pytest --e2e --keep-e2e-data` | E2E + preserve temp data for debugging |
+
+The ``conftest.py`` defines a session-scoped ``e2e_server`` fixture that:
+1. Allocates a free TCP port (no port conflicts)
+2. Creates a temp data directory and seeds it
+3. Starts uvicorn as a subprocess
+4. Health-checks before proceeding (15s timeout)
+5. Yields URL + Chromium path to the test
+6. Terminates server + cleans up temp dir on teardown
+
+Existing ``.mjs`` scripts (``tests/playwright_e2e.mjs``, ``tests/e2e_comprehensive.mjs``) are wrapped by ``tests/test_e2e.py`` via ``subprocess.run()`` — no script rewrite needed.
 
 ## Coding Guidelines
 
