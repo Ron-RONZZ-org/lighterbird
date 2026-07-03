@@ -149,26 +149,6 @@
     });
   }
 
-  function replyAll() {
-    const subject = (msg.subject || "").toLowerCase().startsWith("re:")
-      ? msg.subject : `Re: ${msg.subject}`;
-    const allTo = [
-      msg.from_addr || "",
-      ...parseRecipients(msg.to_recipients),
-    ].filter(Boolean).join(", ");
-    const allCc = parseRecipients(msg.cc_recipients).join(", ");
-    tabStore.open("form", "Reply All", {
-      form: "email-send",
-      initialData: {
-        to: allTo,
-        cc: allCc,
-        subject,
-        body: `\n\n${quoteBody()}`,
-        account: msg.account_email || "",
-      },
-    });
-  }
-
   function forward() {
     const subject = (msg.subject || "").toLowerCase().startsWith("fwd:")
       ? msg.subject : `Fwd: ${msg.subject}`;
@@ -534,7 +514,7 @@
     font-family: monospace;
     font-size: 0.8rem;
   }
-  /* Print styles — hide non-essential UI */
+  /* Print styles — hide non-essential UI, show full content */
   @media print {
     :global(.tab-bar),
     :global(.command-bar),
@@ -543,8 +523,18 @@
     .toolbar {
       display: none !important;
     }
+    .email-wrapper {
+      height: auto !important;
+      overflow: visible !important;
+    }
     .email-view {
       color: #000 !important;
+      overflow: visible !important;
+      flex: none !important;
+      height: auto !important;
+    }
+    .headers {
+      break-inside: avoid;
     }
     .headers .label {
       color: #555 !important;
@@ -552,8 +542,22 @@
     .value {
       color: #000 !important;
     }
+    .body-area {
+      overflow: visible !important;
+      flex: none !important;
+      height: auto !important;
+      min-height: 200px;
+    }
+    .html-frame {
+      height: auto !important;
+      min-height: 300px;
+    }
     .plain-text {
       color: #000 !important;
+      overflow: visible !important;
+    }
+    hr {
+      border-top-color: #ccc !important;
     }
   }
 </style>

@@ -59,7 +59,16 @@
   function handleCancel() {
     tabStore.close(tabStore.active.id);
   }
+
+  function handleKeydown(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      e.preventDefault();
+      handleSave();
+    }
+  }
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <div class="sieve-editor">
   <div class="header">

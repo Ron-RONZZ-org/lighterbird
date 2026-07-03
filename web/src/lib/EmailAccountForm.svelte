@@ -27,6 +27,13 @@
   let saving = $state(false);
   let error = $state("");
 
+  function handleKeydown(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      e.preventDefault();
+      handleSave();
+    }
+  }
+
   async function handleSave() {
     if (!email.trim()) {
       error = "Email address is required.";
@@ -59,6 +66,8 @@
     }
   }
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <div class="modal-overlay" onclick={onDismiss} onkeydown={(e) => e.key === "Escape" && onDismiss()} role="button" tabindex="-1" aria-label="Dismiss">
   <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" tabindex="0" onkeydown={() => {}}>

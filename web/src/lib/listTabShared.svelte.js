@@ -344,6 +344,21 @@ export function truncate(s, max) {
 }
 
 /**
+ * Sanitize a filename to only alphanumeric characters plus - and _.
+ * Falls back to "export" if the result would be empty.
+ *
+ * @param {string} name — base name (without extension)
+ * @param {string} [extension] — file extension including dot, e.g. ".md"
+ * @param {number} [maxLen=64] — max length of the base part
+ * @returns {string} sanitized filename with extension
+ */
+export function sanitizeFilename(name, extension = "", maxLen = 64) {
+  if (!name) return `export${extension}`;
+  const base = name.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, maxLen);
+  return `${base || "export"}${extension}`;
+}
+
+/**
  * Preview text: first line, stripped of markdown, truncated.
  */
 export function preview(s, max = 60) {
