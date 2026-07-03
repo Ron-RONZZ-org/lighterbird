@@ -203,6 +203,17 @@ All list tab components (`EmailListTab`, `JournalListTab`, `SieveListTab`, `Cont
 | **Context-appropriate toolbar** | View mode: [Select] [hint] [+ New <kbd>N</kbd>]; Selection mode: [Exit] [count] [Delete]; Search mode: full-width search input |
 | **Unsaved-changes guard** | Tab close → ConfirmDialog if form dirty; browser `beforeunload` if any dirty form exists; forms expose `dirty` derived rune + `onDirtyChange` callback |
 
+### Shared Export/Import Components
+
+Export and import use two shared dialog components:
+
+| Component | Props | Purpose |
+|-----------|-------|---------|
+| `ExportDialog.svelte` | `domain`, `items`, `format`, `fileName`, `onClose` | Trigger download of selected items in the appropriate format |
+| `ImportDialog.svelte` | `domain`, `acceptedFormats`, `onImport`, `onClose` | File picker + upload for importing items from standard formats |
+
+Backend format conversion lives in domain services (not a unified `export/` module). A shared YAML frontmatter utility exists in `core/yaml_frontmatter.py` for `.md` export/import across todo, journal, and letter domains.
+
 ### Shared Helpers
 
 Common logic lives in `web/src/lib/listTabShared.svelte.js`:
@@ -222,12 +233,24 @@ Backend list commands return typed responses that map to frontend components:
 | Command | Backend Response Type | Frontend Component |
 |---------|----------------------|--------------------|
 | `!email list` / `!email search` | `email-list` | EmailListTab |
+| `!email export eml <uuid>` | download .eml | ExportDialog / direct download |
+| `!email import eml <path>` | `status` | ImportDialog |
 | `!journal list` / `!journal search` | `journal-list` | JournalListTab |
+| `!journal export md <uuid>` | `status` (markdown) | ExportDialog |
+| `!journal import md <path>` | `status` | ImportDialog |
 | `!contacts list` / `!contacts search` | `contacts-list` | ContactsListTab |
+| `!contact export vcf <uuid>` | `status` (vcf) | ExportDialog |
+| `!contact import vcf <path>` | `status` | ImportDialog |
 | `!todo list` / `!todo tree` / `!todo search` | `todo-list` | TodoListTab (tree/flat toggle, tags filter, sort) |
+| `!todo export md <uuid>` | download .md | ExportDialog |
+| `!todo import md <path>` | `status` | ImportDialog |
 | `!calendar list` / `!calendar event search` | `calendar-events` | CalendarEventsListTab |
+| `!calendar event export ics <uuid>` | `status` (ics) | ExportDialog |
+| `!calendar event import ics <path>` | `status` | ImportDialog |
 | `!email sieve list` | `sieve-list` | SieveListTab |
 | `!letter list` / `!letter search` | `letter-list` | LetterListTab |
+| `!letter export md <uuid>` / `!letter export pdf <uuid>` | `status` (md/pdf) | ExportDialog |
+| `!letter import md <path>` | `status` | ImportDialog |
 | `!user info list` | `status` (profiles list) | DynamicForm / StatusPopup |
 
 ---

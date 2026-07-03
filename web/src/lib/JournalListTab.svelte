@@ -30,6 +30,19 @@
     { onNew: handleNew },
   );
 
+  let showImportDialog = $state(false);
+  let showExportDialog = $state(false);
+
+  let exportItems = $derived(entries.filter(e => sel.selectedKeys.has(e.uuid)));
+
+  function openImportDialog() {
+    showImportDialog = true;
+  }
+
+  function openExportDialog() {
+    showExportDialog = true;
+  }
+
   // Highlight animation — auto-clears after 2s
   let highlight = $derived(data?.highlight || "");
   let highlightActive = $state(false);
@@ -205,6 +218,8 @@
         {/if}
       </div>
       <div class="toolbar-right">
+        <button class="tool-btn" disabled={sel.numSelected === 0} title="Export selected (E)"
+          onclick={openExportDialog}>Export <kbd>E</kbd></button>
         <button class="tool-btn danger" disabled={sel.numSelected === 0} title="Delete selected (Delete key)"
           onclick={() => { sel.confirmDelete = true; }}>Delete <kbd>Del</kbd></button>
       </div>
@@ -217,6 +232,7 @@
       </div>
       <div class="toolbar-right">
         <button class="tool-btn primary" onclick={handleNew} title="Write new journal entry">+ New <kbd>N</kbd></button>
+        <button class="tool-btn" onclick={openImportDialog} title="Import journal entries (M)">Import <kbd>M</kbd></button>
       </div>
     {/if}
   </div>
@@ -269,6 +285,22 @@
       message="Delete {sel.numSelected} journal entr{sel.numSelected !== 1 ? 'ies' : 'y'}?"
       onConfirm={async () => { sel.confirmDelete = false; await deleteSelected(); }}
       onDismiss={() => { sel.confirmDelete = false; }}
+    />
+  {/if}
+
+  {#if showExportDialog}
+    <ExportDialog
+      domain="journal"
+      items={exportItems}
+      format="md"
+      onClose={() => showExportDialog = false}
+    />
+  {/if}
+  {#if showImportDialog}
+    <ImportDialog
+      domain="journal"
+      format="md"
+      onClose={() => showImportDialog = false}
     />
   {/if}
 </div>

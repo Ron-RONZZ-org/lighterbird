@@ -8,6 +8,8 @@
     { key: "Ctrl+R", desc: "Reply", modifiers: "Ctrl", category: "Email Detail" },
     { key: "Ctrl+Shift+R", desc: "Reply All", modifiers: "Ctrl+Shift", category: "Email Detail" },
     { key: "Ctrl+L", desc: "Forward", modifiers: "Ctrl", category: "Email Detail" },
+    { key: "Ctrl+E", desc: "Export .eml", modifiers: "Ctrl", category: "Email Detail" },
+    { key: "Ctrl+P", desc: "Print", modifiers: "Ctrl", category: "Email Detail" },
   ]);
 
   let { data = {}, tabId } = $props();
@@ -141,6 +143,23 @@
     });
   }
 
+  function exportEml() {
+    if (msg.uuid) {
+      window.open(`/api/v1/email/export-eml/${msg.uuid}`, '_blank');
+    }
+  }
+
+  function handleKeydown(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "p") {
+      e.preventDefault();
+      window.print();
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === "e") {
+      e.preventDefault();
+      exportEml();
+    }
+  }
+
   async function markRead() {
     if (!msg.uuid || msg.is_read) return;
     try {
@@ -159,6 +178,8 @@
   }
 </script>
 
+<svelte:window onkeydown={handleKeydown} />
+
 <div class="email-wrapper">
   <div class="email-view">
     <!-- Toolbar -->
@@ -172,6 +193,9 @@
       <button class="tool-btn" onclick={forward} title="Forward (Ctrl+L)">
         <span class="tool-icon">→</span> Forward
       </button>
+      <button class="tool-btn" onclick={exportEml} title="Export .eml (Ctrl+E)">
+        <span class="tool-icon">⬇</span> Export <kbd>E</kbd>
+      </button>
       {#if hasHtml}
         <button class="tool-btn" onclick={toggleRender} title="Toggle HTML/plain text">
           <span class="tool-icon">{useHtml ? "🔤" : "🌐"}</span>
@@ -183,6 +207,9 @@
       </button>
       <button class="tool-btn trash-btn" onclick={trash} title="Trash">
         <span class="tool-icon">🗑</span>
+      </button>
+      <button class="tool-btn" onclick={() => window.print()} title="Print (Ctrl+P)">
+        <span class="tool-icon">🖨</span> Print <kbd>Ctrl+P</kbd>
       </button>
       <div class="toolbar-spacer"></div>
       <button
@@ -463,5 +490,27 @@
     padding: 2rem;
     font-family: monospace;
     font-size: 0.8rem;
+  }
+  /* Print styles — hide non-essential UI */
+  @media print {
+    :global(.tab-bar),
+    :global(.command-bar),
+    :global(.home-content),
+    :global(.top-progress),
+    .toolbar {
+      display: none !important;
+    }
+    .email-view {
+      color: #000 !important;
+    }
+    .headers .label {
+      color: #555 !important;
+    }
+    .value {
+      color: #000 !important;
+    }
+    .plain-text {
+      color: #000 !important;
+    }
   }
 </style>

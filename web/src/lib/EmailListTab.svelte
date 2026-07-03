@@ -139,6 +139,18 @@
   let showFolderTree = $state(false);
   let showSortDropdown = $state(false);
   let showParamsDialog = $state(false);
+  let showImportDialog = $state(false);
+  let showExportDialog = $state(false);
+
+  let exportItems = $derived(messages.filter(m => sel.selectedKeys.has(m.uuid)));
+
+  function openImportDialog() {
+    showImportDialog = true;
+  }
+
+  function openExportDialog() {
+    showExportDialog = true;
+  }
 
   function handleNew() {
     tabStore.open("form", "Compose Email", { form: "email-send", initialData: {} }, {
@@ -393,6 +405,8 @@
     onToggleFolderTree={() => { showFolderTree = !showFolderTree; }}
     onToggleSortDropdown={() => { showSortDropdown = !showSortDropdown; }}
     onToggleParamsDialog={() => { showParamsDialog = !showParamsDialog; }}
+    onImport={openImportDialog}
+    onExport={openExportDialog}
   />
 
   <!-- Folder tree dropdown overlay -->
@@ -540,6 +554,22 @@
 
   {#if showShortcutHelp}
     <KeyboardShortcutOverlay onDismiss={() => { showShortcutHelp = false; }} />
+  {/if}
+
+  {#if showExportDialog}
+    <ExportDialog
+      domain="email"
+      items={exportItems}
+      format="eml"
+      onClose={() => showExportDialog = false}
+    />
+  {/if}
+  {#if showImportDialog}
+    <ImportDialog
+      domain="email"
+      format="eml"
+      onClose={() => showImportDialog = false}
+    />
   {/if}
 </div>
 

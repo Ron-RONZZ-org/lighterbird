@@ -21,6 +21,7 @@ dependencies = [
     "dnspython>=2.6.0",
     "mistune>=3.3.2",
     "py7zr>=1.1.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]

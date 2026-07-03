@@ -120,3 +120,48 @@ class CalendarService:
 
     def delete_event(self, uuid_: str) -> bool:
         return self.events.delete(uuid_)
+
+    # ── ICS export / import ─────────────────────────────────────────────
+
+    def export_ics(self, uuid: str | None = None, uuids: list[str] | None = None) -> str:
+        """Export one or more events to an ICS calendar string.
+
+        Args:
+            uuid: Single event UUID.
+            uuids: Multiple event UUIDs.
+
+        Returns:
+            ICS calendar text.
+        """
+        from lighterbird.calendar.ics import events_to_ics
+
+        ids = []
+        if uuid:
+            ids.append(uuid)
+        if uuids:
+            ids.extend(uuids)
+
+        rows = []
+        for eid in ids:
+            evt = self.events.get(eid)
+            if evt:
+                rows.append(dict(evt))
+        if not rows:
+            return ""
+        return events_to_ics(rows)
+
+    def import_ics(self, calendar_uuid: str, path: str) -> list[str]:
+        """Import events from an ICS file.
+
+        Args:
+            calendar_uuid: Target calendar UUID.
+            path: Path to the .ics file on disk.
+
+        Returns:
+            List of created event UUIDs.
+        """
+        from lighterbird.calendar.ics import insert_ics_events
+
+        with open(path, "r") as f:
+            text = f.read()
+        return insert_ics_events(self.db, calendar_uuid, text)
