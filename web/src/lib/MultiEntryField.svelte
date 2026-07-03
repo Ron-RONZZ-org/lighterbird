@@ -36,19 +36,31 @@
   let inputEl = $state(null);
   let debounceTimer = $state(null);
   let abortController = $state(null);
+  /** Maps stored value -> display label when value differs from label (e.g. UUID vs title). */
+  let displayMap = $state(new Map());
 
   // Dirty tracking — report if we have any entries (versus initial empty)
   let dirty = $derived(entries.length > 0);
   $effect(() => { onDirtyChange(dirty); });
 
-  function addEntry(val) {
+  function addEntry(val, displayLabel = null) {
     const trimmed = val.trim();
     if (!trimmed) return;
     if (maxEntries > 0 && entries.length >= maxEntries) return;
     if (!allowDuplicates && entries.includes(trimmed)) return;
 
+    // Track display label when value differs from displayed text (e.g. UUID vs title)
+    if (displayLabel !== null && displayLabel !== trimmed) {
+      displayMap.set(trimmed, displayLabel);
+    }
+
     if (editingIndex >= 0) {
+      const oldVal = entries[editingIndex];
       entries[editingIndex] = trimmed;
+      // Clean up old display map entry if value changed
+      if (oldVal !== trimmed) {
+        displayMap.delete(oldVal);
+      }
       editingIndex = -1;
     } else {
       entries = [...entries, trimmed];
@@ -62,7 +74,9 @@
   }
 
   function removeEntry(idx) {
+    const removed = entries[idx];
     entries = entries.filter((_, i) => i !== idx);
+    displayMap.delete(removed);
     if (editingIndex === idx) editingIndex = -1;
     // If we removed before or at the editing index, adjust
     if (editingIndex > idx) editingIndex -= 1;
@@ -89,10 +103,10 @@
   }
 
   function selectSuggestion(item) {
-    // Replace input value with the suggestion's label
+    // Replace input value with the suggestion's label for display, but store the value
     inputValue = item.label;
-    // Immediately add the entry (on Enter, user could also confirm)
-    addEntry(item.label);
+    // Store the value; if it differs from the label, pass the label for display mapping
+    addEntry(item.value, item.label);
   }
 
   async function handleInput(e) {
@@ -198,6 +212,9 @@
   }
 
   function chipLabel(val) {
+    // Use display map if available (e.g. UUID -> title)
+    const display = displayMap.get(val);
+    if (display) return truncated(display);
     if (label.toLowerCase() === "tags") {
       // For tag-like fields, show the value directly (often short)
       return val;

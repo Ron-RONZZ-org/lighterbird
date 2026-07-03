@@ -9,6 +9,7 @@
 </script>
 
 <button
+  type="button"
   class="cowrite-btn"
   class:active={cowrite.isActive}
   onclick={() => { if (!cowrite.isActive) cowrite.openPanel(); else cowrite.close(); }}
