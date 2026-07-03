@@ -1,6 +1,6 @@
 <script>
   import { tabStore } from "./tabStore.svelte.js";
-  import { sanitizeFilename, openPrintWindow } from "./listTabShared.svelte.js";
+  import { sanitizeFilename, openLetterPrintWindow } from "./listTabShared.svelte.js";
 
   let { data = {} } = $props();
   let letter = $derived(data?.letter || {});
@@ -26,16 +26,13 @@
   }
 
   function printLetter() {
-    const headers = [
-      { label: "Direction", value: letter.direction === "sent" ? "Sent" : "Received" },
-      { label: "Sender", value: letter.sender_manual || (letter.sender_profile ? `Profile: ${letter.sender_profile.slice(0, 8)}` : "") },
-      { label: "Recipient", value: letter.recipient_manual || (letter.recipient_contact ? `Contact: ${letter.recipient_contact.slice(0, 8)}` : "") },
-      { label: "Date", value: letter.created_at || "" },
-    ];
-    const bodyContent = body
-      ? body
-      : "<p>(No body content)</p>";
-    openPrintWindow(letter.object || "(untitled)", headers, bodyContent);
+    openLetterPrintWindow(
+      letter.object || "",
+      letter.sender_manual || "",
+      letter.recipient_manual || "",
+      letter.created_at || "",
+      body || "<p>(No body content)</p>",
+    );
   }
 
   async function exportMarkdown() {
