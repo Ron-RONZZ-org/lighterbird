@@ -127,6 +127,24 @@ _MIGRATE_ACCOUNTS_MANAGESIEVE_TLS = """
 ALTER TABLE accounts ADD COLUMN managesieve_use_tls INTEGER NOT NULL DEFAULT 1;
 """
 
+_DROP_LEGACY_ALDONAJXOJ = "DROP TABLE IF EXISTS aldonajxoj;"
+
+_SYNC_BACKLOG_TABLE = """
+CREATE TABLE IF NOT EXISTS _sync_backlog (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    msg_uuid        TEXT NOT NULL,
+    account_email   TEXT NOT NULL,
+    folder_name     TEXT,
+    imap_uid        INTEGER,
+    is_read         INTEGER NOT NULL DEFAULT 0,
+    is_deleted      INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT NOT NULL,
+    last_attempt    TEXT,
+    retries         INTEGER NOT NULL DEFAULT 0
+);
+"""
+_IDX_SYNC_BACKLOG_MSG = "CREATE INDEX IF NOT EXISTS idx_sync_backlog_msg ON _sync_backlog(msg_uuid);"
+
 _IDX_SIEVE_ACTIVATIONS_ACCOUNT = "CREATE INDEX IF NOT EXISTS idx_sieve_activations_account ON sieve_activations(account_email);"
 
 _IDX_MESSAGES_ACCOUNT = "CREATE INDEX IF NOT EXISTS idx_messages_account ON messages(account_email);"
@@ -149,6 +167,8 @@ _SCHEMA_STATEMENTS: list[str] = [
     _CREATE_FOLDERS,
     _CREATE_MESSAGES,
     _CREATE_ATTACHMENTS,
+    _DROP_LEGACY_ALDONAJXOJ,
+    _SYNC_BACKLOG_TABLE,
     _CREATE_SPAM_BLOCKS,
     _CREATE_SIEVE_SCRIPTS,
     _CREATE_SIEVE_ACTIVATIONS,
@@ -162,6 +182,7 @@ _SCHEMA_STATEMENTS: list[str] = [
     _IDX_MESSAGES_MESSAGE_ID,
     _IDX_MESSAGES_DATE,
     _IDX_ATTACHMENTS_MESSAGE,
+    _IDX_SYNC_BACKLOG_MSG,
     _IDX_SIEVE_ACTIVATIONS_ACCOUNT,
 ]
 
