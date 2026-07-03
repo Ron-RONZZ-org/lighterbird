@@ -55,7 +55,8 @@ export function getAllShortcuts() {
 
   // Navigation (always present)
   groups.set("Navigation", [
-    { key: "Alt + 1-9", desc: "Switch to tab" },
+    { key: "Alt + 1-9", desc: "Switch to tab by position" },
+    { key: "Alt + N/P", desc: "Next / previous tab" },
     { key: "q / Esc", desc: "Close current tab" },
     { key: "i", desc: "Focus command input" },
   ]);

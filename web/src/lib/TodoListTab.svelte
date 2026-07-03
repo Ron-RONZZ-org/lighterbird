@@ -15,8 +15,6 @@
   let { data = {} } = $props();
   let todos = $derived(data?.todos || []);
   let total = $derived(data?.total || 0);
-  let isTree = $derived(displayMode === "tree");
-
   let showSearch = $state(false);
   let searchQuery = $state("");
   let currentFilters = $state({});
@@ -26,7 +24,9 @@
   let sortOrder = $state("created");
 
   // Display mode: can be toggled between "flat" and "tree"
-  let displayMode = $state(isTree ? "tree" : "flat");
+  // NOTE: initialized from data.tree to avoid circular dependency with isTree
+  let displayMode = $state(data?.tree ? "tree" : "flat");
+  let isTree = $derived(displayMode === "tree");
 
   // Sync displayMode with the incoming data
   $effect(() => {

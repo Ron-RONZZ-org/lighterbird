@@ -31,12 +31,36 @@
 
   /** Global keyboard shortcuts. */
   function handleGlobalKeydown(e) {
-    // Alt+1/2/3/4 — switch tabs
+    // Alt+1/2/3/4 — switch to numbered tab
     if (e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
       const num = parseInt(e.key, 10);
       if (num >= 1 && num <= 9) {
         e.preventDefault();
         tabStore.setActiveIndex(num - 1);
+        return;
+      }
+    }
+
+    // Alt+N / Alt+P — next / previous tab
+    if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+      if (e.key === "n" || e.key === "N") {
+        e.preventDefault();
+        const idx = tabStore.activeIndex;
+        if (idx < tabStore.count - 1) {
+          tabStore.setActiveIndex(idx + 1);
+        } else {
+          tabStore.setActiveIndex(0); // wrap to first tab
+        }
+        return;
+      }
+      if (e.key === "p" || e.key === "P") {
+        e.preventDefault();
+        const idx = tabStore.activeIndex;
+        if (idx > 0) {
+          tabStore.setActiveIndex(idx - 1);
+        } else {
+          tabStore.setActiveIndex(tabStore.count - 1); // wrap to last tab
+        }
         return;
       }
     }
