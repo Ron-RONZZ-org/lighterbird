@@ -116,6 +116,18 @@ export function getCompletions(input) {
       };
     }
     if (effectivePartial) {
+      // If partial looks like --help, show all children as help
+      if (effectivePartial.startsWith("--") &&
+          ("help".startsWith(effectivePartial.slice(2).toLowerCase()) ||
+           effectivePartial.slice(2).toLowerCase().startsWith("help"))) {
+        return {
+          completions: node.children.map((c) => c.name),
+          hints: node.children.map((c) => c.description || ""),
+          node,
+          level: "child",
+          positionals: [],
+        };
+      }
       const matches = matchChildren(node.children, effectivePartial);
       return {
         completions: matches.map((c) => c.name),
@@ -173,6 +185,32 @@ function buildParamHints(node, consumedTokens, flags, partial = "") {
   // If user is typing a flag (e.g. "--c"), show only matching flags
   if (isFlagPartial) {
     const partialFlag = partial.slice(2).toLowerCase();
+
+    // Synthetic --help flag: show all params and flags of this command
+    if (partialFlag === "help" || "help".startsWith(partialFlag)) {
+      if (node.params) {
+        for (const p of node.params) {
+          const required = p.required ? " (required)" : "";
+          hints.push({
+            text: `<${p.name}>`,
+            desc: `${p.type}${required}${p.placeholder ? ` e.g. ${p.placeholder}` : ""}`,
+          });
+        }
+      }
+      if (node.flags) {
+        for (const f of node.flags) {
+          const short = f.short ? `-${f.short}, ` : "";
+          const repeatable = f.repeatable ? " (repeatable)" : "";
+          const uuidSrc = f.uuidSource ? " (auto-complete)" : "";
+          hints.push({
+            text: `--${f.name}`,
+            desc: `${short}${f.help || f.type}${repeatable}${uuidSrc}`,
+          });
+        }
+      }
+      return hints;
+    }
+
     if (node.flags) {
       for (const f of node.flags) {
         if (f.name.toLowerCase().startsWith(partialFlag)) {
@@ -272,7 +310,7 @@ function addContacts(cache, result) {
 function addTodos(cache, result) {
   if (cache.todos) {
     for (const t of cache.todos) {
-      result.push({ uuid: t.uuid, label: t.titolo || "(untitled)" });
+      result.push({ uuid: t.uuid, label: t.title || "(untitled)" });
     }
   }
 }
@@ -280,7 +318,7 @@ function addTodos(cache, result) {
 function addJournal(cache, result) {
   if (cache.journal) {
     for (const e of cache.journal) {
-      result.push({ uuid: e.uuid, label: `${e.dato || ""} — ${e.titolo || ""}` });
+      result.push({ uuid: e.uuid, label: `${e.date || ""} — ${e.title || ""}` });
     }
   }
 }

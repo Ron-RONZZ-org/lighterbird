@@ -15,13 +15,23 @@
   let { data = {} } = $props();
   let todos = $derived(data?.todos || []);
   let total = $derived(data?.total || 0);
-  let isTree = $derived(!!data?.tree);
+  let isTree = $derived(displayMode === "tree");
 
   let showSearch = $state(false);
   let searchQuery = $state("");
   let currentFilters = $state({});
   let searchTimeout;
   let abortController = null;
+  let tagFilter = $state("");
+  let sortOrder = $state("created");
+
+  // Display mode: can be toggled between "flat" and "tree"
+  let displayMode = $state(isTree ? "tree" : "flat");
+
+  // Sync displayMode with the incoming data
+  $effect(() => {
+    displayMode = data?.tree ? "tree" : "flat";
+  });
 
   // Highlight animation — auto-clears after 2s
   let highlight = $derived(data?.highlight || "");
@@ -110,27 +120,46 @@
     }
   }
 
+  /** Build the query params from current state. */
+  function buildListParams() {
+    const params = { ...currentFilters, limit: 50, sort: sortOrder };
+    if (searchQuery && searchQuery.length >= 2) params.query = searchQuery;
+    if (displayMode === "tree") params.tree = true;
+    if (tagFilter) params.tags = tagFilter;
+    return params;
+  }
+
   async function refreshList() {
     try {
-      const params = { ...currentFilters, limit: 50 };
-      if (searchQuery && searchQuery.length >= 2) {
-        params.query = searchQuery;
-      }
-      if (isTree) params.tree = true;
-      const result = await todoApi.list(params);
+      const result = await todoApi.list(buildListParams());
       tabStore.update(tabStore.active.id, result);
     } catch { /* silent */ }
+  }
+
+  function toggleMode() {
+    const newMode = displayMode === "tree" ? "flat" : "tree";
+    displayMode = newMode;
+    refreshList();
   }
 
   function performSearch(query) {
     if (abortController) abortController.abort();
     abortController = new AbortController();
-    const params = { ...currentFilters, limit: 50 };
+    const params = buildListParams();
     if (query && query.length >= 2) params.query = query;
-    if (isTree) params.tree = true;
     todoApi.list(params)
       .then((result) => { tabStore.update(tabStore.active.id, result); })
       .catch((err) => { if (err?.name === "AbortError") return; });
+  }
+
+  function handleSortChange(e) {
+    sortOrder = e.target.value;
+    refreshList();
+  }
+
+  function handleTagFilterInput(e) {
+    tagFilter = e.target.value;
+    refreshList();
   }
 
   function handleSearchInput(e) {
@@ -234,12 +263,29 @@
     {:else}
       <div class="left">
         <button class="tool-btn" title="Toggle selection mode (V)" onclick={() => sel.toggleSelectionMode()}>Select <kbd>V</kbd></button>
-        {#if isTree}
-          <span class="tree-indicator">[tree]</span>
-        {/if}
+        <button class="tool-btn" title="Toggle tree/flat view" onclick={toggleMode}>
+          {displayMode === "tree" ? "Flat" : "Tree"}
+        </button>
+        <label class="sort-label" title="Sort order">
+          <select class="sort-select" value={sortOrder} onchange={handleSortChange}>
+            <option value="created">Newest</option>
+            <option value="priority">Priority</option>
+            <option value="due">Due date</option>
+            <option value="title">Title</option>
+          </select>
+        </label>
       </div>
       <div class="center">
-        <span class="hint"><kbd>/</kbd> search</span>
+        {#if showSearch}
+          <input type="text" class="tl-tag-filter"
+            placeholder="Filter tags: tag1,tag2"
+            value={tagFilter}
+            oninput={handleTagFilterInput}
+            aria-label="Filter by tags"
+          />
+        {:else}
+          <span class="hint"><kbd>/</kbd> search</span>
+        {/if}
       </div>
       <div class="right">
         <button class="tool-btn primary" onclick={handleNew} title="Add new todo">+ New <kbd>N</kbd></button>
@@ -299,6 +345,13 @@
             <span class="title">{truncate(todo.title || "(untitled)", 32)}</span>
             <span class="priority {priorityClass(todo.priority)}">{todo.priority || ""}</span>
             <span class="due">{formatListItemDate(todo.due)}</span>
+            {#if todo.labels && todo.labels.length > 0}
+              <span class="labels">
+                {#each todo.labels as lbl}
+                  <span class="tag" style={lbl.color ? `border-color:${lbl.color};color:${lbl.color}` : ""}>{lbl.name}</span>
+                {/each}
+              </span>
+            {/if}
             <span class="status">{todo.status === "done" ? "✓ done" : "○"}</span>
           </div>
         {/if}
@@ -345,6 +398,20 @@
   .tool-btn.danger:hover:not(:disabled) { background: #6b2020; border-color: #8b3030; }
   .tool-btn.primary { border-color: #3a6a3a; color: #7fdb7f; }
   .tool-btn.primary:hover { background: #1e3a1e; }
+  .sort-label { display: inline-flex; align-items: center; }
+  .sort-select {
+    padding: 0.15rem 0.3rem; border: 1px solid #444; border-radius: 3px;
+    background: #2a2a3e; color: #c0c0e0; font-family: monospace; font-size: 0.72rem;
+    cursor: pointer; outline: none;
+  }
+  .sort-select:focus { border-color: #6a6a9a; }
+  .sort-select option { background: #1a1a2e; color: #e0e0e0; }
+  .tl-tag-filter {
+    width: 12rem; padding: 0.2rem 0.4rem; border: 1px solid #444; border-radius: 3px;
+    background: #12122a; color: #e0e0e0; font-family: monospace; font-size: 0.78rem; outline: none;
+  }
+  .tl-tag-filter:focus { border-color: #6a6a9a; }
+  .tl-tag-filter::placeholder { color: #555; }
   .hint { color: #5a5a7a; font-size: 0.72rem; }
   .hint kbd {
     display: inline-block; padding: 0 3px; font-family: monospace;
@@ -415,6 +482,8 @@
   .priority.mid { color: #d0b060; }
   .priority.low { color: var(--clr-muted); }
   .due { color: var(--clr-muted); min-width: 6rem; flex-shrink: 0; font-size: 0.78rem; }
+  .labels { display: flex; gap: 0.25rem; flex-shrink: 0; min-width: 4rem; flex-wrap: wrap; }
+  .tag { font-size: 0.65rem; padding: 0.05rem 0.3rem; border: 1px solid #4a4a6a; border-radius: 3px; color: #7c7c9a; white-space: nowrap; }
   .status { color: var(--clr-muted); min-width: 3rem; flex-shrink: 0; text-align: right; }
   .empty { color: var(--clr-muted); text-align: center; padding: 2rem; }
 </style>

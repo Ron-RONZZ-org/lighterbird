@@ -20,28 +20,55 @@ class TodoService(CRUDService):
 
     # ── Search & List ───────────────────────────────────────────────────
 
-    def search(self, query: str, status: str | None = None, limit: int = 50
-               ) -> list[dict[str, Any]]:
-        if not query and not status:
-            return self.list(limit=limit)
+    def search(self, query: str, status: str | None = None,
+               limit: int = 50, tags: list[str] | None = None,
+               sort: str | None = None) -> list[dict[str, Any]]:
+        if not query and not status and not tags:
+            return self.list(limit=limit, sort=sort)
+        joins: list[str] = []
         conditions: list[str] = []
         params: list[Any] = []
+        group_by = None
+        having = None
+
         if query:
-            conditions.append("(LOWER(title) LIKE LOWER(?)"
-                              " OR LOWER(description) LIKE LOWER(?))")
+            conditions.append("(LOWER(t.title) LIKE LOWER(?)"
+                               " OR LOWER(t.description) LIKE LOWER(?))")
             params.extend([f"%{query}%", f"%{query}%"])
         if status:
-            conditions.append("status = ?")
+            conditions.append("t.status = ?")
             params.append(status)
-        where = " AND ".join(conditions)
-        rows = self.db.execute(
-            f"SELECT * FROM tasks WHERE {where} ORDER BY"
-            f" created_at DESC LIMIT ?",
-            (*params, limit),
+        if tags:
+            joins.append("JOIN todo_labels tl ON t.uuid = tl.todo_uuid")
+            placeholders = ",".join("?" for _ in tags)
+            conditions.append(f"tl.label_name IN ({placeholders})")
+            params.extend(tags)
+            group_by = "t.uuid"
+            having = f"COUNT(DISTINCT tl.label_name) = {len(tags)}"
+
+        # Sort order
+        sort_map = {
+            "priority": "CAST(t.priority AS INTEGER) DESC",
+            "due": "t.due_date ASC NULLS LAST",
+            "title": "t.title ASC",
+            "created": "t.created_at DESC",
+        }
+        order_by = sort_map.get(sort or "", "t.created_at DESC")
+
+        where = " AND ".join(conditions) if conditions else "1=1"
+        group_clause = f" GROUP BY {group_by}" if group_by else ""
+        having_clause = f" HAVING {having}" if having else ""
+        sql = (
+            f"SELECT t.* FROM tasks t"
+            f" {' '.join(joins)}"
+            f" WHERE {where}"
+            f"{group_clause}{having_clause}"
+            f" ORDER BY {order_by} LIMIT ?"
         )
+        rows = list(self.db.execute(sql, (*params, limit)))
         for row in rows:
             row["_computed_priority"] = self._compute_priority(row)
-        return rows
+        return self._attach_labels(rows)
 
     def search_titles(self, query: str, limit: int = 20) -> list[dict[str, Any]]:
         """Search by title only — for autocomplete dropdowns."""
@@ -54,11 +81,46 @@ class TodoService(CRUDService):
         )
         return rows
 
-    def list(self, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
-        rows = super().list(limit=limit, offset=offset)
+    def list(self, limit: int = 100, offset: int = 0,
+             sort: str | None = None) -> list[dict[str, Any]]:
+        sort_map = {
+            "priority": "CAST(priority AS INTEGER) DESC",
+            "due": "due_date ASC NULLS LAST",
+            "title": "title ASC",
+            "created": "created_at DESC",
+        }
+        order_by = sort_map.get(sort or "", "created_at DESC")
+        rows = list(self.db.execute(
+            f"SELECT * FROM tasks ORDER BY {order_by} LIMIT ? OFFSET ?",
+            (limit, offset),
+        ))
         for row in rows:
             row["_computed_priority"] = self._compute_priority(row)
-        return rows
+        return self._attach_labels(rows)
+
+    # ── Labels batch fetch ──────────────────────────────────────────────
+
+    def _attach_labels(self, todos: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Batch-attach label info to each todo in the list."""
+        if not todos:
+            return todos
+        uuids = [t["uuid"] for t in todos]
+        placeholders = ",".join("?" for _ in uuids)
+        rows = self.db.execute(
+            f"SELECT tl.todo_uuid, l.name, l.color"
+            f" FROM todo_labels tl"
+            f" JOIN labels l ON tl.label_name = l.name"
+            f" WHERE tl.todo_uuid IN ({placeholders})",
+            uuids,
+        )
+        label_map: dict[str, list[dict[str, str]]] = {}
+        for row in rows:
+            label_map.setdefault(row["todo_uuid"], []).append(
+                {"name": row["name"], "color": row["color"]},
+            )
+        for t in todos:
+            t["labels"] = label_map.get(t["uuid"], [])
+        return todos
 
     # ── Tree / Hierarchy ────────────────────────────────────────────────
 
@@ -118,7 +180,7 @@ class TodoService(CRUDService):
                     _walk(row["uuid"], depth + 1)
 
         _walk(parent_uuid, 0)
-        return flat
+        return self._attach_labels(flat)
 
     def get_with_children(self, uuid_: str) -> dict[str, Any] | None:
         todo = self.get(uuid_)
@@ -126,6 +188,7 @@ class TodoService(CRUDService):
             return None
         todo["children"] = self.get_tree(uuid_, depth=1)
         todo["_computed_priority"] = self._compute_priority(todo)
+        todo["labels"] = self.get_labels(uuid_)
         return todo
 
     def move_as_child(self, uuid_: str, parent_uuid_: str | None) -> None:
@@ -147,8 +210,28 @@ class TodoService(CRUDService):
                     (grandparent, child["uuid"]),
                 )
 
+    def _post_update(
+        self, uuid_: str, old_data: dict[str, Any] | None,
+        new_data: dict[str, Any],
+    ) -> None:
+        """Handle tag updates after a normal update."""
+        tags = new_data.pop("_tags", None)
+        if tags is not None:
+            # Remove existing labels, then add new ones
+            current = self.db.execute(
+                "SELECT label_name FROM todo_labels WHERE todo_uuid = ?",
+                (uuid_,),
+            )
+            for row in current:
+                self.db.execute(
+                    "DELETE FROM todo_labels WHERE todo_uuid = ? AND label_name = ?",
+                    (uuid_, row["label_name"]),
+                )
+            for tag_name in tags:
+                self.add_label(uuid_, tag_name)
+
     def _post_create(self, data: dict[str, Any], result: dict[str, Any]) -> None:
-        """Handle dependency setup after creation."""
+        """Handle dependency and tag setup after creation."""
         depends_on = data.pop("_depends_on", None)
         if depends_on:
             now = datetime.now(timezone.utc).isoformat()
@@ -161,6 +244,10 @@ class TodoService(CRUDService):
                         " VALUES (?, ?, 'blocked_by', ?)",
                         (result["uuid"], dep_uuid, now),
                     )
+        tags = data.pop("_tags", None)
+        if tags:
+            for tag_name in tags:
+                self.add_label(result["uuid"], tag_name)
 
     # ── Dependencies ────────────────────────────────────────────────────
 

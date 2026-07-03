@@ -197,6 +197,9 @@ All list tab components (`EmailListTab`, `JournalListTab`, `SieveListTab`, `Cont
 | **UUID copy** | Click on truncated UUID (first 8 chars) → `navigator.clipboard.writeText()` → "Copied!" flash for 1.2s |
 | **Email/address copy** | Click on email/from cell → copies address to clipboard (same flash pattern) |
 | **Search** | `f` key toggles search bar; debounced 300ms with AbortController; min 2 chars |
+| **Tags display** | Colored tag pills rendered inline in the row; batch-fetched via junction table |
+| **Sort dropdown** | `sort` param sent to backend; options: created, priority, due, title |
+| **Mode toggle** | Tree/flat toggle button re-queries backend with opposite mode |
 | **Context-appropriate toolbar** | View mode: [Select] [hint] [+ New <kbd>N</kbd>]; Selection mode: [Exit] [count] [Delete]; Search mode: full-width search input |
 | **Unsaved-changes guard** | Tab close → ConfirmDialog if form dirty; browser `beforeunload` if any dirty form exists; forms expose `dirty` derived rune + `onDirtyChange` callback |
 
@@ -221,7 +224,7 @@ Backend list commands return typed responses that map to frontend components:
 | `!email list` / `!email search` | `email-list` | EmailListTab |
 | `!journal list` / `!journal search` | `journal-list` | JournalListTab |
 | `!contacts list` / `!contacts search` | `contacts-list` | ContactsListTab |
-| `!todo list` / `!todo search` | `todo-list` | TodoListTab |
+| `!todo list` / `!todo tree` / `!todo search` | `todo-list` | TodoListTab (tree/flat toggle, tags filter, sort) |
 | `!calendar list` / `!calendar event search` | `calendar-events` | CalendarEventsListTab |
 | `!email sieve list` | `sieve-list` | SieveListTab |
 | `!letter list` / `!letter search` | `letter-list` | LetterListTab |
