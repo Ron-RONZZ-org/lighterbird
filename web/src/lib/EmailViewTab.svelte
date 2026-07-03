@@ -3,6 +3,7 @@
   import { tabStore } from "./tabStore.svelte.js";
   import { email as emailApi } from "./api.js";
   import { registerShortcuts } from "./keyboardShortcuts.svelte.js";
+  import { openPrintWindow } from "./listTabShared.svelte.js";
 
   registerShortcuts("EmailViewTab", [
     { key: "Ctrl+R", desc: "Reply", modifiers: "Ctrl", category: "Email Detail" },
@@ -169,10 +170,22 @@
     }
   }
 
+  function printEmail() {
+    const headers = [
+      { label: "From", value: msg.from_addr || "" },
+      { label: "To", value: Array.isArray(msg.to_recipients) ? msg.to_recipients.join(", ") : (msg.to_recipients || "") },
+      { label: "Date", value: msg.received_at || "" },
+    ];
+    const bodyContent = hasHtml && useHtml
+      ? (msg.html_body || msg.body || "(no body)")
+      : `<pre style="font-family:monospace;white-space:pre-wrap;">${msg.body || "(no body)"}</pre>`;
+    openPrintWindow(msg.subject || "(no subject)", headers, bodyContent);
+  }
+
   function handleKeydown(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === "p") {
       e.preventDefault();
-      window.print();
+      printEmail();
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "e") {
       e.preventDefault();
@@ -231,7 +244,7 @@
       <button class="tool-btn trash-btn" onclick={trash} title="Trash">
         <span class="tool-icon">🗑</span>
       </button>
-      <button class="tool-btn" onclick={() => window.print()} title="Print (Ctrl+P)">
+      <button class="tool-btn" onclick={printEmail} title="Print (Ctrl+P)">
         <span class="tool-icon">🖨</span> Print <kbd>Ctrl+P</kbd>
       </button>
       <div class="toolbar-spacer"></div>
@@ -514,50 +527,5 @@
     font-family: monospace;
     font-size: 0.8rem;
   }
-  /* Print styles — hide non-essential UI, show full content */
-  @media print {
-    :global(.tab-bar),
-    :global(.command-bar),
-    :global(.home-content),
-    :global(.top-progress),
-    .toolbar {
-      display: none !important;
-    }
-    .email-wrapper {
-      height: auto !important;
-      overflow: visible !important;
-    }
-    .email-view {
-      color: #000 !important;
-      overflow: visible !important;
-      flex: none !important;
-      height: auto !important;
-    }
-    .headers {
-      break-inside: avoid;
-    }
-    .headers .label {
-      color: #555 !important;
-    }
-    .value {
-      color: #000 !important;
-    }
-    .body-area {
-      overflow: visible !important;
-      flex: none !important;
-      height: auto !important;
-      min-height: 200px;
-    }
-    .html-frame {
-      height: auto !important;
-      min-height: 300px;
-    }
-    .plain-text {
-      color: #000 !important;
-      overflow: visible !important;
-    }
-    hr {
-      border-top-color: #ccc !important;
-    }
-  }
+  /* Print — handled by dedicated print window, no SPA print styles needed */
 </style>
