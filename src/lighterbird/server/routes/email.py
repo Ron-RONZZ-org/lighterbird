@@ -208,6 +208,8 @@ def list_messages(
     after: str | None = None,
     before: str | None = None,
     read: bool | None = None,
+    sort: str = "newest",
+    group: str | None = None,
     limit: int = 50,
     offset: int = 0,
     email_svc: EmailService = Depends(get_email_service),
@@ -230,10 +232,14 @@ def list_messages(
         filters["account"] = account_email
     if folder:
         filters["folder"] = folder
+    if sort:
+        filters["sort"] = sort
+    if group:
+        filters["group"] = group
     if filters:
         msgs = email_svc.search_messages(filters, limit=limit)
     else:
-        msgs = email_svc.list_messages(limit=limit, offset=offset)
+        msgs = email_svc.list_messages(limit=limit, offset=offset, sort=sort)
     return {"messages": [normalize_message(m) for m in msgs], "total": len(msgs)}
 
 
@@ -244,7 +250,14 @@ def get_message(uuid: str, email_svc: EmailService = Depends(get_email_service))
     if not msg:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Message not found: {uuid[:8]}")
-    return normalize_message(msg)
+    result = normalize_message(msg)
+    # Include attachment count
+    att_rows = list(email_svc.db.execute(
+        "SELECT COUNT(*) AS cnt FROM email_attachments WHERE message_uuid = ?",
+        (uuid,),
+    ))
+    result["attachment_count"] = att_rows[0]["cnt"] if att_rows else 0
+    return result
 
 
 _EMAIL_HTML_TMPL = """\
@@ -400,6 +413,71 @@ def export_eml(uuid: str, email_svc: EmailService = Depends(get_email_service)):
     return Response(
         content=eml_text.encode("utf-8"),
         media_type="message/rfc822",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/messages/{uuid}/attachments")
+def list_attachments(
+    uuid: str,
+    email_svc: EmailService = Depends(get_email_service),
+):
+    """List all attachments for a given message."""
+    from lighterbird.core.storage import AttachmentStore
+
+    rows = list(email_svc.db.execute(
+        "SELECT uuid, filename, mime_type, size, content_id, storage_path "
+        "FROM email_attachments WHERE message_uuid = ? ORDER BY filename",
+        (uuid,),
+    ))
+    attachments = []
+    for row in rows:
+        store = AttachmentStore()
+        file_exists = False
+        try:
+            store.retrieve(uuid, row["content_id"])
+            file_exists = True
+        except FileNotFoundError:
+            pass
+        attachments.append({
+            "uuid": row["uuid"],
+            "filename": row["filename"],
+            "mime_type": row["mime_type"],
+            "size": row["size"],
+            "content_id": row["content_id"],
+            "available": file_exists,
+        })
+    return {"attachments": attachments}
+
+
+@router.get("/attachments/{att_uuid}/download")
+def download_attachment(
+    att_uuid: str,
+    email_svc: EmailService = Depends(get_email_service),
+):
+    """Download a single attachment by its UUID."""
+    from fastapi.responses import Response as FastResponse
+    from lighterbird.core.storage import AttachmentStore
+
+    row = email_svc.db.execute_one(
+        "SELECT message_uuid, filename, mime_type, content_id "
+        "FROM email_attachments WHERE uuid = ?",
+        (att_uuid,),
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Attachment not found: {att_uuid[:8]}")
+
+    store = AttachmentStore()
+    try:
+        data = store.retrieve(row["message_uuid"], row["content_id"])
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Attachment file not found on disk.")
+
+    mime = row["mime_type"] or "application/octet-stream"
+    filename = row["filename"] or "attachment"
+    return FastResponse(
+        content=data,
+        media_type=mime,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 

@@ -68,7 +68,13 @@ export const tabStore = {
       pinned: false,
     };
 
-    _tabs = [..._tabs, tab];
+    // Insert the new tab immediately after the currently active tab
+    const activeIdx = _tabs.findIndex((t) => t.id === _activeId);
+    if (activeIdx >= 0) {
+      _tabs = [..._tabs.slice(0, activeIdx + 1), tab, ..._tabs.slice(activeIdx + 1)];
+    } else {
+      _tabs = [..._tabs, tab];
+    }
     _activeId = tab.id;
     return tab.id;
   },

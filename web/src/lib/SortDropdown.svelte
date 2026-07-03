@@ -6,13 +6,14 @@
   let {
     sort = "newest",
     groupByConversation = false,
+    groupBySender = false,
     sortOptions = [
       { value: "newest", label: "Newest First" },
       { value: "oldest", label: "Oldest First" },
-      { value: "sender", label: "Group by Sender" },
     ],
     onSortChange = () => {},
     onGroupChange = () => {},
+    onGroupBySenderChange = () => {},
   } = $props();
 </script>
 
@@ -33,6 +34,17 @@
         </label>
       {/each}
     </div>
+  </div>
+
+  <div class="group-section">
+    <label class="group-check">
+      <input
+        type="checkbox"
+        checked={groupBySender}
+        onchange={(e) => onGroupBySenderChange(e.target.checked)}
+      />
+      <span>Group by Sender</span>
+    </label>
   </div>
 
   {#if onGroupChange !== undefined}

@@ -94,6 +94,8 @@ export const email = {
     if (params.subject) q.set("subject", params.subject);
     if (params.limit) q.set("limit", String(params.limit));
     if (params.offset) q.set("offset", String(params.offset));
+    if (params.sort) q.set("sort", params.sort);
+    if (params.group) q.set("group", params.group);
     return request("GET", `/email/messages?${q}`);
   },
 
@@ -105,6 +107,12 @@ export const email = {
     request("PATCH", `/email/messages/${uuid}/read`, { read }),
 
   trash: (uuid) => request("POST", `/email/messages/${uuid}/trash`),
+
+  listAttachments: (uuid) => request("GET", `/email/messages/${uuid}/attachments`),
+
+  downloadAttachment: (attUuid) => {
+    window.open(`/api/v1/email/attachments/${attUuid}/download`, "_blank");
+  },
 
   batchDelete: (uuids) => request("POST", "/email/messages/batch-delete", { uuids }),
 
