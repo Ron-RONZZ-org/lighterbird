@@ -88,14 +88,19 @@ class CRUDService:
     # ── Create / Update / Delete ────────────────────────────────────────
 
     def create(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Create a new entry with auto-generated UUID and timestamps."""
+        """Create a new entry with auto-generated UUID and timestamps.
+
+        Keys starting with ``_`` are treated as internal/hook-only and
+        are NOT written to the database table. They remain accessible
+        to ``_post_create`` for side-effects.
+        """
         now = datetime.now(timezone.utc).isoformat()
         data.setdefault("uuid", str(uuid.uuid4()))
         data.setdefault("created_at", now)
         data["updated_at"] = now
 
-        columns = list(data.keys())
-        values = list(data.values())
+        columns = [k for k in data.keys() if not k.startswith("_")]
+        values = [data[k] for k in columns]
         placeholders = ", ".join(["?"] * len(columns))
         sql = f"INSERT INTO {self.table} ({', '.join(columns)}) VALUES ({placeholders})"
 
@@ -112,12 +117,17 @@ class CRUDService:
         Uses prefix matching (``LIKE``) on the UUID to support short
         UUID prefixes as well as full UUIDs — consistent with ``get()``
         and ``delete()``.
+
+        Keys starting with ``_`` are internal/hook-only and are NOT
+        written to the database table. They remain accessible to
+        ``_post_update`` for side-effects.
         """
         old_data = self.get(uuid_)
         data["updated_at"] = datetime.now(timezone.utc).isoformat()
 
-        set_clauses = [f"{k} = ?" for k in data.keys()]
-        values = list(data.values()) + [f"{uuid_}%"]
+        db_keys = [k for k in data.keys() if not k.startswith("_")]
+        set_clauses = [f"{k} = ?" for k in db_keys]
+        values = [data[k] for k in db_keys] + [f"{uuid_}%"]
         sql = f"UPDATE {self.table} SET {', '.join(set_clauses)} WHERE uuid LIKE ?"
 
         with self.db.transaction() as conn:

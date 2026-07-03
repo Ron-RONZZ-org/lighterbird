@@ -19,10 +19,13 @@ Traditional PIM apps drown you in sidebars, nested menus, and feature flags. Lig
 ```
 
 - `!account add/list/modify/remove` — manage accounts
-- `!new` — see new emails
-- `!search` — search across domains
+- `!email` / `!todo` / `!calendar` / `!contact` / `!journal` — open domain list view (root command defaults to list)
+- `!todo add --tags work,urgent` — tag your todos; filter with `!todo list --tags work`
+- `!todo list --mode tree` — toggle between flat and tree view
+- `!todo list --sort priority` — sort by priority, due date, or title
+- `!email send --help` — see all flags and params in autocomplete
 - Just type naturally → ask the built-in LLM to do things on your behalf
-- As-you-type command suggestions — no memorisation needed
+- As-you-type command suggestions with UUID/entity completion — no memorisation needed
 
 ## Architecture
 

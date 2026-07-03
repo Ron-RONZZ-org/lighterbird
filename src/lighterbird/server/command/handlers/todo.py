@@ -55,19 +55,39 @@ def todo_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 @command("todo.list")
 def todo_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!todo list [--status pending|done]"""
+    """!todo list [--status pending|done] [--tags tag1,tag2]
+                  [--sort created|priority|due|title] [--mode flat|tree]"""
     svc: TodoService = get_todo_service()
+    mode = flags.get("mode", "flat")
     status = flags.get("status")
-    todos = svc.search("", status=status) if status else svc.list()
+    tags_raw = flags.get("tags", "")
+    tags = [t.strip() for t in tags_raw.split(",") if t.strip()] if tags_raw else None
+    sort = flags.get("sort")
+
+    if mode == "tree":
+        flat = svc.flatten_tree()
+        return {"type": "todo-list", "title": "Todos", "data": {
+            "todos": flat, "tree": True,
+        }}
+
+    todos = svc.search("", status=status, tags=tags, sort=sort)
     return {"type": "todo-list", "title": "Todos", "data": {"todos": todos}}
 
 
 @command("todo.tree")
 def todo_tree(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!todo tree [--status pending|done]"""
+    """!todo tree [--status pending|done] [--mode tree|flat]"""
     svc: TodoService = get_todo_service()
+    mode = flags.get("mode", "tree")
+    status = flags.get("status")
+    sort = flags.get("sort")
+
+    if mode == "flat":
+        todos = svc.search("", status=status) if status else svc.list(sort=sort)
+        return {"type": "todo-list", "title": "Todos", "data": {"todos": todos}}
+
     flat = svc.flatten_tree()
-    return {"type": "todo-list", "title": "Todos (Tree)", "data": {
+    return {"type": "todo-list", "title": "Todos", "data": {
         "todos": flat, "tree": True,
     }}
 
@@ -151,6 +171,17 @@ def todo_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 )
             resolved.append(dep_todo["uuid"])
         data["_depends_on"] = resolved
+
+    # ── Tags ──────────────────────────────────────────────────────────
+    tags_raw = flags.get("tags", "")
+    if tags_raw:
+        tag_names = [t.strip() for t in tags_raw.split(",") if t.strip()]
+        for tag_name in tag_names:
+            try:
+                svc.create_label({"name": tag_name})
+            except ValueError:
+                pass  # label already exists
+        data["_tags"] = tag_names
 
     # ── LLM co-writing ─────────────────────────────────────────────────
     cowrite_instr = flags.get("cowrite", "")
@@ -301,6 +332,22 @@ def todo_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                     f"Parent todo not found: {parent_val[:8]}",
                 )
             updates["parent_uuid"] = parent["uuid"]
+
+    # ── Tags ──────────────────────────────────────────────────────────
+    if "tags" in flags:
+        tags_raw = flags["tags"]
+        if tags_raw.strip():
+            tag_names = [t.strip() for t in tags_raw.split(",") if t.strip()]
+            # Ensure labels exist
+            for tag_name in tag_names:
+                try:
+                    svc.create_label({"name": tag_name})
+                except ValueError:
+                    pass
+            updates["_tags"] = tag_names
+        else:
+            updates["_tags"] = []  # empty = clear all tags
+
     if not updates:
         raise CommandValidationError(
             "No fields to modify.",
@@ -338,11 +385,14 @@ def todo_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 @command("todo.search")
 def todo_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!todo search <query> [--status STATE]"""
+    """!todo search <query> [--status STATE] [--tags tag1,tag2]"""
     svc: TodoService = get_todo_service()
     query = " ".join(remaining) if remaining else flags.get("query", "")
     status = flags.get("status")
-    todos = svc.search(query, status=status)
+    tags_raw = flags.get("tags", "")
+    tags = [t.strip() for t in tags_raw.split(",") if t.strip()] if tags_raw else None
+    sort = flags.get("sort")
+    todos = svc.search(query, status=status, tags=tags, sort=sort)
     return {
         "type": "todo-list",
         "title": "Todo Search",
