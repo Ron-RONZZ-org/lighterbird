@@ -19,24 +19,24 @@ async function typeCommand(cmd) {
   const isVisible = await input.isVisible().catch(() => false);
   if (!isVisible) {
     await page.keyboard.press("Escape");
-    await sleep(500);
+    await sleep(200);
   }
   await input.waitFor({ state: "visible", timeout: 5000 });
   await input.click();
   await input.fill("");
-  await sleep(100);
-  await input.pressSequentially(cmd, { delay: 15 });
-  await sleep(600);
+  await sleep(50);
+  await input.pressSequentially(cmd, { delay: 5 });
+  await sleep(200);
 }
 
 async function pressEnter() {
   await page.keyboard.press("Enter");
-  await sleep(1500);
+  await sleep(400);
 }
 
 async function getPopupText() {
   try {
-    await sleep(600);
+    await sleep(200);
     const body = page.locator("body");
     let text = ((await body.textContent()) || "").trim();
     text = text.replace(/\s+/g, " ").trim();
@@ -48,14 +48,15 @@ async function getPopupText() {
 
 async function getResultPanelText() {
   try {
-    await sleep(500);
-    // Try to get the active tab content specifically
-    const panels = page.locator('[role="tabpanel"]');
-    const count = await panels.count();
-    for (let i = 0; i < count; i++) {
-      const visible = await panels.nth(i).isVisible().catch(() => false);
-      if (visible) {
-        return ((await panels.nth(i).textContent()) || "").trim().replace(/\s+/g, " ");
+    // Quick poll for a visible tab panel — 3 attempts × 200ms.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await sleep(200);
+      const panels = page.locator('[role="tabpanel"]');
+      const count = await panels.count();
+      for (let i = 0; i < count; i++) {
+        if (await panels.nth(i).isVisible().catch(() => false)) {
+          return ((await panels.nth(i).textContent()) || "").trim().replace(/\s+/g, " ");
+        }
       }
     }
     return await getPopupText();
@@ -65,15 +66,15 @@ async function getResultPanelText() {
 }
 
 async function dismissAllTabs() {
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 4; i++) {
     await page.keyboard.press("Escape");
-    await sleep(250);
+    await sleep(100);
   }
   try {
     const dismissBtn = page.locator("button", { hasText: "Dismiss notice" });
-    if (await dismissBtn.isVisible({ timeout: 500 })) {
+    if (await dismissBtn.isVisible({ timeout: 300 })) {
       await dismissBtn.click();
-      await sleep(300);
+      await sleep(200);
     }
   } catch { /* no notice */ }
 }
@@ -131,27 +132,17 @@ async function run() {
 
   await page.goto(FRONTEND_URL, { waitUntil: "networkidle" });
   console.log("\u2713 Page loaded:", await page.title());
-  await sleep(2000);
-
-  // Debug: log initial structure
-  const inputs = await page.locator("input, textarea, [contenteditable]").all();
-  console.log(`  Input elements: ${inputs.length}`);
-  for (const el of inputs) {
-    const tag = await el.evaluate(e => e.tagName + (e.getAttribute('aria-label') ? `[aria-label="${e.getAttribute('aria-label')}"]` : ''));
-    const visible = await el.isVisible();
-    const placeholder = await el.getAttribute('placeholder');
-    console.log(`    ${tag} visible=${visible} placeholder="${placeholder}"`);
-  }
+  await sleep(500);
 
   // Dismiss notice if present
   try {
     const dismissBtn = page.locator("button", { hasText: "Dismiss notice" });
-    if (await dismissBtn.isVisible({ timeout: 1000 })) {
+    if (await dismissBtn.isVisible({ timeout: 300 })) {
       await dismissBtn.click();
-      await sleep(500);
+      await sleep(200);
     }
   } catch { /* no notice */ }
-  await sleep(1000);
+  await sleep(300);
 
   // ═══════════════════════════════════════════
   console.log();
@@ -228,7 +219,6 @@ async function run() {
   // ═══════════════════════════════════════════
   console.log();
   console.log("--- CREATE (via API completion) ---");
-  // These commands succeed directly because they have required params
 
   await test("!contact add --first-name Jane --last-name Doe --email jane@test.com", async () => {
     await typeCommand("!contact add --first-name Jane --last-name Doe --email jane@test.com");
@@ -261,7 +251,7 @@ async function run() {
   await test("!contact add (missing args → form popup)", async () => {
     await typeCommand("!contact add");
     await pressEnter();
-    await sleep(1000);
+    await sleep(600);
     const text = await getPopupText();
     assert(text.includes("Required") || text.includes("form") || text.includes("first-name") || text.includes("Missing"),
       `Expected form-required, got: '${text.substring(0, 200)}'`);
@@ -270,7 +260,7 @@ async function run() {
   await test("!email account add (missing args → form popup)", async () => {
     await typeCommand("!email account add");
     await pressEnter();
-    await sleep(1000);
+    await sleep(600);
     const text = await getPopupText();
     assert(text.includes("Required") || text.includes("form") || text.includes("email") || text.includes("Missing"),
       `Expected form-required, got: '${text.substring(0, 200)}'`);
@@ -314,7 +304,7 @@ async function run() {
 
   await test("Can navigate home with Escape", async () => {
     await page.keyboard.press("Escape");
-    await sleep(500);
+    await sleep(300);
     const input = page.locator("[aria-label='Message input']");
     const visible = await input.isVisible().catch(() => false);
     assert(visible, "Message input should be visible after Escape");
@@ -439,7 +429,6 @@ async function run() {
   // ═══════════════════════════════════════════
   console.log("");
 
-  // Try getting final tab count
   const tabCount = await getTabCount();
   console.log(`  Final tabs visible: ${tabCount}`);
 
