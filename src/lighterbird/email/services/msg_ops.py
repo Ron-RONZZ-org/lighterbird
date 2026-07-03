@@ -17,12 +17,156 @@ class MessageOpsService:
         self._account_service = account_service
 
     def mark_read(self, msg_uuid: str, is_read: bool = True) -> None:
-        """Mark a message as read or unread locally."""
+        """Mark a message as read or unread locally and sync to IMAP server."""
         now = datetime.now(timezone.utc).isoformat()
         self.db.execute(
             "UPDATE messages SET is_read = ?, updated_at = ? WHERE uuid = ?",
             (1 if is_read else 0, now, msg_uuid),
         )
+        self._imap_sync_flags(msg_uuid)
+
+    def _imap_sync_flags(self, msg_uuid: str) -> None:
+        """Sync local message flags to the IMAP server, queuing on failure.
+
+        Reads the current message state from DB and sends STORE commands
+        to the IMAP server. Falls back to enqueuing a backlog entry
+        if the IMAP connection fails.
+        """
+        msg = self.db.execute_one(
+            "SELECT * FROM messages WHERE uuid = ?", (msg_uuid,)
+        )
+        if not msg:
+            return
+        account_email = msg.get("account_email", "")
+        imap_uid = msg.get("imap_uid")
+        if imap_uid is None or not account_email:
+            self._enqueue_sync(msg)
+            return
+        folder_name = msg.get("folder_name", "")
+        acct = self._account_service.get_account_with_password(account_email)
+        if not acct or not acct.get("password"):
+            self._enqueue_sync(msg)
+            return
+
+        from lighterbird.email.imap.client import IMAPClient
+        client = IMAPClient(
+            host=acct.get("imap_server", ""),
+            port=acct.get("imap_port", 993),
+            use_ssl=acct.get("imap_use_ssl", 1) == 1,
+        )
+        try:
+            client.connect(
+                username=acct.get("imap_username", "") or account_email,
+                password=acct["password"],
+            )
+            add: list[str] = []
+            remove: list[str] = []
+            if msg.get("is_read"):
+                add.append("\\Seen")
+            else:
+                remove.append("\\Seen")
+            if msg.get("is_deleted"):
+                add.append("\\Deleted")
+            else:
+                remove.append("\\Deleted")
+            client.set_flags(
+                int(imap_uid), folder_name or "INBOX",
+                add=add or None, remove=remove or None,
+            )
+        except Exception:
+            self._enqueue_sync(msg)
+        finally:
+            client.disconnect()
+
+    def _enqueue_sync(self, msg: dict) -> None:
+        """Queue a message flag sync request for later processing."""
+        now = datetime.now(timezone.utc).isoformat()
+        msg_uuid = msg.get("uuid", "")
+        self.db.execute(
+            "INSERT OR REPLACE INTO _sync_backlog "
+            "(id, msg_uuid, account_email, folder_name, imap_uid, "
+            " is_read, is_deleted, created_at, last_attempt, retries) "
+            "VALUES ("
+            "  COALESCE((SELECT id FROM _sync_backlog WHERE msg_uuid = ?), NULL),"
+            "  ?, ?, ?, ?, ?, ?, ?, NULL, 0"
+            ")",
+            (msg_uuid, msg_uuid, msg.get("account_email", ""),
+             msg.get("folder_name", ""),
+             msg.get("imap_uid"),
+             int(msg.get("is_read", 0)),
+             int(msg.get("is_deleted", 0)), now),
+        )
+
+    def process_sync_backlog(self) -> int:
+        """Process all pending flag sync requests.
+
+        Connects to each account's IMAP server and sends STORE commands
+        for queued flag changes. Clears successfully synced entries.
+
+        Returns:
+            Number of backlog entries successfully synced.
+        """
+        entries = list(self.db.execute(
+            "SELECT * FROM _sync_backlog ORDER BY created_at ASC LIMIT 500"
+        ))
+        if not entries:
+            return 0
+        from collections import defaultdict
+        by_account: dict[str, list[dict]] = defaultdict(list)
+        for e in entries:
+            by_account[e["account_email"]].append(e)
+        synced = 0
+        for account_email, items in by_account.items():
+            acct = self._account_service.get_account_with_password(account_email)
+            if not acct or not acct.get("password"):
+                continue
+            from lighterbird.email.imap.client import IMAPClient
+            client = IMAPClient(
+                host=acct.get("imap_server", ""),
+                port=acct.get("imap_port", 993),
+                use_ssl=acct.get("imap_use_ssl", 1) == 1,
+            )
+            try:
+                client.connect(
+                    username=acct.get("imap_username", "") or account_email,
+                    password=acct["password"],
+                )
+                for item in items:
+                    try:
+                        imap_uid = item.get("imap_uid")
+                        if imap_uid is None:
+                            continue
+                        folder = item.get("folder_name") or "INBOX"
+                        add: list[str] = []
+                        remove: list[str] = []
+                        if item.get("is_read"):
+                            add.append("\\Seen")
+                        else:
+                            remove.append("\\Seen")
+                        if item.get("is_deleted"):
+                            add.append("\\Deleted")
+                        else:
+                            remove.append("\\Deleted")
+                        client.set_flags(
+                            int(imap_uid), folder,
+                            add=add or None, remove=remove or None,
+                        )
+                        self.db.execute(
+                            "DELETE FROM _sync_backlog WHERE id = ?",
+                            (item["id"],),
+                        )
+                        synced += 1
+                    except Exception:
+                        self.db.execute(
+                            "UPDATE _sync_backlog SET retries = retries + 1, "
+                            "last_attempt = ? WHERE id = ?",
+                            (datetime.now(timezone.utc).isoformat(), item["id"]),
+                        )
+            except Exception:
+                pass
+            finally:
+                client.disconnect()
+        return synced
 
     def trash_message(self, msg_uuid: str) -> None:
         """Move a message to the IMAP server's Trash folder.

@@ -172,7 +172,7 @@
   }
 
   function handleNew() {
-    tabStore.open("form", "Compose Email", { form: "email-send", initialData: {} }, {
+    tabStore.open("form", "Compose Email", { form: "email-send", initialData: { _returnIdKey: "persistent-email-list" } }, {
       idKey: "email-compose",
     });
   }

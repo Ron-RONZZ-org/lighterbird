@@ -26,7 +26,16 @@
   });
 
   // Whether to prefer HTML rendering over plain text
-  let useHtml = $state(true);
+  // Persisted across emails via localStorage — if user toggles to plain,
+  // new emails open in plain text until toggled back.
+  const LS_KEY = "lighterbird:email:viewHtml";
+  let useHtml = $state(() => {
+    try { const v = localStorage.getItem(LS_KEY); return v !== null ? JSON.parse(v) : true; }
+    catch { return true; }
+  }());
+  $effect(() => {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(useHtml)); } catch { /* best-effort */ }
+  });
   // Conversation sidebar state
   let showConversation = $state(false);
   let conversation = $state([]);
@@ -119,6 +128,7 @@
     tabStore.open("form", "Reply", {
       form: "email-send",
       initialData: {
+        _returnIdKey: "persistent-email-list",
         to,
         subject,
         body: `\n\n${quoteBody()}`,
@@ -150,6 +160,7 @@
     tabStore.open("form", "Reply All", {
       form: "email-send",
       initialData: {
+        _returnIdKey: "persistent-email-list",
         to: allTo,
         cc: allCc,
         subject,
@@ -166,6 +177,7 @@
     tabStore.open("form", "Forward", {
       form: "email-send",
       initialData: {
+        _returnIdKey: "persistent-email-list",
         subject,
         body: `\n\n${header}${msg.body || ""}`,
         account: msg.account_email || "",

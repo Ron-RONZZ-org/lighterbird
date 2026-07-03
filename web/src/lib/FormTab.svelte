@@ -12,7 +12,8 @@
    */
 
   import { tabStore } from "./tabStore.svelte.js";
-  import { journal as journalApi, todo as todoApi, contacts as contactsApi, calendar as calendarApi, letters as lettersApi } from "./api.js";
+  import { banner } from "./bannerStore.svelte.js";
+  import { journal as journalApi, todo as todoApi, contacts as contactsApi, calendar as calendarApi, letters as lettersApi, email as emailApi } from "./api.js";
   import ComposeEmail from "./ComposeEmail.svelte";
   import JournalWrite from "./JournalWrite.svelte";
   import TodoAddForm from "./TodoAddForm.svelte";
@@ -28,6 +29,7 @@
     "persistent-contacts-list":        (highlight) => contactsApi.list({ limit: 50 }).then(r => ({ ...r, highlight })),
     "persistent-calendar-events":      (highlight) => calendarApi.listEvents({ limit: 50 }).then(r => ({ ...r, highlight })),
     "persistent-letter-list":          (highlight) => lettersApi.list({ limit: 50 }).then(r => ({ ...r, highlight })),
+    "persistent-email-list":           (highlight) => emailApi.list({ limit: 50 }).then(r => ({ ...r, highlight })),
   };
 
   let { data = {} } = $props();
@@ -118,6 +120,8 @@
           const freshData = await LIST_REFRESHERS[returnIdKey](highlightUuid);
           tabStore.open(returnType || "status", returnTitle || "Done", freshData, { idKey: returnIdKey });
           if (renderUrl) window.open(renderUrl, "_blank");
+          // Show confirmation banner for email sends
+          if (formType === "email-send") banner.show("Email sent ✓", "success");
           return;
         } catch {
           // Refresh failed — fall through to open result tab
@@ -126,6 +130,8 @@
 
       tabStore.open(result.type || "status", result.title || "Done", result.data || {});
       if (renderUrl) window.open(renderUrl, "_blank");
+      // Show confirmation banner for email sends (fallback path)
+      if (formType === "email-send") banner.show("Email sent ✓", "success");
     } catch (err) {
       const msg = err.cause?.code === "ECONNREFUSED"
         ? "Cannot connect to the backend."
