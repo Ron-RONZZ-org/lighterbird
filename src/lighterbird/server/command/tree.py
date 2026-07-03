@@ -44,6 +44,7 @@ def get_command_tree() -> list[CommandNode]:
         {
             "name": "email",
             "description": "Email operations",
+            "default_action": "list",
             "children": [
                 {
                     "name": "list",
@@ -313,6 +314,7 @@ def get_command_tree() -> list[CommandNode]:
         {
             "name": "calendar",
             "description": "Calendar operations",
+            "default_action": "list",
             "children": [
                 {
                     "name": "list",
@@ -438,6 +440,7 @@ def get_command_tree() -> list[CommandNode]:
         {
             "name": "contact",
             "description": "Contact management",
+            "default_action": "list",
             "children": [
                 {
                     "name": "list",
@@ -516,12 +519,16 @@ def get_command_tree() -> list[CommandNode]:
         {
             "name": "todo",
             "description": "Task management",
+            "default_action": "list",
             "children": [
                 {
                     "name": "list",
-                    "description": "List all todos (flat view)",
+                    "description": "List todos (tree/flat, tags, sort)",
                     "flags": [
                         {"name": "status", "type": "string", "help": "Filter by status (pending|done)"},
+                        {"name": "tags", "type": "string", "help": "Filter by tag(s); comma-separated (AND semantics)"},
+                        {"name": "sort", "type": "string", "help": "Sort: created (default), priority, due, title"},
+                        {"name": "mode", "type": "string", "help": "Display mode: flat (default) or tree"},
                     ],
                 },
                 {
@@ -536,6 +543,7 @@ def get_command_tree() -> list[CommandNode]:
                     "description": "List todos (tree view with expand/collapse)",
                     "flags": [
                         {"name": "status", "type": "string", "help": "Filter by status (pending|done)"},
+                        {"name": "mode", "type": "string", "help": "Display mode: tree (default) or flat"},
                     ],
                 },
                 {
@@ -554,6 +562,7 @@ def get_command_tree() -> list[CommandNode]:
                         {"name": "dependency", "type": "string", "help": "Depends on UUID(s); comma-separated", "uuidSource": "todo.list"},
                         {"name": "file", "type": "string", "help": "Attach file(s); comma-separated paths/URLs"},
                         {"name": "template", "type": "string", "help": "Template name for structured fields"},
+                        {"name": "tags", "type": "string", "help": "Add tag(s); comma-separated (creates if needed)"},
                         {"name": "cowrite", "type": "string", "help": "LLM co-writing instruction (e.g. 'add more detail')"},
                         {"name": "cowrite-diff", "type": "flag", "help": "Show unified diff before applying cowrite"},
                     ],
@@ -585,6 +594,7 @@ def get_command_tree() -> list[CommandNode]:
                         {"name": "due", "type": "date", "help": "New due date"},
                         {"name": "status", "type": "string", "help": "New status (pending|done)"},
                         {"name": "parent", "type": "string", "help": "New parent UUID(s); comma-separated"},
+                        {"name": "tags", "type": "string", "help": "Replace tags; comma-separated (empty string clears all)"},
                     ],
                 },
                         {
@@ -602,6 +612,7 @@ def get_command_tree() -> list[CommandNode]:
                     ],
                     "flags": [
                         {"name": "status", "type": "string", "help": "Filter by status"},
+                        {"name": "tags", "type": "string", "help": "Filter by tag(s); comma-separated (AND semantics)"},
                     ],
                 },
                 {
@@ -662,6 +673,7 @@ def get_command_tree() -> list[CommandNode]:
         {
             "name": "journal",
             "description": "Journal entries",
+            "default_action": "list",
             "children": [
                 {
                     "name": "list",
@@ -1104,6 +1116,33 @@ def get_command_tree() -> list[CommandNode]:
             "description": "Show available commands",
         },
     ]
+
+
+# ---------------------------------------------------------------------------
+# Tree-walking helpers
+# ---------------------------------------------------------------------------
+
+
+def find_tree_node(path: list[str]) -> CommandNode | None:
+    """Walk the command tree to find a node at the given path.
+
+    Args:
+        path: Tokenized path, e.g. ``["email", "list"]``.
+
+    Returns:
+        The matching node dict, or ``None`` if not found.
+    """
+    nodes = get_command_tree()
+    for token in path:
+        found = None
+        for node in nodes:
+            if node["name"].lower() == token.lower():
+                found = node
+                break
+        if found is None:
+            return None
+        nodes = found.get("children", [])
+    return found
 
 
 # ---------------------------------------------------------------------------

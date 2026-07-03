@@ -18,8 +18,18 @@ async function typeCommand(cmd) {
   const input = page.locator("[aria-label='Message input']");
   const isVisible = await input.isVisible().catch(() => false);
   if (!isVisible) {
-    await page.keyboard.press("Escape");
-    await sleep(200);
+    // Try keyboard shortcut Alt+1 first, then click home tab
+    await page.keyboard.press("Alt+1");
+    await sleep(300);
+    const stillHidden = !(await input.isVisible().catch(() => false));
+    if (stillHidden) {
+      // Fall back to clicking the home tab button
+      const homeTab = page.locator('[role="tab"]', { hasText: "Home" });
+      if (await homeTab.isVisible().catch(() => false)) {
+        await homeTab.click();
+        await sleep(300);
+      }
+    }
   }
   await input.waitFor({ state: "visible", timeout: 5000 });
   await input.click();
@@ -66,7 +76,11 @@ async function getResultPanelText() {
 }
 
 async function dismissAllTabs() {
-  for (let i = 0; i < 4; i++) {
+  // Go home (Alt+1 is the reliable keyboard shortcut)
+  await page.keyboard.press("Alt+1");
+  await sleep(200);
+  // Also press Escape a few times to close any remaining result tabs
+  for (let i = 0; i < 5; i++) {
     await page.keyboard.press("Escape");
     await sleep(100);
   }

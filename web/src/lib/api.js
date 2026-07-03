@@ -176,6 +176,8 @@ export const todo = {
     if (params.limit) q.set("limit", String(params.limit));
     if (params.tree) q.set("tree", "true");
     if (params.query) q.set("query", params.query);
+    if (params.tags) q.set("tags", params.tags);
+    if (params.sort) q.set("sort", params.sort);
     return request("GET", `/todo/todos?${q}`);
   },
 

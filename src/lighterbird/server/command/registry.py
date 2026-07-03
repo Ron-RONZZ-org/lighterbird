@@ -134,6 +134,21 @@ def dispatch(
         handler = _commands.get(key)
         if handler is not None:
             remaining = resolved[i:]
+            # If no remaining tokens, check if the tree node wants to
+            # redirect to a default action (e.g. "email" → "email list").
+            if not remaining:
+                path_tokens = resolved[:i]
+                try:
+                    from lighterbird.server.command.tree import find_tree_node
+                    node = find_tree_node(path_tokens)
+                    if node and "default_action" in node:
+                        # Redirect to the default action's handler
+                        return dispatch(
+                            path_tokens + [node["default_action"]],
+                            flags,
+                        )
+                except Exception:
+                    pass  # Gracefully fall through on any error
             return handler(remaining, flags)
 
     raise CommandNotFound(tokens)

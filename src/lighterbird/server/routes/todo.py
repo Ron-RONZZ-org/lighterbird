@@ -19,16 +19,16 @@ def list_todos(
     status: str | None = None,
     tree: bool = False,
     limit: int = 50,
+    tags: str | None = None,
+    sort: str | None = None,
     svc: TodoService = Depends(get_todo_service),
 ):
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
     if tree:
         flat = svc.flatten_tree()
         todos = [normalize_todo(t) for t in flat]
         return {"todos": todos, "total": len(todos), "tree": True}
-    if status:
-        todos = svc.search("", status=status, limit=limit)
-    else:
-        todos = svc.list(limit=limit)
+    todos = svc.search("", status=status, limit=limit, tags=tag_list, sort=sort)
     return {"todos": [normalize_todo(t) for t in todos], "total": len(todos)}
 
 
