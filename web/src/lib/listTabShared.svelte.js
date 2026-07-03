@@ -421,6 +421,108 @@ export function openPrintWindow(title, headers, bodyHtml) {
 }
 
 /**
+ * Open a print window with a proper physical letter layout (not email-style).
+ *
+ * Produces a traditional letter format with:
+ *   - Sender block (top-right)
+ *   - Recipient block (below, left-aligned)
+ *   - Date (right-aligned below sender)
+ *   - Subject line (Objet:)
+ *   - Body text
+ *
+ * @param {string} subject — letter object/subject
+ * @param {string} senderText — multi-line sender info
+ * @param {string} recipientText — multi-line recipient info
+ * @param {string} dateStr — date string
+ * @param {string} bodyHtml — HTML body content
+ */
+export function openLetterPrintWindow(subject, senderText, recipientText, dateStr, bodyHtml) {
+  const win = window.open("", "_blank");
+  if (!win) {
+    alert("Print window was blocked. Please allow popups and try again.");
+    return;
+  }
+
+  const senderLines = (senderText || "").split("\n").map((l) => l.trim()).filter(Boolean);
+  const recipientLines = (recipientText || "").split("\n").map((l) => l.trim()).filter(Boolean);
+  const dateLine = dateStr ? new Date(dateStr).toLocaleDateString("fr-FR", {
+    day: "numeric", month: "long", year: "numeric",
+  }) : "";
+
+  win.document.write(`<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>${escHtml(subject)}</title>
+  <style>
+    @page { margin: 2.5cm 2cm; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Times New Roman', Times, serif;
+      font-size: 12pt; line-height: 1.5; color: #000;
+      background: #fff; padding: 0;
+      max-width: 19cm; margin: 0 auto;
+    }
+
+    /* Sender block — top right */
+    .sender { text-align: right; margin-bottom: 1.5cm; font-size: 11pt; }
+    .sender .name { font-weight: 700; font-size: 12pt; }
+    .sender .line { margin-top: 0.05cm; }
+
+    /* Recipient block — below, left */
+    .recipient { margin-bottom: 1cm; font-size: 11pt; }
+    .recipient .attn { font-weight: 700; font-size: 11pt; margin-bottom: 0.1cm; }
+
+    /* Date — below recipient, right */
+    .date-row { text-align: right; margin-bottom: 0.8cm; font-size: 11pt; }
+
+    /* Subject line */
+    .subject { margin-bottom: 0.8cm; font-size: 12pt; }
+    .subject .label { font-weight: 700; }
+
+    /* Body */
+    .body { font-size: 12pt; line-height: 1.8; text-align: justify; }
+    .body p { margin-bottom: 0.3cm; text-indent: 0; }
+    .body p:first-of-type { margin-top: 0; }
+
+    /* Signature block */
+    .signature { margin-top: 1.5cm; text-align: right; font-size: 11pt; }
+
+    @media print {
+      body { margin: 0; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Sender -->
+  <div class="sender">
+    ${senderLines.map((l, i) => i === 0 ? `<div class="name">${escHtml(l)}</div>` : `<div class="line">${escHtml(l)}</div>`).join("\n    ")}
+  </div>
+
+  <!-- Recipient -->
+  <div class="recipient">
+    <div class="attn">A l'attention de</div>
+    ${recipientLines.map((l) => `<div class="line">${escHtml(l)}</div>`).join("\n    ")}
+  </div>
+
+  <!-- Date -->
+  ${dateLine ? `<div class="date-row">${escHtml(dateLine)}</div>` : ""}
+
+  <!-- Subject -->
+  ${subject ? `<div class="subject"><span class="label">Objet&nbsp;: </span>${escHtml(subject)}</div>` : ""}
+
+  <!-- Body -->
+  <div class="body">${bodyHtml}</div>
+
+  <script>
+    window.onload = function () { setTimeout(function () { window.print(); }, 300); };
+  <\/script>
+</body>
+</html>`);
+  win.document.close();
+}
+
+/**
  * Preview text: first line, stripped of markdown, truncated.
  */
 export function preview(s, max = 60) {
