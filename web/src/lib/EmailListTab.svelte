@@ -295,26 +295,7 @@
     finally { syncing = false; }
   }
 
-  // Live-update read status in ALL email list tabs when a message is viewed
-  $effect(() => {
-    function handler(e) {
-      const { uuid, is_read } = e.detail || {};
-      if (!uuid) return;
-      for (const t of tabStore.tabs) {
-        if (t.data?.messages && Array.isArray(t.data.messages)) {
-          const updatedMessages = t.data.messages.map((m) =>
-            m.uuid === uuid ? { ...m, is_read } : m,
-          );
-          // Only update if something actually changed
-          if (updatedMessages.some((m, i) => m !== t.data.messages[i])) {
-            tabStore.update(t.id, { ...t.data, messages: updatedMessages });
-          }
-        }
-      }
-    }
-    window.addEventListener("email-read-status-changed", handler);
-    return () => window.removeEventListener("email-read-status-changed", handler);
-  });
+  // Live-update read status — handled in App.svelte (always-mounted root)
 
   // ── Folder tree callbacks ──────────────────────────────────────────
   function handleToggleFolder(folderName) {

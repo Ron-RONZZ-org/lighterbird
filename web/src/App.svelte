@@ -29,6 +29,28 @@
   }
   fetchNotice();
 
+  // Live-update read status in all email list tabs when a message is viewed.
+  // Must be here (always-mounted root), not in EmailListTab (unmounted when
+  // EmailViewTab is active).
+  $effect(() => {
+    function handler(e) {
+      const { uuid, is_read } = e.detail || {};
+      if (!uuid) return;
+      for (const t of tabStore.tabs) {
+        if (t.data?.messages && Array.isArray(t.data.messages)) {
+          const updatedMessages = t.data.messages.map((m) =>
+            m.uuid === uuid ? { ...m, is_read } : m,
+          );
+          if (updatedMessages.some((m, i) => m !== t.data.messages[i])) {
+            tabStore.update(t.id, { ...t.data, messages: updatedMessages });
+          }
+        }
+      }
+    }
+    window.addEventListener("email-read-status-changed", handler);
+    return () => window.removeEventListener("email-read-status-changed", handler);
+  });
+
   /** Global keyboard shortcuts. */
   function handleGlobalKeydown(e) {
     // Alt+1/2/3/4 — switch to numbered tab

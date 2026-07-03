@@ -96,7 +96,7 @@ class MessageOpsService:
         bcc: list[str] | None = None,
         priority: int = 3,
         body_format: str = "markdown",
-        attachments: list[str] | None = None,
+        attachments: list[dict[str, Any]] | None = None,
         signature: str | None = None,
         in_reply_to: str | None = None,
     ) -> None:
@@ -176,6 +176,7 @@ class MessageOpsService:
                 from_addr=sender_email, to=to, subject=subject,
                 body=final_body, cc=cc, bcc=bcc,
                 html_body=html_body,
+                attachments=attachments,
                 signature=signature,
                 message_id=message_id,
                 in_reply_to=in_reply_to,
