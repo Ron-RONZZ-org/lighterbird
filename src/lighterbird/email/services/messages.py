@@ -38,6 +38,7 @@ class MessageService:
         folder: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        sort: str = "newest",
     ) -> list[dict[str, Any]]:
         """List non-deleted messages, optionally filtered."""
         conditions = ["m.is_deleted = 0"]
@@ -49,11 +50,12 @@ class MessageService:
             conditions.append("m.folder_name = ?")
             params.append(folder)
         where = " AND ".join(conditions)
+        order = "m.received_at DESC" if sort != "oldest" else "m.received_at ASC"
         sql = (
             "SELECT m.*, COALESCE(m.folder_name, '') AS folder_name"
             " FROM messages m"
             f" WHERE {where}"
-            " ORDER BY m.received_at DESC LIMIT ? OFFSET ?"
+            f" ORDER BY {order} LIMIT ? OFFSET ?"
         )
         params.extend([limit, offset])
         return list(self.db.execute(sql, tuple(params)))
@@ -111,20 +113,36 @@ class MessageService:
             )
             params.extend(exclude_folders)
         where = " AND ".join(conditions)
+
+        # Sorting
+        sort = filters.get("sort", "newest")
+        if sort == "oldest":
+            order = "m.received_at ASC"
+        else:
+            order = "m.received_at DESC"
+
+        # Group by sender (overrides received_at ordering for display grouping)
+        group = filters.get("group", "")
+        if group == "sender":
+            select_cols = "m.*, COALESCE(m.de, '') AS sort_sender"
+            order = f"LOWER(COALESCE(m.de, '')), {order}"
+        else:
+            select_cols = "m.*"
+
         sql = (
-            "SELECT m.*"
+            f"SELECT {select_cols}"
             " FROM messages m"
             f" WHERE {where}"
-            " ORDER BY m.received_at DESC LIMIT ?"
+            f" ORDER BY {order} LIMIT ?"
         )
         params.append(limit)
         try:
             rows = self.db.execute(sql, tuple(params))
         except Exception:
             fallback_sql = (
-                "SELECT m.* FROM messages m"
+                f"SELECT {select_cols} FROM messages m"
                 " WHERE m.is_deleted = 0"
-                " ORDER BY m.received_at DESC LIMIT ?"
+                f" ORDER BY {order} LIMIT ?"
             )
             rows = self.db.execute(fallback_sql, (limit,))
         return list(rows)

@@ -36,6 +36,7 @@
   let expandedFolders = $state([]);
   let sort = $state("newest");
   let groupByConversation = $state(false);
+  let groupBySender = $state(false);
 
   // Sync config when tab data changes (e.g., !email list --sort oldest)
   $effect(() => {
@@ -44,11 +45,13 @@
       if (data.filters.folder) cliFlags.folder = data.filters.folder;
       if (data.filters.sort) cliFlags.sort = data.filters.sort;
       if (data.filters.group === "conversation") cliFlags.group = "conversation";
+      if (data.filters.group === "sender") cliFlags.group = "sender";
       if (Object.keys(cliFlags).length > 0) {
         const merged = config.mergeWithCliFlags(cliFlags);
         folderVisibility = merged.folderVisibility || {};
         sort = merged.sort || "newest";
         groupByConversation = !!merged.groupByConversation;
+        groupBySender = !!merged.groupBySender;
       } else {
         // No CLI flags — apply lastConfig from store
         const lastCfg = config.getLastConfig();
@@ -56,6 +59,7 @@
         expandedFolders = lastCfg.expandedFolders || [];
         sort = lastCfg.sort || "newest";
         groupByConversation = !!lastCfg.groupByConversation;
+        groupBySender = !!lastCfg.groupBySender;
       }
     }
   });
@@ -317,13 +321,20 @@
 
   function handleSortChange(val) {
     sort = val;
-    config.autoSave({ sort: val });
+    config.autoSave({ sort: val, groupBySender: false });
+    if (groupBySender) { groupBySender = false; }
     applyFolderFilter();
   }
 
   function handleGroupChange(val) {
     groupByConversation = val;
     config.autoSave({ groupByConversation: val });
+    applyFolderFilter();
+  }
+
+  function handleGroupBySenderChange(val) {
+    groupBySender = val;
+    config.autoSave({ groupBySender: val });
     applyFolderFilter();
   }
 
@@ -351,6 +362,7 @@
     }
     if (sort) params.sort = sort;
     if (groupByConversation) params.group = "conversation";
+    if (groupBySender) params.group = "sender";
     if (searchQuery && searchQuery.length >= 2) {
       params.query = searchQuery;
     }
@@ -442,10 +454,12 @@
         {expandedFolders}
         {sort}
         {groupByConversation}
+        {groupBySender}
         onToggleFolder={handleToggleFolder}
         onToggleExpand={handleToggleExpand}
         onSortChange={handleSortChange}
         onGroupChange={handleGroupChange}
+        onGroupBySenderChange={handleGroupBySenderChange}
         onCreateFolder={handleCreateFolder}
       />
     </div>
@@ -459,8 +473,10 @@
       <SortDropdown
         {sort}
         {groupByConversation}
+        {groupBySender}
         onSortChange={handleSortChange}
         onGroupChange={handleGroupChange}
+        onGroupBySenderChange={handleGroupBySenderChange}
       />
     </div>
   {/if}

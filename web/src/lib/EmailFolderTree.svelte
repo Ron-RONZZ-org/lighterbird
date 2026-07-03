@@ -12,10 +12,12 @@
     expandedFolders = [],
     sort = "newest",
     groupByConversation = false,
+    groupBySender = false,
     onToggleFolder = () => {},
     onToggleExpand = () => {},
     onSortChange = () => {},
     onGroupChange = () => {},
+    onGroupBySenderChange = () => {},
     onCreateFolder = null,
   } = $props();
 

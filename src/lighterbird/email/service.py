@@ -97,9 +97,9 @@ class EmailService:
     def get_message(self, uuid_: str):
         return self.messages.get_message(uuid_)
 
-    def list_messages(self, account_email=None, folder=None, limit=50, offset=0):
+    def list_messages(self, account_email=None, folder=None, limit=50, offset=0, sort="newest"):
         return self.messages.list_messages(
-            account_email=account_email, folder=folder, limit=limit, offset=offset
+            account_email=account_email, folder=folder, limit=limit, offset=offset, sort=sort
         )
 
     def search_messages(self, filters: dict, limit=50):

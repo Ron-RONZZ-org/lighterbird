@@ -223,6 +223,46 @@
     } catch { /* ignore */ }
   }
 
+  // ── Attachments ──────────────────────────────────────────────────────
+  let attachments = $state([]);
+  let attachmentsLoading = $state(false);
+  let attachmentError = $state("");
+
+  async function fetchAttachments() {
+    if (!msg.uuid || msg.attachment_count === 0) return;
+    attachmentsLoading = true;
+    attachmentError = "";
+    try {
+      const resp = await fetch(`/api/v1/email/messages/${msg.uuid}/attachments`);
+      if (resp.ok) {
+        const data = await resp.json();
+        attachments = data.attachments || [];
+      } else {
+        attachmentError = "Failed to load attachments.";
+      }
+    } catch {
+      attachmentError = "Network error loading attachments.";
+    } finally {
+      attachmentsLoading = false;
+    }
+  }
+
+  // Fetch attachments when message UUID is known
+  $effect(() => {
+    if (msg.uuid) fetchAttachments();
+  });
+
+  function downloadAttachment(att) {
+    window.open(`/api/v1/email/attachments/${att.uuid}/download`, "_blank");
+  }
+
+  function formatFileSize(bytes) {
+    if (!bytes) return "";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1048576).toFixed(1)} MB`;
+  }
+
   async function trash() {
     if (!msg.uuid) return;
     try {
@@ -298,6 +338,29 @@
         <span class="value">{msg.received_at || ""}</span>
       </div>
     </div>
+
+    <!-- Attachment list -->
+    {#if attachmentsLoading}
+      <div class="attachment-bar">
+        <span class="att-loading">Loading attachments…</span>
+      </div>
+    {:else if attachmentError}
+      <div class="attachment-bar att-error">
+        <span>{attachmentError}</span>
+      </div>
+    {:else if attachments.length > 0}
+      <div class="attachment-bar">
+        <span class="att-label">Attachments ({attachments.length})</span>
+        {#each attachments as att}
+          <button class="att-btn" onclick={() => downloadAttachment(att)} title="Download {att.filename} ({formatFileSize(att.size)})">
+            <span class="att-icon">📎</span>
+            <span class="att-name">{att.filename}</span>
+            <span class="att-size">{formatFileSize(att.size)}</span>
+          </button>
+        {/each}
+      </div>
+    {/if}
+
     <hr />
 
     <!-- Body: HTML iframe or plain text -->
@@ -415,6 +478,59 @@
   .toolbar-spacer {
     flex: 1;
   }
+
+  /* Attachment bar */
+  .attachment-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.75rem;
+    background: #16162a;
+    border-bottom: 1px solid #333;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  .attachment-bar.att-error {
+    color: #c44;
+    font-size: 0.78rem;
+  }
+  .att-loading {
+    color: var(--clr-muted);
+    font-size: 0.78rem;
+    font-style: italic;
+  }
+  .att-label {
+    color: var(--clr-sub);
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: 0.2rem;
+  }
+  .att-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.15rem 0.5rem;
+    background: #2a2a44;
+    border: 1px solid #4a4a6a;
+    border-radius: 4px;
+    color: #b0b0c0;
+    font-family: monospace;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s;
+    white-space: nowrap;
+  }
+  .att-btn:hover {
+    background: #3a3a5a;
+    border-color: #6a6a9a;
+    color: #e0e0e0;
+  }
+  .att-icon { font-size: 0.75rem; }
+  .att-name { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; }
+  .att-size { color: var(--clr-muted); font-size: 0.68rem; }
+
   .trash-btn:hover {
     border-color: #8b3a3a;
     color: #e06060;

@@ -161,6 +161,11 @@
           e.preventDefault();
         }
         return;
+      case "e":
+        if (plain && sel.selectionMode && sel.numSelected > 0) {
+          openExportDialog(); e.preventDefault(); return;
+        }
+        return;
       case "Escape":
         if (showSearch) { closeSearch(); e.preventDefault(); return; }
         if (sel.selectionMode) { sel.toggleSelectionMode(); e.preventDefault(); return; }
