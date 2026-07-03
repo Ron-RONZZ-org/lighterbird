@@ -6,7 +6,7 @@ import html as html_mod
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from lighterbird.server.deps import get_letter_service
@@ -195,22 +195,18 @@ class ExportMDRequest(BaseModel):
     uuids: list[str] = []
 
 
-@router.get("/export-md/{uuid}")
+@router.get("/export-md/{uuid}", response_class=PlainTextResponse)
 def export_letter_md(uuid: str, svc: LetterService = Depends(get_letter_service)):
     """Export a single letter as YAML-frontmatter markdown."""
     letter = svc.get(uuid)
     if not letter:
         raise HTTPException(status_code=404, detail=f"Letter not found: {uuid[:8]}")
     md = svc.export_md(uuid=uuid)
-    filename = f"letter-{uuid[:8]}.md"
-    return {
-        "markdown": md,
-        "filename": filename,
-        "uuid": uuid,
-    }
+    return PlainTextResponse(md, media_type="text/markdown",
+                            headers={"Content-Disposition": f'attachment; filename="letter-{uuid[:8]}.md"'})
 
 
-@router.get("/export-md")
+@router.get("/export-md", response_class=PlainTextResponse)
 def export_letters_md(
     uuids: str = "",
     svc: LetterService = Depends(get_letter_service),
@@ -223,11 +219,8 @@ def export_letters_md(
         raise HTTPException(status_code=400, detail="No UUIDs provided. Use ?uuids=uuid1,uuid2")
     uuid_list = [u.strip() for u in uuids.split(",") if u.strip()]
     md = svc.export_md(uuids=uuid_list)
-    return {
-        "markdown": md,
-        "filename": f"letters-{len(uuid_list)}.md",
-        "uuids": uuid_list,
-    }
+    return PlainTextResponse(md, media_type="text/markdown",
+                            headers={"Content-Disposition": f'attachment; filename="letters-{len(uuid_list)}.md"'})
 
 
 class ImportMDRequest(BaseModel):
