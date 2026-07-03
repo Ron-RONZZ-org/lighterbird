@@ -14,7 +14,16 @@
   ]);
 
   let { data = {}, tabId } = $props();
-  let msg = $derived(data || {});
+  // $state is needed because $derived can't be assigned to (markRead updates is_read).
+  // Sync from prop on first mount only — after that, local state takes over.
+  let msg = $state(data || {});
+  let synced = $state(false);
+  $effect(() => {
+    if (!synced) {
+      msg = data || {};
+      synced = true;
+    }
+  });
 
   // Whether to prefer HTML rendering over plain text
   let useHtml = $state(true);
@@ -192,6 +201,15 @@
       exportEml();
     }
   }
+
+  // Auto-mark as read when the email is opened
+  let readAttempted = $state(false);
+  $effect(() => {
+    if (msg.uuid && !msg.is_read && !readAttempted) {
+      readAttempted = true;
+      markRead();
+    }
+  });
 
   async function markRead() {
     if (!msg.uuid || msg.is_read) return;
