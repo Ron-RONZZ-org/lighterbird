@@ -154,9 +154,15 @@ lighterbird/
    - `detectPersistentType()` in `web/src/App.svelte` and `web/src/lib/HomeTab.svelte`
 
 4. **GUI tests use headless Playwright — ALWAYS prefer E2E scripts over the interactive browser tool.**
+   - **One-time setup**: Ensure Playwright's Chromium is installed before running E2E tests:
+     ```bash
+     cd web && npx playwright install chromium
+     ```
+     Without this, the E2E fixture fails with "No Chromium browser found". The download is ~300MB and takes ~90s.
    - **Run the E2E test scripts (`node tests/e2e_comprehensive.mjs`, `node tests/playwright_e2e.mjs`)** as the primary verification method. These are fast, reliable, and catch regressions automatically.
    - **Use the `browser` tool (headed mode) ONLY as a last resort** when an E2E script cannot reproduce the issue and you need to manually inspect the UI. Headed mode sessions are fragile: tool calls are interrupted if the user types "continue" while an action is in-flight, leaving the browser in an inconsistent state.
    - Always use `http://127.0.0.1:<port>` for local dev servers (IPv4, not `localhost` which can resolve to IPv6 `::1`).
+   - **Timeout**: E2E tests take ~2 minutes. When running via the shell tool, set a timeout of at least 300s (`timeout: 300000`).
 
 5. **Use `lighterbird-dev --seed` for isolated E2E testing** — instead of starting the production server, use the isolated dev server which creates a temporary data directory and seeds it with test data from ``.dev``:
 
@@ -165,6 +171,7 @@ lighterbird/
    uv run lighterbird-dev --seed
 
    # Terminal 2: run Playwright E2E tests
+   # (one-time setup: cd web && npx playwright install chromium)
    node tests/playwright_e2e.mjs
    node tests/e2e_comprehensive.mjs
    ```
@@ -182,6 +189,11 @@ Playwright E2E tests are integrated into pytest via the ``--e2e`` flag:
 | `uv run pytest tests/` | Unit tests only (203 tests, E2E skipped) |
 | `uv run pytest --e2e tests/test_e2e.py` | E2E tests only (auto-starts seeded server) |
 | `uv run pytest --e2e --keep-e2e-data` | E2E + preserve temp data for debugging |
+
+**Prerequisite**: Playwright's Chromium must be installed:
+```bash
+cd web && npx playwright install chromium
+```
 
 The ``conftest.py`` defines a session-scoped ``e2e_server`` fixture that:
 1. Allocates a free TCP port (no port conflicts)
