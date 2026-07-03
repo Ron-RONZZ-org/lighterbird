@@ -6,6 +6,7 @@ from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from lighterbird.server.deps import get_journal_service
@@ -87,7 +88,7 @@ class ImportMdRequest(BaseModel):
     path: str
 
 
-@router.get("/export-md")
+@router.get("/export-md", response_class=PlainTextResponse)
 def export_md(
     uuids: str | None = Query(None, description="Comma-separated UUIDs"),
     svc: JournalService = Depends(get_journal_service),
@@ -99,10 +100,11 @@ def export_md(
     if not ids:
         raise HTTPException(status_code=400, detail="No valid UUIDs provided")
     md = svc.export_md(uuids=ids)
-    return {"type": "markdown", "data": md}
+    return PlainTextResponse(md, media_type="text/markdown",
+                            headers={"Content-Disposition": f'attachment; filename="journal-export.md"'})
 
 
-@router.get("/export-md/{uuid}")
+@router.get("/export-md/{uuid}", response_class=PlainTextResponse)
 def export_entry_md(
     uuid: str,
     svc: JournalService = Depends(get_journal_service),
@@ -112,7 +114,8 @@ def export_entry_md(
     if not entry:
         raise HTTPException(status_code=404, detail=f"Entry not found: {uuid[:8]}")
     md = svc.export_md(uuid=uuid)
-    return {"type": "markdown", "data": md}
+    return PlainTextResponse(md, media_type="text/markdown",
+                            headers={"Content-Disposition": f'attachment; filename="journal-entry-{uuid[:8]}.md"'})
 
 
 @router.post("/import-md", status_code=201)

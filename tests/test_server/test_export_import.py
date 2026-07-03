@@ -183,8 +183,8 @@ class TestJournalMDExportImport:
 
         export_resp = client.get(f"/api/v1/journal/export-md/{entry_uuid}")
         assert export_resp.status_code == 200
-        data = export_resp.json()
-        md_text = data.get("data", "")
+        # Response is now plain text markdown
+        md_text = export_resp.text
         assert "Test Journal Entry" in md_text
 
     def test_import_md(self, client):
@@ -240,8 +240,8 @@ class TestLetterMDExportImport:
 
         export_resp = client.get(f"/api/v1/letters/export-md/{letter_uuid}")
         assert export_resp.status_code == 200
-        data = export_resp.json()
-        md_text = data.get("markdown", "")
+        # Response is now plain text markdown
+        md_text = export_resp.text
         assert "Thank You Letter" in md_text
 
     def test_import_md(self, client):

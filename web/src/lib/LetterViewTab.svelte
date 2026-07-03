@@ -8,7 +8,7 @@
   function handleKeydown(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === "p") {
       e.preventDefault();
-      window.print();
+      printLetter();
     }
   }
 
