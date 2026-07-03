@@ -6,6 +6,7 @@ and optional signature footer.
 
 from __future__ import annotations
 
+import base64
 import smtplib
 import socket
 import ssl
@@ -78,7 +79,7 @@ class SMTPClient:
         cc: list[str] | None = None,
         bcc: list[str] | None = None,
         html_body: str = "",
-        attachments: list[str | Path] | None = None,
+        attachments: list[str | Path | dict[str, Any]] | None = None,
         signature: str = "",
         message_id: str | None = None,
         in_reply_to: str | None = None,
@@ -184,9 +185,36 @@ class SMTPClient:
         return msg_id
 
     @staticmethod
-    def _attach_file(msg: MIMEMultipart, path: str | Path) -> None:
-        """Attach a file to a MIME message."""
-        path = Path(path)
+    def _attach_file(msg: MIMEMultipart, item: str | Path | dict[str, Any]) -> None:
+        """Attach a file to a MIME message.
+
+        Accepts:
+          - A file path (str or Path) — reads from disk.
+          - A dict with ``name`` (str) and ``data`` (bytes or base64 str).
+        """
+        import base64
+
+        if isinstance(item, dict):
+            filename = item.get("name", "attachment")
+            raw = item.get("data", "")
+            if isinstance(raw, str):
+                try:
+                    payload = base64.b64decode(raw)
+                except Exception:
+                    payload = raw.encode("utf-8")
+            else:
+                payload = raw
+            part = MIMEBase("application", "octet-stream")
+            part.set_payload(payload)
+            encoders.encode_base64(part)
+            part.add_header(
+                "Content-Disposition",
+                f'attachment; filename="{filename}"',
+            )
+            msg.attach(part)
+            return
+
+        path = Path(item)
         if not path.exists():
             return
         with path.open("rb") as f:
