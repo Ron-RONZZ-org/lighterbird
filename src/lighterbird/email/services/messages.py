@@ -5,6 +5,7 @@ Flat service class, forked from A-lien's RetpostoMessagingMixin.
 
 from __future__ import annotations
 
+import email.message
 from typing import Any
 
 
@@ -127,6 +128,27 @@ class MessageService:
             )
             rows = self.db.execute(fallback_sql, (limit,))
         return list(rows)
+
+    def export_eml(self, uuid_: str) -> str | None:
+        """Export a message as an RFC 822 .eml string.
+
+        Returns the .eml content or None if the message is not found.
+        """
+        msg = self.get_message(uuid_)
+        if not msg:
+            return None
+
+        eml = email.message.EmailMessage()
+        eml["From"] = msg.get("from_addr", "")
+        eml["To"] = msg.get("to_recipients", "")
+        eml["Subject"] = msg.get("subject", "")
+        eml["Date"] = msg.get("received_at", "")
+        if msg.get("message_id"):
+            eml["Message-ID"] = msg["message_id"]
+        body = msg.get("body", "")
+        eml.set_content(body or "")
+
+        return eml.as_string()
 
     def find_conversation(
         self, message_id: str, references: str = "", in_reply_to: str = "",

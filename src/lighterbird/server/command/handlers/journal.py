@@ -34,7 +34,9 @@ def journal_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "  !journal view         — View a journal entry\n"
                 "  !journal search       — Search journal entries\n"
                 "  !journal delete       — Delete journal entry(s)\n"
-                "  !journal draft        — List / recall journal drafts"
+                "  !journal draft        — List / recall journal drafts\n"
+                "  !journal export md    — Export entry(s) as .md\n"
+                "  !journal import md    — Import entry(s) from .md"
             ),
         },
     }
@@ -135,4 +137,49 @@ def journal_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
         "type": "status",
         "title": "Journal Entry(s) Deleted",
         "data": {"removed": removed, "not_found": not_found},
+    }
+
+
+@command("journal.export")
+def journal_export(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!journal export md <uuid> [uuid...]"""
+    if not remaining or remaining[0] != "md":
+        raise CommandValidationError(
+            "Missing subcommand.",
+            "Usage: !journal export md <uuid> [uuid...]",
+        )
+    uuids = remaining[1:]
+    if not uuids:
+        raise CommandValidationError(
+            "Missing entry UUID(s).",
+            "Usage: !journal export md <uuid> [uuid...]",
+        )
+    svc: JournalService = get_journal_service()
+    md = svc.export_md(uuids=uuids)
+    return {"type": "markdown", "title": "Journal Export", "data": md}
+
+
+@command("journal.import")
+def journal_import(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!journal import md <path>"""
+    if not remaining or remaining[0] != "md":
+        raise CommandValidationError(
+            "Missing subcommand.",
+            "Usage: !journal import md <path>",
+        )
+    if len(remaining) < 2:
+        raise CommandValidationError(
+            "Missing file path.",
+            "Usage: !journal import md <path>",
+        )
+    path = remaining[1]
+    svc: JournalService = get_journal_service()
+    try:
+        uuids = svc.import_md(path)
+    except FileNotFoundError:
+        raise CommandValidationError(f"File not found: {path}")
+    return {
+        "type": "status",
+        "title": "Journal Import",
+        "data": {"imported": uuids, "count": len(uuids)},
     }

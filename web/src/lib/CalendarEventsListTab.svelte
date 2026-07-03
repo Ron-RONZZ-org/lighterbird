@@ -26,6 +26,19 @@
     }
   });
 
+  let showImportDialog = $state(false);
+  let showExportDialog = $state(false);
+
+  let exportItems = $derived(events.filter(e => sel.selectedKeys.has(e.uuid)));
+
+  function openImportDialog() {
+    showImportDialog = true;
+  }
+
+  function openExportDialog() {
+    showExportDialog = true;
+  }
+
   let showSearch = $state(false);
   let searchQuery = $state("");
   let currentFilters = $state({});
@@ -194,6 +207,8 @@
         {/if}
       </div>
       <div class="right">
+        <button class="tool-btn" disabled={sel.numSelected === 0} title="Export selected (E)"
+          onclick={openExportDialog}>Export <kbd>E</kbd></button>
         <button class="tool-btn danger" disabled={sel.numSelected === 0} title="Delete selected (Delete key)"
           onclick={() => { sel.confirmDelete = true; }}>Delete <kbd>Del</kbd></button>
       </div>
@@ -206,6 +221,7 @@
       </div>
       <div class="right">
         <button class="tool-btn primary" onclick={handleNew} title="Add new event">+ New <kbd>N</kbd></button>
+        <button class="tool-btn" onclick={openImportDialog} title="Import events (M)">Import <kbd>M</kbd></button>
       </div>
     {/if}
   </div>
@@ -254,6 +270,22 @@
       message="Delete {sel.numSelected} event{sel.numSelected !== 1 ? 's' : ''}?"
       onConfirm={async () => { sel.confirmDelete = false; await sel.deleteSelected(); }}
       onDismiss={() => { sel.confirmDelete = false; }}
+    />
+  {/if}
+
+  {#if showExportDialog}
+    <ExportDialog
+      domain="calendar"
+      items={exportItems}
+      format="ics"
+      onClose={() => showExportDialog = false}
+    />
+  {/if}
+  {#if showImportDialog}
+    <ImportDialog
+      domain="calendar"
+      format="ics"
+      onClose={() => showImportDialog = false}
     />
   {/if}
 </div>

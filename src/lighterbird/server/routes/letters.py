@@ -189,3 +189,61 @@ def render_letter(uuid: str, svc: LetterService = Depends(get_letter_service)):
         )
 
     return _render_letter_full_html(letter, body)
+
+
+class ExportMDRequest(BaseModel):
+    uuids: list[str] = []
+
+
+@router.get("/export-md/{uuid}")
+def export_letter_md(uuid: str, svc: LetterService = Depends(get_letter_service)):
+    """Export a single letter as YAML-frontmatter markdown."""
+    letter = svc.get(uuid)
+    if not letter:
+        raise HTTPException(status_code=404, detail=f"Letter not found: {uuid[:8]}")
+    md = svc.export_md(uuid=uuid)
+    filename = f"letter-{uuid[:8]}.md"
+    return {
+        "markdown": md,
+        "filename": filename,
+        "uuid": uuid,
+    }
+
+
+@router.get("/export-md")
+def export_letters_md(
+    uuids: str = "",
+    svc: LetterService = Depends(get_letter_service),
+):
+    """Export multiple letters as concatenated YAML-frontmatter markdown.
+
+    Query param ``uuids`` is a comma-separated list of UUIDs.
+    """
+    if not uuids:
+        raise HTTPException(status_code=400, detail="No UUIDs provided. Use ?uuids=uuid1,uuid2")
+    uuid_list = [u.strip() for u in uuids.split(",") if u.strip()]
+    md = svc.export_md(uuids=uuid_list)
+    return {
+        "markdown": md,
+        "filename": f"letters-{len(uuid_list)}.md",
+        "uuids": uuid_list,
+    }
+
+
+class ImportMDRequest(BaseModel):
+    path: str
+
+
+@router.post("/import-md")
+def import_letter_md(
+    req: ImportMDRequest,
+    svc: LetterService = Depends(get_letter_service),
+):
+    """Import a letter from a YAML-frontmatter markdown file."""
+    try:
+        uuids = svc.import_md(req.path)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"uuids": uuids, "imported": len(uuids)}

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 
 from lighterbird.server.deps import get_email_service
 from lighterbird.server.schemas import (
@@ -383,3 +383,32 @@ def batch_move(
     for uuid in req.uuids:
         email_svc.move_message(uuid, req.destination_folder)
     return BatchResultResponse(status="ok", count=len(req.uuids))
+
+
+@router.get("/export-eml/{uuid}")
+def export_eml(uuid: str, email_svc: EmailService = Depends(get_email_service)):
+    """Export a message as .eml (RFC 822) download."""
+    eml_text = email_svc.export_eml(uuid)
+    if eml_text is None:
+        raise HTTPException(status_code=404, detail=f"Message not found: {uuid[:8]}")
+    filename = f"{uuid[:12]}.eml"
+    return Response(
+        content=eml_text.encode("utf-8"),
+        media_type="message/rfc822",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/import-eml", status_code=201)
+def import_eml(data: dict, email_svc: EmailService = Depends(get_email_service)):
+    """Import a .eml file as an email draft."""
+    path = data.get("path", "")
+    if not path:
+        raise HTTPException(status_code=400, detail="Path is required.")
+    try:
+        draft = email_svc.import_eml(path)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"imported": 1, "uuid": draft["uuid"]}

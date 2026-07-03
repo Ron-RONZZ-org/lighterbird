@@ -256,6 +256,116 @@ class LetterService(CRUDService):
         text = re.sub(r'`([^`]+)`', r'<code>\1</code>', text)
         return text
 
+    # ── MD export/import ─────────────────────────────────────────────
+
+    def export_md(self, uuid: str | None = None, uuids: list[str] | None = None) -> str:
+        """Export one or more letters as YAML-frontmatter markdown.
+
+        Args:
+            uuid: Single letter UUID.
+            uuids: Batch list of UUIDs (takes precedence over *uuid*).
+
+        Returns:
+            Concatenated markdown string with frontmatter per letter.
+        """
+        from lighterbird.core.yaml_frontmatter import wrap
+
+        targets: list[str] = []
+        if uuids:
+            targets = uuids
+        elif uuid:
+            targets = [uuid]
+
+        parts: list[str] = []
+        for uid in targets:
+            letter = self.get(uid)
+            if not letter:
+                continue
+            body = self.get_body(uid)
+            plain_body = self._html_to_text(body)
+            tags = self.get_tags(uid)
+            meta = {
+                "uuid": letter.get("uuid"),
+                "domain": "letter",
+                "created_at": letter.get("created_at"),
+                "updated_at": letter.get("updated_at"),
+                "direction": letter.get("direction"),
+                "object": letter.get("object"),
+                "sender_manual": letter.get("sender_manual"),
+                "recipient_manual": letter.get("recipient_manual"),
+                "tags": tags if tags else None,
+            }
+            parts.append(wrap(plain_body, meta))
+
+        return "\n".join(parts)
+
+    def import_md(self, path: str) -> list[str]:
+        """Import a YAML-frontmatter markdown file as one or more letters.
+
+        Args:
+            path: Absolute path to the .md file.
+
+        Returns:
+            List of created letter UUIDs.
+        """
+        from pathlib import Path
+
+        from lighterbird.core.yaml_frontmatter import unwrap
+
+        filepath = Path(path)
+        if not filepath.exists():
+            raise FileNotFoundError(f"File not found: {path}")
+
+        content = filepath.read_text(encoding="utf-8")
+        meta, body = unwrap(content)
+
+        data: dict[str, Any] = {
+            "direction": meta.get("direction", "received"),
+            "object": meta.get("object", ""),
+            "sender_manual": meta.get("sender_manual", ""),
+            "recipient_manual": meta.get("recipient_manual", ""),
+        }
+
+        if meta.get("uuid"):
+            data["uuid"] = meta["uuid"]
+        if meta.get("created_at"):
+            data["created_at"] = meta["created_at"]
+        if meta.get("updated_at"):
+            data["updated_at"] = meta["updated_at"]
+
+        letter = self.create(data)
+
+        if body:
+            html_content = self.convert_to_html(body, "markdown")
+            self.store_body(letter["uuid"], html_content)
+
+        tags = meta.get("tags")
+        if tags:
+            if isinstance(tags, list):
+                self.set_tags(letter["uuid"], tags)
+            elif isinstance(tags, str):
+                self.set_tags(letter["uuid"], [tags])
+
+        return [letter["uuid"]]
+
+    @staticmethod
+    def _html_to_text(html_content: str) -> str:
+        """Strip HTML tags and entities to produce readable plain text."""
+        import re
+        if not html_content:
+            return ""
+        clean = re.sub(r'<style[^>]*>.*?</style>', '', html_content, flags=re.DOTALL)
+        clean = re.sub(r'<script[^>]*>.*?</script>', '', clean, flags=re.DOTALL)
+        clean = re.sub(r'<br\s*/?>', '\n', clean)
+        clean = re.sub(r'</p>', '\n\n', clean)
+        clean = re.sub(r'</div>', '\n', clean)
+        clean = re.sub(r'<[^>]+>', '', clean)
+        clean = clean.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
+        clean = clean.replace('&quot;', '"').replace('&#39;', "'")
+        clean = re.sub(r'&#(\d+);', lambda m: chr(int(m.group(1))), clean)
+        clean = re.sub(r'&#x([0-9a-fA-F]+);', lambda m: chr(int(m.group(1), 16)), clean)
+        return clean.strip()
+
     def convert_to_html(self, content: str, fmt: str) -> str:
         """Convert markdown or plain text to HTML."""
         if fmt == "html":

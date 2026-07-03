@@ -24,6 +24,8 @@ Traditional PIM apps drown you in sidebars, nested menus, and feature flags. Lig
 - `!todo list --mode tree` — toggle between flat and tree view
 - `!todo list --sort priority` — sort by priority, due date, or title
 - `!email send --help` — see all flags and params in autocomplete
+- `!email/!todo/!journal/!contact/!calendar/!letter export` — export items as .eml, .ics, .vcf, .md
+- `!email/!todo/!journal/!contact/!calendar/!letter import` — import items from standard file formats
 - Just type naturally → ask the built-in LLM to do things on your behalf
 - As-you-type command suggestions with UUID/entity completion — no memorisation needed
 

@@ -5,6 +5,13 @@
   let letter = $derived(data?.letter || {});
   let body = $derived(data?.body || "");
 
+  function handleKeydown(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "p") {
+      e.preventDefault();
+      window.print();
+    }
+  }
+
   function respond() {
     tabStore.open("form", "Send Letter", { form: "letter-send", initialData: {
       "respond-to": letter.uuid,
@@ -18,9 +25,27 @@
   }
 
   function printLetter() {
+    window.print();
+  }
+
+  async function exportMarkdown() {
     if (!letter.uuid) return;
-    const renderUrl = `/api/v1/letters/letters/${letter.uuid}/render`;
-    window.open(renderUrl, "_blank");
+    try {
+      const res = await fetch(`/api/v1/letters/export-md/${letter.uuid}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      const blob = new Blob([text], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${letter.object || "letter"}.md`.replace(/[^a-zA-Z0-9._ -]/g, "_");
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Export markdown failed", err);
+    }
   }
 
   function senderDisplay() {
@@ -34,10 +59,13 @@
   }
 </script>
 
+<svelte:window onkeydown={handleKeydown} />
+
 <div class="letter-view">
   <div class="toolbar">
     <button class="tool-btn" onclick={respond} title="Respond to this letter">Respond ↩</button>
-    <button class="tool-btn" onclick={printLetter} title="Print letter" disabled={!body}>Print 🖨</button>
+    <button class="tool-btn" onclick={printLetter} title="Print (Ctrl+P)"><kbd>Ctrl+P</kbd> Print</button>
+    <button class="tool-btn" onclick={exportMarkdown} title="Export as Markdown">Export .md</button>
     <div class="toolbar-spacer"></div>
     {#if letter.respond_to_uuid}
       <span class="meta-info">In reply to: {letter.respond_to_uuid.slice(0, 8)}</span>
@@ -185,5 +213,40 @@
   .thread-label {
     color: var(--clr-muted);
     font-size: 0.72rem;
+  }
+
+  /* Print styles — hide non-essential UI */
+  @media print {
+    :global(.tab-bar),
+    :global(.command-bar),
+    :global(.home-content),
+    :global(.top-progress),
+    .toolbar,
+    .thread-bar {
+      display: none !important;
+    }
+    .letter-view {
+      padding: 0 !important;
+      height: auto !important;
+    }
+    .headers {
+      color: #000 !important;
+    }
+    .headers .value {
+      color: #000 !important;
+    }
+    .headers .label {
+      color: #444 !important;
+    }
+    .body-area {
+      overflow: visible !important;
+      background: #fff !important;
+    }
+    .letter-frame {
+      color: #000 !important;
+    }
+    hr {
+      border-top-color: #ccc !important;
+    }
   }
 </style>

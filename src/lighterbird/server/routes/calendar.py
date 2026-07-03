@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 from lighterbird.server.deps import get_calendar_service
 from lighterbird.server.schemas import (
@@ -10,6 +11,11 @@ from lighterbird.server.schemas import (
     EventCreate, EventUpdate, EventResponse, EventListResponse, EventQueryParams,
 )
 from lighterbird.calendar.service import CalendarService
+
+
+class ImportIcsRequest(BaseModel):
+    path: str
+    calendar_uuid: str
 
 router = APIRouter(prefix="/api/v1/calendar", tags=["calendar"])
 
@@ -188,3 +194,53 @@ def update_event(
 @router.delete("/events/{uuid}", status_code=204)
 def delete_event(uuid: str, cal_svc: CalendarService = Depends(get_calendar_service)):
     cal_svc.delete_event(uuid)
+
+
+# ── ICS export / import ────────────────────────────────────────────────
+
+
+class EventExportIcsResponse(BaseModel):
+    ics: str
+    filename: str
+    count: int
+
+
+@router.get("/export-ics", response_model=EventExportIcsResponse)
+@router.get("/export-ics/{uuid}", response_model=EventExportIcsResponse)
+def export_ics(
+    uuid: str | None = None,
+    uuids: str | None = Query(default=None, description="Comma-separated event UUIDs"),
+    cal_svc: CalendarService = Depends(get_calendar_service),
+):
+    uuids_list = uuids.split(",") if uuids else None
+    ics_text = cal_svc.export_ics(uuid=uuid, uuids=uuids_list)
+    if not ics_text.strip():
+        raise HTTPException(status_code=404, detail="No events found to export")
+    count_text = uuid if uuid else (uuids or "")
+    ident = count_text.split(",")[0][:8] if count_text else "events"
+    return EventExportIcsResponse(
+        ics=ics_text,
+        filename=f"lighterbird-{ident}.ics",
+        count=0 if not ics_text.strip() else ics_text.count("BEGIN:VEVENT"),
+    )
+
+
+@router.post("/import-ics")
+def import_ics(
+    data: ImportIcsRequest,
+    cal_svc: CalendarService = Depends(get_calendar_service),
+):
+    # Validate calendar exists
+    cal = cal_svc.calendars.get(data.calendar_uuid)
+    if not cal:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Calendar not found: {data.calendar_uuid[:8]}",
+        )
+    try:
+        uuids = cal_svc.import_ics(data.calendar_uuid, data.path)
+    except FileNotFoundError:
+        raise HTTPException(status_code=400, detail=f"File not found: {data.path}")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"status": "imported", "count": len(uuids), "uuids": uuids}

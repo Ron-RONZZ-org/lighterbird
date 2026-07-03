@@ -42,6 +42,8 @@ def calendar_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
                 "  !calendar event modify      — Modify an event\n"
                 "  !calendar event delete      — Delete an event\n"
                 "  !calendar event search      — Search events\n"
+                "  !calendar event export ics  — Export event(s) as ICS\n"
+                "  !calendar event import ics  — Import events from ICS file\n"
                 "  !calendar account list      — List calendars\n"
                 "  !calendar account add       — Add a calendar\n"
                 "  !calendar account modify    — Modify a calendar\n"
@@ -170,6 +172,47 @@ def event_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         except Exception:
             pass
     return {"type": "status", "title": "Event(s) Deleted", "data": {"removed": removed}}
+
+
+@command("calendar.event.export_ics")
+def event_export_ics(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!calendar event export ics <uuid> [<uuid>...]"""
+    if not remaining:
+        raise CommandValidationError("Missing event UUID(s).", "Usage: !calendar event export ics <uuid> [uuid...]")
+    svc: CalendarService = get_calendar_service()
+    ics_text = svc.export_ics(uuids=remaining)
+    return {"type": "status", "title": "ICS Export", "data": {"ics": ics_text, "count": ics_text.count("BEGIN:VEVENT")}}
+
+
+@command("calendar.event.import_ics")
+def event_import_ics(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!calendar event import ics <path> [--calendar UUID]
+
+    Calendar UUID is specified via --calendar flag or auto-detected.
+    """
+    if not remaining:
+        raise CommandValidationError("Missing ICS file path.", "Usage: !calendar event import ics <path> [--calendar UUID]")
+    path = remaining[0]
+    svc: CalendarService = get_calendar_service()
+    calendar_uuid = flags.get("calendar", "")
+    if not calendar_uuid:
+        calendars = svc.list_calendars()
+        if len(calendars) == 1:
+            calendar_uuid = calendars[0]["uuid"]
+        elif len(calendars) == 0:
+            raise CommandValidationError("No calendars configured.", "Add one with: !calendar account add <url>")
+        else:
+            raise CommandValidationError(
+                "Multiple calendars. Specify one with --calendar <uuid>.",
+                "Usage: !calendar event import ics <path> --calendar <uuid>",
+            )
+    try:
+        uuids = svc.import_ics(calendar_uuid, path)
+    except FileNotFoundError:
+        raise CommandValidationError(f"File not found: {path}")
+    except Exception as e:
+        raise CommandValidationError(str(e))
+    return {"type": "status", "title": "ICS Import", "data": {"imported": len(uuids), "uuids": uuids}}
 
 
 @command("calendar.event.search")

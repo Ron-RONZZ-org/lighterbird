@@ -58,6 +58,37 @@ def create_contact(
     return contact
 
 
+@router.post("/contacts/import-vcf", status_code=200)
+def import_vcf(
+    data: dict,
+    svc: ContactService = Depends(get_contact_service),
+):
+    """Import contacts from a VCF file path."""
+    path = data.get("path", "")
+    if not path:
+        raise HTTPException(status_code=400, detail="Path is required.")
+    try:
+        count = svc.import_vcf(path)
+        return {"imported": count, "message": f"Imported {count} contact(s)"}
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ImportError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/contacts/export-vcf")
+def export_vcf(
+    uuid: str | None = None,
+    svc: ContactService = Depends(get_contact_service),
+):
+    """Export contact(s) to VCF format."""
+    try:
+        vcf_text = svc.export_vcf(uuid=uuid)
+        return {"vcf": vcf_text}
+    except ImportError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/contacts/{uuid}")
 def get_contact(uuid: str, svc: ContactService = Depends(get_contact_service)):
     contact = svc.get(uuid)
@@ -102,34 +133,3 @@ def update_contact(
 @router.delete("/contacts/{uuid}", status_code=204)
 def delete_contact(uuid: str, svc: ContactService = Depends(get_contact_service)):
     svc.delete(uuid)
-
-
-@router.post("/contacts/import-vcf", status_code=200)
-def import_vcf(
-    data: dict,
-    svc: ContactService = Depends(get_contact_service),
-):
-    """Import contacts from a VCF file path."""
-    path = data.get("path", "")
-    if not path:
-        raise HTTPException(status_code=400, detail="Path is required.")
-    try:
-        count = svc.import_vcf(path)
-        return {"imported": count, "message": f"Imported {count} contact(s)"}
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except ImportError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.get("/contacts/export-vcf")
-def export_vcf(
-    uuid: str | None = None,
-    svc: ContactService = Depends(get_contact_service),
-):
-    """Export contact(s) to VCF format."""
-    try:
-        vcf_text = svc.export_vcf(uuid=uuid)
-        return {"vcf": vcf_text}
-    except ImportError as e:
-        raise HTTPException(status_code=400, detail=str(e))

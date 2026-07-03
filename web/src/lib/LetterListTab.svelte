@@ -27,6 +27,19 @@
     { onNew: handleNew },
   );
 
+  let showImportDialog = $state(false);
+  let showExportDialog = $state(false);
+
+  let exportItems = $derived(letters.filter(l => sel.selectedKeys.has(l.uuid)));
+
+  function openImportDialog() {
+    showImportDialog = true;
+  }
+
+  function openExportDialog() {
+    showExportDialog = true;
+  }
+
   let highlight = $derived(data?.highlight || "");
   let highlightActive = $state(false);
   $effect(() => {
@@ -264,6 +277,8 @@
         {/if}
       </div>
       <div class="toolbar-right">
+        <button class="tool-btn" disabled={sel.numSelected === 0} title="Export selected (E)"
+          onclick={openExportDialog}>Export <kbd>E</kbd></button>
         <button class="tool-btn danger" disabled={sel.numSelected === 0} title="Delete selected (Delete key)"
           onclick={() => { sel.confirmDelete = true; }}>Delete <kbd>Del</kbd></button>
       </div>
@@ -278,6 +293,7 @@
       </div>
       <div class="toolbar-right">
         <button class="tool-btn primary" onclick={handleNew} title="Add received letter">+ New <kbd>N</kbd></button>
+        <button class="tool-btn" onclick={openImportDialog} title="Import letters (M)">Import <kbd>M</kbd></button>
         <button class="tool-btn primary" onclick={() => {
           tabStore.open("form", "Send Letter", { form: "letter-send", initialData: {
             _returnIdKey: "persistent-letter-list",
@@ -392,6 +408,22 @@
       message="Delete {sel.numSelected} letter{sel.numSelected !== 1 ? 's' : ''}?"
       onConfirm={async () => { sel.confirmDelete = false; await deleteSelected(); }}
       onDismiss={() => { sel.confirmDelete = false; }}
+    />
+  {/if}
+
+  {#if showExportDialog}
+    <ExportDialog
+      domain="letter"
+      items={exportItems}
+      format="md"
+      onClose={() => showExportDialog = false}
+    />
+  {/if}
+  {#if showImportDialog}
+    <ImportDialog
+      domain="letter"
+      format="md"
+      onClose={() => showImportDialog = false}
     />
   {/if}
 </div>

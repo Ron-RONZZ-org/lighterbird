@@ -78,6 +78,19 @@
 
   let uuidCopy = createCopyState();
 
+  let showImportDialog = $state(false);
+  let showExportDialog = $state(false);
+
+  let exportItems = $derived(todos.filter(t => sel.selectedKeys.has(t.uuid)));
+
+  function openImportDialog() {
+    showImportDialog = true;
+  }
+
+  function openExportDialog() {
+    showExportDialog = true;
+  }
+
   /** Check if all ancestors of a tree item are expanded. */
   function isParentExpanded(todo, index, allTodos, expandedSet) {
     if (!todo._depth || todo._depth === 0) return true;
@@ -257,6 +270,8 @@
         {/if}
       </div>
       <div class="right">
+        <button class="tool-btn" disabled={sel.numSelected === 0} title="Export selected (E)"
+          onclick={openExportDialog}>Export <kbd>E</kbd></button>
         <button class="tool-btn danger" disabled={sel.numSelected === 0} title="Delete selected (Delete key)"
           onclick={() => { sel.confirmDelete = true; }}>Delete <kbd>Del</kbd></button>
       </div>
@@ -289,6 +304,7 @@
       </div>
       <div class="right">
         <button class="tool-btn primary" onclick={handleNew} title="Add new todo">+ New <kbd>N</kbd></button>
+        <button class="tool-btn" onclick={openImportDialog} title="Import todos (M)">Import <kbd>M</kbd></button>
       </div>
     {/if}
   </div>
@@ -365,6 +381,22 @@
       message="Delete {sel.numSelected} todo{sel.numSelected !== 1 ? 's' : ''}?"
       onConfirm={async () => { sel.confirmDelete = false; await sel.deleteSelected(); }}
       onDismiss={() => { sel.confirmDelete = false; }}
+    />
+  {/if}
+
+  {#if showExportDialog}
+    <ExportDialog
+      domain="todo"
+      items={exportItems}
+      format="md"
+      onClose={() => showExportDialog = false}
+    />
+  {/if}
+  {#if showImportDialog}
+    <ImportDialog
+      domain="todo"
+      format="md"
+      onClose={() => showImportDialog = false}
     />
   {/if}
 </div>

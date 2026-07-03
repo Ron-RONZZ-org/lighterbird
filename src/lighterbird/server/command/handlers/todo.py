@@ -41,6 +41,8 @@ def todo_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "  !todo search <query>      — Search todos\n"
                 "  !todo draft               — List / recall todo drafts\n"
                 "  !todo template            — Manage templates\n"
+                "  !todo export md           — Export todo(s) to .md\n"
+                "  !todo import md           — Import todo(s) from .md\n"
                 "\nFlags for !todo add:\n"
                 "  --parent <uuid>           — Set parent (subtask)\n"
                 "  --dependency <uuid>       — Set dependency\n"
@@ -598,4 +600,102 @@ def todo_template_delete(remaining: list[str],
         "type": "status",
         "title": "Template Deleted",
         "data": {"name": tpl["name"]},
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Markdown Export / Import subcommands
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@command("todo.export")
+def todo_export_root(remaining: list[str],
+                     flags: dict[str, str]) -> dict[str, Any]:
+    """!todo export — Show available export subcommands."""
+    return {
+        "type": "status",
+        "title": "Export Commands",
+        "data": {
+            "_summary": (
+                "Available !todo export commands:\n"
+                "  !todo export md <uuid>         — Export a single todo\n"
+                "  !todo export md --all          — Export all todos\n"
+            ),
+        },
+    }
+
+
+@command("todo.export.md")
+def todo_export_md(remaining: list[str],
+                   flags: dict[str, str]) -> dict[str, Any]:
+    """!todo export md <uuid> | !todo export md --all"""
+    svc: TodoService = get_todo_service()
+
+    if "all" in flags:
+        result = svc.export_md()
+    elif remaining:
+        result = svc.export_md(uuid=remaining[0])
+    else:
+        raise CommandValidationError(
+            "Missing todo UUID or --all flag.",
+            "Usage: !todo export md <uuid> | !todo export md --all",
+        )
+
+    if not result:
+        raise CommandValidationError(
+            f"Todo not found: {remaining[0][:8]}" if remaining
+            else "No todos to export.",
+        )
+
+    import datetime
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"todo_export_{timestamp}.md"
+    with open(filename, "w") as f:
+        f.write(result)
+
+    return {
+        "type": "status",
+        "title": "Todo Exported",
+        "data": {"file": filename, "size": len(result)},
+    }
+
+
+@command("todo.import")
+def todo_import_root(remaining: list[str],
+                     flags: dict[str, str]) -> dict[str, Any]:
+    """!todo import — Show available import subcommands."""
+    return {
+        "type": "status",
+        "title": "Import Commands",
+        "data": {
+            "_summary": (
+                "Available !todo import commands:\n"
+                "  !todo import md <path>         — Import from .md file\n"
+            ),
+        },
+    }
+
+
+@command("todo.import.md")
+def todo_import_md(remaining: list[str],
+                   flags: dict[str, str]) -> dict[str, Any]:
+    """!todo import md <path>"""
+    if not remaining:
+        raise CommandValidationError(
+            "Missing file path.",
+            "Usage: !todo import md <path>",
+        )
+
+    path = remaining[0]
+    svc: TodoService = get_todo_service()
+
+    try:
+        created = svc.import_md(path)
+    except FileNotFoundError as e:
+        raise CommandValidationError(str(e)) from e
+
+    return {
+        "type": "status",
+        "title": "Todo(s) Imported",
+        "data": {"created": created, "count": len(created)},
     }
