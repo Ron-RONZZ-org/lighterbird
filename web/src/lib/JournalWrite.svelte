@@ -82,6 +82,16 @@
 </script>
 
 <form onsubmit={handleSubmit} class="journal-write-form">
+  <!-- Toolbar -->
+  <div class="form-toolbar">
+    <div class="toolbar-left">
+      <span class="toolbar-title">Write Journal Entry</span>
+    </div>
+    <div class="toolbar-right">
+      <CowriteButton {cowrite} />
+    </div>
+  </div>
+
   <div class="field">
     <label for="title">Title</label>
     <input id="title" type="text" bind:value={title} required placeholder="Entry title" />
@@ -92,10 +102,7 @@
   </div>
   <div class="field">
     <label for="text">Content</label>
-    <div class="textarea-actions">
-      <textarea id="text" bind:value={text} rows="12" placeholder="Write your journal entry here..."></textarea>
-      <CowriteButton {cowrite} />
-    </div>
+    <textarea id="text" bind:value={text} rows="12" placeholder="Write your journal entry here..."></textarea>
   </div>
   <div class="actions">
     <button type="button" class="draft-btn" onclick={saveDraft} disabled={savingDraft || !title && !text}>
@@ -108,7 +115,7 @@
       {/if}
     </button>
     <button type="submit" disabled={writing || !title}>
-      {writing ? "Saving..." : "Save Entry"} <kbd>⌃Enter</kbd>
+      {writing ? "Saving..." : "Save Entry"} <kbd>Ctrl+Enter</kbd>
     </button>
   </div>
 
@@ -120,7 +127,16 @@
 <svelte:window onkeydown={handleFormKeydown} />
 
 <style>
-  .journal-write-form { padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; position: relative; }
+  .journal-write-form { padding: 1rem 1rem 0 1rem; display: flex; flex-direction: column; gap: 0.75rem; position: relative; }
+  .form-toolbar {
+    display: flex; align-items: center; gap: 0.5rem;
+    margin: -1rem -1rem 0 -1rem; padding: 0.4rem 0.5rem;
+    background: #16162a; border-bottom: 1px solid #333; min-height: 2.2rem;
+    flex-shrink: 0; font-family: monospace; font-size: 0.82rem;
+  }
+  .toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 0.5rem; }
+  .toolbar-right { margin-left: auto; }
+  .toolbar-title { color: #b0b0c0; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; }
   .field { display: flex; flex-direction: column; gap: 0.25rem; }
   .field label { font-size: 0.8rem; color: #7c7c9a; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
   .field input, .field textarea {
@@ -128,7 +144,6 @@
     padding: 0.5rem; border-radius: 4px; font-family: inherit; font-size: 0.9rem;
   }
   .field textarea { resize: vertical; min-height: 200px; font-family: inherit; line-height: 1.5; }
-  .textarea-actions { display: flex; flex-direction: column; gap: 0.3rem; }
   .actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
   .actions button {
     background: #0f3460; color: #e0e0e0; border: none; padding: 0.5rem 1.5rem;

@@ -4,7 +4,7 @@
   import { renderMarkdown } from "./markdown.js";
   import { journal as journalApi } from "./api.js";
   import { tabStore } from "./tabStore.svelte.js";
-  import { formatListItemDate, openPrintWindow } from "./listTabShared.svelte.js";
+  import { formatListItemDate, openPrintWindow, sanitizeFilename } from "./listTabShared.svelte.js";
 
   let { data: _data = {} } = $props();
 
@@ -40,6 +40,13 @@
       e.preventDefault();
       cancelEdit();
     }
+    if (e.key === "e" && !e.ctrlKey && !e.metaKey && !e.altKey && !editing) {
+      const tag = e.target.tagName;
+      if (tag !== "INPUT" && tag !== "TEXTAREA" && !e.target.isContentEditable) {
+        e.preventDefault();
+        exportMarkdown();
+      }
+    }
     if ((e.ctrlKey || e.metaKey) && e.key === "p") {
       e.preventDefault();
       printJournal();
@@ -65,6 +72,29 @@
       { label: "UUID", value: entry.uuid?.slice(0, 8) || "" },
     ];
     openPrintWindow(entry.title || "(untitled)", headers, htmlBody);
+  }
+
+  async function exportMarkdown() {
+    if (!entry.uuid) return;
+    try {
+      const resp = await fetch(`/api/v1/journal/export-md/${entry.uuid}`);
+      if (!resp.ok) {
+        const detail = await resp.json().catch(() => ({ detail: `HTTP ${resp.status}` }));
+        throw new Error(detail.detail || "Export failed");
+      }
+      const text = await resp.text();
+      const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = sanitizeFilename(entry.title || "journal-entry", ".md");
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      tabStore.open("error", "Export Failed", { message: err.message || "Export failed" });
+    }
   }
 
   async function saveEdit() {
@@ -95,6 +125,9 @@
         <button class="tool-btn" onclick={startEdit} title="Edit (i)">✎ Edit <kbd>i</kbd></button>
         <button class="tool-btn" onclick={printJournal} title="Print / Export PDF (Ctrl+P)">
           <kbd>Ctrl+P</kbd> Print / PDF
+        </button>
+        <button class="tool-btn" onclick={exportMarkdown} title="Export as Markdown">
+          Export <kbd>E</kbd>
         </button>
       {/if}
     </div>
