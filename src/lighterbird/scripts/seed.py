@@ -96,7 +96,7 @@ def _create_account(db, email: str, password: str, sort_order: int,
         from lighterbird.email.keyring import set_password
         set_password(email, password)
 
-    for folder in ("INBOX", "Sent"):
+    for folder in ("INBOX", "Sent", "Trash", "Spam", "Junk"):
         db.execute(
             "INSERT OR IGNORE INTO folders (account_email, name, created_at, updated_at) VALUES (?, ?, ?, ?)",
             (email, folder, now, now),

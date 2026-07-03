@@ -127,6 +127,11 @@ def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         existing_exclude = filters.get("exclude_folder", [])
         filters["exclude_folder"] = existing_exclude + ["Trash", "Spam", "Junk", "Bin"]
 
+    if sort_by:
+        filters["sort"] = sort_by
+    if group_by:
+        filters["group"] = group_by
+
     messages = [normalize_message(m) for m in svc.search_messages(filters, limit=limit)]
     title_suffix = f" ({folder_filter})" if folder_filter else ""
     if not_folder_filter:
