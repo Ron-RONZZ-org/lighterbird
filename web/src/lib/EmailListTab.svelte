@@ -21,12 +21,14 @@
     { key: "s", desc: "Change sort order", category: "Email List" },
     { key: "p", desc: "Toggle params dialog", category: "Email List" },
     { key: "r", desc: "Reply to selected message", category: "Email List" },
+    { key: "Ctrl+R", desc: "Sync emails", modifiers: "Ctrl", category: "Email List" },
     { key: "Ctrl+M", desc: "Move selected messages", modifiers: "Ctrl", category: "Email List" },
   ]);
 
   let { data = {} } = $props();
   let messages = $derived(data?.messages || []);
   let total = $derived(data?.total || 0);
+  let syncing = $state(false);
 
   // ── Config store ─────────────────────────────────────────────────────
   let config = $state(createEmailConfigStore());
@@ -121,6 +123,12 @@
             // No active UI state — close the tab
             tabStore.close(tabStore.active?.id);
             return true;
+        }
+
+        if ((e.ctrlKey || e.metaKey) && e.key === "r") {
+          e.preventDefault();
+          handleSync();
+          return true;
         }
 
         if ((e.ctrlKey || e.metaKey) && e.key === "m") {
@@ -277,6 +285,32 @@
     } catch { /* silent */ }
   }
 
+  async function handleSync() {
+    if (syncing) return;
+    syncing = true;
+    try {
+      await emailApi.sync();
+      await refreshList();
+    } catch { /* silent */ }
+    finally { syncing = false; }
+  }
+
+  // Live-update read status when a message is viewed in EmailViewTab
+  $effect(() => {
+    function handler(e) {
+      const { uuid, is_read } = e.detail || {};
+      if (!uuid) return;
+      const active = tabStore.active;
+      if (!active || !active.data?.messages) return;
+      const updatedMessages = active.data.messages.map((m) =>
+        m.uuid === uuid ? { ...m, is_read } : m,
+      );
+      tabStore.update(active.id, { ...active.data, messages: updatedMessages });
+    }
+    window.addEventListener("email-read-status-changed", handler);
+    return () => window.removeEventListener("email-read-status-changed", handler);
+  });
+
   // ── Folder tree callbacks ──────────────────────────────────────────
   function handleToggleFolder(folderName) {
     const next = { ...folderVisibility };
@@ -407,6 +441,8 @@
     onToggleParamsDialog={() => { showParamsDialog = !showParamsDialog; }}
     onImport={openImportDialog}
     onExport={openExportDialog}
+    onSync={handleSync}
+    {syncing}
   />
 
   <!-- Folder tree dropdown overlay -->

@@ -96,12 +96,52 @@
   }
 
   function reply() {
+    // If message is from the user's own account (e.g. Sent folder),
+    // reply to the original recipient instead of self
+    const isFromSelf = msg.from_addr && msg.account_email &&
+      msg.from_addr.toLowerCase().includes(msg.account_email.toLowerCase());
+    const to = isFromSelf
+      ? (parseRecipients(msg.to_recipients)[0] || "")
+      : msg.from_addr || "";
+
     const subject = (msg.subject || "").toLowerCase().startsWith("re:")
       ? msg.subject : `Re: ${msg.subject}`;
     tabStore.open("form", "Reply", {
       form: "email-send",
       initialData: {
-        to: msg.from_addr || "",
+        to,
+        subject,
+        body: `\n\n${quoteBody()}`,
+        account: msg.account_email || "",
+      },
+    });
+  }
+
+  function replyAll() {
+    const isFromSelf = msg.from_addr && msg.account_email &&
+      msg.from_addr.toLowerCase().includes(msg.account_email.toLowerCase());
+
+    let allTo, allCc;
+    if (isFromSelf) {
+      // Sent by user — reply back to original recipients
+      allTo = parseRecipients(msg.to_recipients).filter(Boolean).join(", ");
+      allCc = parseRecipients(msg.cc_recipients).filter(Boolean).join(", ");
+    } else {
+      // Received from someone — reply to sender + all To recipients
+      allTo = [
+        msg.from_addr || "",
+        ...parseRecipients(msg.to_recipients),
+      ].filter(Boolean).join(", ");
+      allCc = parseRecipients(msg.cc_recipients).filter(Boolean).join(", ");
+    }
+
+    const subject = (msg.subject || "").toLowerCase().startsWith("re:")
+      ? msg.subject : `Re: ${msg.subject}`;
+    tabStore.open("form", "Reply All", {
+      form: "email-send",
+      initialData: {
+        to: allTo,
+        cc: allCc,
         subject,
         body: `\n\n${quoteBody()}`,
         account: msg.account_email || "",
@@ -166,6 +206,9 @@
       await emailApi.markRead(msg.uuid, true);
       msg = { ...msg, is_read: true };
       tabStore.update(tabId, msg);
+      window.dispatchEvent(new CustomEvent("email-read-status-changed", {
+        detail: { uuid: msg.uuid, is_read: true },
+      }));
     } catch { /* ignore */ }
   }
 

@@ -297,14 +297,29 @@ def email_reply(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         raise CommandValidationError(f"Message not found: {uuid[:8]}")
 
     reply_all = "all" in flags
-    to = msg.get("from_addr", "")
-    if reply_all:
+
+    # Detect if message was sent by the user (e.g. in Sent folder).
+    # If so, reply to original recipients instead of self.
+    from_addr = (msg.get("from_addr") or "").lower()
+    account_email = (msg.get("account_email") or "").lower()
+    is_from_self = from_addr and account_email and account_email in from_addr
+
+    import json as json_mod
+    orig_to = (json_mod.loads(msg.get("to_recipients", "[]"))
+               if isinstance(msg.get("to_recipients"), str)
+               else (msg.get("to_recipients") or []))
+
+    if is_from_self:
+        # Message sent by user — reply to original To recipients
+        to = ", ".join(orig_to) if orig_to else ""
+    else:
+        to = msg.get("from_addr", "")
+
+    if reply_all and not is_from_self:
         # Include original To recipients (excluding self)
-        import json as json_mod
-        orig_to = json_mod.loads(msg.get("to_recipients", "[]")) if isinstance(msg.get("to_recipients"), str) else (msg.get("to_recipients") or [])
         to_list = [to]
         for r in orig_to:
-            if r.strip().lower() != msg.get("account_email", "").lower():
+            if r.strip().lower() != account_email:
                 to_list.append(r.strip())
         to = ", ".join(to_list)
 

@@ -10,8 +10,8 @@
   // svelte-ignore state_referenced_locally
   const _initial = initialData;
 
-  let accountUuid = $state(_initial.account || "");
-  let to = $state(_initial.to || "");
+  let accountEmail = $state(_initial.account || "");
+  let toList = $state(_initial.to ? _initial.to.split(",").map((s) => s.trim()).filter(Boolean) : []);
   let subject = $state(_initial.subject || "");
   let body = $state(_initial.body || "");
   let ccList = $state(_initial.cc ? _initial.cc.split(",").map((s) => s.trim()).filter(Boolean) : []);
@@ -66,14 +66,14 @@
   let cowrite = $state(createCowrite({
     formType: "email-send",
     getCurrentContent: () => ({
-      to,
+      to: toList.join(", "),
       subject,
       body,
       cc: ccList.join(", "),
       bcc: bccList.join(", "),
     }),
     applyEdit: (field, text) => {
-      if (field === "to") to = text;
+      if (field === "to") toList = text.split(",").map((s) => s.trim()).filter(Boolean);
       else if (field === "subject") subject = text;
       else if (field === "body") body = text;
       else if (field === "cc") ccList = text.split(",").map((s) => s.trim()).filter(Boolean);
@@ -90,7 +90,7 @@
       const result = await draftsApi.save(
         "email",
         subject || "(no subject)",
-        { account: accountUuid, to, subject, body, cc: ccList.join(","), bcc: bccList.join(","), priority, bodyFormat },
+        { account: accountEmail, to: toList.join(","), subject, body, cc: ccList.join(","), bcc: bccList.join(","), priority, bodyFormat },
         draftUuid,
       );
       draftUuid = result.uuid;
@@ -120,8 +120,9 @@
   }
 
   // Dirty state — compare current against initial
+  let initialToArray = $derived(_initial.to ? _initial.to.split(",").map((s) => s.trim()).filter(Boolean) : []);
   let dirty = $derived(
-    to !== (_initial.to || "")
+    toList.length !== initialToArray.length || toList.some((e, i) => e !== initialToArray[i])
     || subject !== (_initial.subject || "")
     || body !== (_initial.body || "")
     || ccList.length > 0
@@ -132,11 +133,23 @@
   );
   $effect(() => { onDirtyChange(dirty); });
 
+  // Last-used account persistence
+  const LS_LAST_ACCOUNT = "lighterbird:email:lastUsedAccount";
+  function getLastUsedAccount() {
+    try { return localStorage.getItem(LS_LAST_ACCOUNT) || ""; } catch { return ""; }
+  }
+  function saveLastUsedAccount(email) {
+    try { localStorage.setItem(LS_LAST_ACCOUNT, email); } catch { /* best-effort */ }
+  }
+
   $effect(() => {
     emailApi.listAccounts().then((data) => {
       accounts = data.accounts || [];
-      if (accounts.length > 0 && !accountUuid) {
-        accountUuid = accounts[0].uuid;
+      if (accounts.length > 0 && !accountEmail) {
+        // Try last-used, fall back to first
+        const last = getLastUsedAccount();
+        const match = last ? accounts.find((a) => a.email === last) : null;
+        accountEmail = match ? match.email : accounts[0].email;
       }
     }).catch(() => {});
   });
@@ -168,17 +181,19 @@
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!to || !subject) return;
+    if (toList.length === 0 || !subject) return;
     sending = true;
     try {
+      if (accountEmail) saveLastUsedAccount(accountEmail);
       const flags = {
-        ...(accountUuid ? { account: accountUuid } : {}),
+        ...(accountEmail ? { account: accountEmail } : {}),
         ...(ccList.length > 0 ? { cc: ccList.join(",") } : {}),
         ...(bccList.length > 0 ? { bcc: bccList.join(",") } : {}),
         priority,
         ...(bodyFormat !== "markdown" ? { [`body-format`]: bodyFormat } : {}),
       };
-      const remaining = [to, subject, body];
+      const toStr = toList.join(",");
+      const remaining = [toStr, subject, body];
       // Attachments passed as --file flags
       for (const att of attachmentFiles) {
         remaining.push(`--file`);
@@ -201,9 +216,9 @@
   <div class="row-fields">
     <FormField label="Account" class="flex-1">
       {#snippet children()}
-        <select id="account" class="ff-input" bind:value={accountUuid}>
+        <select id="account" class="ff-input" bind:value={accountEmail}>
           {#each accounts as acct}
-            <option value={acct.uuid}>{acct.email}</option>
+            <option value={acct.email}>{acct.email}</option>
           {/each}
         </select>
       {/snippet}
@@ -223,7 +238,13 @@
 
   <FormField label="To" required={true}>
     {#snippet children()}
-      <input id="to" type="email" class="ff-input" bind:value={to} required placeholder="recipient@example.com" list="contact-emails" />
+      <MultiEntryField
+        label=""
+        bind:entries={toList}
+        placeholder="recipient@example.com"
+        autocompleteQuery={searchContactEmails}
+        allowDuplicates={false}
+      />
     {/snippet}
   </FormField>
 
@@ -245,12 +266,6 @@
       />
     </div>
   </div>
-
-  <datalist id="contact-emails">
-    {#each contactSuggestions as email}
-      <option value={email}></option>
-    {/each}
-  </datalist>
 
   <FormField label="Subject" required={true}>
     {#snippet children()}
@@ -296,7 +311,7 @@
   </FormField>
 
   <div class="form-actions">
-    <button type="button" class="btn-draft" onclick={saveDraft} disabled={savingDraft || !to && !subject && !body}>
+    <button type="button" class="btn-draft" onclick={saveDraft} disabled={savingDraft || toList.length === 0 && !subject && !body}>
       {#if savingDraft}
         Saving…
       {:else if draftSaved}
@@ -305,8 +320,8 @@
         Save Draft <kbd>Ctrl+S</kbd>
       {/if}
     </button>
-    <button type="submit" class="btn-primary" disabled={sending || !to || !subject}>
-      {sending ? "Sending..." : "Send"} <kbd>⌃Enter</kbd>
+    <button type="submit" class="btn-primary" disabled={sending || toList.length === 0 || !subject}>
+      {sending ? "Sending..." : "Send"} <kbd>Ctrl+Enter</kbd>
     </button>
   </div>
 
