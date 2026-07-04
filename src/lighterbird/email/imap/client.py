@@ -31,11 +31,12 @@ _SPECIAL_USE_MAP = {
 def _parse_list_response(line: bytes) -> dict[str, Any] | None:
     """Parse a single IMAP LIST response line.
 
+    Handles both quoted and unquoted folder names.
     Returns dict with ``name``, ``delimiter``, ``flags``, or None.
     """
     if not line:
         return None
-    # RFC 3501: (flags) "/" "name"
+    # RFC 3501: (flags) "/" "name"  or  (flags) "/" name
     parts = line.split(b'"')
     flags_str = b""
     delimiter = "/"
@@ -50,13 +51,17 @@ def _parse_list_response(line: bytes) -> dict[str, Any] | None:
             if end_idx >= 0:
                 flags_str = raw[paren_idx + 1 : end_idx]
 
+    # Determine delimiter and name from split parts:
+    # len(parts) == 3: (flags) "/" name  → parts[1]=/, parts[2]=name
+    # len(parts) == 5: (flags) "/" "name"  → parts[1]=/, parts[3]=name
     if len(parts) >= 3:
         delimiter = parts[1].decode("utf-8", errors="replace")
-        name = parts[2].strip().strip(b'"').strip()
-        if isinstance(name, bytes):
-            name = name.decode("utf-8", errors="replace")
-    elif len(parts) >= 2:
-        name = parts[-2].strip().strip(b'"').strip()
+        if len(parts) == 5:
+            # Quoted name
+            name = parts[3].strip()
+        else:
+            # Unquoted name
+            name = parts[2].strip()
         if isinstance(name, bytes):
             name = name.decode("utf-8", errors="replace")
 
@@ -68,12 +73,15 @@ def _parse_list_response(line: bytes) -> dict[str, Any] | None:
         for f in flags_str.split() if f
     ]
 
-    # Detect SPECIAL-USE
+    # Detect SPECIAL-USE (case-insensitive matching)
     special_use = None
     for flag in flags:
-        upper_flag = flag.upper()
-        if upper_flag in _SPECIAL_USE_MAP:
-            special_use = _SPECIAL_USE_MAP[upper_flag]
+        upper_flag = flag.upper().lstrip("\\")
+        for key, val in _SPECIAL_USE_MAP.items():
+            if key.upper().lstrip("\\") == upper_flag:
+                special_use = val
+                break
+        if special_use:
             break
 
     return {
