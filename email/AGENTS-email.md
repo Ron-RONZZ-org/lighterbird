@@ -2,7 +2,7 @@
 
 ## Summary
 
-Email and contacts module, forked from [A-lien](../../A-lien). Provides IMAP sync, SMTP send, contact management (VCF), account management, Sieve filter management, and spam blocking.
+Email module, forked from [A-lien](../../A-lien). Provides IMAP sync, SMTP send, account management, Sieve filter management, spam blocking, and email signatures.
 
 ## Purpose and Expected Behavior
 
@@ -10,15 +10,14 @@ Email and contacts module, forked from [A-lien](../../A-lien). Provides IMAP syn
 
 - **`imap/`** — IMAP sync engine: client, message parser, concurrent sync, UID-based dedup
 - **`smtp.py`** — SMTP send with attachments, HTML body, signatures, priority headers
-- **`contacts/`** — Contact CRUD, VCF import/export, FTS5 search, categories, dedup
 - **`accounts/`** — Email account CRUD + keyring password management
 - **`filters/`** — Sieve filter CRUD + ManageSieve sync
 - **`spam.py`** — Spam block management + Sieve rule generation
+- **`signatures/`** — Per-account email signature management
 
 ## Constraints and Invariants
 
 - **Passwords in system keyring only** — no `pasvorto` column in the accounts table
-- **Contacts indexed by FTS5** on name, email, organization, notes
 - **Messages use IMAP UID for dedup** — `imap_uid` is the stable remote identifier
 - **HTML body is stored alongside plaintext** — both are preserved for the frontend to decide rendering
 - **Attachments are metadata-only in DB** — file blobs are extracted on demand via IMAP FETCH
@@ -30,7 +29,7 @@ Email and contacts module, forked from [A-lien](../../A-lien). Provides IMAP syn
 - `sync_all()` returns `dict[str, SyncResult]` keyed by account UUID
 - `search_messages(filters)` uses IMAP SEARCH (network) — local FTS5 may be added later
 - `send_email(...)` stores a copy of the sent message in the local DB
-- `import_vcf(path)` returns count of imported contacts
+- `import_vcf(path)` returns count of imported contacts (legacy — use `contacts/` module for new VCF imports)
 
 ## Documentation Reference
 
@@ -49,10 +48,11 @@ Flag changes (read/delete) are synced back to the IMAP server via a backlog queu
 
 ## Domain-Specific Rules for Agents
 
-1. **Fork the service layer, not the CLI.** A-lien's CLI code (Typer commands) stays behind. The services are what matter — they expose the `RetpostoService` and `KontaktoService` APIs.
-2. **Rename to English.** `retposto` → `email`, `kontakto` → `contacts`, `mesagoj` → `messages`, `dosierujoj` → `folders`. Update all variable names and comments accordingly.
+1. **Fork the service layer, not the CLI.** A-lien's CLI code (Typer commands) stays behind. The services are what matter — they expose the `EmailService` API.
+2. **Rename to English.** `retposto` → `email`, `mesagoj` → `messages`, `dosierujoj` → `folders`, `retposto_konto` → `accounts`. Update all variable names and comments accordingly.
 3. **DB column names use English** — migrated from Esperanto in v0.3.0 (e.g., `subject`, `received_at`, `account_email`).
-4. **Simplify the mixin hierarchy.** A-lien uses 7+ mixins composed into a single class. Consider flattening to 2-3 service classes (`EmailService`, `ContactsService`, `AccountService`).
-5. **Strip keyring.py** — lighterbird already has one in `core/keyring.py`.
-6. **OAuth2 must be added** for modern email providers (Gmail, Outlook). Design the auth interface now even if only password auth is implemented initially.
-7. **Adapt error reporting.** A-lien uses `error()`, `info()` from A.core. lighterbird should use Python logging or raise structured exceptions for the server layer to handle.
+4. **Simplify the mixin hierarchy.** A-lien uses 7+ mixins composed into a single class. lighterbird uses `EmailService` + `AccountService` with simpler delegation.
+5. **Contacts extracted to own module.** Contacts CRUD and VCF import/export now live in `src/lighterbird/contacts/`. The email module communicates with contacts only via `contact_uuid` references.
+6. **Strip keyring.py** — lighterbird already has one in `core/keyring.py`.
+7. **OAuth2 must be added** for modern email providers (Gmail, Outlook). Design the auth interface now even if only password auth is implemented initially.
+8. **Adapt error reporting.** A-lien uses `error()`, `info()` from A.core. lighterbird should use Python logging or raise structured exceptions for the server layer to handle.

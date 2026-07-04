@@ -1,4 +1,4 @@
-"""Email and contacts module — IMAP, SMTP, contacts, accounts."""
+"""Email module — IMAP, SMTP, accounts, Sieve filters, signatures."""
 
 from lighterbird.email.service import EmailService
 

@@ -9,32 +9,43 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 `src/lighterbird/server/` provides:
 
 - **`app.py`** — FastAPI application factory, startup/shutdown lifecycle
-- **`routes/`** — API route handlers organized by domain (email, calendar, admin)
-- **`middleware/`** — CORS, error handling, request logging, static file serving
-- **`deps.py`** — FastAPI dependency injection (get_db, get_email_service, etc.)
+- **`routes/`** — API route handlers organized by domain (email, calendar, contacts, journal, todo, letter, profiles, chat, admin, cowrite)
+- **`command/`** — `!` command system: tree definition, parser, registry, response models, per-domain handlers
+- **`llm/`** — LLM integration: chat sessions, streaming, provider resolution
+- **`cowrite/`** — AI-assisted writing integration for form editors
+- **`middleware.py`** — CORS, error handling, request logging, static file serving
+- **`deps.py`** — FastAPI dependency injection (get_db, get_email_service, get_db_for, etc.)
 - **`schemas.py`** — Pydantic models for request/response validation
-- **`tasks.py`** — Background task management (email polling, CalDAV sync)
+- **`tasks.py`** — Background task management (email polling, CalDAV sync, backup scheduler)
 
 ## Constraints and Invariants
 
 - **The server is a single-user app** — no authentication middleware needed initially (future: optional auth)
 - **Svelte SPA is served as static files** — the FastAPI app mounts `web/dist/` as static files
 - **WebSocket endpoint for streaming LLM responses** — the command bar needs real-time streaming
-- **REST API for everything else** — messages, contacts, calendar, todo CRUD
-- **One background thread for email sync** — polls IMAP accounts on configurable interval
-- **One background thread for CalDAV sync** — processes the sync queue
+- **REST API for everything else** — messages, contacts, calendar, todo, journal, letters, profiles CRUD
+- **Command system (`!` commands)** — the primary user interaction model. Defined in `command/tree.py`, dispatched by `command/registry.py`, handled by per-domain handlers in `command/handlers/`
+- **Backup scheduler** — automatic timestamped backups of all domain databases on configurable schedule
+- **Cowrite API** — AI-assisted writing via `POST /api/v1/cowrite`, used by form editors (ComposeEmail, TodoAddForm, JournalWrite)
 - **API version prefix**: `/api/v1/...`
 
 ## Input/Output Expectations
 
+- `GET /api/v1/command/tree` — fetch command tree metadata (frontend bootstraps from this)
+- `POST /api/v1/command/execute` — execute a `!` command, return structured response
 - `GET /api/v1/email/messages` — list messages (filters: account, folder, read, starred)
 - `GET /api/v1/email/messages/{uuid}` — get single message with body
 - `POST /api/v1/email/sync` — trigger IMAP sync
 - `POST /api/v1/email/send` — send email (body: to, subject, body, cc, bcc, attachments)
 - `GET /api/v1/calendar/events` — list events (filter: date range, calendar)
 - `POST /api/v1/calendar/events` — create event
-- `GET /api/v1/ai/chat` — WebSocket for streaming LLM chat
-- `POST /api/v1/ai/command` — execute a `!` command, return structured result
+- `GET /api/v1/contacts` — list/search contacts
+- `GET /api/v1/journal/entries` — list journal entries
+- `GET /api/v1/todo/tasks` — list/search tasks
+- `GET /api/v1/letters/letters` — list letters
+- `GET /api/v1/profiles` — list user profiles
+- `POST /api/v1/cowrite` — AI-assisted writing
+- `WebSocket /api/v1/ai/chat` — streaming LLM chat
 
 ## Documentation Reference
 
@@ -43,9 +54,12 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 
 ## Domain-Specific Rules for Agents
 
-1. **Thin route layer** — routes call into email/calendar/core services and return JSON. No business logic in route handlers.
+1. **Thin route layer** — routes call into domain services and return JSON. No business logic in route handlers.
 2. **Pydantic schemas for all I/O** — never return raw dicts from routes. Define request/response models in `schemas.py`.
 3. **Streaming LLM responses** — use FastAPI's `StreamingResponse` or WebSocket for real-time LLM output. The command bar should show tokens as they arrive.
 4. **Error responses are structured JSON** — `{"error": "...", "code": "...", "suggestion": "..."}` (inspired by A-lien's actionable error messages).
 5. **CORS is wide open in development** — restrictive in production (or behind a reverse proxy).
 6. **Static file serving for production** — mount `web/dist/` at the root path. For development, use Svelte's Vite dev server with a proxy to FastAPI.
+7. **Command system is the primary API.** All domain operations are accessible via `!commands`. REST routes exist for frontend convenience (list/search CRUD), but the command handler is the authoritative implementation.
+8. **Register all interactive commands.** Any command that may be invoked with missing required args must be registered in `_INTERACTIVE_FORMS` (see root AGENTS.md) so the server can return a `form-required` response with pre-filled options.
+9. **Backup covers all domain databases.** The backup scheduler auto-discovers `.db` files in the data directory — no need to register new databases manually.
