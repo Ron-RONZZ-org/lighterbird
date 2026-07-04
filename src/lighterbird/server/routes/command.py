@@ -12,100 +12,31 @@ from fastapi import APIRouter, HTTPException
 
 from lighterbird.server.command.errors import CommandError, CommandNotFound, CommandValidationError
 from lighterbird.server.command.models import CommandRequest, CommandResponse
-from lighterbird.server.command.registry import dispatch, get_definitions
-from lighterbird.server.command.tree import get_command_tree
+from lighterbird.server.command.registry import dispatch, get_definitions, resolve_form_type
+from lighterbird.server.command.tree import get_command_tree, find_command_depth, get_param_names
 
 router = APIRouter(prefix="/api/v1", tags=["command"])
 
-# ── Interactive command form mapping ──────────────────────────────────────
-# Maps a command path (dotted) to its form type string.
-_INTERACTIVE_FORMS: dict[str, str] = {
-    "email.send": "email-send",
-    "email.reply": "email-send",
-    "email.forward": "email-send",
-    "email.sieve.add": "email-sieve-add",
-    "email.sieve.modify": "email-sieve-modify",
-    "calendar.event.add": "calendar-event-add",
-    "contact.add": "contacts-add",
-    "contact.modify": "contacts-modify",
-    "email.account.add": "email-account-add",
-    "email.account.modify": "email-account-modify",
-    "calendar.account.add": "calendar-account-add",
-    "calendar.account.modify": "calendar-account-modify",
-    "todo.add": "todo-add",
-    "todo.modify": "todo-modify",
-    "todo.template.add": "todo-template-add",
-    "todo.template.modify": "todo-template-modify",
-    "journal.write": "journal-write",
-    "user.saved-commands.add": "user-saved-commands-add",
-    "user.saved-commands.modify": "user-saved-commands-modify",
-    "user.info.add": "user-info-add",
-    "user.info.modify": "user-info-modify",
-    "llm.profile.new": "llm-profile-new",
-    "llm.profile.set": "llm-profile-set",
-    "backup.config.add": "backup-config-add",
-    "backup.config.modify": "backup-config-modify",
-    "backup.prune": "backup-prune",
-    "sync": "sync",
-    "letter.add": "letter-add",
-    "letter.send": "letter-send",
-    "todo.delete": "todo-delete",
-    "todo.template.delete": "todo-template-delete",
-    "email.account.delete": "email-account-delete",
-    "calendar.event.delete": "calendar-event-delete",
-    "calendar.account.delete": "calendar-account-delete",
-    "backup.config.delete": "backup-config-delete",
-    "user.saved-commands.delete": "user-saved-commands-delete",
-    "journal.delete": "journal-delete",
-    "reset": "reset-no-backup",
-}
-
-
-def _resolve_form_type(tokens: list[str]) -> str | None:
-    """Check if the given command path maps to an interactive form.
-
-    Tries progressively shorter paths (full path down to 2 tokens)
-    to find a match.
-    """
-    for i in range(len(tokens), 1, -1):
-        key = ".".join(tokens[:i])
-        if key in _INTERACTIVE_FORMS:
-            return _INTERACTIVE_FORMS[key]
-    return None
-
 
 def _extract_partial_data(tokens: list[str], flags: dict[str, str]) -> dict[str, str]:
-    """Extract whatever the user has already typed as initial form data.
-
-    Positional args after the command path become param values.
-    Flag values become form field values.
-    """
+    """Extract whatever the user has already typed as initial form data."""
     data: dict[str, str] = {}
-
-    # Find where the command path ends and positional args begin
-    from lighterbird.server.command.tree import _find_command_depth
-
-    cmd_depth = _find_command_depth(tokens)
+    cmd_depth = find_command_depth(tokens)
     if cmd_depth < len(tokens):
         params = tokens[cmd_depth:]
-        # Map param names from the tree
         key = ".".join(tokens[:cmd_depth]) if cmd_depth > 0 else ""
-        if key in _INTERACTIVE_FORMS:
-            from lighterbird.server.command.tree import _get_param_names
-            names = _get_param_names(tokens[:cmd_depth])
+        if resolve_form_type(tokens[:cmd_depth]):
+            names = get_param_names(tokens[:cmd_depth])
             for i, val in enumerate(params):
                 if i < len(names):
                     data[names[i]] = val
                 else:
                     break
-
-    # Flag values (skip meta-flags like --form)
     for k, v in flags.items():
         if k == "form":
             continue
         if v:
             data[k] = v
-
     return data
 
 
@@ -123,7 +54,7 @@ def execute_command(req: CommandRequest) -> dict[str, Any]:
     try:
         # --form flag: skip dispatch, return form-required immediately
         if "form" in req.flags:
-            form_type = _resolve_form_type(req.tokens)
+            form_type = resolve_form_type(req.tokens)
             if form_type:
                 return {
                     "type": "form-required",
@@ -145,7 +76,7 @@ def execute_command(req: CommandRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(e))
     except CommandValidationError as e:
         # If the failed command has an interactive form, return form-required
-        form_type = _resolve_form_type(req.tokens)
+        form_type = resolve_form_type(req.tokens)
         if form_type:
             return {
                 "type": "form-required",
