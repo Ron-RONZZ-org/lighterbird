@@ -125,8 +125,11 @@ def _seed_email(data_dir: Path, creds: dict[str, str]) -> None:
     pw2 = creds.get("TEST_EMAIL_2_PASS", "")
     _create_account(db, email2, pw2, 1, creds, now)
 
-    # ── Sample messages ──────────────────────────────────────────────────
-    _seed_email_messages(db, email1, email2, now)
+    # NOTE: Email messages are NOT seeded. Seeded messages have imap_uid=NULL,
+    # which breaks read-status sync (backlog entries can't be processed) and
+    # trash sync (_retry_pending_trash requires imap_uid IS NOT NULL).
+    # Real messages fetched from the IMAP server during testing have proper
+    # imap_uid values and work correctly with all flag-sync mechanisms.
 
 
 def _seed_email_messages(db, email1: str, email2: str, now: str) -> None:
