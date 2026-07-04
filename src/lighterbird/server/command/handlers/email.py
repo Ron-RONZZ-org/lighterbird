@@ -462,7 +462,7 @@ def email_archive(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
 
 
 
-@command("email.export_eml")
+@command("email.export.eml")
 def email_export_eml(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email export eml <uuid>
 
@@ -489,7 +489,7 @@ def email_export_eml(remaining: list[str], flags: dict[str, str]) -> dict[str, A
     }
 
 
-@command("email.import_eml")
+@command("email.import.eml")
 def email_import_eml(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email import eml <path>
 

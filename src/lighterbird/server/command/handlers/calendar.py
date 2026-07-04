@@ -174,7 +174,7 @@ def event_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "status", "title": "Event(s) Deleted", "data": {"removed": removed}}
 
 
-@command("calendar.event.export_ics")
+@command("calendar.event.export.ics")
 def event_export_ics(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar event export ics <uuid> [<uuid>...]"""
     if not remaining:
@@ -184,7 +184,7 @@ def event_export_ics(remaining: list[str], flags: dict[str, str]) -> dict[str, A
     return {"type": "status", "title": "ICS Export", "data": {"ics": ics_text, "count": ics_text.count("BEGIN:VEVENT")}}
 
 
-@command("calendar.event.import_ics")
+@command("calendar.event.import.ics")
 def event_import_ics(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar event import ics <path> [--calendar UUID]
 

@@ -30,6 +30,11 @@ SCRIPTS: list[tuple[str, str, int]] = [
         "Full suite (list, create, search, backup, sync, tab nav, LLM)",
         180,
     ),
+    (
+        "e2e_full.mjs",
+        "Full coverage: every registered command, CRUD, search, export/import, navigation",
+        420,
+    ),
 ]
 
 # ── Tests ───────────────────────────────────────────────────────────────────
