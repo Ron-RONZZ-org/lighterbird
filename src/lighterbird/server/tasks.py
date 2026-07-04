@@ -187,6 +187,15 @@ class EmailSyncWorker(BackgroundWorker):
                 "[tasks] Drained %d pending flag syncs from backlog",
                 backlog,
             )
+        # Drain the send queue (outbound emails that failed on first attempt)
+        send_result = svc.process_send_queue()
+        if send_result.get("sent") or send_result.get("retrying"):
+            logger.info(
+                "[tasks] Send queue: %d sent, %d retrying, %d failed",
+                send_result.get("sent", 0),
+                send_result.get("retrying", 0),
+                send_result.get("failed", 0),
+            )
 
     @staticmethod
     def _do_process_trash(payload: dict) -> None:

@@ -6,9 +6,10 @@ Stripped of CalDAV sync hooks for MVP (local-only events).
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, timedelta
 from typing import Any
 
+from lighterbird.core.backoff import compute_backoff_seconds
 from lighterbird.core.crud import CRUDService
 
 
@@ -134,34 +135,59 @@ class EventService(CRUDService):
             (remote_href, datetime.now(timezone.utc).isoformat(), event_uuid),
         )
 
-    def process_sync_queue(self) -> list[dict[str, Any]]:
-        """Process all pending sync jobs for remote CalDAV calendars.
+    def process_sync_queue(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Process pending and retryable sync jobs with exponential backoff.
 
-        Called by the background sync worker. Returns a list of job results.
+        Queries for jobs that are either:
+        * ``status = 'pending'`` — fresh jobs, retried immediately.
+        * ``status = 'failed'`` AND ``next_attempt <= now`` AND
+          ``retries < max_retries`` — retryable jobs.
+
+        On success: status becomes ``'completed'``.
+        On failure: ``retries`` is incremented, ``next_attempt`` is set
+        with exponential backoff (60s, 2min, 4min, … up to 24h).
+        After ``max_retries`` exhausted: stays ``'failed'`` permanently.
+
+        Args:
+            limit: Maximum number of jobs to process this call.
+
+        Returns:
+            List of job result dicts with id, event, status, and optional error.
         """
         from lighterbird.calendar.caldav import push_event, delete_event, remote_http_url
         from lighterbird.calendar.ics import events_to_ics
         from lighterbird.calendar.keyring import get_password
 
-        results: list[dict[str, Any]] = []
-        pending = list(self.db.execute(
-            "SELECT * FROM calendar_sync_queue WHERE status = 'pending' "
-            "ORDER BY id ASC LIMIT 50"
+        now_ts = datetime.now(timezone.utc)
+        now_iso = now_ts.isoformat()
+
+        jobs = list(self.db.execute(
+            """SELECT * FROM calendar_sync_queue
+               WHERE (status = 'pending'
+                      OR (status = 'failed'
+                          AND retries < max_retries
+                          AND (next_attempt IS NULL OR next_attempt <= ?)))
+               ORDER BY id ASC
+               LIMIT ?""",
+            (now_iso, limit),
         ))
 
-        for job in pending:
+        results: list[dict[str, Any]] = []
+
+        for job in jobs:
             job_id = job["id"]
             event_uuid = job["event_uuid"]
             operation = job["operation"]
             cal_uuid = job["calendar_uuid"]
             remote_href = job.get("remote_href") or None
+            retries = job.get("retries", 0)
+            max_retries = job.get("max_retries", 5)
 
             try:
                 # Mark as running
-                now_ts = datetime.now(timezone.utc).isoformat()
                 self.db.execute(
                     "UPDATE calendar_sync_queue SET status = 'running', updated_at = ? WHERE id = ?",
-                    (now_ts, job_id),
+                    (now_iso, job_id),
                 )
 
                 # Get calendar config
@@ -176,7 +202,6 @@ class EventService(CRUDService):
                 password = get_password(cal_uuid) or ""
 
                 if operation == "push":
-                    # Read the event from DB
                     event = self.db.execute_one(
                         "SELECT * FROM events WHERE uuid = ?", (event_uuid,)
                     )
@@ -186,8 +211,6 @@ class EventService(CRUDService):
                             url, username, password, ics_payload,
                             event_uuid, remote_href,
                         )
-                        # After successful push, store the remote_href
-                        # Use existing remote_href or derive from push URL
                         new_href = remote_href or f"{url.rstrip('/')}/{event_uuid}.ics"
                         if not event.get("remote_href"):
                             self._update_remote_href(event_uuid, new_href)
@@ -197,18 +220,41 @@ class EventService(CRUDService):
                 # Mark completed
                 self.db.execute(
                     "UPDATE calendar_sync_queue SET status = 'completed', updated_at = ? WHERE id = ?",
-                    (now_ts, job_id),
+                    (now_iso, job_id),
                 )
                 results.append({"id": job_id, "event": event_uuid[:8], "status": "completed"})
 
             except Exception as exc:
                 err_msg = str(exc)
-                self.db.execute(
-                    "UPDATE calendar_sync_queue SET status = 'failed', error = ?, updated_at = ? "
-                    "WHERE id = ?",
-                    (err_msg, datetime.now(timezone.utc).isoformat(), job_id),
-                )
-                results.append({"id": job_id, "event": event_uuid[:8], "status": "failed", "error": err_msg})
+                new_retries = retries + 1
+                if new_retries >= max_retries:
+                    # Exhausted — stay permanently failed
+                    self.db.execute(
+                        "UPDATE calendar_sync_queue SET status = 'failed', "
+                        "retries = ?, error = ?, updated_at = ? WHERE id = ?",
+                        (new_retries, err_msg, now_iso, job_id),
+                    )
+                    results.append({
+                        "id": job_id, "event": event_uuid[:8],
+                        "status": "failed", "error": err_msg,
+                        "permanent": True,
+                    })
+                else:
+                    # Schedule next attempt with exponential backoff
+                    delay = compute_backoff_seconds(new_retries - 1, base_seconds=60)
+                    next_attempt = (now_ts + timedelta(seconds=delay)).isoformat()
+                    self.db.execute(
+                        "UPDATE calendar_sync_queue SET status = 'failed', "
+                        "retries = ?, next_attempt = ?, error = ?, updated_at = ? "
+                        "WHERE id = ?",
+                        (new_retries, next_attempt, err_msg, now_iso, job_id),
+                    )
+                    results.append({
+                        "id": job_id, "event": event_uuid[:8],
+                        "status": "retrying", "error": err_msg,
+                        "retry_in_seconds": delay,
+                        "retries": new_retries,
+                    })
 
         return results
 
