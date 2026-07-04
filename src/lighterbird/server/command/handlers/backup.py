@@ -171,7 +171,7 @@ def backup_now(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 @command("backup.list")
 def backup_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!backup list [--stem email|calendar|contacts|todo|journal] [--strategy ID]
+    """!backup list [--stem email|calendar|contacts|todo|journal|letters|profiles|user_commands] [--strategy ID]
 
     List available backup snapshots (7z archives and legacy .db files).
     Optionally filter by stem or strategy.
