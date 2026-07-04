@@ -94,7 +94,13 @@ npm run dev          # Vite dev server (port 5173)
 npm run build        # Build to web/dist/
 ```
 
-The Vite dev server proxies `/api/` requests to the FastAPI backend (port 8000).
+The Vite dev server proxies `/api/` requests to the FastAPI backend. By default it connects to port 8000. To use a different backend port, set the `LIGHTERBIRD_PORT` environment variable:
+
+```bash
+LIGHTERBIRD_PORT=8765 npm run dev
+```
+
+This is the same env var read by `python -m lighterbird` and `lighterbird-dev` to determine which port to bind.
 
 ## Post-Send Banner
 

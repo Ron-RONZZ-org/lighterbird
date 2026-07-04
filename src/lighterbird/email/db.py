@@ -159,6 +159,26 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_message_id
     ON messages(account_email, message_id)
     WHERE message_id IS NOT NULL;
 """
+_SEND_QUEUE_TABLE = """
+CREATE TABLE IF NOT EXISTS send_queue (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    msg_uuid        TEXT NOT NULL UNIQUE REFERENCES messages(uuid) ON DELETE CASCADE,
+    account_email   TEXT NOT NULL,
+    body_format     TEXT NOT NULL DEFAULT 'markdown',
+    signature       TEXT NOT NULL DEFAULT '',
+    priority        INTEGER NOT NULL DEFAULT 3,
+    status          TEXT NOT NULL DEFAULT 'pending'
+                    CHECK(status IN ('pending', 'running', 'completed', 'failed')),
+    retries         INTEGER NOT NULL DEFAULT 0,
+    max_retries     INTEGER NOT NULL DEFAULT 10,
+    next_attempt    TEXT,
+    last_error      TEXT NOT NULL DEFAULT '',
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL
+);
+"""
+_IDX_SEND_QUEUE_STATUS = "CREATE INDEX IF NOT EXISTS idx_send_queue_status ON send_queue(status, next_attempt);"
+
 _IDX_MESSAGES_DATE = "CREATE INDEX IF NOT EXISTS idx_messages_date ON messages(received_at);"
 _IDX_ATTACHMENTS_MESSAGE = "CREATE INDEX IF NOT EXISTS idx_email_attachments_message ON email_attachments(message_uuid);"
 
@@ -169,6 +189,7 @@ _SCHEMA_STATEMENTS: list[str] = [
     _CREATE_ATTACHMENTS,
     _DROP_LEGACY_ALDONAJXOJ,
     _SYNC_BACKLOG_TABLE,
+    _SEND_QUEUE_TABLE,
     _CREATE_SPAM_BLOCKS,
     _CREATE_SIEVE_SCRIPTS,
     _CREATE_SIEVE_ACTIVATIONS,
@@ -184,6 +205,7 @@ _SCHEMA_STATEMENTS: list[str] = [
     _IDX_ATTACHMENTS_MESSAGE,
     _IDX_SYNC_BACKLOG_MSG,
     _IDX_SIEVE_ACTIVATIONS_ACCOUNT,
+    _IDX_SEND_QUEUE_STATUS,
 ]
 
 

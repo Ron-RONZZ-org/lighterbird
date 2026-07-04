@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -86,10 +87,11 @@ def main() -> None:
     """Run the development server."""
     import uvicorn
 
+    port = int(os.environ.get("LIGHTERBIRD_PORT", 8000))
     uvicorn.run(
         "lighterbird.server.app:create_app",
         host="127.0.0.1",
-        port=8000,
+        port=port,
         reload=True,
         factory=True,
     )
