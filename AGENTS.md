@@ -97,6 +97,7 @@ lighterbird/
 │       ├── server/              # FastAPI web server: routes, middleware, command system
 │       ├── todo/                # Task CRUD, priority formulas, subtasks, dependencies
 │       └── user_commands/       # User-defined saved commands with template expansion
+├── reset/                       # Reset module AGENTS file
 ├── tests/                       # Shared tests root
 │   ├── conftest.py              # Shared fixtures (E2E server, DB isolation)
 │   ├── test_e2e.py              # E2E test runner (wraps Playwright .mjs scripts)
@@ -126,6 +127,8 @@ lighterbird/
 │   └── AGENTS-todo.md
 ├── profiles/                    # Module-level AGENTS-profiles.md
 │   └── AGENTS-profiles.md
+├── reset/                       # Module-level AGENTS-reset.md
+│   └── AGENTS-reset.md
 ├── user_commands/               # Module-level AGENTS-user-commands.md
 │   └── AGENTS-user-commands.md
 ├── letter/                      # Module-level AGENTS-letter.md
@@ -322,6 +325,8 @@ Backend list commands return typed responses that map to frontend components:
 | `!letter export md <uuid>` / `!letter export pdf <uuid>` | `status` (md/pdf) | ExportDialog |
 | `!letter import md <path>` | `status` | ImportDialog |
 | `!user info list` | `status` (profiles list) | DynamicForm / StatusPopup |
+| `!reset <path.7z>` | `status` (reset complete) | StatusPopup |
+| `!reset --no-backup` | `form-required` (reset-no-backup) | ConfirmDialog |
 
 ---
 
@@ -343,7 +348,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 ## What to Avoid
 
 - **Do not import from A-ecosystem packages at runtime.** lighterbird forks the code — all dependencies must be vendored under `src/lighterbird/`. The `../A-lien` references in README are for development reference only.
-- **Do not duplicate logic across modules.** Each domain module (core, email, calendar, contacts, journal, letter, profiles, todo, user_commands) is self-contained. Shared utilities go in `core`.
+- **Do not duplicate logic across modules.** Each domain module (core, email, calendar, contacts, journal, letter, profiles, todo, reset, user_commands) is self-contained. Shared utilities go in `core`.
 - **Do not use `print()` for user output.** Use FastAPI structured responses or loguru/logging.
 - **Do not store credentials in SQLite.** Keyring only.
 - **Do not add heavy frameworks** (Django, SQLAlchemy, Celery) — this is a lightweight single-user app.
@@ -367,6 +372,7 @@ The following module-specific AGENTS files are located in their respective direc
 | Letter | `letter/AGENTS-letter.md` | Paper letter management, PDF rendering, templates |
 | Profiles | `profiles/AGENTS-profiles.md` | User identity profiles |
 | Todo | `todo/AGENTS-todo.md` | Task CRUD, priority formulas, subtasks, dependencies |
+| Reset | `reset/AGENTS-reset.md` | Reset to fresh state with optional backup |
 | User Commands | `user_commands/AGENTS-user-commands.md` | User-defined saved commands with template expansion |
 | Scripts | `scripts/AGENTS-scripts.md` | Dev CLI, seed data generator, test infrastructure |
 | Server | `server/AGENTS-server.md` | FastAPI routes, middleware, command system |
@@ -390,6 +396,7 @@ Root AGENTS.md (global rules)
     ├── profiles/AGENTS-profiles.md User identity profiles
     ├── todo/AGENTS-todo.md       Tasks, priorities, subtasks
     ├── user_commands/AGENTS-user-commands.md Saved commands
+    ├── reset/AGENTS-reset.md     Reset with optional backup
     ├── scripts/AGENTS-scripts.md Dev CLI, seed data, test infra
     ├── server/AGENTS-server.md   FastAPI backend, API routes
     └── web/AGENTS-web.md         Svelte SPA frontend

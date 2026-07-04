@@ -57,6 +57,7 @@ _INTERACTIVE_FORMS: dict[str, str] = {
     "backup.config.delete": "backup-config-delete",
     "user.saved-commands.delete": "user-saved-commands-delete",
     "journal.delete": "journal-delete",
+    "reset": "reset-no-backup",
 }
 
 
