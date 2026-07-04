@@ -1,4 +1,4 @@
-"""Calendar, todo, and journal module — CalDAV, events, tasks."""
+"""Calendar module — CalDAV sync and events."""
 
 from lighterbird.calendar.service import CalendarService
 
