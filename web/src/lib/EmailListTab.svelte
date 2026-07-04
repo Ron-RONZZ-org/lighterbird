@@ -7,6 +7,8 @@
   import MoveDialog from "./MoveDialog.svelte";
   import KeyboardShortcutOverlay from "./KeyboardShortcutOverlay.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
+  import ExportDialog from "./ExportDialog.svelte";
+  import ImportDialog from "./ImportDialog.svelte";
   import {
     createSelectionManager,
     createCopyState,
@@ -47,13 +49,17 @@
       if (data.filters.sort) cliFlags.sort = data.filters.sort;
       if (data.filters.group === "conversation") cliFlags.group = "conversation";
       if (data.filters.group === "sender") cliFlags.group = "sender";
-      let needsRequery = true;
+      let needsRequery = false;
       if (Object.keys(cliFlags).length > 0) {
+        // CLI flags from the backend command are already applied — just apply
+        // matching config so the toolbar reflects the correct state.
         const merged = config.mergeWithCliFlags(cliFlags);
         folderVisibility = merged.folderVisibility || {};
         sort = merged.sort || "newest";
         groupByConversation = !!merged.groupByConversation;
         groupBySender = !!merged.groupBySender;
+        // No re-query needed — CLI response is the authoritative view
+        needsRequery = false;
       } else {
         // No CLI flags — apply lastConfig from store
         const lastCfg = config.getLastConfig();
@@ -253,7 +259,11 @@
 
   $effect(() => {
     if (data && (data.filters !== undefined || data.query !== undefined)) {
-      currentFilters = data.filters || {};
+      const newFilters = data.filters || {};
+      // Avoid unnecessary object reference change that triggers cascading effects
+      if (JSON.stringify(currentFilters) !== JSON.stringify(newFilters)) {
+        currentFilters = newFilters;
+      }
       searchQuery = data.query || "";
       showSearch = !!(data.query);
     }
