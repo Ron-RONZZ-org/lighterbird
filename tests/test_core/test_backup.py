@@ -44,8 +44,13 @@ class TestBackupDatabase:
 
     def test_backup_creates_file(self, tmp_data_dir: Path, tmp_path: Path):
         """backup_database creates a timestamped copy in .backups/."""
+        import sqlite3
         db_path = tmp_path / "test.db"
-        db_path.write_text("hello")
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("CREATE TABLE t (x TEXT)")
+        conn.execute("INSERT INTO t VALUES ('hello')")
+        conn.commit()
+        conn.close()
         result = backup_database(db_path, retention=0)
         assert result is not None
         assert result.exists()
@@ -54,18 +59,32 @@ class TestBackupDatabase:
         assert ".backups" in str(result.parent)
 
     def test_backup_checksum_verified(self, tmp_data_dir: Path, tmp_path: Path):
-        """Backup content matches source (SHA-256 verified)."""
+        """Backup contains the same data (verified by reading back)."""
+        import sqlite3
         db_path = tmp_path / "verify.db"
-        db_path.write_text("some data here 123")
-        orig_hash = _sha256(db_path)
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("CREATE TABLE t (x TEXT)")
+        conn.execute("INSERT INTO t VALUES ('data')")
+        conn.commit()
+        conn.close()
         result = backup_database(db_path, retention=0)
         assert result is not None
-        assert _sha256(result) == orig_hash
+        assert result.exists()
+        # Verify we can read back the data from the backup
+        verify = sqlite3.connect(str(result))
+        row = verify.execute("SELECT x FROM t").fetchone()
+        assert row[0] == "data"
+        verify.close()
 
     def test_backup_timestamp_in_filename(self, tmp_data_dir: Path, tmp_path: Path):
         """Filename contains stem + strategy + timestamp."""
+        import sqlite3
         db_path = tmp_path / "email.db"
-        db_path.write_text("data")
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("CREATE TABLE t (x TEXT)")
+        conn.execute("INSERT INTO t VALUES ('d')")
+        conn.commit()
+        conn.close()
         result = backup_database(db_path, retention=0)
         assert result is not None
         # Should contain strategy prefix (default)
@@ -75,8 +94,13 @@ class TestBackupDatabase:
 
     def test_backup_adds_to_list(self, tmp_data_dir: Path, tmp_path: Path):
         """After backup, list_backups returns the new file."""
+        import sqlite3
         db_path = tmp_path / "calendar.db"
-        db_path.write_text("data")
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("CREATE TABLE t (x TEXT)")
+        conn.execute("INSERT INTO t VALUES ('d')")
+        conn.commit()
+        conn.close()
         assert len(list_backups()) == 0
         backup_database(db_path, retention=0)
         assert len(list_backups()) >= 1
