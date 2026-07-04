@@ -451,6 +451,39 @@ def store_message(
             else:
                 return msg_uuid  # Already known
 
+    # Fallback: cross-folder UID dedup — search for the same imap_uid
+    # across ALL folders (not just the current one). This catches
+    # messages that were moved between folders (e.g., trashed) and
+    # re-appear in the original folder during sync. Without this,
+    # a duplicate row with is_read=0 would be created, overwriting
+    # the user's local read status.
+    if imap_uid is not None and account_email:
+        existing = db.execute_one(
+            "SELECT uuid, is_read, is_starred FROM messages "
+            "WHERE account_email = ? AND imap_uid = ?",
+            (account_email, imap_uid),
+        )
+        if existing:
+            msg_uuid = existing["uuid"]
+            if force:
+                is_read = existing["is_read"]
+                is_starred = existing["is_starred"]
+                db.execute("DELETE FROM messages WHERE uuid = ?", (msg_uuid,))
+                _insert_message(db, data, msg_uuid, account_email, folder_name)
+                db.execute(
+                    "UPDATE messages SET is_read = ?, is_starred = ? WHERE uuid = ?",
+                    (is_read, is_starred, msg_uuid),
+                )
+            else:
+                # Update folder, uid, and timestamps for the move
+                db.execute(
+                    "UPDATE messages SET folder_name = ?, imap_uid = ?, "
+                    "updated_at = ? WHERE uuid = ?",
+                    (folder_name, imap_uid,
+                     datetime.now(timezone.utc).isoformat(), msg_uuid),
+                )
+            return msg_uuid
+
     # New message — insert
     _insert_message(db, data, msg_uuid, account_email, folder_name)
     return msg_uuid
@@ -460,22 +493,40 @@ def _insert_message(
     db: Any, data: dict[str, Any],
     msg_uuid: str, account_email: str | None, folder_name: str | None,
 ) -> None:
-    """Insert a message row."""
-    db.execute(
-        """INSERT OR REPLACE INTO messages
-           (uuid, account_email, folder_name, message_id, in_reply_to,
-            imap_uid, from_addr, to_recipients, cc_recipients,
-            subject, body, html_body,
-            priority, is_read, is_starred, is_deleted,
-            received_at, created_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-        (msg_uuid, account_email or data.get("account_email", ""),
-         folder_name or data.get("folder_name"),
-         data.get("message_id", ""), data.get("in_reply_to", ""),
-         data.get("imap_uid"), data.get("from_addr", ""), data.get("to_recipients", "[]"),
-         data.get("cc_recipients", "[]"), data.get("subject", ""), data.get("body", ""),
-         data.get("html_body", ""), data.get("priority", 5),
-         int(data.get("is_read", 0)), int(data.get("is_starred", 0)),
-         int(data.get("is_deleted", 0)), data.get("received_at", ""),
-         data.get("created_at", ""), data.get("updated_at", "")),
-    )
+    """Insert a message row safely.
+
+    Uses INSERT OR IGNORE to prevent silently overwriting existing
+    rows (e.g., when the UNIQUE INDEX on
+    ``(account_email, folder_name, imap_uid)`` triggers a REPLACE).
+    If the insert is ignored (row already exists), the existing data
+    — including user flags like ``is_read`` — is preserved.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    try:
+        db.execute(
+            """INSERT INTO messages
+               (uuid, account_email, folder_name, message_id, in_reply_to,
+                imap_uid, from_addr, to_recipients, cc_recipients,
+                subject, body, html_body,
+                priority, is_read, is_starred, is_deleted,
+                received_at, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (msg_uuid, account_email or data.get("account_email", ""),
+             folder_name or data.get("folder_name"),
+             data.get("message_id", ""), data.get("in_reply_to", ""),
+             data.get("imap_uid"), data.get("from_addr", ""), data.get("to_recipients", "[]"),
+             data.get("cc_recipients", "[]"), data.get("subject", ""), data.get("body", ""),
+             data.get("html_body", ""), data.get("priority", 5),
+             int(data.get("is_read", 0)), int(data.get("is_starred", 0)),
+             int(data.get("is_deleted", 0)), data.get("received_at", ""),
+             data.get("created_at", ""), data.get("updated_at", "")),
+        )
+    except Exception as exc:
+        # Row already exists (UUID or UNIQUE INDEX conflict).
+        # Preserve existing data — this is a safety net in case
+        # store_message's dedup logic missed a duplicate.
+        logger.warning(
+            "_insert_message skipped for %s (%s): %s",
+            msg_uuid[:8], data.get("imap_uid"), exc,
+        )
