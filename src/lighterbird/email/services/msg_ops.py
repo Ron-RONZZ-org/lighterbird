@@ -69,10 +69,14 @@ class MessageOpsService:
                 add.append("\\Deleted")
             else:
                 remove.append("\\Deleted")
-            client.set_flags(
+            ok = client.set_flags(
                 int(imap_uid), folder_name or "INBOX",
                 add=add or None, remove=remove or None,
             )
+            if not ok:
+                raise RuntimeError(
+                    f"Failed to set flags for UID {imap_uid} in folder {folder_name}"
+                )
         except Exception:
             self._enqueue_sync(msg)
         finally:
@@ -147,10 +151,14 @@ class MessageOpsService:
                             add.append("\\Deleted")
                         else:
                             remove.append("\\Deleted")
-                        client.set_flags(
+                        ok = client.set_flags(
                             int(imap_uid), folder,
                             add=add or None, remove=remove or None,
                         )
+                        if not ok:
+                            raise RuntimeError(
+                                f"Failed to set flags for UID {imap_uid} in folder {folder}"
+                            )
                         self.db.execute(
                             "DELETE FROM _sync_backlog WHERE id = ?",
                             (item["id"],),
