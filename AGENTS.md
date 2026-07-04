@@ -17,11 +17,11 @@ Context resolution order (highest priority first):
 ---
 ## Project Overview
 
-**lighterbird** is a command-driven personal information manager (PIM) integrating email, contacts, calendar, and todo into a single webapp with built-in BYOK (Bring Your Own Key) LLM support.
+**lighterbird** is a command-driven personal information manager (PIM) integrating email, contacts, calendar, todo, journal, and paper letters into a single webapp with built-in BYOK (Bring Your Own Key) LLM support.
 
 The interaction model is a **centralized command box** — type `!account add` to manage accounts, `!new` to see new emails, or just type naturally to chat with the built-in LLM. The philosophy: *you see only what you need* — no sidebars, no bloat.
 
-The backend is forked from proven code in [A-lien](../A-lien) (email, contacts), [A-organizi](../A-organizi) (calendar, todo, journal), and [A-core](../A-core) (DB, crypto, keyring, AI providers). The frontend is a Svelte SPA served by a FastAPI Python server.
+The backend is forked from proven code in [A-lien](../A-lien) (email), [A-organizi](../A-organizi) (calendar), and [A-core](../A-core) (DB, crypto, keyring, AI providers), with contacts, todo, and journal extracted into standalone modules. The frontend is a Svelte 5 SPA served by a FastAPI Python server.
 
 ---
 
@@ -78,40 +78,64 @@ lighterbird/
 ├── LICENSE                      # AGPL-3.0
 ├── pyproject.toml
 ├── .gitignore
+├── docs/                        # Documentation
 ├── src/
 │   └── lighterbird/             # Main Python package
 │       ├── __init__.py
 │       ├── __main__.py          # python -m lighterbird entry point
+│       ├── calendar/            # CalDAV sync, events
+│       ├── contacts/            # Contact CRUD, VCF import/export
+│       ├── core/                # DB, crypto, keyring, AI providers, paths
+│       ├── email/               # IMAP sync, SMTP send, accounts, Sieve, signatures
+│       ├── journal/             # Journal entry CRUD, markdown export/import, labels
+│       ├── letter/              # Paper letter management, HTML/PDF rendering
+│       ├── profiles/            # User identity profiles
 │       ├── scripts/             # Dev tooling: seed data generator, dev CLI
 │       │   ├── __init__.py
 │       │   ├── dev_cli.py       # lighterbird-dev CLI entry point
 │       │   └── seed.py          # Seed data generator for test databases
-│       ├── core/                # Forked from A-core: DB, crypto, keyring, AI, paths
-│       ├── email/               # Forked from A-lien: IMAP, SMTP, contacts, accounts
-│       ├── calendar/            # Forked from A-organizi: CalDAV, events, todo, journal
-│       └── server/              # FastAPI web server: routes, middleware, static serving
+│       ├── server/              # FastAPI web server: routes, middleware, command system
+│       ├── todo/                # Task CRUD, priority formulas, subtasks, dependencies
+│       └── user_commands/       # User-defined saved commands with template expansion
 ├── tests/                       # Shared tests root
+│   ├── conftest.py              # Shared fixtures (E2E server, DB isolation)
+│   ├── test_e2e.py              # E2E test runner (wraps Playwright .mjs scripts)
+│   ├── e2e_comprehensive.mjs    # Comprehensive Playwright E2E tests
+│   ├── playwright_e2e.mjs       # Focused Playwright E2E tests
 │   ├── test_core/
 │   ├── test_email/
 │   ├── test_calendar/
 │   └── test_server/
-├── core/                        # Module-level AGENTS-core.md lives here
-│   └── AGENTS-core.md
-├── email/                       # Module-level AGENTS-email.md lives here
-│   └── AGENTS-email.md
-├── calendar/                    # Module-level AGENTS-calendar.md lives here
-│   └── AGENTS-calendar.md
-├── letter/                      # Module-level AGENTS-letter.md lives here
-│   └── AGENTS-letter.md
-├── server/                      # Module-level AGENTS-server.md lives here
-│   └── AGENTS-server.md
 ├── web/                         # Svelte frontend (separate Node project)
 │   ├── AGENTS-web.md
 │   ├── package.json
 │   ├── vite.config.js
 │   ├── svelte.config.js
 │   └── src/
-└── docs/                        # Documentation
+├── core/                        # Module-level AGENTS-core.md
+│   └── AGENTS-core.md
+├── email/                       # Module-level AGENTS-email.md
+│   └── AGENTS-email.md
+├── calendar/                    # Module-level AGENTS-calendar.md
+│   └── AGENTS-calendar.md
+├── contacts/                    # Module-level AGENTS-contacts.md
+│   └── AGENTS-contacts.md
+├── journal/                     # Module-level AGENTS-journal.md
+│   └── AGENTS-journal.md
+├── todo/                        # Module-level AGENTS-todo.md
+│   └── AGENTS-todo.md
+├── profiles/                    # Module-level AGENTS-profiles.md
+│   └── AGENTS-profiles.md
+├── user_commands/               # Module-level AGENTS-user-commands.md
+│   └── AGENTS-user-commands.md
+├── letter/                      # Module-level AGENTS-letter.md
+│   └── AGENTS-letter.md
+├── scripts/                     # Module-level AGENTS-scripts.md
+│   └── AGENTS-scripts.md
+├── server/                      # Module-level AGENTS-server.md
+│   └── AGENTS-server.md
+└── web/                         # Module-level AGENTS-web.md (lives inside web/)
+    └── AGENTS-web.md
 ```
 
 ---
@@ -186,7 +210,7 @@ Playwright E2E tests are integrated into pytest via the ``--e2e`` flag:
 
 | Command | Behavior |
 |---------|----------|
-| `uv run pytest tests/` | Unit tests only (203 tests, E2E skipped) |
+| `uv run pytest tests/` | Unit tests only (225 tests, E2E skipped) |
 | `uv run pytest --e2e tests/test_e2e.py` | E2E tests only (auto-starts seeded server) |
 | `uv run pytest --e2e --keep-e2e-data` | E2E + preserve temp data for debugging |
 
@@ -220,7 +244,7 @@ Existing ``.mjs`` scripts (``tests/playwright_e2e.mjs``, ``tests/e2e_comprehensi
 
 ## List Tab Standard Feature Set
 
-All list tab components (`EmailListTab`, `JournalListTab`, `SieveListTab`, `ContactsListTab`, `TodoListTab`, `CalendarEventsListTab`) must implement the following standard feature set:
+All list tab components (`EmailListTab`, `JournalListTab`, `SieveListTab`, `ContactsListTab`, `TodoListTab`, `CalendarEventsListTab`, `LetterListTab`) must implement the following standard feature set:
 
 | Feature | Implementation |
 |---------|---------------|
@@ -319,12 +343,13 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 ## What to Avoid
 
 - **Do not import from A-ecosystem packages at runtime.** lighterbird forks the code — all dependencies must be vendored under `src/lighterbird/`. The `../A-lien` references in README are for development reference only.
-- **Do not duplicate logic across modules.** Each domain module (core, email, calendar) is self-contained. Shared utilities go in `core`.
+- **Do not duplicate logic across modules.** Each domain module (core, email, calendar, contacts, journal, letter, profiles, todo, user_commands) is self-contained. Shared utilities go in `core`.
 - **Do not use `print()` for user output.** Use FastAPI structured responses or loguru/logging.
 - **Do not store credentials in SQLite.** Keyring only.
 - **Do not add heavy frameworks** (Django, SQLAlchemy, Celery) — this is a lightweight single-user app.
 - **Do not hardcode paths.** Use `core.paths` module for XDG-compliant resolution.
 - **Do not ship a full MTA/IMAP server.** lighterbird is a client, not a server.
+- **Do not use SvelteKit for the frontend.** The web SPA is a plain Svelte 5 + Vite project, not a SvelteKit SSR app. SvelteKit would add unnecessary complexity and bundle size.
 
 ---
 
@@ -335,11 +360,16 @@ The following module-specific AGENTS files are located in their respective direc
 | Module | AGENTS File | Description |
 |--------|-------------|-------------|
 | Core | `core/AGENTS-core.md` | DB, crypto, keyring, backup, AI providers, paths |
-| Email | `email/AGENTS-email.md` | IMAP sync, SMTP send, contacts, accounts, Sieve |
-| Calendar | `calendar/AGENTS-calendar.md` | CalDAV sync, events, todo, journal, labels |
+| Email | `email/AGENTS-email.md` | IMAP sync, SMTP send, accounts, Sieve, signatures |
+| Calendar | `calendar/AGENTS-calendar.md` | CalDAV sync, events |
+| Contacts | `contacts/AGENTS-contacts.md` | Contact CRUD, VCF import/export |
+| Journal | `journal/AGENTS-journal.md` | Journal entry CRUD, markdown export/import, labels |
 | Letter | `letter/AGENTS-letter.md` | Paper letter management, PDF rendering, templates |
+| Profiles | `profiles/AGENTS-profiles.md` | User identity profiles |
+| Todo | `todo/AGENTS-todo.md` | Task CRUD, priority formulas, subtasks, dependencies |
+| User Commands | `user_commands/AGENTS-user-commands.md` | User-defined saved commands with template expansion |
 | Scripts | `scripts/AGENTS-scripts.md` | Dev CLI, seed data generator, test infrastructure |
-| Server | `server/AGENTS-server.md` | FastAPI routes, middleware, static serving |
+| Server | `server/AGENTS-server.md` | FastAPI routes, middleware, command system |
 | Web | `web/AGENTS-web.md` | Svelte SPA, command-bar UI, build tooling |
 
 (Update this table as new modules are added)
@@ -352,9 +382,14 @@ The following module-specific AGENTS files are located in their respective direc
 Root AGENTS.md (global rules)
     │
     ├── core/AGENTS-core.md       DB, crypto, keyring, AI providers
-    ├── email/AGENTS-email.md     IMAP, SMTP, contacts, accounts
-    ├── calendar/AGENTS-calendar.md  CalDAV, events, todo, journal
+    ├── email/AGENTS-email.md     IMAP, SMTP, accounts, Sieve
+    ├── calendar/AGENTS-calendar.md  CalDAV, events
+    ├── contacts/AGENTS-contacts.md  Contact CRUD, VCF
+    ├── journal/AGENTS-journal.md Journal entries, labels
     ├── letter/AGENTS-letter.md   Paper letters, PDF, templates
+    ├── profiles/AGENTS-profiles.md User identity profiles
+    ├── todo/AGENTS-todo.md       Tasks, priorities, subtasks
+    ├── user_commands/AGENTS-user-commands.md Saved commands
     ├── scripts/AGENTS-scripts.md Dev CLI, seed data, test infra
     ├── server/AGENTS-server.md   FastAPI backend, API routes
     └── web/AGENTS-web.md         Svelte SPA frontend

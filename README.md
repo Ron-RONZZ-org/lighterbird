@@ -1,6 +1,6 @@
 # lighterbird
 
-Lighterbird — email, contacts, calendar, and todo. A command-driven personal information manager (PIM) with built-in BYOK (Bring Your Own Key) LLM support. AGPL-3.0.
+Lighterbird — email, contacts, calendar, todo, journal, and paper letters. A command-driven personal information manager (PIM) with built-in BYOK (Bring Your Own Key) LLM support. AGPL-3.0.
 
 ## Philosophy: You see only what you need
 
@@ -33,11 +33,17 @@ Traditional PIM apps drown you in sidebars, nested menus, and feature flags. Lig
 
 ```
 lighterbird/
-├── core/          Forked from A-core   — DB, crypto, keyring, AI providers, paths
-├── email/         Forked from A-lien   — IMAP sync, SMTP send, contacts, accounts
-├── calendar/      Forked from A-organizi — CalDAV, events, todo, journal
-├── server/        FastAPI backend      — REST API, WebSocket, static serving
-└── web/           Svelte 5 SPA         — Command-bar UI, rich result rendering
+├── core/          Forked from A-core       — DB, crypto, keyring, AI providers, paths
+├── email/         Forked from A-lien       — IMAP sync, SMTP send, accounts, Sieve
+├── calendar/      Forked from A-organizi   — CalDAV, events
+├── contacts/      Extracted from email     — Contact CRUD, VCF import/export
+├── journal/       Extracted from calendar  — Journal entries, labels
+├── todo/          Extracted from calendar  — Tasks, priorities, subtasks, dependencies
+├── profiles/      New module              — User identity profiles
+├── user_commands/ New module              — Saved command aliases with templates
+├── letter/        New module              — Paper letter management, PDF rendering
+├── server/        FastAPI backend          — REST API, command system, static serving
+└── web/           Svelte 5 SPA             — Command-bar UI, rich result rendering
 ```
 
 ## Stack
@@ -73,7 +79,7 @@ Open http://localhost:5173 — the Vite dev server proxies API calls to the Pyth
 uv run pytest tests/ -m "not e2e"
 ```
 
-This runs all backend tests (currently **203**). E2E tests are automatically skipped.
+This runs all backend tests (currently **225**). E2E tests are automatically skipped.
 
 ### E2E Browser Tests (Playwright)
 
@@ -130,4 +136,4 @@ Use ``--seed-from <archive.7z>`` to restore from a backup archive.
 
 ## Status
 
-**Pre-alpha.** The code is being forked from the frozen [A-lien](../A-lien), [A-organizi](../A-organizi), and [A-core](../A-core) projects. Backend logic exists and is proven; the frontend is being built from scratch.
+**Pre-alpha.** The code is forked from [A-lien](../A-lien), [A-organizi](../A-organizi), and [A-core](../A-core), with modules extracted into standalone domains (contacts, todo, journal, profiles, letter, user_commands). Backend logic is proven; frontend is feature-complete for most domains.
