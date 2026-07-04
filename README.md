@@ -26,6 +26,8 @@ Traditional PIM apps drown you in sidebars, nested menus, and feature flags. Lig
 - `!email send --help` — see all flags and params in autocomplete
 - `!email/!todo/!journal/!contact/!calendar/!letter export` — export items as .eml, .ics, .vcf, .md
 - `!email/!todo/!journal/!contact/!calendar/!letter import` — import items from standard file formats
+- `!reset <path.7z>` — backup all data to a 7z archive, then reset to a fresh state
+- `!reset --no-backup` — reset WITHOUT backup (requires GUI confirmation)
 - Just type naturally → ask the built-in LLM to do things on your behalf
 - As-you-type command suggestions with UUID/entity completion — no memorisation needed
 
@@ -42,6 +44,7 @@ lighterbird/
 ├── profiles/      New module              — User identity profiles
 ├── user_commands/ New module              — Saved command aliases with templates
 ├── letter/        New module              — Paper letter management, PDF rendering
+├── reset/         New module              — Reset with backup and reinitialisation
 ├── server/        FastAPI backend          — REST API, command system, static serving
 └── web/           Svelte 5 SPA             — Command-bar UI, rich result rendering
 ```

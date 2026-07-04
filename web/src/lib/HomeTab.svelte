@@ -9,6 +9,7 @@
   import { parseCommand } from "./parser.js";
   import { commandTree, findNode } from "./commandTree.js";
   import { shouldIntercept } from "./commandRouter.js";
+  import ConfirmDialog from "./ConfirmDialog.svelte";
 
   let hasSentLlmMessage = $state(false);
   let showLlmSetup = $state(false);
@@ -22,6 +23,7 @@
   let saveCommand = $state("");
   let saveHint = $state("");
   let copiedIndex = $state(-1); // index of message just copied, -1 = none
+  let resetConfirm = $state(null); // {tokens, flags, message} or null
 
   /** Build conversation context from message history (last 20 messages). */
   function buildContext() {
@@ -98,8 +100,18 @@
 
         // Handle form-required response (interactive commands with missing args)
         if (result.type === "form-required") {
-          const { form, initialData } = result.data || {};
+          const { form, initialData, message } = result.data || {};
           if (form) {
+            // Special case: reset-no-backup shows a ConfirmDialog overlay
+            if (form === "reset-no-backup") {
+              resetConfirm = {
+                tokens: parseCommand(trimmed).tokens,
+                flags: { "no-backup": "", "confirmed": "true" },
+                message: message || "This will permanently delete ALL your data.",
+              };
+              scrollToBottom();
+              return;
+            }
             tabStore.open("form", result.title || "Complete Form", {
               form,
               initialData: initialData || {},
@@ -472,6 +484,42 @@
   />
 {/if}
 
+{#if resetConfirm}
+  <div class="reset-confirm">
+    <ConfirmDialog
+      title="⚠ Reset Lighterbird"
+      message={resetConfirm.message}
+      confirmText="Yes, Delete Everything"
+      variant="danger"
+      onConfirm={async () => {
+        const cmd = resetConfirm;
+        resetConfirm = null;
+        try {
+          const resp = await fetch("/api/v1/command", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tokens: cmd.tokens, flags: cmd.flags }),
+          });
+          const result = await resp.json();
+          if (result.type === "form-required") {
+            popup.show("error", "Reset Cancelled", { message: "Reset requires confirmation." });
+          } else {
+            const dataType = detectPersistentType("!reset");
+            if (dataType) {
+              popup.showPersistent(result.type, result.title, result.data, dataType);
+            } else {
+              popup.show(result.type, result.title, result.data);
+            }
+          }
+        } catch (err) {
+          popup.show("error", "Reset Failed", { message: err.message || String(err) });
+        }
+      }}
+      onDismiss={() => { resetConfirm = null; }}
+    />
+  </div>
+{/if}
+
 <style>
   .home-tab {
     display: flex;
@@ -653,4 +701,9 @@
     border-radius: 4px; padding: 0.2rem 0.6rem; font-family: monospace; font-size: 0.78rem; cursor: pointer;
   }
   .btn-cancel-save:hover { background: #2a2a3e; }
+  .reset-confirm {
+    position: absolute;
+    inset: 0;
+    z-index: 200;
+  }
 </style>
