@@ -56,8 +56,8 @@ def dev_main() -> None:
     parser.add_argument(
         "--port",
         type=int,
-        default=8000,
-        help="Port to bind the server (default: 8000)",
+        default=None,
+        help="Port to bind the server (default: LIGHTERBIRD_PORT env var or 8000)",
     )
     parser.add_argument(
         "--keep-data",
@@ -65,6 +65,9 @@ def dev_main() -> None:
         help="Do not clean up the temp data directory on exit",
     )
     args = parser.parse_args()
+
+    # Resolve port: CLI arg > LIGHTERBIRD_PORT env var > 8000
+    port = args.port or int(os.environ.get("LIGHTERBIRD_PORT", 8000))
 
     # ── Create isolated data directory ───────────────────────────────────
     tmp_dir = Path(tempfile.mkdtemp(prefix="lighterbird-dev-"))
@@ -126,7 +129,7 @@ def dev_main() -> None:
             print("[lighterbird-dev] Seed data generated successfully.")
 
     # ── Start server ─────────────────────────────────────────────────────
-    print(f"[lighterbird-dev] Starting server on http://127.0.0.1:{args.port}")
+    print(f"[lighterbird-dev] Starting server on http://127.0.0.1:{port}")
     print("[lighterbird-dev] Press Ctrl+C to stop.")
 
     import uvicorn
@@ -135,7 +138,7 @@ def dev_main() -> None:
         uvicorn.run(
             "lighterbird.server.app:create_app",
             host="127.0.0.1",
-            port=args.port,
+            port=port,
             factory=True,
             reload=False,
         )
