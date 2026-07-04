@@ -8,6 +8,13 @@ Multiple backup strategies are supported — each strategy defines a
 retention limit (max copies per stem) and an optional external target
 directory. Strategies are stored in the backup config file.
 
+File autodiscovery::
+
+    Databases are auto-discovered by scanning ``data_dir()/*.db`` at
+    backup time.  Any ``*.db`` file placed in the data directory is
+    automatically included in backup, export, and import — no registration
+    needed. Config files are similarly auto-discovered from ``config_dir()``.
+
 Typical usage::
 
     from lighterbird.core.backup import backup_all, list_backups, restore_latest
@@ -47,6 +54,27 @@ _BACKUP_SUBDIR = ".backups"
 _BACKUP_CONFIG_FILE = "backup.json"
 _DEFAULT_MAX_COPIES = 10
 _CONFIG_VERSION = 3
+
+# ── BackupTarget dataclass ─────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class BackupTarget:
+    """A single file that should be backed up (or restored/exported).
+
+    Attributes:
+        path:     Absolute filesystem path to the file.
+        category: ``"data"`` for user data (restore to ``data_dir``),
+                  ``"config"`` for config-like data (restore to
+                  ``config_dir``).
+        module:   Module name (e.g. ``"email"``, ``"letters"``).
+        label:    Short human-readable description
+                  (e.g. ``"Email database"``).
+    """
+    path: Path
+    category: str = "data"
+    module: str = ""
+    label: str = ""
 
 # ── Strategy dataclass ─────────────────────────────────────────────────────
 
@@ -183,32 +211,75 @@ def _copy_with_verify(src: Path, dst: Path) -> Path:
 # ── DB discovery ───────────────────────────────────────────────────────────
 
 
+def get_backup_targets(
+    *, category: str | None = None,
+) -> list[BackupTarget]:
+    """Auto-discover all files that should be included in backup/export/import.
+
+    Discovery strategy (same pattern as A-core's ``backup_targets``):
+
+    1. Scan ``data_dir()/*.db`` — any SQLite database present is included
+       as a data target.  No explicit registration needed.
+    2. Scan ``config_dir()/*.md`` — Markdown config files are included
+       as config targets.
+
+    This means a new module that places ``<module>.db`` in ``data_dir()``
+    is *automatically* backed up, exported, and importable — no need to
+    update this list.
+
+    Returns:
+        Deduplicated list of :class:`BackupTarget` sorted by path.
+    """
+    targets: list[BackupTarget] = []
+    seen: set[Path] = set()
+    dd = data_dir()
+    cd = config_dir()
+
+    # 1. Data: scan data_dir()/*.db
+    if dd.is_dir():
+        for p in sorted(dd.glob("*.db")):
+            resolved = p.resolve()
+            if resolved not in seen:
+                seen.add(resolved)
+                targets.append(BackupTarget(
+                    path=p,
+                    category="data",
+                    module=p.stem,
+                    label=f"{p.stem} database",
+                ))
+
+    # 2. Config: scan config_dir()/*.md
+    if cd.is_dir():
+        for p in sorted(cd.glob("*.md")):
+            resolved = p.resolve()
+            if resolved not in seen:
+                seen.add(resolved)
+                targets.append(BackupTarget(
+                    path=p,
+                    category="config",
+                    module=p.stem,
+                    label=f"{p.stem} config",
+                ))
+
+    if category:
+        targets = [t for t in targets if t.category == category]
+    return targets
+
+
 def _known_db_paths() -> list[Path]:
     """Return paths to all lighterbird database files that exist on disk.
 
-    Databases are:
-        - email.db
-        - calendar.db
-        - contacts.db
-        - todo.db
-        - journal.db
+    Auto-discovered by scanning ``data_dir()/*.db``.
     """
-    names = ["email.db", "calendar.db", "contacts.db", "todo.db", "journal.db"]
-    d = data_dir()
-    return [d / name for name in names if (d / name).exists()]
+    return [t.path for t in get_backup_targets(category="data")]
 
 
 def _known_config_files() -> list[Path]:
     """Return paths to user-config files that should be backed up.
 
-    Includes:
-        - system_prompt.md (if it exists in config_dir)
+    Auto-discovered by scanning ``config_dir()/*.md``.
     """
-    files: list[Path] = []
-    sp = config_dir() / "system_prompt.md"
-    if sp.exists():
-        files.append(sp)
-    return files
+    return [t.path for t in get_backup_targets(category="config")]
 
 
 # ── Backup file naming / parsing ───────────────────────────────────────────
@@ -1310,6 +1381,7 @@ def import_data(
 
 __all__ = [
     "BackupStrategy",
+    "BackupTarget",
     "add_strategy",
     "backup_all",
     "backup_all_strategies",
@@ -1318,6 +1390,7 @@ __all__ = [
     "backup_with_strategy",
     "copy_to_external",
     "export_data",
+    "get_backup_targets",
     "get_strategy",
     "import_data",
     "list_backups",
