@@ -86,10 +86,13 @@ def load_system_prompt() -> str:
     """
     path = system_prompt_path()
 
-    if path.exists():
-        content = path.read_text(encoding="utf-8").strip()
-        if content:
-            return content
+    try:
+        if path.exists():
+            content = path.read_text(encoding="utf-8").strip()
+            if content:
+                return content
+    except OSError:
+        pass
 
     # 2. Auto-seed on first run
     path.parent.mkdir(parents=True, exist_ok=True)
