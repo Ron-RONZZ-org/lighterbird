@@ -345,26 +345,25 @@ class IMAPClient:
                         from lighterbird.core.storage import AttachmentStore
                         msg = email_lib.message_from_bytes(raw_data)
                         data = parse_email_message(msg, account_email, folder_name, imap_uid, store_attachments=True)
-                        # Store attachment blobs if any
+                        # Insert or update message FIRST to get the canonical msg_uuid
+                        msg_uuid = store_message(db_store.db, data, force=force, account_email=account_email, folder_name=folder_name)
+                        # Store attachment blobs using msg_uuid as directory name
                         if "_attachments_data" in data:
-                            uid_str = str(uuid_mod.uuid4())
                             store = AttachmentStore()
                             for att in data["_attachments_data"]:
                                 try:
-                                    store.store(uid_str, att["content_id"], att["data"])
+                                    store.store(msg_uuid, att["content_id"], att["data"])
                                 except Exception as store_err:
                                     result["errors"].append(
                                         f"Attachment store error for UID {imap_uid}: {store_err}"
                                     )
-                        # Insert or update message
-                        msg_uuid = store_message(db_store.db, data, force=force, account_email=account_email, folder_name=folder_name)
                         # Store attachment metadata in email_attachments table
                         if "_attachments_meta" in data:
                             now_ts = datetime.now(timezone.utc).isoformat()
                             for meta in data["_attachments_meta"]:
                                 try:
                                     att_uuid = str(uuid_mod.uuid4())
-                                    store_path = f"{uid_str}/{meta['content_id']}"
+                                    store_path = f"{msg_uuid}/{meta['content_id']}"
                                     db_store.db.execute(
                                         "INSERT OR IGNORE INTO email_attachments "
                                         "(uuid, message_uuid, filename, mime_type, size, content_id, storage_path, created_at, updated_at) "

@@ -377,7 +377,11 @@
     // Determine which folders to show
     const visibleFolders = Object.entries(folderVisibility)
       .filter(([_, visible]) => visible)
-      .map(([name]) => name);
+      .map(([name]) => {
+        // Extract folder name from "account/folder_name" format
+        const parts = name.split("/");
+        return parts.length > 1 ? parts.slice(1).join("/") : name;
+      });
 
     const params = { ...currentFilters, limit: 50 };
     if (visibleFolders.length > 0) {
