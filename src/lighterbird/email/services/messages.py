@@ -124,8 +124,8 @@ class MessageService:
         # Group by sender (overrides received_at ordering for display grouping)
         group = filters.get("group", "")
         if group == "sender":
-            select_cols = "m.*, COALESCE(m.de, '') AS sort_sender"
-            order = f"LOWER(COALESCE(m.de, '')), {order}"
+            select_cols = "m.*, COALESCE(m.from_addr, '') AS sort_sender"
+            order = f"LOWER(COALESCE(m.from_addr, '')), {order}"
         else:
             select_cols = "m.*"
 

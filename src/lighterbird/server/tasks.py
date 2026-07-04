@@ -77,6 +77,26 @@ def enqueue_email_sync(account_email: str | None = None) -> None:
     )
 
 
+def enqueue_email_trash(account_email: str | None = None) -> None:
+    """Enqueue a background trash queue drain job.
+
+    Processes pending IMAP trash operations from the backlog.
+    Args:
+        account_email: If None, processes trash for all accounts.
+    """
+    worker = _pool.get("email")
+    if worker is None:
+        logger.warning("[tasks] Email worker not available")
+        return
+    worker.enqueue(
+        Job(
+            domain="email",
+            operation="process_trash",
+            payload={"account_email": account_email} if account_email else {},
+        )
+    )
+
+
 # ── CalDAV sync / push ───────────────────────────────────────────────────
 
 
@@ -131,7 +151,7 @@ def enqueue_caldav_sync(calendar_uuid: str) -> None:
 
 
 class EmailSyncWorker(BackgroundWorker):
-    """BackgroundWorker subclass that handles email sync jobs."""
+    """BackgroundWorker subclass that handles email sync and trash jobs."""
 
     def execute_job(self, job: Job) -> None:
         if job.domain != "email":
@@ -140,6 +160,8 @@ class EmailSyncWorker(BackgroundWorker):
 
         if job.operation == "sync":
             self._do_sync(job.payload)
+        elif job.operation == "process_trash":
+            self._do_process_trash(job.payload)
         else:
             logger.warning("Unknown email operation: %s", job.operation)
 
@@ -155,6 +177,24 @@ class EmailSyncWorker(BackgroundWorker):
         else:
             for account in svc.list_accounts():
                 svc.sync_account(account["email"])
+
+    @staticmethod
+    def _do_process_trash(payload: dict) -> None:
+        """Process pending IMAP trash operations in the background.
+
+        Opens one IMAP connection per account and moves all queued
+        messages to the server-side Trash folder.
+        """
+        from lighterbird.email.service import EmailService
+
+        svc = EmailService()
+        account_email = payload.get("account_email")
+        if account_email:
+            # Only process trash for specific account
+            svc.msg_ops.process_trash_backlog()
+        else:
+            # Process trash for all accounts
+            svc.msg_ops.process_trash_backlog()
 
 
 class CalDAVWorker(BackgroundWorker):
@@ -381,6 +421,7 @@ __all__ = [
     "shutdown_workers",
     "get_worker_pool",
     "enqueue_email_sync",
+    "enqueue_email_trash",
     "enqueue_caldav_push",
     "enqueue_caldav_sync",
     "EmailSyncWorker",
