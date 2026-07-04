@@ -39,8 +39,13 @@ class MessageOpsService:
             return
         account_email = msg.get("account_email", "")
         imap_uid = msg.get("imap_uid")
-        if imap_uid is None or not account_email:
-            self._enqueue_sync(msg)
+        if not account_email:
+            return  # No account — nothing to sync to
+        if imap_uid is None:
+            # No IMAP UID (e.g., local-only seeded message or draft).
+            # The message will get a real UID when it's fetched from the
+            # IMAP server during sync. Until then, there's no point
+            # enqueuing — process_sync_backlog can't process a NULL UID.
             return
         folder_name = msg.get("folder_name", "")
         acct = self._account_service.get_account_with_password(account_email)
@@ -110,11 +115,32 @@ class MessageOpsService:
         Returns:
             Number of backlog entries successfully synced.
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
         entries = list(self.db.execute(
             "SELECT * FROM _sync_backlog ORDER BY created_at ASC LIMIT 500"
         ))
         if not entries:
             return 0
+
+        # Clean up stale entries with NULL imap_uid (created by older code
+        # for seeded/local-only messages that can never be synced to IMAP).
+        stale = [e for e in entries if e.get("imap_uid") is None]
+        if stale:
+            logger.warning(
+                "Deleting %d stale backlog entries with NULL imap_uid",
+                len(stale),
+            )
+            for e in stale:
+                self.db.execute(
+                    "DELETE FROM _sync_backlog WHERE id = ?", (e["id"],)
+                )
+            entries = [e for e in entries if e.get("imap_uid") is not None]
+
+        if not entries:
+            return 0
+
         from collections import defaultdict
         by_account: dict[str, list[dict]] = defaultdict(list)
         for e in entries:
