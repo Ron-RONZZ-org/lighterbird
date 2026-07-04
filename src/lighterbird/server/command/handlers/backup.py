@@ -602,7 +602,7 @@ def backup_import(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     try:
         from lighterbird.server.deps import reset_services
         reset_services()
-        result = import_data(export_path, force=force, decisions=decisions or None)
+        result = import_data(export_path, force=force)
     except (FileNotFoundError, ValueError, OSError) as e:
         raise CommandValidationError(f"Import failed: {e}")
 
