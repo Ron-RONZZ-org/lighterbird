@@ -23,6 +23,8 @@ The interaction model is a **centralized command box** — type `!account add` t
 
 The backend is forked from proven code in [A-lien](../A-lien) (email), [A-organizi](../A-organizi) (calendar), and [A-core](../A-core) (DB, crypto, keyring, AI providers), with contacts, todo, and journal extracted into standalone modules. The frontend is a Svelte 5 SPA served by a FastAPI Python server.
 
+**Shared core**: lighterbird now depends on [lightercore](../lightercore) for cross-cutting infrastructure — database, paths, exceptions, CRUD, and backup. The local ``lighterbird/core/`` modules are thin re-exports; the canonical implementations live in lightercore.
+
 ---
 
 ## Language and Naming Conventions
@@ -58,7 +60,7 @@ This project uses **uv** for development:
 
 | Operation | Command |
 |-----------|---------|
-| Install project in dev mode | `uv pip install -e .` |
+| Install project + lightercore in dev mode | `uv pip install -e "../lightercore" -e .` |
 | Install dev deps | `uv pip install -e ".[dev]"` |
 | Run tests | `uv run pytest tests/` |
 | Run isolated dev server | `uv run lighterbird-dev --seed` |
@@ -66,6 +68,8 @@ This project uses **uv** for development:
 | Add dev dependency | `uv pip install <pkg>` |
 
 **Exceptions:** README install instructions may use `pip` for users without `uv`. Runtime `install-on-confirmation` may fall back to `pip`.
+
+**Note:** [lightercore](../lightercore) is a sibling package — clone it alongside lighterbird and install with ``-e ../lightercore`` before installing lighterbird.
 
 ---
 
@@ -85,7 +89,7 @@ lighterbird/
 │       ├── __main__.py          # python -m lighterbird entry point
 │       ├── calendar/            # CalDAV sync, events
 │       ├── contacts/            # Contact CRUD, VCF import/export
-│       ├── core/                # DB, crypto, keyring, AI providers, paths
+│       ├── core/                # Re-exports from lightercore (DB, paths, exceptions, CRUD, backup) + keyring, AI providers
 │       ├── email/               # IMAP sync, SMTP send, accounts, Sieve, signatures
 │       ├── journal/             # Journal entry CRUD, markdown export/import, labels
 │       ├── letter/              # Paper letter management, HTML/PDF rendering
@@ -113,7 +117,7 @@ lighterbird/
 │   ├── vite.config.js
 │   ├── svelte.config.js
 │   └── src/
-├── core/                        # Module-level AGENTS-core.md
+├── core/                        # Module-level AGENTS-core.md (lightercore replaces most of this)
 │   └── AGENTS-core.md
 ├── email/                       # Module-level AGENTS-email.md
 │   └── AGENTS-email.md
