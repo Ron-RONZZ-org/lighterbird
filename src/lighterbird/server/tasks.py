@@ -177,6 +177,16 @@ class EmailSyncWorker(BackgroundWorker):
         else:
             for account in svc.list_accounts():
                 svc.sync_account(account["email"])
+        # Always drain the flag sync backlog after any sync pass,
+        # ensuring \\Seen and \\Deleted flags queued by mark_read()
+        # and trash_message() are pushed to the IMAP server even if
+        # sync_account returned early (e.g., no password).
+        backlog = svc.process_sync_backlog()
+        if backlog:
+            logger.info(
+                "[tasks] Drained %d pending flag syncs from backlog",
+                backlog,
+            )
 
     @staticmethod
     def _do_process_trash(payload: dict) -> None:
