@@ -178,6 +178,11 @@
 
     const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
     switch (e.key) {
+      case "e":
+        if (plain && sel.selectionMode && sel.numSelected > 0) {
+          openExportDialog(); e.preventDefault();
+        }
+        return;
       case "/":
         if (plain) {
           showSearch = !showSearch;
