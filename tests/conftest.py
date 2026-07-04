@@ -197,17 +197,46 @@ def e2e_server(request: pytest.FixtureRequest) -> Iterator[dict[str, Any]]:
         print(f"[e2e] Cleaned up: {tmp_dir}")
 
 
-# ── Existing fixtures ───────────────────────────────────────────────────────
+# ── Data isolation ────────────────────────────────────────────────────────────
+
+
+@pytest.fixture(autouse=True)
+def auto_isolate_data_dir(
+    tmp_path: Path, monkeypatch: Any, request: pytest.FixtureRequest,
+) -> None:
+    """Isolate EVERY test from the real data directory (autouse).
+
+    All path resolution calls during the test will point to a unique
+    ``tmp_path`` instead of the real XDG directory.  This prevents:
+
+    * State pollution — tests that trigger ``get_email_service()`` via
+      command handlers accidentally writing to ``~/.local/share/lighterbird/``.
+    * Flaky ordering-dependent failures — the 4 ``test_server.py`` tests
+      that failed only in the full suite because preceding tests left
+      behind accounts/calendars in the real DB.
+
+    Tests that genuinely need the real default path (e.g. ``test_data_dir_default``)
+    can opt out with ``@pytest.mark.no_isolation``.
+    """
+    if request.node.get_closest_marker("no_isolation"):
+        return
+
+    from lighterbird.server.deps import reset_services as _reset_svc
+
+    monkeypatch.setenv("LIGHTERBIRD_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("LIGHTERBIRD_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("LIGHTERBIRD_STATE_DIR", str(tmp_path))
+    _reset_svc()
 
 
 @pytest.fixture
 def tmp_data_dir(monkeypatch: Any, tmp_path: Path) -> Path:
-    """Isolate data directory to a temporary path.
-
-    All path resolution calls during the test will point to ``tmp_path``
-    instead of the real XDG directory.
-    """
+    """Explicit opt-in data isolation (for tests that don't want autouse)."""
     monkeypatch.setenv("LIGHTERBIRD_DATA_DIR", str(tmp_path))
     monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_path))
     monkeypatch.setenv("LIGHTERBIRD_CACHE_DIR", str(tmp_path))
     return tmp_path
+
+
+

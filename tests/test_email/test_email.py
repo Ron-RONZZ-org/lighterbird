@@ -36,6 +36,7 @@ class TestEmailDB:
         get_db(db_path)  # First call
         get_db(db_path)  # Second call should not raise
 
+    @pytest.mark.no_isolation
     def test_db_path_defaults_to_data_dir(self):
         from lighterbird.core.paths import data_dir
         from lighterbird.email.db import _email_db_path

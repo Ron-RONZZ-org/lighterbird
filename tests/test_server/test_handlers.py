@@ -20,10 +20,9 @@ from lighterbird.server.deps import reset_services
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
 
-@pytest.fixture(autouse=True)
-def reset_services_before():
-    """Reset all service singletons before each test."""
-    reset_services()
+# Data directory isolation is handled by the root conftest's
+# ``auto_isolate_data_dir`` fixture (autouse).  That fixture also
+# calls ``reset_services()``, so no extra fixture is needed here.
 
 
 def _mock_email_service(**attrs):

@@ -108,6 +108,7 @@ class TestLighterbirdDB:
 
 
 class TestPaths:
+    @pytest.mark.no_isolation
     def test_data_dir_default(self):
         from lighterbird.core.paths import data_dir
 
@@ -119,6 +120,7 @@ class TestPaths:
         monkeypatch.setenv("LIGHTERBIRD_DATA_DIR", "/tmp/lbtest/data")
         assert str(data_dir()) == "/tmp/lbtest/data"
 
+    @pytest.mark.no_isolation
     def test_lighterbird_dir_override(self, monkeypatch):
         from lighterbird.core.paths import data_dir
 
