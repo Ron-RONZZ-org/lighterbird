@@ -231,7 +231,8 @@ def list_messages(
     if account_email:
         filters["account"] = account_email
     if folder:
-        filters["folder"] = folder
+        # Support comma-separated folder names from the frontend
+        filters["folder"] = [f.strip() for f in folder.split(",") if f.strip()]
     if sort:
         filters["sort"] = sort
     if group:
@@ -388,7 +389,11 @@ def trash_message(
     uuid: str,
     email_svc: EmailService = Depends(get_email_service),
 ):
-    """Soft-delete a single message."""
+    """Soft-delete a single message.
+
+    Does local soft-delete immediately. IMAP trash move is attempted
+    best-effort; on failure, queued for background retry.
+    """
     email_svc.trash_message(uuid)
     return {"status": "trashed"}
 
@@ -398,10 +403,16 @@ def batch_delete(
     req: BatchDeleteRequest,
     email_svc: EmailService = Depends(get_email_service),
 ):
-    """Soft-delete multiple messages at once."""
-    for uuid in req.uuids:
-        email_svc.trash_message(uuid)
-    return BatchResultResponse(status="ok", count=len(req.uuids))
+    """Soft-delete multiple messages at once.
+
+    Performs local soft-delete immediately for a snappy UI. IMAP trash
+    operations are queued for background processing.
+    """
+    result = email_svc.msg_ops.batch_trash_messages(req.uuids)
+    return BatchResultResponse(
+        status="ok",
+        count=result["count"],
+    )
 
 
 @router.post("/messages/batch-move", response_model=BatchResultResponse)
