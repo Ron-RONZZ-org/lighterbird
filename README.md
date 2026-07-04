@@ -128,6 +128,17 @@ The pytest fixture automatically:
 - Runs the Playwright scripts
 - Tears down both server and temp data on completion
 
+## Dependencies
+
+lighterbird depends on [lightercore](../lightercore) for shared infrastructure (DB, paths, exceptions, CRUD, backup). When setting up a development environment, clone both repos side by side:
+
+```bash
+git clone https://github.com/Ron-RONZZ-org/lighterbird.git
+git clone https://github.com/Ron-RONZZ-org/lightercore.git
+cd lighterbird
+uv pip install -e "../lightercore" -e ".[dev]"
+```
+
 ## Development Server
 
 For E2E testing or isolated development, use the `lighterbird-dev` CLI. It creates a temporary data directory, optionally seeds it with test credentials, and starts the server. The port can be set via `--port` or the `LIGHTERBIRD_PORT` environment variable:
