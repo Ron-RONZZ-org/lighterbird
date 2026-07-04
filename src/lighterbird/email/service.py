@@ -47,7 +47,9 @@ class EmailService:
     def sync_account(self, email: str, force: bool = False):
         """Sync messages for a single account by email.
 
-        Always returns a SyncResult (never raises).
+        Always returns a SyncResult (never raises). Pending flag syncs
+        (\\Seen, \\Deleted) from the backlog are processed regardless
+        of whether the IMAP fetch succeeds.
         """
         from lighterbird.email.imap import sync_account as _sync
         from lighterbird.email.imap.sync import SyncResult
@@ -56,32 +58,38 @@ class EmailService:
         if not acct:
             result = SyncResult()
             result.errors.append(f"Account not found: {email}")
-            return result
-        if not acct.get("password"):
+        elif not acct.get("password"):
             result = SyncResult()
             result.errors.append(
                 f"No password configured for account {email}. "
                 f"Set it with: !email account modify {email} --password <pw>"
             )
-            return result
-        try:
-            result = _sync(
-                host=acct.get("imap_server", ""),
-                port=acct.get("imap_port", 993),
-                use_ssl=acct.get("imap_use_ssl", 1) == 1,
-                username=acct.get("imap_username", "") or acct.get("email", ""),
-                password=acct["password"],
-                account_email=email,
-                db_store=self,
-                force=force,
-            )
-            # Process pending flag syncs after fetch
-            backlog = self.msg_ops.process_sync_backlog()
-            if backlog:
-                result.total += backlog
-        except ConnectionError as e:
-            result = SyncResult()
-            result.errors.append(str(e))
+        else:
+            try:
+                result = _sync(
+                    host=acct.get("imap_server", ""),
+                    port=acct.get("imap_port", 993),
+                    use_ssl=acct.get("imap_use_ssl", 1) == 1,
+                    username=acct.get("imap_username", "") or acct.get("email", ""),
+                    password=acct["password"],
+                    account_email=email,
+                    db_store=self,
+                    force=force,
+                )
+            except ConnectionError as e:
+                result = SyncResult()
+                result.errors.append(str(e))
+            except Exception as e:
+                result = SyncResult()
+                result.errors.append(f"Sync error: {e}")
+        # ALWAYS drain the flag sync backlog, even on sync failure.
+        # This ensures \\Seen and \\Deleted flags pushed by mark_read
+        # and trash_message are eventually sent to the IMAP server.
+        backlog = self.msg_ops.process_sync_backlog()
+        if backlog:
+            if not hasattr(locals().get('result', None), 'total'):
+                result = SyncResult()
+            result.total += backlog
         return result
 
     def sync_all(self, force: bool = False) -> dict[str, dict]:
