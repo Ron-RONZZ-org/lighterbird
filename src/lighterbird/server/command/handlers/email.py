@@ -275,11 +275,15 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         except (RuntimeError, ValueError) as exc:
             raise CommandValidationError(f"Co-writing failed: {exc}")
 
-    svc.send_email(account_email, to_list, subject, body,
-                   cc=cc_list, bcc=bcc_list, priority=priority,
-                   body_format=body_format,
-                   attachments=attachments,
-                   in_reply_to=in_reply_to or None)
+    result = svc.send_email(account_email, to_list, subject, body,
+                            cc=cc_list, bcc=bcc_list, priority=priority,
+                            body_format=body_format,
+                            attachments=attachments,
+                            in_reply_to=in_reply_to or None)
+    if result.get("status") == "queued":
+        return {"type": "status", "title": "Queued for Delivery",
+                "data": {"to": to_str, "subject": subject, "folder": "Outbox",
+                         "error": result.get("error", "")}}
     return {"type": "status", "title": "Sent", "data": {"to": to_str, "subject": subject}}
 
 

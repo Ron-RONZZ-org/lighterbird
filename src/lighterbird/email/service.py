@@ -191,13 +191,24 @@ class EmailService:
                    body_format: str = "markdown",
                    attachments: list[str] | None = None,
                    signature: str | None = None,
-                   in_reply_to: str | None = None):
-        self.msg_ops.send_email(account_email, to, subject, body, cc=cc,
-                                bcc=bcc, priority=priority,
-                                body_format=body_format,
-                                attachments=attachments,
-                                signature=signature,
-                                in_reply_to=in_reply_to)
+                   in_reply_to: str | None = None) -> dict:
+        return self.msg_ops.send_email(account_email, to, subject, body, cc=cc,
+                                       bcc=bcc, priority=priority,
+                                       body_format=body_format,
+                                       attachments=attachments,
+                                       signature=signature,
+                                       in_reply_to=in_reply_to)
+
+    def process_send_queue(self, limit: int = 50) -> dict:
+        """Process pending send-queue entries with exponential backoff.
+
+        Args:
+            limit: Maximum number of queue entries to process.
+
+        Returns:
+            Dict with ``sent``, ``retrying``, ``failed`` counts.
+        """
+        return self.msg_ops.process_send_queue(limit=limit)
 
     # ── MessageStore protocol (used by IMAP sync) ────────────────────────
 

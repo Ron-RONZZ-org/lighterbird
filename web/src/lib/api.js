@@ -18,7 +18,7 @@ async function request(method, path, body = null) {
     resp = await fetch(`${BASE}${path}`, opts);
   } catch (err) {
     const msg = err.cause?.code === "ECONNREFUSED"
-      ? `Cannot connect to the backend server on port 8000. ${BACKEND_HELP}`
+      ? `Cannot connect to the backend server. ${BACKEND_HELP}`
       : `Network error: ${err.message}. ${BACKEND_HELP}`;
     const e = new Error(msg);
     e.code = "CONNECTION_REFUSED";
