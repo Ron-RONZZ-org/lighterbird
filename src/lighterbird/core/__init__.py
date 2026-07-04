@@ -1,10 +1,13 @@
-"""Core services — DB, crypto, keyring, paths, exceptions, CRUD, backup."""
+"""Core services — re-exported from lightercore where possible.
 
-from lighterbird.core.db import LighterbirdDB
-from lighterbird.core.paths import data_dir, config_dir, cache_dir, state_dir, ensure_dirs
-from lighterbird.core.keyring import get_password, set_password, delete_password
-from lighterbird.core.crud import CRUDService
-from lighterbird.core.exceptions import (
+``lightercore`` is the canonical source for DB, paths, exceptions, CRUD,
+and backup.  Keyring, AI provider, and system prompt wrappers remain local.
+"""
+
+from lightercore.db import LighterbirdDB
+from lightercore.paths import data_dir, config_dir, cache_dir, state_dir, ensure_dirs
+from lightercore.crud import CRUDService
+from lightercore.exceptions import (
     LighterbirdError,
     ConfigurationError,
     DatabaseError,
@@ -13,15 +16,14 @@ from lighterbird.core.exceptions import (
     SyncError,
     AIError,
     ProtectedPathError,
+    AmbiguousIDError,
 )
-from lighterbird.core.backup import (
+from lightercore.backup import (
     BackupStrategy,
     BackupTarget,
-    backup_database,
     backup_all,
     backup_all_strategies,
-    backup_config_files,
-    backup_with_strategy,
+    backup_database,
     copy_to_external,
     get_backup_targets,
     list_backups,
@@ -39,6 +41,12 @@ from lighterbird.core.backup import (
     load_config as load_backup_config,
     save_config as save_backup_config,
 )
+
+# Local modules (not in lightercore)
+from lighterbird.core.keyring import get_password, set_password, delete_password
+
+# Local wrappers (extend lightercore with lighterbird-specific behavior)
+from lighterbird.core.backup import backup_config_files, backup_with_strategy
 
 __all__ = [
     "LighterbirdDB",
@@ -59,12 +67,13 @@ __all__ = [
     "SyncError",
     "AIError",
     "ProtectedPathError",
+    "AmbiguousIDError",
     "BackupStrategy",
     "BackupTarget",
-    "backup_database",
     "backup_all",
     "backup_all_strategies",
     "backup_config_files",
+    "backup_database",
     "backup_with_strategy",
     "copy_to_external",
     "get_backup_targets",
