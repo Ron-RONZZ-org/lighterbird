@@ -12,13 +12,6 @@ from lighterbird.server.app import create_app
 from lighterbird.server.deps import reset_services
 
 
-@pytest.fixture(autouse=True)
-def isolated_lighterbird_dir(tmp_path: Path, monkeypatch):
-    """Ensure each test uses an isolated data directory."""
-    monkeypatch.setenv("LIGHTERBIRD_DIR", str(tmp_path / "lighterbird"))
-    reset_services()
-
-
 @pytest.fixture
 def client():
     """Create a fresh TestClient with isolated services."""

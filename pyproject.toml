@@ -46,7 +46,10 @@ packages = ["src/lighterbird"]
 testpaths = ["tests"]
 markers = [
     "e2e: E2E browser tests (skipped by default; use --e2e to run)",
+    "asyncio: async tests",
+    "no_isolation: do not isolate data directory (test checks default paths)",
 ]
+asyncio_mode = "auto"
 
 [tool.ruff.lint]
 select = ["S110", "S112", "E", "F", "I"]
