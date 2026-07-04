@@ -212,6 +212,11 @@
       case "v":
         if (plain && !sel.selectionMode) { sel.toggleSelectionMode(); e.preventDefault(); }
         return;
+      case "e":
+        if (plain && sel.selectionMode && sel.numSelected > 0) {
+          openExportDialog(); e.preventDefault();
+        }
+        return;
       case "/":
         if (plain) {
           showSearch = !showSearch;

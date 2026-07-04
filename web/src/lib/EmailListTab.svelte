@@ -92,6 +92,7 @@
     },
     () => refreshList(),
     {
+      onNew: handleNew,
       onBeforeKeydown(e) {
         const tag = e.target.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA" || e.target.isContentEditable) return true;
@@ -103,6 +104,11 @@
 
         const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
         switch (e.key) {
+          case "e":
+            if (plain && sel.selectionMode && sel.numSelected > 0) {
+              openExportDialog(); e.preventDefault();
+            }
+            return true;
           case "/":
             if (plain) {
               showSearch = !showSearch;
