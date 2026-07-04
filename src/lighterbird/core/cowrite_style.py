@@ -84,10 +84,13 @@ def load_cowrite_style() -> str | None:
     """
     path = config_dir() / _COWRITE_STYLE_FILENAME
 
-    if path.exists():
-        content = path.read_text(encoding="utf-8").strip()
-        if content:
-            return content
+    try:
+        if path.exists():
+            content = path.read_text(encoding="utf-8").strip()
+            if content:
+                return content
+    except OSError:
+        pass
 
     # Auto-seed on first run
     path.parent.mkdir(parents=True, exist_ok=True)

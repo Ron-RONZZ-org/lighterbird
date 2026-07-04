@@ -63,7 +63,10 @@ def eval_safe(
         raise ValueError("Expression cannot be empty.")
 
     try:
-        return float(text)
+        result = float(text)
+        if not math.isfinite(result):
+            raise ValueError("Expression returned a non-finite value (inf or nan).")
+        return result
     except ValueError:
         pass
 
