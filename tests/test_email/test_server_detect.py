@@ -2,7 +2,21 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from lighterbird.email.server_detect import detect_servers, known_providers, _lookup_mx
+
+
+def _fake_mx_answer(hostname: str, preference: int = 10):
+    """Create a mock DNS MX answer object with the given hostname."""
+    import dns.name
+
+    class FakeAnswer:
+        def __init__(self):
+            self.exchange = dns.name.from_text(hostname)
+            self.preference = preference
+
+    return FakeAnswer()
 
 
 class TestDetectServers:
@@ -60,19 +74,43 @@ class TestDetectServers:
             assert "imap" in servers
             assert "smtp" in servers
 
-    def test_mx_lookup_ronzz_org(self):
-        mx = _lookup_mx("ronzz.org")
-        assert mx is not None
-        assert "migadu.com" in mx.lower() or "aspmx" in mx.lower()
+    @patch("dns.resolver.resolve")
+    def test_mx_lookup(self, mock_resolve):
+        """_lookup_mx returns the highest-priority MX hostname."""
+        mock_resolve.return_value = [
+            _fake_mx_answer("alt1.aspmx.migadu.com", preference=20),
+            _fake_mx_answer("aspmx1.migadu.com", preference=10),
+        ]
+        mx = _lookup_mx("example.org")
+        assert mx == "aspmx1.migadu.com"
 
-    def test_detect_via_mx_provider(self):
-        """ronzz.org uses Migadu → should detect via MX + provider match."""
+    @patch("dns.resolver.resolve")
+    def test_mx_lookup_no_records(self, mock_resolve):
+        """_lookup_mx returns None when no MX records exist."""
+        mock_resolve.side_effect = Exception("No MX record")
+        mx = _lookup_mx("nonexistent.example")
+        assert mx is None
+
+    @patch("lighterbird.email.server_detect._lookup_mx")
+    def test_detect_via_mx_provider(self, mock_lookup_mx):
+        """When MX matches a known provider, detect via MX + provider match."""
+        mock_lookup_mx.return_value = "aspmx1.migadu.com"
         result = detect_servers("user@ronzz.org")
         assert result["imap"] == "imap.migadu.com", (
             f"Expected Migadu IMAP, got {result['imap']}")
         assert result["smtp"] == "smtp.migadu.com", (
             f"Expected Migadu SMTP, got {result['smtp']}")
-        assert result["method"] in ("known_provider", "mx_provider")
+        assert result["method"] == "mx_provider"
+
+    @patch("lighterbird.email.server_detect._lookup_mx")
+    def test_detect_via_mx_provider_no_mx(self, mock_lookup_mx):
+        """When MX lookup fails, falls back to domain pattern."""
+        mock_lookup_mx.return_value = None
+        # ronzz.org is not a known_provider by exact domain, so without MX
+        # it should fall back to imap.ronzz.org / smtp.ronzz.org
+        result = detect_servers("user@ronzz.org")
+        assert result["method"] == "fallback"
+        assert result["imap"] == "imap.ronzz.org"
 
     def test_partial_explicit_imap(self):
         """Partial override: IMAP explicitly set, SMTP should auto-detect."""
