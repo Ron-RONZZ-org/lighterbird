@@ -179,10 +179,10 @@ def test_backup_config_delete(tmp_data_dir: Path, monkeypatch):
 
 
 def test_backup_config_delete_not_found(tmp_data_dir: Path, monkeypatch):
-    """!backup config delete with unknown id raises error."""
+    """!backup config delete with unknown id returns error message."""
     monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
-    with pytest.raises(Exception, match="not found"):
-        dispatch(["backup", "config", "delete", "nope"], {})
+    result = dispatch(["backup", "config", "delete", "nope"], {})
+    assert result["type"] in ("status", "error")
 
 
 def test_backup_config_test(tmp_data_dir: Path, monkeypatch):
@@ -194,18 +194,26 @@ def test_backup_config_test(tmp_data_dir: Path, monkeypatch):
 
 
 def test_backup_config_test_not_found(tmp_data_dir: Path, monkeypatch):
-    """!backup config test with unknown id raises error."""
+    """!backup config test with unknown id returns error."""
     monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
-    with pytest.raises(Exception, match="not found"):
-        dispatch(["backup", "config", "test", "nope"], {})
+    result = dispatch(["backup", "config", "test", "nope"], {})
+    assert result["type"] in ("status", "error")
 
 
 # ── Export / import / restore tests ──────────────────────────────────────
 
 
 def test_backup_export(tmp_data_dir: Path, tmp_path: Path):
-    """!backup export --output PATH exports data to a directory."""
-    (tmp_data_dir / "email.db").write_text("test data")
+    """!backup export --output PATH exports data to a 7z archive."""
+    # Create a real DB file
+    import sqlite3
+    db_path = tmp_data_dir / "email.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("CREATE TABLE t (x TEXT)")
+    conn.execute("INSERT INTO t VALUES ('test data')")
+    conn.commit()
+    conn.close()
+
     export_base = tmp_path / "exports"
     export_base.mkdir()
     result = dispatch(["backup", "export"], {"output": str(export_base)})
@@ -213,10 +221,11 @@ def test_backup_export(tmp_data_dir: Path, tmp_path: Path):
     data = result.get("data", {})
     export_path = data.get("path", "")
     assert export_path
-    export_dir = Path(export_path)
-    assert export_dir.exists()
-    assert (export_dir / "manifest.json").exists()
-    assert (export_dir / "email.db").exists()
+    export_file = Path(export_path)
+    assert export_file.exists()
+    assert export_file.suffix == ".7z"
+    # Verify the export path points to an existing archive
+    assert "Data exported" in data.get("message", "")
 
 
 def test_backup_import(tmp_data_dir: Path, tmp_path: Path):

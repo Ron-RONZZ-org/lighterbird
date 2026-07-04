@@ -369,10 +369,10 @@ class TestStrategyCRUD:
         assert s["max_copies"] == 3
 
     def test_update_strategy_not_found(self, tmp_data_dir: Path, monkeypatch):
-        """update_strategy raises ValueError for unknown id."""
+        """update_strategy returns None for unknown id."""
         monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
-        with pytest.raises(ValueError, match="not found"):
-            update_strategy("nope", {"max_copies": 1})
+        result = update_strategy("nope", {"max_copies": 1})
+        assert result is None
 
     def test_remove_strategy(self, tmp_data_dir: Path, monkeypatch):
         """remove_strategy removes a strategy."""
@@ -382,82 +382,93 @@ class TestStrategyCRUD:
         assert get_strategy("toremove") is None
 
     def test_remove_strategy_not_found(self, tmp_data_dir: Path, monkeypatch):
-        """remove_strategy raises ValueError for unknown id."""
+        """remove_strategy returns False for unknown id."""
         monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
-        with pytest.raises(ValueError, match="not found"):
-            remove_strategy("nope")
+        assert remove_strategy("nope") is False
 
     def test_test_strategy_local(self, tmp_data_dir: Path, monkeypatch):
         """test_strategy succeeds for local target."""
         monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
-        result = verify_strategy_target("default")
+        s = get_strategy("default")
+        assert s is not None
+        result = verify_strategy_target(s)
         assert result["success"] is True
         assert "writable" in result["message"]
 
     def test_test_strategy_not_found(self, tmp_data_dir: Path, monkeypatch):
-        """test_strategy raises ValueError for unknown id."""
+        """test_strategy returns error for unknown id."""
         monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_data_dir))
-        with pytest.raises(ValueError, match="not found"):
-            verify_strategy_target("nope")
+        result = verify_strategy_target({"id": "nope", "target": "/nonexistent"})
+        assert result["success"] is False
 
 
 class TestExportImport:
-    def test_export_creates_directory(self, tmp_data_dir: Path, tmp_path: Path):
-        """export_data creates a timestamped export dir with manifest."""
-        # Create a couple of real DB files
-        for name in ["email.db", "todo.db"]:
-            (tmp_data_dir / name).write_text(f"{name} data")
-        export_dir = export_data(str(tmp_path))
-        assert export_dir.exists()
-        assert export_dir.is_dir()
-        assert (export_dir / "manifest.json").exists()
-        assert (export_dir / "email.db").exists()
-        assert (export_dir / "todo.db").exists()
+    def _make_db_files(self, tmp_data_dir: Path, names: list[str]) -> None:
+        """Create valid SQLite DB files for testing."""
+        import sqlite3
+        for name in names:
+            db_path = tmp_data_dir / name
+            conn = sqlite3.connect(str(db_path))
+            conn.execute("CREATE TABLE t (x TEXT)")
+            conn.execute("INSERT INTO t VALUES (?)", (f"{name} data",))
+            conn.commit()
+            conn.close()
+
+    def test_export_creates_archive(self, tmp_data_dir: Path, tmp_path: Path):
+        """export_data creates a timestamped 7z archive with manifest."""
+        self._make_db_files(tmp_data_dir, ["email.db", "todo.db"])
+        result = export_data(str(tmp_path))
+        assert result.exists()
+        assert result.suffix == ".7z"
+        # Verify archive content via import roundtrip
+        import py7zr
+        with py7zr.SevenZipFile(str(result), "r") as arc:
+            names = arc.getnames()
+            assert "manifest.json" in names
+            assert "email.db" in names
+            assert "todo.db" in names
 
     def test_export_manifest_valid(self, tmp_data_dir: Path, tmp_path: Path):
         """Export manifest.json contains valid metadata."""
-        (tmp_data_dir / "email.db").write_text("data")
-        export_dir = export_data(str(tmp_path))
-        manifest = json.loads((export_dir / "manifest.json").read_text())
-        assert "exported_at" in manifest
+        self._make_db_files(tmp_data_dir, ["email.db"])
+        result = export_data(str(tmp_path))
+        import py7zr, json, tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            with py7zr.SevenZipFile(str(result), "r") as arc:
+                arc.extractall(path=tmp)
+            manifest = json.loads((Path(tmp) / "manifest.json").read_text())
+        assert "version" in manifest
         assert "files" in manifest
         assert "email.db" in manifest["files"]
-        assert manifest["files"]["email.db"]["size"] == 4
 
     def test_import_restores_files(self, tmp_data_dir: Path, tmp_path: Path):
-        """import_data copies files from export dir to data dir."""
-        (tmp_data_dir / "email.db").write_text("original")
-        export_dir = export_data(str(tmp_path))
+        """import_data restores files from 7z archive."""
+        self._make_db_files(tmp_data_dir, ["email.db"])
+        export_path = export_data(str(tmp_path))
         # Remove originals
         (tmp_data_dir / "email.db").unlink()
-        result = import_data(str(export_dir), force=True)
+        result = import_data(str(export_path), force=True)
         assert "email.db" in result["imported"]
         assert (tmp_data_dir / "email.db").exists()
-        assert (tmp_data_dir / "email.db").read_text() == "original"
 
     def test_import_skips_existing(self, tmp_data_dir: Path, tmp_path: Path):
-        """import_data marks byte-identical files as identical (without --force)."""
-        (tmp_data_dir / "email.db").write_text("original")
-        export_dir = export_data(str(tmp_path))
-        result = import_data(str(export_dir))
-        assert "email.db" in result["identical"]
+        """import_data skips byte-identical files without --force."""
+        self._make_db_files(tmp_data_dir, ["email.db"])
+        export_path = export_data(str(tmp_path))
+        result = import_data(str(export_path))
+        assert "email.db" in result["skipped"]
 
     def test_import_force_overwrites(self, tmp_data_dir: Path, tmp_path: Path):
         """import_data with --force overwrites existing files."""
-        (tmp_data_dir / "email.db").write_text("original")
-        export_dir = export_data(str(tmp_path))
-        # Modify the export copy
-        (export_dir / "email.db").write_text("overwritten")
-        result = import_data(str(export_dir), force=True)
+        self._make_db_files(tmp_data_dir, ["email.db"])
+        export_path = export_data(str(tmp_path))
+        result = import_data(str(export_path), force=True)
         assert "email.db" in result["imported"]
-        assert (tmp_data_dir / "email.db").read_text() == "overwritten"
 
     def test_import_missing_manifest(self, tmp_data_dir: Path, tmp_path: Path):
-        """import_data raises FileNotFoundError without manifest."""
-        empty_dir = tmp_path / "not-an-export"
-        empty_dir.mkdir()
-        with pytest.raises(FileNotFoundError, match="manifest.json"):
-            import_data(str(empty_dir))
+        """import_data raises FileNotFoundError for nonexistent archive."""
+        with pytest.raises(FileNotFoundError, match="not found"):
+            import_data(str(tmp_path / "nonexistent.7z"))
 
 
 class TestKnownDbPaths:

@@ -574,17 +574,17 @@ def _seed_llm_config(creds: dict[str, str]) -> None:
 def _seed_backup_config(data_dir: Path) -> None:
     """Create a basic backup config so backup commands don't error."""
     from lighterbird.core.backup import save_config, BackupStrategy
-    from dataclasses import asdict
 
-    strategy = BackupStrategy(
-        id="default",
-        label="Default",
-        interval_minutes=0,
-        max_copies=10,
-        target="local",
-        enabled=True,
-    )
-    save_config({"version": 3, "strategies": [asdict(strategy)]})
+    save_config({"version": 3, "strategies": [
+        BackupStrategy(
+            id="default",
+            label="Default",
+            interval_minutes=0,
+            max_copies=10,
+            target="local",
+            enabled=True,
+        ).to_dict()
+    ]})
 
 
 # ── Public API ──────────────────────────────────────────────────────────────
@@ -640,7 +640,6 @@ def seed_test_seed_7z(output_path: str | Path) -> Path:
 
     from lighterbird.core.backup import BackupStrategy
     from lighterbird.core.backup import _create_strategy_archive as _create_archive
-    from dataclasses import asdict
 
     tmp = Path(tempfile.mkdtemp(prefix="lighterbird-seed-"))
     data_tmp = tmp / "data"
@@ -650,7 +649,7 @@ def seed_test_seed_7z(output_path: str | Path) -> Path:
 
     try:
         seed_data_dir(data_tmp)
-        strategy = asdict(BackupStrategy(id="default", label="Default"))
+        strategy = BackupStrategy(id="default", label="Default").to_dict()
         archive = _create_archive(strategy)
         if archive:
             dst = Path(output_path)

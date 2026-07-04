@@ -222,14 +222,15 @@ class TestCRUDService:
     def test_list(self, service):
         service.create({"name": "a", "value": 1})
         service.create({"name": "b", "value": 2})
-        entries = service.list(order_by="value")
+        # Default is DESC — last created first
+        entries = service.list(order_by="value", desc=False)
         assert len(entries) == 2
         assert entries[0]["value"] == 1
 
     def test_list_with_limit_and_offset(self, service):
         for i in range(10):
             service.create({"name": f"item{i}", "value": i})
-        entries = service.list(order_by="value", limit=3, offset=5)
+        entries = service.list(order_by="value", desc=False, limit=3, offset=5)
         assert len(entries) == 3
         assert entries[0]["value"] == 5
 
