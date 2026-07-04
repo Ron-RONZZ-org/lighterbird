@@ -222,3 +222,47 @@ def sieve_deactivate(remaining: list[str], flags: dict[str, str]) -> dict[str, A
     if not script:
         raise CommandValidationError(f"Script not found: {name}")
     return {"type": "status", "title": "Script Deactivated", "data": {"name": name, "account": resolved_id}}
+
+
+@command("email.sieve.priority")
+def sieve_priority(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!email sieve priority <name> <priority> --account email
+
+    Set execution priority for a script on a specific account.
+    Lower priority values are evaluated first.
+    """
+    if len(remaining) < 2:
+        raise CommandValidationError(
+            "Missing script name or priority.",
+            "Usage: !email sieve priority <name> <0-999> --account email",
+        )
+    name = remaining[0]
+    try:
+        priority = int(remaining[1])
+    except ValueError:
+        raise CommandValidationError(
+            f"Invalid priority: {remaining[1]}. Must be a number (0-999).",
+        )
+
+    account_id = flags.get("account", "")
+    if not account_id:
+        raise CommandValidationError(
+            "Missing --account flag.",
+            "Usage: !email sieve priority <name> <priority> --account email",
+        )
+    resolved_id = _resolve_account_identifier(account_id)
+    if not resolved_id:
+        raise CommandValidationError(f"Account not found: {account_id[:20]}")
+
+    svc: EmailService = get_email_service()
+    result = svc.sieve.set_priority(name, account_email=resolved_id, priority=priority)
+    if not result:
+        raise CommandValidationError(
+            f"Script '{name}' is not activated on {resolved_id}. "
+            f"Activate it first with: !email sieve activate {name} --account {resolved_id}"
+        )
+    return {
+        "type": "status",
+        "title": "Priority Set",
+        "data": {"name": name, "account": resolved_id, "priority": priority},
+    }
