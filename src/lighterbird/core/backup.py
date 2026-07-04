@@ -192,8 +192,15 @@ def _known_db_paths() -> list[Path]:
         - contacts.db
         - todo.db
         - journal.db
+        - letters.db
+        - profiles.db
+        - user_commands.db
     """
-    names = ["email.db", "calendar.db", "contacts.db", "todo.db", "journal.db"]
+    names = [
+        "email.db", "calendar.db", "contacts.db",
+        "todo.db", "journal.db", "letters.db",
+        "profiles.db", "user_commands.db",
+    ]
     d = data_dir()
     return [d / name for name in names if (d / name).exists()]
 

@@ -884,7 +884,7 @@ def get_command_tree() -> list[CommandNode]:
                     "name": "list",
                     "description": "List available backup snapshots",
                     "flags": [
-                        {"name": "stem", "type": "string", "help": "Filter by database (email|calendar|contacts|todo|journal)"},
+                        {"name": "stem", "type": "string", "help": "Filter by database (email|calendar|contacts|todo|journal|letters|profiles|user_commands)"},
                         {"name": "strategy", "type": "string", "help": "Filter by strategy id"},
                     ],
                 },
