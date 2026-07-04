@@ -75,10 +75,10 @@ Open http://localhost:5173 — the Vite dev server proxies API calls to the Pyth
 
 ```bash
 # Terminal 1: backend on custom port
-LIGHTERBIRD_PORT=8765 uv run python -m lighterbird
+LIGHTERBIRD_PORT=8764 uv run python -m lighterbird
 
 # Terminal 2: Vite frontend auto-detects the same port
-LIGHTERBIRD_PORT=8765 npm run dev
+LIGHTERBIRD_PORT=8764 npm run dev
 ```
 
 The `lighterbird-dev` CLI also respects `LIGHTERBIRD_PORT`. The `--port` CLI flag takes precedence over the env var (CLI > env > 8000). In production (built SPA served by FastAPI), port configuration is automatic — everything runs on the same origin, no proxy needed.
