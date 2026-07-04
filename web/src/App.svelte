@@ -11,9 +11,11 @@
   import { email, calendar, contacts, todo, journal, letters } from "./lib/api.js";
   import ComposeEmail from "./lib/ComposeEmail.svelte";
   import EventForm from "./lib/EventForm.svelte";
+  import ConfirmDialog from "./lib/ConfirmDialog.svelte";
 
   let isLoading = $state(false);
   let activeForm = $state(null);
+  let resetConfirm = $state(null); // {tokens, flags} or null
 
   // ── Notice banner (fetched on page load, dismissible per session) ────
   let noticeMessage = $state("");
@@ -174,8 +176,18 @@
       // Handle form-required response type (backend fallback for
       // saved-commands/aliases that can't be expanded frontend-side)
       if (result.type === "form-required") {
-        const { form, initialData } = result.data || {};
+        const { form, initialData, message } = result.data || {};
         if (form) {
+          // Special case: reset-no-backup shows a ConfirmDialog overlay
+          if (form === "reset-no-backup") {
+            resetConfirm = {
+              tokens: parseCommand(input).tokens,
+              flags: { "no-backup": "", "confirmed": "true" },
+              message: message || "This will permanently delete ALL your data.",
+            };
+            isLoading = false;
+            return;
+          }
           // Close loading, open form
           const activeId = tabStore.active?.id;
           if (activeId) tabStore.close(activeId);
@@ -242,6 +254,41 @@
     <div class="loading-bar" aria-label="Loading"></div>
   {/if}
   <PopupOverlay />
+  {#if resetConfirm}
+    <div class="global-confirm">
+      <ConfirmDialog
+        title="⚠ Reset Lighterbird"
+        message={resetConfirm.message}
+        confirmText="Yes, Delete Everything"
+        variant="danger"
+        onConfirm={async () => {
+          const cmd = resetConfirm;
+          resetConfirm = null;
+          try {
+            const resp = await fetch("/api/v1/command", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ tokens: cmd.tokens, flags: cmd.flags }),
+            });
+            const result = await resp.json();
+            if (result.type === "form-required") {
+              popup.show("error", "Reset Cancelled", { message: "Reset requires confirmation." });
+            } else {
+              const dataType = detectPersistentType("!reset");
+              if (dataType) {
+                popup.showPersistent(result.type, result.title, result.data, dataType);
+              } else {
+                popup.show(result.type, result.title, result.data);
+              }
+            }
+          } catch (err) {
+            popup.show("error", "Reset Failed", { message: err.message || String(err) });
+          }
+        }}
+        onDismiss={() => { resetConfirm = null; }}
+      />
+    </div>
+  {/if}
 </main>
 
 <style>
@@ -315,5 +362,10 @@
   @keyframes bar-slide {
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
+  }
+  .global-confirm {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
   }
 </style>

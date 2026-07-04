@@ -1275,6 +1275,18 @@ def get_command_tree() -> list[CommandNode]:
             ],
         },
 
+        # ── Reset ───────────────────────────────────────────────────────────
+        {
+            "name": "reset",
+            "description": "Reset lighterbird to a fresh state (backup first!)",
+            "params": [
+                {"name": "path", "required": False, "type": "string", "placeholder": "/path/to/backup.7z"},
+            ],
+            "flags": [
+                {"name": "no-backup", "type": "flag", "help": "Skip backup and delete everything (irreversible!)"},
+            ],
+        },
+
         # ── Help ───────────────────────────────────────────────────────────
         {
             "name": "help",
