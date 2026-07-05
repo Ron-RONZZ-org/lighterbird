@@ -71,10 +71,10 @@ class MessageService:
             q = f"%{filters['query']}%"
             params.extend([q, q])
         if filters.get("from"):
-            conditions.append("m.de LIKE ?")
+            conditions.append("m.from_addr LIKE ?")
             params.append(f"%{filters['from']}%")
         if filters.get("to"):
-            conditions.append("m.al LIKE ?")
+            conditions.append("m.to_recipients LIKE ?")
             params.append(f"%{filters['to']}%")
         if filters.get("subject"):
             conditions.append("m.subject LIKE ?")

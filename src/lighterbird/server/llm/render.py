@@ -94,7 +94,7 @@ def _sanitize_html(html: str) -> str:
 def _filter_attrs(tag_html: str, allowed: set[str]) -> str:
     """Extract and return only allowed attributes from an HTML tag."""
     attrs_found: list[str] = []
-    for a_name, a_val in re.findall(r"""(\w+)\s*=\s*(["'])(.*?)\2""", tag_html):
+    for a_name, _, a_val in re.findall(r"""(\w+)\s*=\s*(["'])(.*?)\2""", tag_html):
         if a_name in allowed:
             # Basic XSS protection: strip script: and javascript: from href
             if a_name == "href":
