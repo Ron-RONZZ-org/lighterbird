@@ -5,17 +5,51 @@ const BASE = "/api/v1";
 const BACKEND_HELP =
   "Is the Python backend running? Run `uv run python -m lighterbird` in another terminal.";
 
-async function request(method, path, body = null) {
+/**
+ * Fetch with exponential backoff retry for transient failures.
+ * Retries on network errors and HTTP 5xx responses (not 4xx client errors).
+ */
+async function fetchWithRetry(url, options, retries = 3, baseBackoff = 500) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const resp = await fetch(url, options);
+      // Retry on server errors (5xx) only, not client errors (4xx)
+      if (resp.status >= 500 && resp.status < 600 && attempt < retries) {
+        await sleep(baseBackoff * 2 ** attempt);
+        continue;
+      }
+      return resp;
+    } catch (err) {
+      // Network errors (TypeError, ECONNREFUSED) — retry
+      if (attempt < retries) {
+        await sleep(baseBackoff * 2 ** attempt);
+        continue;
+      }
+      throw err;
+    }
+  }
+  // Unreachable — all attempts exhausted
+  throw new Error("Request failed after retries");
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function request(method, path, body = null, opts = {}) {
+  const retry = opts.retry ?? (method === "GET");
   let resp;
   try {
-    const opts = {
+    const fetchOpts = {
       method,
       headers: { "Content-Type": "application/json" },
     };
     if (body !== null) {
-      opts.body = JSON.stringify(body);
+      fetchOpts.body = JSON.stringify(body);
     }
-    resp = await fetch(`${BASE}${path}`, opts);
+    resp = retry
+      ? await fetchWithRetry(`${BASE}${path}`, fetchOpts)
+      : await fetch(`${BASE}${path}`, fetchOpts);
   } catch (err) {
     const msg = err.cause?.code === "ECONNREFUSED"
       ? `Cannot connect to the backend server. ${BACKEND_HELP}`
@@ -83,7 +117,7 @@ export const email = {
   deleteAccount: (email) => request("DELETE", `/email/accounts/${encodeURIComponent(email)}`),
 
   sync: (accountEmail = null) =>
-    request("POST", "/email/sync", accountEmail ? { account_email: accountEmail } : {}),
+    request("POST", "/email/sync", accountEmail ? { account_email: accountEmail } : {}, { retry: true }),
 
   listMessages: (params = {}) => {
     const q = new URLSearchParams();
@@ -136,7 +170,7 @@ export const calendar = {
 
   deleteCalendar: (uuid) => request("DELETE", `/calendar/calendars/${uuid}`),
 
-  sync: (uuid) => request("POST", `/calendar/sync/${uuid}`),
+  sync: (uuid) => request("POST", `/calendar/sync/${uuid}`, null, { retry: true }),
 
   listEvents: (params = {}) => {
     const q = new URLSearchParams();
@@ -330,7 +364,7 @@ export const letters = {
 
 export const admin = {
   health: () => request("GET", "/health"),
-  syncAll: () => request("POST", "/sync/all"),
+  syncAll: () => request("POST", "/sync/all", null, { retry: true }),
 };
 
 // ── Profiles API ──────────────────────────────────────────────────────
