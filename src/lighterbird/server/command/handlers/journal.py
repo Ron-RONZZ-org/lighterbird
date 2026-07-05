@@ -15,7 +15,7 @@ from typing import Any
 
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
-from lighterbird.server.command.response import normalize_journal_entry
+
 from lighterbird.server.deps import get_journal_service
 from lighterbird.journal.services import JournalService
 
@@ -49,9 +49,9 @@ def journal_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     date_str = flags.get("date")
     limit = int(flags.get("limit", 50))
     if date_str:
-        entries = [normalize_journal_entry(e) for e in svc.list_by_date(date_str)]
+        entries = [dict(e) for e in svc.list_by_date(date_str)]
     else:
-        entries = [normalize_journal_entry(e) for e in svc.list(limit=limit)]
+        entries = [dict(e) for e in svc.list(limit=limit)]
     return {"type": "journal-list", "title": "Journal", "data": {"entries": entries, "total": len(entries)}}
 
 
@@ -100,7 +100,7 @@ def journal_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     entry = svc.get(remaining[0])
     if not entry:
         raise CommandValidationError(f"Journal entry not found: {remaining[0][:8]}")
-    return {"type": "status", "title": entry.get("title", "(untitled)"), "data": normalize_journal_entry(entry)}
+    return {"type": "status", "title": entry.get("title", "(untitled)"), "data": dict(entry)}
 
 
 @command("journal.search")
@@ -108,7 +108,7 @@ def journal_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     """!journal search <query>"""
     svc: JournalService = get_journal_service()
     query = " ".join(remaining) if remaining else flags.get("query", "")
-    entries = [normalize_journal_entry(e) for e in svc.search(query)]
+    entries = [dict(e) for e in svc.search(query)]
     return {"type": "journal-list", "title": "Journal Search", "data": {"entries": entries, "total": len(entries)}}
 
 

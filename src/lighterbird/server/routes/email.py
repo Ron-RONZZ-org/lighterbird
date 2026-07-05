@@ -1,20 +1,20 @@
-"""Email REST API routes."""
+"""Email REST API routes — accounts, sync, folders, messages, conversation.
+
+Action endpoints (send, trash, batch ops, import/export eml, attachments)
+live in ``email_actions.py`` — this file is kept under 500 lines.
+"""
 
 from __future__ import annotations
 
 import json
-import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse
 
 from lighterbird.server.deps import get_email_service
 from lighterbird.server.schemas import (
     AccountCreate, AccountUpdate, AccountResponse, AccountListResponse,
     SyncRequest, SyncResultResponse, SyncAllResponse,
-    SendRequest, MarkReadRequest,
-    BatchDeleteRequest, BatchMoveRequest, BatchResultResponse,
-    ErrorResponse,
 )
 from lighterbird.email.service import EmailService
 from lighterbird.email.server_detect import detect_servers
@@ -127,8 +127,7 @@ def sync_email(
 @router.get("/folders")
 def list_folders(email_svc: EmailService = Depends(get_email_service)):
     """List all known folders with account info."""
-    from lighterbird.server.command.response import normalize_account
-    accounts = {a["email"]: normalize_account(a) for a in email_svc.list_accounts()}
+    accounts = {a["email"]: dict(a) for a in email_svc.list_accounts()}
     rows = list(email_svc.db.execute(
         "SELECT account_email, name FROM folders ORDER BY account_email, name"
     ))
@@ -214,7 +213,6 @@ def list_messages(
     offset: int = 0,
     email_svc: EmailService = Depends(get_email_service),
 ):
-    from lighterbird.server.command.response import normalize_message
     filters = {}
     if query:
         filters["query"] = query
@@ -254,7 +252,7 @@ def list_messages(
         att_counts = {r["message_uuid"]: r["cnt"] for r in rows}
     enriched = []
     for m in msgs:
-        d = normalize_message(m)
+        d = dict(m)
         d["attachment_count"] = att_counts.get(m.get("uuid", ""), 0)
         enriched.append(d)
     return {"messages": enriched, "total": len(msgs)}
@@ -262,12 +260,11 @@ def list_messages(
 
 @router.get("/messages/{uuid}")
 def get_message(uuid: str, email_svc: EmailService = Depends(get_email_service)):
-    from lighterbird.server.command.response import normalize_message
     msg = email_svc.get_message(uuid)
     if not msg:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Message not found: {uuid[:8]}")
-    result = normalize_message(msg)
+    result = dict(msg)
     # Include attachment count
     att_rows = list(email_svc.db.execute(
         "SELECT COUNT(*) AS cnt FROM email_attachments WHERE message_uuid = ?",
@@ -353,172 +350,8 @@ def view_message_html(uuid: str, email_svc: EmailService = Depends(get_email_ser
 @router.get("/messages/{uuid}/conversation")
 def get_conversation(uuid: str, limit: int = 20, email_svc: EmailService = Depends(get_email_service)):
     """Get all messages in the same conversation thread as the given message."""
-    from lighterbird.server.command.response import normalize_message
     msgs = email_svc.get_conversation(uuid, limit=limit)
-    return {"messages": [normalize_message(m) for m in msgs], "total": len(msgs)}
+    return {"messages": [dict(m) for m in msgs], "total": len(msgs)}
 
 
-@router.post("/send", status_code=201)
-def send_email(
-    req: SendRequest,
-    email_svc: EmailService = Depends(get_email_service),
-):
-    try:
-        result = email_svc.send_email(
-            req.account_email, req.to, req.subject, req.body,
-            cc=req.cc, bcc=req.bcc, priority=req.priority,
-            body_format=req.body_format, attachments=req.attachments,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    return {"status": result.get("status", "sent")}
-
-
-@router.patch("/messages/{uuid}/read")
-def mark_read(
-    uuid: str,
-    req: MarkReadRequest,
-    email_svc: EmailService = Depends(get_email_service),
-):
-    email_svc.mark_read(uuid, req.read)
-    return {"status": "ok"}
-
-
-@router.post("/messages/{uuid}/trash")
-def trash_message(
-    uuid: str,
-    email_svc: EmailService = Depends(get_email_service),
-):
-    """Soft-delete a single message.
-
-    Does local soft-delete immediately. IMAP trash move is attempted
-    best-effort; on failure, queued for background retry.
-    """
-    email_svc.trash_message(uuid)
-    return {"status": "trashed"}
-
-
-@router.post("/messages/batch-delete", response_model=BatchResultResponse)
-def batch_delete(
-    req: BatchDeleteRequest,
-    email_svc: EmailService = Depends(get_email_service),
-):
-    """Soft-delete multiple messages at once.
-
-    Performs local soft-delete immediately for a snappy UI. IMAP trash
-    operations are queued for background processing.
-    """
-    result = email_svc.msg_ops.batch_trash_messages(req.uuids)
-    return BatchResultResponse(
-        status="ok",
-        count=result["count"],
-    )
-
-
-@router.post("/messages/batch-move", response_model=BatchResultResponse)
-def batch_move(
-    req: BatchMoveRequest,
-    email_svc: EmailService = Depends(get_email_service),
-):
-    """Move multiple messages to a destination folder."""
-    for uuid in req.uuids:
-        email_svc.move_message(uuid, req.destination_folder)
-    return BatchResultResponse(status="ok", count=len(req.uuids))
-
-
-@router.get("/export-eml/{uuid}")
-def export_eml(uuid: str, email_svc: EmailService = Depends(get_email_service)):
-    """Export a message as .eml (RFC 822) download."""
-    eml_text = email_svc.export_eml(uuid)
-    if eml_text is None:
-        raise HTTPException(status_code=404, detail=f"Message not found: {uuid[:8]}")
-    # Use subject for meaningful filename
-    msg = email_svc.get_message(uuid)
-    subject = (msg or {}).get("subject", "") or ""
-    base = re.sub(r'[^a-zA-Z0-9_-]', '', subject)[:48] or uuid[:12]
-    filename = f"{base}.eml"
-    return Response(
-        content=eml_text.encode("utf-8"),
-        media_type="message/rfc822",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-@router.get("/messages/{uuid}/attachments")
-def list_attachments(
-    uuid: str,
-    email_svc: EmailService = Depends(get_email_service),
-):
-    """List all attachments for a given message."""
-    from lighterbird.core.storage import AttachmentStore
-
-    rows = list(email_svc.db.execute(
-        "SELECT uuid, filename, mime_type, size, content_id, storage_path "
-        "FROM email_attachments WHERE message_uuid = ? ORDER BY filename",
-        (uuid,),
-    ))
-    attachments = []
-    for row in rows:
-        store = AttachmentStore()
-        file_exists = False
-        try:
-            store.retrieve(uuid, row["content_id"])
-            file_exists = True
-        except FileNotFoundError:
-            pass
-        attachments.append({
-            "uuid": row["uuid"],
-            "filename": row["filename"],
-            "mime_type": row["mime_type"],
-            "size": row["size"],
-            "content_id": row["content_id"],
-            "available": file_exists,
-        })
-    return {"attachments": attachments}
-
-
-@router.get("/attachments/{att_uuid}/download")
-def download_attachment(
-    att_uuid: str,
-    email_svc: EmailService = Depends(get_email_service),
-):
-    """Download a single attachment by its UUID."""
-    from fastapi.responses import Response as FastResponse
-    from lighterbird.core.storage import AttachmentStore
-
-    row = email_svc.db.execute_one(
-        "SELECT message_uuid, filename, mime_type, content_id "
-        "FROM email_attachments WHERE uuid = ?",
-        (att_uuid,),
-    )
-    if not row:
-        raise HTTPException(status_code=404, detail=f"Attachment not found: {att_uuid[:8]}")
-
-    store = AttachmentStore()
-    try:
-        data = store.retrieve(row["message_uuid"], row["content_id"])
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Attachment file not found on disk.")
-
-    mime = row["mime_type"] or "application/octet-stream"
-    filename = row["filename"] or "attachment"
-    return FastResponse(
-        content=data,
-        media_type=mime,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-@router.post("/import-eml", status_code=201)
-def import_eml(data: dict, email_svc: EmailService = Depends(get_email_service)):
-    """Import a .eml file as an email draft."""
-    path = data.get("path", "")
-    if not path:
-        raise HTTPException(status_code=400, detail="Path is required.")
-    try:
-        draft = email_svc.import_eml(path)
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return {"imported": 1, "uuid": draft["uuid"]}
+# (send, trash, batch, export/import eml, attachments moved to email_actions.py)

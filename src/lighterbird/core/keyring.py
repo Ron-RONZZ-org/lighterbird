@@ -8,6 +8,10 @@ Forked from A-core's ``A.core.keyring``.
 
 from __future__ import annotations
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def _keyring_available() -> bool:
     try:
@@ -32,7 +36,8 @@ def get_password(service: str, key: str) -> str | None:
     try:
         import keyring
         return keyring.get_password(service, key)
-    except Exception:
+    except Exception as exc:
+        logger.warning("Keyring get_password failed for %s/%s: %s", service, key, exc)
         return None
 
 
@@ -48,7 +53,8 @@ def set_password(service: str, key: str, password: str) -> bool:
         import keyring
         keyring.set_password(service, key, password)
         return True
-    except Exception:
+    except Exception as exc:
+        logger.warning("Keyring set_password failed for %s/%s: %s", service, key, exc)
         return False
 
 
@@ -62,5 +68,6 @@ def delete_password(service: str, key: str) -> bool:
         return True
     except keyring.errors.PasswordDeleteError:
         return True
-    except Exception:
+    except Exception as exc:
+        logger.warning("Keyring delete_password failed for %s/%s: %s", service, key, exc)
         return False
