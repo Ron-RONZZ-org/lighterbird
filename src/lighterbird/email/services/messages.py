@@ -182,6 +182,50 @@ class MessageService:
             )
         return self.db.execute("SELECT * FROM folders ORDER BY account_email, name")
 
+    # ── ICS extraction from email ────────────────────────────────────────
+
+    def extract_ics_attachments(self, message_uuid: str) -> list[bytes]:
+        """Extract .ics attachment data from a message's email attachments.
+
+        Searches the ``email_attachments`` table for entries with
+        ``text/calendar`` MIME type or ``.ics`` filename extension.
+
+        Returns:
+            List of raw ICS data bytes.
+        """
+        from lighterbird.core.storage import AttachmentStore
+
+        rows = self.db.execute(
+            "SELECT content_id, storage_path FROM email_attachments"
+            " WHERE message_uuid = ?"
+            " AND (mime_type = 'text/calendar'"
+            "      OR LOWER(filename) LIKE '%.ics')"
+            " ORDER BY filename",
+            (message_uuid,),
+        )
+        store = AttachmentStore()
+        results: list[bytes] = []
+        for row in rows:
+            try:
+                data = store.retrieve(message_uuid, row["content_id"])
+                results.append(data)
+            except FileNotFoundError:
+                # Fallback: try storage_path if stored inline in the message
+                pass
+        # Also check inline (embedded) ICS data in the message body
+        msg = self.db.execute_one(
+            "SELECT body, html_body FROM messages WHERE uuid = ?",
+            (message_uuid,),
+        )
+        if msg:
+            body = msg.get("body", "") or ""
+            import re
+            for m in re.finditer(
+                r"BEGIN:VCALENDAR.*?END:VCALENDAR", body, re.DOTALL,
+            ):
+                results.append(m.group(0).encode("utf-8"))
+        return results
+
     def find_conversation(
         self, message_id: str, references: str = "", in_reply_to: str = "",
         limit: int = 20,

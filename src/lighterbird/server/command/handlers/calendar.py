@@ -184,13 +184,19 @@ def event_export_ics(remaining: list[str], flags: dict[str, str]) -> dict[str, A
 
 @command("calendar.event.import.ics")
 def event_import_ics(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!calendar event import ics <path> [--calendar UUID]
+    """!calendar event import ics <path|from-email msg-uuid> [--calendar UUID]
 
-    Calendar UUID is specified via --calendar flag or auto-detected.
+    Import events from an ICS file or from an email attachment.
+    Use ``!calendar event import ics from-email <msg-uuid>`` to
+    import .ics attachments from an email message.
     """
     if not remaining:
-        raise CommandValidationError("Missing ICS file path.", "Usage: !calendar event import ics <path> [--calendar UUID]")
-    path = remaining[0]
+        raise CommandValidationError(
+            "Missing argument.",
+            "Usage: !calendar event import ics <path>\n"
+            "       !calendar event import ics from-email <msg-uuid>",
+        )
+
     svc: CalendarService = get_calendar_service()
     calendar_uuid = flags.get("calendar", "")
     if not calendar_uuid:
@@ -204,6 +210,35 @@ def event_import_ics(remaining: list[str], flags: dict[str, str]) -> dict[str, A
                 "Multiple calendars. Specify one with --calendar <uuid>.",
                 "Usage: !calendar event import ics <path> --calendar <uuid>",
             )
+
+    # ── Import from email attachment ───────────────────────────────────
+    if remaining[0] == "from-email":
+        if len(remaining) < 2:
+            raise CommandValidationError(
+                "Missing message UUID.",
+                "Usage: !calendar event import ics from-email <msg-uuid>",
+            )
+        msg_uuid = remaining[1]
+        from lighterbird.server.deps import get_email_service
+        email_svc = get_email_service()
+        ics_blobs = email_svc.messages.extract_ics_attachments(msg_uuid)
+        if not ics_blobs:
+            raise CommandValidationError(
+                f"No .ics attachments found in message {msg_uuid[:8]}.",
+            )
+        uuids = []
+        from lighterbird.calendar.ics import insert_ics_events
+        for blob in ics_blobs:
+            added = insert_ics_events(svc.db, calendar_uuid, blob.decode("utf-8", errors="replace"))
+            uuids.extend(added)
+        return {
+            "type": "status",
+            "title": "ICS Import from Email",
+            "data": {"imported": len(uuids), "uuids": uuids, "source": "email"},
+        }
+
+    # ── Import from file ───────────────────────────────────────────────
+    path = remaining[0]
     try:
         uuids = svc.import_ics(calendar_uuid, path)
     except FileNotFoundError:
