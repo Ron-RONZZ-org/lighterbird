@@ -19,6 +19,7 @@ try:
         email_account,  # noqa: F401
         email_sieve,  # noqa: F401
         email_signature,  # noqa: F401
+        email_spam,  # noqa: F401
         help,  # noqa: F401
         journal,  # noqa: F401
         letter,  # noqa: F401
@@ -33,13 +34,28 @@ finally:
 
 # ── Group metadata ────────────────────────────────────────────────────────
 
-from lighterbird.server.command.registry import group, register_interactive_form
+from lighterbird.server.command.registry import alias, group, register_interactive_form
+
+# ── Group metadata ────────────────────────────────────────────────────────
 
 group("email", description="Email operations", default_action="list")
 group("calendar", description="Calendar operations", default_action="list")
 group("contact", description="Contact management", default_action="list")
 group("todo", description="Task management", default_action="list")
 group("journal", description="Journal entries", default_action="list")
+group("email.spam", description="Spam block management")
+
+# ── Command aliases ────────────────────────────────────────────────────────
+# Plural-form aliases for intuitive command entry.
+
+alias(["contacts"], ["contact"])
+alias(["inbox"], ["email", "list"])
+alias(["tasks"], ["todo", "list"])
+alias(["journals"], ["journal", "list"])
+alias(["calendars"], ["calendar", "list"])
+alias(["letters"], ["letter", "list"])
+alias(["profiles"], ["user", "info", "list"])
+alias(["commands"], ["user", "saved-commands", "list"])
 
 # ── Interactive forms ─────────────────────────────────────────────────────
 # Commands that have an interactive form popup in the frontend.

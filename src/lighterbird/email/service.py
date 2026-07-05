@@ -214,6 +214,15 @@ class EmailService:
 
     # ── MessageStore protocol (used by IMAP sync) ────────────────────────
 
+    # ── Spam block management ──────────────────────────────────────────
+
+    @property
+    def spam(self):
+        """Get a SpamManager instance for the email DB."""
+        from lighterbird.email.filters.spam import SpamManager
+
+        return SpamManager(self._db)
+
     @property
     def db(self):
         return self._db
