@@ -21,6 +21,7 @@ Registered paths:
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from lighterbird.email.service import EmailService
@@ -78,29 +79,27 @@ def email_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("email.list")
-def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email list [--limit N] [--folder NAME] [--not-folder NAME] [--all]
-                  [--sort newest|oldest|sender] [--group conversation]
+def _build_email_list_filters(flags: dict[str, str], svc: EmailService) -> dict[str, Any]:
+    """Build search filter dict from CLI flags for ``!email list``.
 
-    By default excludes Trash, Spam, and Junk folders.
-    Use ``--all`` to include all folders (including trash).
-    Use ``--folder`` to filter to specific folder(s); comma-separated.
-    Use ``--not-folder`` to exclude specific folder(s); comma-separated.
-    Folder names use the ``{email}/{folder}`` convention, e.g.
-    ``user@gmail.com/INBOX``.
-    ``--sort`` controls display order: newest (default), oldest, sender.
-    ``--group`` groups by conversation thread.
+    Handles ``--folder``, ``--not-folder``, ``--all``, ``--sort``,
+    and ``--group`` flags.  By default excludes Trash, Spam, Junk,
+    and Bin folders.
+
+    Args:
+        flags: Parsed CLI flags.
+        svc: Email service instance for account lookup.
+
+    Returns:
+        Filter dict suitable for ``EmailService.search_messages()``.
     """
-    svc: EmailService = get_email_service()
-    limit = int(flags.get("limit", 20))
     include_all = "all" in flags
     folder_filter = flags.get("folder", "")
     not_folder_filter = flags.get("not-folder", "")
     sort_by = flags.get("sort", "newest")
     group_by = flags.get("group", "")
 
-    filters = {}
+    filters: dict[str, Any] = {}
     if folder_filter:
         folder_names = [f.strip() for f in folder_filter.split(",") if f.strip()]
         resolved_account: str | None = None
@@ -136,6 +135,33 @@ def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         filters["sort"] = sort_by
     if group_by:
         filters["group"] = group_by
+
+    return filters
+
+
+@command("email.list")
+def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!email list [--limit N] [--folder NAME] [--not-folder NAME] [--all]
+                  [--sort newest|oldest|sender] [--group conversation]
+
+    By default excludes Trash, Spam, and Junk folders.
+    Use ``--all`` to include all folders (including trash).
+    Use ``--folder`` to filter to specific folder(s); comma-separated.
+    Use ``--not-folder`` to exclude specific folder(s); comma-separated.
+    Folder names use the ``{email}/{folder}`` convention, e.g.
+    ``user@gmail.com/INBOX``.
+    ``--sort`` controls display order: newest (default), oldest, sender.
+    ``--group`` groups by conversation thread.
+    """
+    svc: EmailService = get_email_service()
+    limit = int(flags.get("limit", 20))
+    folder_filter = flags.get("folder", "")
+    not_folder_filter = flags.get("not-folder", "")
+    include_all = "all" in flags
+    sort_by = flags.get("sort", "newest")
+    group_by = flags.get("group", "")
+
+    filters = _build_email_list_filters(flags, svc)
 
     messages = [dict(m) for m in svc.search_messages(filters, limit=limit)]
     title_suffix = f" ({folder_filter})" if folder_filter else ""
@@ -208,8 +234,7 @@ def email_reply(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     account_email = (msg.get("account_email") or "").lower()
     is_from_self = from_addr and account_email and account_email in from_addr
 
-    import json as json_mod
-    orig_to = (json_mod.loads(msg.get("to_recipients", "[]"))
+    orig_to = (json.loads(msg.get("to_recipients", "[]"))
                if isinstance(msg.get("to_recipients"), str)
                else (msg.get("to_recipients") or []))
 
@@ -288,41 +313,32 @@ def email_forward(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     }
 
 
+def _build_search_filters(flags: dict[str, str],
+                          remaining: list[str]) -> tuple[dict[str, str], int, str]:
+    """Build search filter dict and extract limit/query from flags."""
+    filters: dict[str, str] = {}
+    for key in ("from", "subject", "body", "after", "before"):
+        if val := flags.get(key):
+            filters[key] = val
+    limit = int(flags.get("limit", 50))
+    query = " ".join(remaining) if remaining else ""
+    if query:
+        filters["query"] = query
+    return filters, limit, query
+
+
 @command("email.search")
 def email_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email search [--from] [--subject] [--body] [--after] [--before] [--limit]"""
     svc: EmailService = get_email_service()
-    filters = {}
-    if flags.get("from"):
-        filters["from"] = flags["from"]
-    if flags.get("subject"):
-        filters["subject"] = flags["subject"]
-    if flags.get("body"):
-        filters["body"] = flags["body"]
-    if flags.get("after"):
-        filters["after"] = flags["after"]
-    if flags.get("before"):
-        filters["before"] = flags["before"]
-    limit = int(flags.get("limit", 50))
-    if remaining:
-        filters["query"] = " ".join(remaining)
+    filters, limit, query = _build_search_filters(flags, remaining)
 
     if filters:
         messages = [dict(m) for m in svc.search_messages(filters, limit=limit)]
     else:
         messages = [dict(m) for m in svc.list_messages(limit=limit)]
 
-    frontend_filters = {}
-    if flags.get("from"):
-        frontend_filters["from"] = flags["from"]
-    if flags.get("subject"):
-        frontend_filters["subject"] = flags["subject"]
-    if flags.get("after"):
-        frontend_filters["after"] = flags["after"]
-    if flags.get("before"):
-        frontend_filters["before"] = flags["before"]
-
-    query = " ".join(remaining) if remaining else ""
+    frontend_filters = {k: v for k, v in filters.items() if k != "query"}
 
     return {
         "type": "email-list",

@@ -36,7 +36,6 @@ def _extract_partial_data(tokens: list[str], flags: dict[str, str]) -> dict[str,
     cmd_depth = find_command_depth(tokens)
     if cmd_depth < len(tokens):
         params = tokens[cmd_depth:]
-        ".".join(tokens[:cmd_depth]) if cmd_depth > 0 else ""
         if resolve_form_type(tokens[:cmd_depth]):
             names = get_param_names(tokens[:cmd_depth])
             for i, val in enumerate(params):

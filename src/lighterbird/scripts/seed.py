@@ -431,10 +431,11 @@ def _seed_letters(data_dir: Path) -> None:
 
     now = _now()
 
-    # Try to load a real cover letter from ronCV project
-    cover_letter_path = Path("/home/rongzhou/kodo/ronCV/lettre-de-motivation/DVUC-001-3/DVUC-001-3.md")
+    # Try to load a real cover letter from env-optional path,
+    # fall back to a simple example.
+    cover_letter_path = Path(os.environ.get("COVER_LETTER_PATH", ""))
     body = ""
-    if cover_letter_path.exists():
+    if cover_letter_path.is_file():
         try:
             body = cover_letter_path.read_text(encoding="utf-8")
         except Exception:

@@ -90,11 +90,12 @@ def main() -> None:
     import uvicorn
 
     port = int(os.environ.get("LIGHTERBIRD_PORT", 8000))
+    debug = os.environ.get("LIGHTERBIRD_DEBUG", "").lower() in ("1", "true")
     uvicorn.run(
         "lighterbird.server.app:create_app",
         host="127.0.0.1",
         port=port,
-        reload=True,
+        reload=debug,
         factory=True,
     )
 

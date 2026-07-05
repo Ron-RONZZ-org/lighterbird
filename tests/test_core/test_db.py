@@ -195,7 +195,7 @@ class TestKeyring:
 
         result = set_password("test_service", "test_key", "sekret")
         # If keyring is available, returns True; otherwise False
-        assert result == _keyring_available()
+        assert result == _keyring_available
 
 
 class TestCRUDService:
