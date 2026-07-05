@@ -8,17 +8,17 @@ Forked from A-core's ``A.core.keyring``.
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 
 logger = logging.getLogger(__name__)
 
+_keyring_available: bool = importlib.util.find_spec("keyring") is not None
 
-def _keyring_available() -> bool:
-    try:
-        import keyring  # noqa: F401
-        return True
-    except ImportError:
-        return False
+if _keyring_available:
+    import keyring  # type: ignore[assignment]
+else:
+    keyring = None  # type: ignore[assignment]
 
 
 def get_password(service: str, key: str) -> str | None:
@@ -31,11 +31,10 @@ def get_password(service: str, key: str) -> str | None:
     Returns:
         The stored password, or ``None`` if not found or keyring unavailable.
     """
-    if not _keyring_available():
+    if not _keyring_available:
         return None
     try:
-        import keyring
-        return keyring.get_password(service, key)
+        return keyring.get_password(service, key)  # type: ignore[union-attr]
     except Exception as exc:
         logger.warning("Keyring get_password failed for %s/%s: %s", service, key, exc)
         return None
@@ -47,11 +46,10 @@ def set_password(service: str, key: str, password: str) -> bool:
     Returns:
         ``True`` if stored successfully.
     """
-    if not _keyring_available():
+    if not _keyring_available:
         return False
     try:
-        import keyring
-        keyring.set_password(service, key, password)
+        keyring.set_password(service, key, password)  # type: ignore[union-attr]
         return True
     except Exception as exc:
         logger.warning("Keyring set_password failed for %s/%s: %s", service, key, exc)
@@ -60,11 +58,10 @@ def set_password(service: str, key: str, password: str) -> bool:
 
 def delete_password(service: str, key: str) -> bool:
     """Remove a password from the system keyring. Idempotent."""
-    if not _keyring_available():
+    if not _keyring_available:
         return False
     try:
-        import keyring
-        keyring.delete_password(service, key)
+        keyring.delete_password(service, key)  # type: ignore[union-attr]
         return True
     except keyring.errors.PasswordDeleteError:
         return True

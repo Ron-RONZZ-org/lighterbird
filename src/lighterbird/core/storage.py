@@ -128,9 +128,19 @@ class AttachmentStore:
     def _safe_filename(content_id: str) -> str:
         """Sanitize a content_id for use as a filename.
 
-        Replaces path separators and null bytes with underscores.
+        Strips directory components (prevents ``../etc/passwd`` style
+        path traversal from user-controlled IMAP headers) and removes
+        null bytes.
         """
-        return content_id.replace("/", "_").replace("\\", "_").replace("\0", "")
+        # Strip directory components — ``Path.name`` on any platform
+        # returns only the final path component.
+        safe = Path(content_id).name
+        # Remove null bytes which can cause issues on some filesystems
+        safe = safe.replace("\0", "")
+        # Replace backslash (path separator on Windows, regular char on
+        # Linux — safe to normalize either way)
+        safe = safe.replace("\\", "_")
+        return safe
 
 
 __all__ = ["AttachmentStore"]
