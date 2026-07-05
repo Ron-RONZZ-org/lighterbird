@@ -10,6 +10,7 @@ from __future__ import annotations
 import difflib
 import json
 import logging
+import uuid as _uuid
 from typing import Any
 
 from lighterbird.core.ai import get_provider as _get_core_provider
@@ -189,6 +190,38 @@ def _validate_response(
     return validated
 
 
+def _clean_llm_response(raw: str, expected_fields: set[str]) -> dict[str, str]:
+    """Parse and validate LLM JSON response, stripping markdown fences.
+
+    Handles common LLM wrapping patterns: markdown code fences,
+    surrounding explanatory text, etc.
+
+    Args:
+        raw: Raw response string from the LLM.
+        expected_fields: Set of field names that must be present.
+
+    Returns:
+        Dict mapping field name to full revised text.
+
+    Raises:
+        ValueError: If the response cannot be parsed or validated.
+    """
+    cleaned = raw.strip()
+    # Strip markdown code fences
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("\n", 1)[-1] if "\n" in cleaned else cleaned[3:]
+        cleaned = cleaned.rsplit("```", 1)[0] if "```" in cleaned else cleaned
+        cleaned = cleaned.strip()
+    # Strip leading/trailing non-JSON text
+    brace_start = cleaned.find("{")
+    brace_end = cleaned.rfind("}")
+    if brace_start != -1 and brace_end != -1:
+        cleaned = cleaned[brace_start : brace_end + 1]
+
+    parsed: dict[str, Any] = json.loads(cleaned)
+    return _validate_response(parsed, expected_fields)
+
+
 async def cowrite(
     form_type: str,
     fields: dict[str, str],
@@ -264,23 +297,7 @@ async def cowrite(
     if not raw_response or not raw_response.strip():
         raise RuntimeError("LLM returned empty response.")
 
-    # Attempt to parse JSON — clean common wrapping
-    cleaned = raw_response.strip()
-    # Strip markdown code fences
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("\n", 1)[-1] if "\n" in cleaned else cleaned[3:]
-        cleaned = cleaned.rsplit("```", 1)[0] if "```" in cleaned else cleaned
-        cleaned = cleaned.strip()
-    # Strip leading/trailing non-JSON text
-    brace_start = cleaned.find("{")
-    brace_end = cleaned.rfind("}")
-    if brace_start != -1 and brace_end != -1:
-        cleaned = cleaned[brace_start : brace_end + 1]
-
-    import json as _json
-
-    parsed: dict[str, Any] = _json.loads(cleaned)
-    validated = _validate_response(parsed, expected_fields)
+    validated = _clean_llm_response(raw_response, expected_fields)
 
     # Length-sanity check: keep a threshold of 25% to catch truncation
     for field in expected_fields:
@@ -299,8 +316,6 @@ async def cowrite(
     edits: dict[str, list[dict[str, Any]]] = {}
     for field in expected_fields:
         edits[field] = compute_diffs(fields[field], validated[field])
-
-    import uuid as _uuid
 
     session_id = str(_uuid.uuid4())
 
