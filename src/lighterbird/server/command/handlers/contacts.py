@@ -20,6 +20,7 @@ from lighterbird.contacts.services import ContactService
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_contact_service
+from lightercore.permissions import PermissionLevel
 
 
 def _parse_custom_fields(raw: str) -> dict[str, str]:
@@ -88,7 +89,24 @@ def contact_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "contacts-list", "title": "Contacts", "data": {"contacts": contacts}}
 
 
-@command("contact.add")
+@command("contact.add",
+         params=[],
+         flags=[
+             {"name": "first-name", "type": "string", "help": "Given name", "required": False},
+             {"name": "last-name", "type": "string", "help": "Family name", "required": False},
+             {"name": "email", "type": "string", "help": "tag:value,... email addresses"},
+             {"name": "phone", "type": "string", "help": "tag:value,... phone numbers"},
+             {"name": "organization", "type": "string", "help": "Organization"},
+             {"name": "notes", "type": "string", "help": "Notes"},
+             {"name": "middle-names", "type": "string", "help": "Middle names"},
+             {"name": "dob", "type": "date", "help": "Date of birth (YYYY-MM-DD)"},
+             {"name": "place-of-birth", "type": "string", "help": "Place of birth"},
+             {"name": "address", "type": "string", "help": "Street address"},
+             {"name": "post-code", "type": "string", "help": "Postal code"},
+             {"name": "position", "type": "string", "help": "Job position"},
+         ],
+         interactive=True,
+)
 def contact_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!contact add --first-name GIVEN --last-name FAMILY [--middle-names M]
     [--email tag:value,...] [--phone tag:value,...] [--organization ORG]
@@ -234,7 +252,7 @@ def contact_export_vcf(remaining: list[str], flags: dict[str, str]) -> dict[str,
     return {"type": "status", "title": "VCF Export", "data": {"vcf": vcf_text}}
 
 
-@command("contact.clean")
+@command("contact.clean", permission_level=PermissionLevel.DESTRUCTIVE)
 def contact_clean(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!contact clean — Find and report duplicate contacts.
 
@@ -253,7 +271,7 @@ def contact_clean(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     }
 
 
-@command("contact.merge")
+@command("contact.merge", permission_level=PermissionLevel.DESTRUCTIVE)
 def contact_merge(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!contact merge <keep-uuid> <remove-uuid> [remove-uuid...]
 
