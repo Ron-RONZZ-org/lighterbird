@@ -32,6 +32,18 @@ class ProviderConfig:
     temperature: float = 0.7
     max_tokens: int = 2048
 
+    def __repr__(self) -> str:
+        """Return a safe repr with the API key redacted."""
+        redacted = "****" if self.api_key else ""
+        return (
+            f"ProviderConfig(provider_type={self.provider_type!r}, "
+            f"api_key={redacted!r}, "
+            f"base_url={self.base_url!r}, "
+            f"model={self.model!r}, "
+            f"temperature={self.temperature}, "
+            f"max_tokens={self.max_tokens})"
+        )
+
 
 class LLMProvider(Protocol):
     """Stateless provider interface for chat and command generation."""

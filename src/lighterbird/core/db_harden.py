@@ -6,6 +6,7 @@ Forked from A-core's ``A.data.harden``.
 from __future__ import annotations
 
 import sqlite3
+import urllib.parse
 from pathlib import Path
 
 from lighterbird.core.backup import backup_database, copy_to_external, load_config
@@ -45,7 +46,8 @@ def health_check(db_path: Path) -> bool:
     if not db_path.exists():
         return True
     try:
-        conn = sqlite3.connect(f"file:{db_path!s}?mode=ro", uri=True, timeout=5)
+        quoted = urllib.parse.quote(str(db_path), safe="")
+        conn = sqlite3.connect(f"file:{quoted}?mode=ro", uri=True, timeout=5)
         (result,) = conn.execute("PRAGMA quick_check").fetchone()
         conn.close()
         return result == "ok"

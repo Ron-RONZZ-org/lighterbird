@@ -115,13 +115,12 @@ def todo_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     # ── LLM co-writing ─────────────────────────────────────────────────
     cowrite_instr = flags.get("cowrite", "")
     if cowrite_instr:
-        import asyncio
-
+        from lighterbird.core.async_utils import run_async_sync
         from lighterbird.server.cowrite.engine import cowrite as _cowrite_call
 
         fields = {"title": data["title"], "description": data.get("description", "")}
         try:
-            result = asyncio.run(_cowrite_call(
+            result = run_async_sync(lambda: _cowrite_call(
                 form_type="todo-add",
                 fields=fields,
                 instruction=cowrite_instr,

@@ -135,20 +135,35 @@ class LetterService(CRUDService):
     # ── Conversation-grouped listing ───────────────────────────────────
 
     def list_grouped(self, limit: int = 50) -> list[dict[str, Any]]:
-        """Return letters grouped by conversation (root + replies)."""
-        roots = self.db.execute(
+        """Return letters grouped by conversation (root + replies).
+
+        Uses a single batch query for replies instead of N+1 queries.
+        """
+        roots = list(self.db.execute(
             "SELECT * FROM letters WHERE respond_to_uuid IS NULL"
             " ORDER BY created_at DESC LIMIT ?",
             (limit,),
-        )
+        ))
+        if not roots:
+            return []
+
+        # Batch-fetch all replies in a single query
+        root_uuids = [r["uuid"] for r in roots]
+        placeholders = ",".join("?" for _ in root_uuids)
+        all_replies = list(self.db.execute(
+            f"SELECT * FROM letters WHERE respond_to_uuid IN ({placeholders})"
+            " ORDER BY created_at ASC",
+            tuple(root_uuids),
+        ))
+
+        # Group replies by respond_to_uuid
+        reply_map: dict[str, list[dict[str, Any]]] = {}
+        for reply in all_replies:
+            reply_map.setdefault(reply["respond_to_uuid"], []).append(reply)
+
         result = []
         for root in roots:
-            replies = self.db.execute(
-                "SELECT * FROM letters WHERE respond_to_uuid = ?"
-                " ORDER BY created_at ASC",
-                (root["uuid"],),
-            )
-            root["replies"] = replies
+            root["replies"] = reply_map.get(root["uuid"], [])
             result.append(root)
         return self._attach_tags(result)
 

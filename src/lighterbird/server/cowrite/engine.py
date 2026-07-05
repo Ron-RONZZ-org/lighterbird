@@ -12,7 +12,7 @@ import json
 import logging
 from typing import Any
 
-from lighterbird.core.ai import get_provider as create_core_provider
+from lighterbird.core.ai import get_provider as _get_core_provider
 from lighterbird.core.cowrite_style import load_cowrite_style
 from lighterbird.server.cowrite.context import gather_context
 from lighterbird.server.llm.provider import get_provider
@@ -245,8 +245,11 @@ async def cowrite(
         {"role": "user", "content": user_content},
     ]
 
-    # Call LLM — try JSON mode first, fall back to parsing
-    core = create_core_provider(provider.config)
+    # Call LLM — create a core-level provider with the wrapper's config.
+    # The wrapper's .chat() uses (message, context) signature, but the cowrite
+    # engine constructs its own message list (protocol prompt + style guide),
+    # so we bypass the wrapper and use the core provider directly.
+    core = _get_core_provider(provider.config)
     expected_fields = set(fields.keys())
 
     raw_response: str | None = None

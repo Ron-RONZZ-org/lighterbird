@@ -42,6 +42,9 @@ def parse_expanded(cmd_str: str) -> tuple[list[str], dict[str, str]]:
     in_flag: str | None = None
 
     # Use shlex for robust quoting — it handles double quotes, escapes, etc.
+    # Note: shlex does NOT interpret shell metacharacters ($, `, |, etc.)
+    # — it only handles quoting and escaping. Saved commands are never
+    # passed to a shell, so there is no injection risk from shlex itself.
     try:
         parts = shlex.split(text)
     except ValueError:
