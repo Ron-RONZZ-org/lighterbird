@@ -15,6 +15,7 @@ from typing import Any
 
 from lighterbird.journal.services import JournalService
 from lighterbird.server.command.errors import CommandValidationError
+from lighterbird.server.command.helpers import require_uuid, require_found
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_journal_service
 
@@ -94,12 +95,10 @@ def journal_write(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
 @command("journal.view")
 def journal_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!journal view <uuid>"""
-    if not remaining:
-        raise CommandValidationError("Missing entry UUID.", "Usage: !journal view <uuid>")
+    uuid = require_uuid(remaining, "Usage: !journal view <uuid>")
     svc: JournalService = get_journal_service()
-    entry = svc.get(remaining[0])
-    if not entry:
-        raise CommandValidationError(f"Journal entry not found: {remaining[0][:8]}")
+    entry = svc.get(uuid)
+    require_found(entry, uuid[:8], "journal entry")
     return {"type": "status", "title": entry.get("title", "(untitled)"), "data": dict(entry)}
 
 
