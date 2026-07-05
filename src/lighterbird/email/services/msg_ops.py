@@ -343,7 +343,7 @@ class MessageOpsService:
 
         return {"count": trashed, "queued": queued}
 
-    def process_trash_backlog(self) -> int:
+    def process_trash_backlog(self, account_email: str | None = None) -> int:
         """Process pending IMAP trash operations from the backlog.
 
         Groups queued entries by account, opens one IMAP connection per
@@ -351,13 +351,24 @@ class MessageOpsService:
         moved entries are updated in the local DB (folder='Trash',
         is_deleted=0) and removed from the backlog.
 
+        Args:
+            account_email: If provided, only process trash backlog for
+                           this specific account. Otherwise process for all.
+
         Returns:
             Number of backlog entries successfully moved to Trash.
         """
-        entries = list(self.db.execute(
-            "SELECT * FROM _sync_backlog WHERE is_deleted = 1 "
-            "ORDER BY created_at ASC LIMIT 500"
-        ))
+        if account_email:
+            entries = list(self.db.execute(
+                "SELECT * FROM _sync_backlog WHERE is_deleted = 1 "
+                "AND account_email = ? ORDER BY created_at ASC LIMIT 500",
+                (account_email,),
+            ))
+        else:
+            entries = list(self.db.execute(
+                "SELECT * FROM _sync_backlog WHERE is_deleted = 1 "
+                "ORDER BY created_at ASC LIMIT 500"
+            ))
         if not entries:
             return 0
 

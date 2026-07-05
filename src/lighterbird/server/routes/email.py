@@ -127,8 +127,7 @@ def sync_email(
 @router.get("/folders")
 def list_folders(email_svc: EmailService = Depends(get_email_service)):
     """List all known folders with account info."""
-    from lighterbird.server.command.response import normalize_account
-    accounts = {a["email"]: normalize_account(a) for a in email_svc.list_accounts()}
+    accounts = {a["email"]: dict(a) for a in email_svc.list_accounts()}
     rows = list(email_svc.db.execute(
         "SELECT account_email, name FROM folders ORDER BY account_email, name"
     ))
@@ -214,7 +213,6 @@ def list_messages(
     offset: int = 0,
     email_svc: EmailService = Depends(get_email_service),
 ):
-    from lighterbird.server.command.response import normalize_message
     filters = {}
     if query:
         filters["query"] = query
@@ -254,7 +252,7 @@ def list_messages(
         att_counts = {r["message_uuid"]: r["cnt"] for r in rows}
     enriched = []
     for m in msgs:
-        d = normalize_message(m)
+        d = dict(m)
         d["attachment_count"] = att_counts.get(m.get("uuid", ""), 0)
         enriched.append(d)
     return {"messages": enriched, "total": len(msgs)}
@@ -262,12 +260,11 @@ def list_messages(
 
 @router.get("/messages/{uuid}")
 def get_message(uuid: str, email_svc: EmailService = Depends(get_email_service)):
-    from lighterbird.server.command.response import normalize_message
     msg = email_svc.get_message(uuid)
     if not msg:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Message not found: {uuid[:8]}")
-    result = normalize_message(msg)
+    result = dict(msg)
     # Include attachment count
     att_rows = list(email_svc.db.execute(
         "SELECT COUNT(*) AS cnt FROM email_attachments WHERE message_uuid = ?",
@@ -353,9 +350,8 @@ def view_message_html(uuid: str, email_svc: EmailService = Depends(get_email_ser
 @router.get("/messages/{uuid}/conversation")
 def get_conversation(uuid: str, limit: int = 20, email_svc: EmailService = Depends(get_email_service)):
     """Get all messages in the same conversation thread as the given message."""
-    from lighterbird.server.command.response import normalize_message
     msgs = email_svc.get_conversation(uuid, limit=limit)
-    return {"messages": [normalize_message(m) for m in msgs], "total": len(msgs)}
+    return {"messages": [dict(m) for m in msgs], "total": len(msgs)}
 
 
 @router.post("/send", status_code=201)
@@ -457,9 +453,9 @@ def list_attachments(
         "FROM email_attachments WHERE message_uuid = ? ORDER BY filename",
         (uuid,),
     ))
+    store = AttachmentStore()
     attachments = []
     for row in rows:
-        store = AttachmentStore()
         file_exists = False
         try:
             store.retrieve(uuid, row["content_id"])

@@ -54,12 +54,11 @@ class EmailService:
         from lighterbird.email.imap import sync_account as _sync
         from lighterbird.email.imap.sync import SyncResult
 
+        result = SyncResult()
         acct = self.accounts.get_account_with_password(email)
         if not acct:
-            result = SyncResult()
             result.errors.append(f"Account not found: {email}")
         elif not acct.get("password"):
-            result = SyncResult()
             result.errors.append(
                 f"No password configured for account {email}. "
                 f"Set it with: !email account modify {email} --password <pw>"
@@ -87,8 +86,6 @@ class EmailService:
         # and trash_message are eventually sent to the IMAP server.
         backlog = self.msg_ops.process_sync_backlog()
         if backlog:
-            if not hasattr(locals().get('result', None), 'total'):
-                result = SyncResult()
             result.total += backlog
         return result
 

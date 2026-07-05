@@ -18,7 +18,7 @@ from typing import Any
 
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
-from lighterbird.server.command.response import normalize_contact
+
 from lighterbird.server.deps import get_contact_service
 from lighterbird.contacts.services import ContactService
 
@@ -85,7 +85,7 @@ def contact_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!contact list [--limit N]"""
     svc: ContactService = get_contact_service()
     limit = int(flags.get("limit", 50))
-    contacts = [normalize_contact(c) for c in svc.list(limit=limit)]
+    contacts = [dict(c) for c in svc.list(limit=limit)]
     return {"type": "contacts-list", "title": "Contacts", "data": {"contacts": contacts}}
 
 
@@ -149,7 +149,7 @@ def contact_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         contact = svc.find_by_email(identifier)
     if not contact:
         raise CommandValidationError(f"Contact not found: {identifier[:16]}")
-    return {"type": "status", "title": contact.get("given_name", "(unnamed)"), "data": normalize_contact(contact)}
+    return {"type": "status", "title": contact.get("given_name", "(unnamed)"), "data": dict(contact)}
 
 
 @command("contact.modify")
@@ -215,7 +215,7 @@ def contact_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     """!contact search <query>"""
     svc: ContactService = get_contact_service()
     query = " ".join(remaining) if remaining else flags.get("query", "")
-    contacts = [normalize_contact(c) for c in svc.search(query)]
+    contacts = [dict(c) for c in svc.search(query)]
     return {"type": "contacts-list", "title": "Contact Search", "data": {"contacts": contacts}}
 
 

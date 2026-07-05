@@ -10,7 +10,6 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from lighterbird.server.deps import get_journal_service
-from lighterbird.server.command.response import normalize_journal_entry
 from lighterbird.journal.services import JournalService
 
 router = APIRouter(prefix="/api/v1/journal", tags=["journal"])
@@ -29,7 +28,7 @@ def list_entries(
         raw = svc.search(query, limit=limit)
     else:
         raw = svc.list(limit=limit)
-    entries = [normalize_journal_entry(e) for e in raw]
+    entries = [dict(e) for e in raw]
     return {"entries": entries, "total": len(entries)}
 
 
@@ -44,7 +43,7 @@ def create_entry(
         "date": data.get("date", date.today().isoformat()),
     }
     entry = svc.create(entry_data)
-    return normalize_journal_entry(entry)
+    return dict(entry)
 
 
 @router.get("/entries/{uuid}")
@@ -52,7 +51,7 @@ def get_entry(uuid: str, svc: JournalService = Depends(get_journal_service)):
     entry = svc.get(uuid)
     if not entry:
         raise HTTPException(status_code=404, detail=f"Entry not found: {uuid[:8]}")
-    return normalize_journal_entry(entry)
+    return dict(entry)
 
 
 @router.patch("/entries/{uuid}")
@@ -73,7 +72,7 @@ def update_entry(
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
     result = svc.update(uuid, updates)
-    return normalize_journal_entry(result)
+    return dict(result)
 
 
 @router.delete("/entries/{uuid}", status_code=204)
