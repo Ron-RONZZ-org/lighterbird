@@ -3,6 +3,8 @@
   import { email as emailApi } from "./api.js";
   import EmailListToolbar from "./EmailListToolbar.svelte";
   import EmailFolderTree from "./EmailFolderTree.svelte";
+  import EmailListRow from "./EmailListRow.svelte";
+  import EmailParamsDialog from "./EmailParamsDialog.svelte";
   import SortDropdown from "./SortDropdown.svelte";
   import MoveDialog from "./MoveDialog.svelte";
   import KeyboardShortcutOverlay from "./KeyboardShortcutOverlay.svelte";
@@ -12,8 +14,6 @@
   import {
     createSelectionManager,
     createCopyState,
-    formatListItemDate,
-    truncate,
   } from "./listTabShared.svelte.js";
   import { createEmailConfigStore } from "./emailConfigStore.svelte.js";
   import { registerShortcuts } from "./keyboardShortcuts.svelte.js";
@@ -400,16 +400,9 @@
       .catch(() => {});
   }
 
-  // ── Config dialog ──────────────────────────────────────────────────
-  let configDialogName = $state("");
-  let configDialogMode = $state("save"); // "save" | "manage"
-  let configSearchQuery = $state("");
-
-  function handleSaveConfig() {
-    const name = configDialogName.trim();
-    if (!name) return;
+  // ── Config dialog callbacks ────────────────────────────────────────
+  function handleSaveConfig(name) {
     config.saveAs(name);
-    configDialogName = "";
   }
 
   function handleActivateConfig(name) {
@@ -425,11 +418,6 @@
   function handleDeleteConfig(name) {
     config.remove(name);
   }
-
-  let userConfigs = $state({});
-  $effect(() => {
-    userConfigs = config.getUserConfigs();
-  });
 
   function handleWindowKeydown(e) {
     sel.handleKeydown(e);
@@ -512,96 +500,30 @@
   {#if showParamsDialog}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div class="dropdown-backdrop" onclick={() => { showParamsDialog = false; }} role="presentation"></div>
-    <div class="dropdown-panel params-panel">
-      <div class="params-header">
-        <h4>Parameters</h4>
-        <button class="close-btn" onclick={() => { showParamsDialog = false; }} aria-label="Close">✕</button>
-      </div>
-
-      <!-- Save / Load section -->
-      <div class="params-section">
-        <h5>Save Current View</h5>
-        <div class="save-row">
-          <input type="text" class="params-input" bind:value={configDialogName}
-            placeholder="Config name..." onkeydown={(e) => { if (e.key === "Enter") handleSaveConfig(); }} />
-          <button class="btn-sm" onclick={handleSaveConfig} disabled={!configDialogName.trim()}>Save</button>
-        </div>
-      </div>
-
-      <!-- Manage configs -->
-      <div class="params-section">
-        <h5>Saved Configs</h5>
-        {#if Object.keys(userConfigs).length === 0}
-          <p class="empty-msg">No saved configs yet.</p>
-        {:else}
-          <div class="config-list">
-            {#each Object.entries(userConfigs) as [name, cfg]}
-              <div class="config-item" class:active={config.getActiveConfigName() === name}>
-                <label class="config-check">
-                  <input type="checkbox" />
-                  <span class="config-name">{name}</span>
-                </label>
-                <div class="config-actions">
-                  <button class="btn-tiny" onclick={() => handleActivateConfig(name)}
-                    disabled={config.getActiveConfigName() === name}
-                    title="Activate">Activate</button>
-                  <button class="btn-tiny danger" onclick={() => handleDeleteConfig(name)} title="Delete">✕</button>
-                </div>
-              </div>
-            {/each}
-          </div>
-        {/if}
-      </div>
+    <div class="dropdown-panel">
+      <EmailParamsDialog
+        {config}
+        onSave={handleSaveConfig}
+        onActivate={handleActivateConfig}
+        onDelete={handleDeleteConfig}
+        onClose={() => { showParamsDialog = false; }}
+      />
     </div>
   {/if}
 
   <!-- Message list -->
   <div class="list" role="listbox" aria-label="Email messages" aria-multiselectable="true">
     {#each messages as msg, i (msg.uuid)}
-      <div
-        id="row-{msg.uuid}"
-        class="row"
-        class:selected={sel.isSelected(msg.uuid)}
-        class:focused={i === sel.focusedIndex}
-        class:selection-mode={sel.selectionMode}
-        role="option"
-        aria-selected={sel.isSelected(msg.uuid)}
-        tabindex={sel.selectionMode ? (i === sel.focusedIndex ? 0 : -1) : 0}
-        onclick={(e) => handleRowClick(e, msg)}
-        onkeydown={(e) => {
-          if (e.key === "Enter") handleRowClick(e, msg);
-        }}
-      >
-        <span class="checkbox-cell">
-          {#if sel.selectionMode}
-            <span class="checkbox" class:checked={sel.isSelected(msg.uuid)}>
-              {sel.isSelected(msg.uuid) ? "\u2713" : ""}
-            </span>
-          {/if}
-        </span>
-
-        <span class="msg-uuid" role="button" tabindex="-1"
-              onclick={(e) => { e.stopPropagation(); uuidCopy.copyToClipboard(msg.uuid); }}
-              onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); uuidCopy.copyToClipboard(msg.uuid); } }}
-              title="Click to copy UUID">
-          {uuidCopy.copiedKey === msg.uuid ? "Copied!" : msg.uuid.slice(0, 8)}
-        </span>
-        <span class="from" class:unread={!msg.is_read} role="button" tabindex="-1"
-              onclick={(e) => {
-                if (!sel.selectionMode) { e.stopPropagation(); emailCopy.copyToClipboard(msg.from_addr || ""); }
-              }}
-              onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (!sel.selectionMode) { e.stopPropagation(); emailCopy.copyToClipboard(msg.from_addr || ""); } } }}
-              title="Click to copy email address">
-          {emailCopy.copiedKey === msg.from_addr ? "Copied!" : truncate(msg.from_addr || "", 24)}
-        </span>
-        {#if msg.priority === 1}
-          <span class="priority high" title="Highest priority">‼</span>
-        {:else if msg.priority === 2}
-          <span class="priority" title="High priority">❗</span>
-        {/if}
-        <span class="subject" class:unread={!msg.is_read}>{truncate(msg.subject || "(no subject)", 40)}</span>
-        <span class="date">{formatListItemDate(msg.received_at)}</span>
-      </div>
+      <EmailListRow
+        {msg}
+        index={i}
+        isSelected={sel.isSelected(msg.uuid)}
+        isFocused={i === sel.focusedIndex}
+        selectionMode={sel.selectionMode}
+        {uuidCopy}
+        {emailCopy}
+        onRowClick={handleRowClick}
+      />
     {:else}
       <p class="empty">No messages.</p>
     {/each}
@@ -659,79 +581,6 @@
     padding: 0;
   }
 
-  .row {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.4rem 0.5rem;
-    border-bottom: 1px solid #2a2a3e;
-    cursor: default;
-    transition: background 0.08s;
-    min-height: 2rem;
-  }
-  .row:hover { background: #2a2a44; }
-  .row.focused { background: #2a2a50; outline: 1px solid #5a5a8a; outline-offset: -1px; }
-  .row.selected { background: #2a2a50; }
-  .row.selection-mode { cursor: pointer; }
-
-  .checkbox-cell {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.8rem;
-    flex-shrink: 0;
-  }
-  .checkbox {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.1rem;
-    height: 1.1rem;
-    border: 1.5px solid #7c7c9a;
-    border-radius: 3px;
-    font-size: 0.7rem;
-    color: #e0e0e0;
-    background: transparent;
-    transition: background 0.1s, border-color 0.1s;
-  }
-  .checkbox.checked { background: #4a6fa5; border-color: #4a6fa5; }
-
-  .msg-uuid {
-    color: var(--clr-muted);
-    font-size: 0.72rem;
-    min-width: 5rem;
-    flex-shrink: 0;
-    cursor: pointer;
-  }
-  .msg-uuid:hover { color: #7c7c9a; text-decoration: underline; }
-  .from {
-    color: #e0e0e0;
-    min-width: 10rem;
-    flex-shrink: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    cursor: pointer;
-  }
-  .from:hover { color: #ccc; text-decoration: underline; }
-  .from.unread { font-weight: 700; }
-  .subject {
-    color: #ccc;
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .subject.unread { font-weight: 600; color: #e0e0e0; }
-  .priority { font-size: 0.75rem; flex-shrink: 0; margin-right: 0.15rem; opacity: 0.85; }
-  .priority.high { color: #e06060; opacity: 1; }
-  .date {
-    color: var(--clr-muted);
-    min-width: 6rem;
-    text-align: right;
-    flex-shrink: 0;
-    font-size: 0.78rem;
-  }
   .empty {
     color: var(--clr-muted);
     text-align: center;
@@ -761,94 +610,4 @@
     width: 320px;
     padding: 0.75rem;
   }
-  .params-panel {
-    width: 360px;
-    padding: 0;
-  }
-  .params-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.6rem 0.75rem;
-    border-bottom: 1px solid #333;
-  }
-  .params-header h4 {
-    margin: 0;
-    font-size: 0.85rem;
-    color: #e0e0e0;
-  }
-  .close-btn {
-    background: none; border: none; color: #7c7c9a; cursor: pointer;
-    font-size: 0.9rem; padding: 0.1rem 0.3rem;
-  }
-  .close-btn:hover { color: #e0e0e0; }
-  .params-section {
-    padding: 0.6rem 0.75rem;
-    border-bottom: 1px solid #2a2a3e;
-  }
-  .params-section:last-child { border-bottom: none; }
-  .params-section h5 {
-    margin: 0 0 0.4rem;
-    font-size: 0.72rem;
-    color: var(--clr-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-  .save-row {
-    display: flex;
-    gap: 0.4rem;
-  }
-  .params-input {
-    flex: 1;
-    padding: 0.3rem 0.5rem;
-    background: #16213e; border: 1px solid #333; color: #e0e0e0;
-    border-radius: 4px; font-family: monospace; font-size: 0.82rem; outline: none;
-  }
-  .params-input:focus { border-color: #5a5a8a; }
-  .btn-sm {
-    padding: 0.3rem 0.6rem; border: 1px solid #444; border-radius: 4px;
-    background: #2a2a3e; color: #e0e0e0; cursor: pointer;
-    font-family: monospace; font-size: 0.78rem;
-  }
-  .btn-sm:hover { background: #3a3a5a; }
-  .btn-sm:disabled { opacity: 0.4; cursor: default; }
-  .empty-msg {
-    color: var(--clr-muted); font-size: 0.78rem; text-align: center; padding: 0.5rem;
-  }
-  .config-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    max-height: 200px;
-    overflow-y: auto;
-  }
-  .config-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.3rem 0.4rem;
-    border-radius: 4px;
-    font-size: 0.8rem;
-  }
-  .config-item:hover { background: #2a2a44; }
-  .config-item.active { background: #2a2a50; border: 1px solid #4a4a6a; }
-  .config-check {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    cursor: pointer;
-    flex: 1;
-  }
-  .config-check input { width: 0.85rem; height: 0.85rem; accent-color: #4a6fa5; }
-  .config-name { color: #e0e0e0; }
-  .config-actions { display: flex; gap: 0.25rem; }
-  .btn-tiny {
-    padding: 0.15rem 0.4rem; border: 1px solid #444; border-radius: 3px;
-    background: #2a2a3e; color: #b0b0c0; cursor: pointer;
-    font-family: monospace; font-size: 0.7rem;
-  }
-  .btn-tiny:hover { background: #3a3a5a; }
-  .btn-tiny.danger { border-color: #5a3a3a; color: #8a4a4a; }
-  .btn-tiny.danger:hover { background: #4a2a2a; color: #cc6a6a; }
-  .btn-tiny:disabled { opacity: 0.4; cursor: default; }
 </style>
