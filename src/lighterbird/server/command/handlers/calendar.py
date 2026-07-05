@@ -19,7 +19,7 @@ from typing import Any
 
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
-from lighterbird.server.command.response import normalize_calendar, normalize_event
+
 from lighterbird.server.deps import get_calendar_service
 from lighterbird.calendar.service import CalendarService
 
@@ -63,7 +63,7 @@ def calendar_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     calendar_uuid = flags.get("calendar")
     query = flags.get("query")
 
-    events = [normalize_event(e) for e in svc.list_events(start, end, calendar_uuid=calendar_uuid)]
+    events = [dict(e) for e in svc.list_events(start, end, calendar_uuid=calendar_uuid)]
     if query:
         q = query.lower()
         events = [
@@ -128,7 +128,7 @@ def event_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     evt = svc.get_event(remaining[0])
     if not evt:
         raise CommandValidationError(f"Event not found: {remaining[0][:8]}")
-    return {"type": "events", "title": evt.get("title", "(untitled)"), "data": normalize_event(evt)}
+    return {"type": "events", "title": evt.get("title", "(untitled)"), "data": dict(evt)}
 
 
 @command("calendar.event.modify")
@@ -224,7 +224,7 @@ def event_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     end = flags.get("end", "2099-12-31")
     calendar_uuid = flags.get("calendar")
 
-    events = [normalize_event(e) for e in svc.list_events(start, end, calendar_uuid=calendar_uuid)]
+    events = [dict(e) for e in svc.list_events(start, end, calendar_uuid=calendar_uuid)]
     if query:
         q = query.lower()
         events = [
@@ -242,7 +242,7 @@ def event_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 def cal_account_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar account list"""
     svc: CalendarService = get_calendar_service()
-    calendars = [normalize_calendar(c) for c in svc.list_calendars()]
+    calendars = [dict(c) for c in svc.list_calendars()]
     return {"type": "status", "title": "Calendars", "data": {"calendars": calendars}}
 
 

@@ -3,6 +3,11 @@
 Each module is imported for its ``@command`` / ``@alias`` side effects.
 """
 
+import lighterbird.server.command.registry as _reg
+
+# Suppress per-registration cache invalidations during bulk load.
+_reg._bulk_loading = True  # noqa: SLF001
+
 from lighterbird.server.command.handlers import email  # noqa: F401
 from lighterbird.server.command.handlers import email_sieve  # noqa: F401
 from lighterbird.server.command.handlers import email_signature  # noqa: F401
@@ -29,6 +34,8 @@ group("calendar", description="Calendar operations", default_action="list")
 group("contact", description="Contact management", default_action="list")
 group("todo", description="Task management", default_action="list")
 group("journal", description="Journal entries", default_action="list")
+
+_reg._bulk_loading = False  # noqa: SLF001
 
 # ── Interactive forms ─────────────────────────────────────────────────────
 # Commands that have an interactive form popup in the frontend.

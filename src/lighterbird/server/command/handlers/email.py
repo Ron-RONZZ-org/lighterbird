@@ -25,7 +25,7 @@ from typing import Any
 
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
-from lighterbird.server.command.response import normalize_message
+
 from lighterbird.server.deps import get_email_service
 from lighterbird.email.service import EmailService
 
@@ -132,7 +132,7 @@ def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     if group_by:
         filters["group"] = group_by
 
-    messages = [normalize_message(m) for m in svc.search_messages(filters, limit=limit)]
+    messages = [dict(m) for m in svc.search_messages(filters, limit=limit)]
     title_suffix = f" ({folder_filter})" if folder_filter else ""
     if not_folder_filter:
         title_suffix += f" (excl. {not_folder_filter})"
@@ -171,7 +171,7 @@ def email_read(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     msg = svc.get_message(uuid)
     if not msg:
         raise CommandValidationError(f"Message not found: {uuid[:8]}")
-    return {"type": "email", "title": msg.get("subject", "(no subject)"), "data": normalize_message(msg)}
+    return {"type": "email", "title": msg.get("subject", "(no subject)"), "data": dict(msg)}
 
 
 @command("email.send")
@@ -413,9 +413,9 @@ def email_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         filters["query"] = " ".join(remaining)
 
     if filters:
-        messages = [normalize_message(m) for m in svc.search_messages(filters, limit=limit)]
+        messages = [dict(m) for m in svc.search_messages(filters, limit=limit)]
     else:
-        messages = [normalize_message(m) for m in svc.list_messages(limit=limit)]
+        messages = [dict(m) for m in svc.list_messages(limit=limit)]
 
     frontend_filters = {}
     if flags.get("from"):
@@ -453,12 +453,17 @@ def email_trash(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 @command("email.archive")
 def email_archive(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email archive <uuid>"""
+    """!email archive <uuid> [--folder NAME]
+
+    Move a message to the Archive folder (default: "Archive").
+    Use ``--folder`` to specify a different destination folder.
+    """
     if not remaining:
         raise CommandValidationError("Missing message UUID.", "Usage: !email archive <uuid>")
     svc: EmailService = get_email_service()
-    svc.trash_message(remaining[0])
-    return {"type": "status", "title": "Archived", "data": {"uuid": remaining[0][:8]}}
+    folder = flags.get("folder", "Archive")
+    svc.move_message(remaining[0], folder)
+    return {"type": "status", "title": "Archived", "data": {"uuid": remaining[0][:8], "folder": folder}}
 
 
 
