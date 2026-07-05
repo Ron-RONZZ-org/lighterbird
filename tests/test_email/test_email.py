@@ -161,7 +161,7 @@ class TestEmailService:
 class TestKeyring:
     def test_email_keyring(self):
         from lighterbird.core.keyring import _keyring_available
-        available = _keyring_available()
+        available = bool(_keyring_available)
         # Should not crash regardless of keyring availability
         pw = get_password("test@example.com")
         if available:
