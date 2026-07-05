@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 
 from lighterbird.email.service import EmailService
-from lighterbird.server.deps import get_email_service
+from lighterbird.server.deps import get_contact_service, get_email_service
 from lighterbird.server.schemas import (
     BatchDeleteRequest,
     BatchMoveRequest,
@@ -179,3 +179,49 @@ def import_eml(data: dict, email_svc: EmailService = Depends(get_email_service))
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"imported": 1, "uuid": draft["uuid"]}
+
+
+@router.post("/messages/{uuid}/add-contacts")
+def add_contacts_from_email(uuid: str):
+    """Extract sender from a message and create a contact.
+
+    Returns existing contact UUID if already present (idempotent).
+    """
+    email_svc = get_email_service()
+    msg = email_svc.get_message(uuid)
+    if not msg:
+        raise HTTPException(status_code=404, detail=f"Message not found: {uuid[:8]}")
+
+    from_addr = (msg.get("from_addr") or "").strip()
+    if not from_addr or "@" not in from_addr:
+        raise HTTPException(status_code=400, detail="Message has no valid sender address.")
+
+    # Parse name and email from "Name <email>" format
+    name = ""
+    email = from_addr
+    m = re.match(r"^(.*?)\s*<([^>]+)>$", from_addr)
+    if m:
+        name = m.group(1).strip().strip('"')
+        email = m.group(2).strip()
+
+    contact_svc = get_contact_service()
+
+    # Check if contact already exists by email
+    existing = contact_svc.find_by_email(email)
+    if existing:
+        return {"contact": existing, "created": False, "uuid": existing["uuid"]}
+
+    # Split name into given/family
+    parts = name.split(None, 1) if name else [email.split("@")[0]]
+    given_name = parts[0] if parts else email.split("@")[0]
+    family_name = parts[1] if len(parts) > 1 else ""
+
+    import json
+    contact_data = {
+        "given_name": given_name,
+        "family_name": family_name,
+        "emails": json.dumps([{"value": email, "tag": ""}]),
+        "phones": "[]",
+    }
+    contact = contact_svc.create(contact_data)
+    return {"contact": contact, "created": True, "uuid": contact["uuid"]}
