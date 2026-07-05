@@ -59,9 +59,19 @@ CREATE TABLE IF NOT EXISTS events (
     location       TEXT NOT NULL DEFAULT '',
     description    TEXT NOT NULL DEFAULT '',
     remote_href    TEXT,
+    rrule          TEXT NOT NULL DEFAULT '',
+    master_uuid    TEXT REFERENCES events(uuid) ON DELETE CASCADE,
     created_at     TEXT NOT NULL,
     updated_at     TEXT NOT NULL
 );
+"""
+
+_MIGRATE_EVENTS_RRULE = """
+ALTER TABLE events ADD COLUMN rrule TEXT NOT NULL DEFAULT '';
+"""
+
+_MIGRATE_EVENTS_MASTER = """
+ALTER TABLE events ADD COLUMN master_uuid TEXT REFERENCES events(uuid) ON DELETE CASCADE;
 """
 
 _CREATE_STMTS: list[str] = [
@@ -71,6 +81,8 @@ _CREATE_STMTS: list[str] = [
     _MIGRATE_SYNC_QUEUE_RETRIES,
     _MIGRATE_SYNC_QUEUE_MAX_RETRIES,
     _MIGRATE_SYNC_QUEUE_NEXT_ATTEMPT,
+    _MIGRATE_EVENTS_RRULE,
+    _MIGRATE_EVENTS_MASTER,
     "CREATE INDEX IF NOT EXISTS idx_events_calendar ON events(calendar_uuid);",
     "CREATE INDEX IF NOT EXISTS idx_events_start ON events(start);",
     "CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON calendar_sync_queue(status);",

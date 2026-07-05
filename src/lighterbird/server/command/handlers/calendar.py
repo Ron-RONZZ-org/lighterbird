@@ -41,7 +41,9 @@ def calendar_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
                 "  !calendar event delete      — Delete an event\n"
                 "  !calendar event search      — Search events\n"
                 "  !calendar event export ics  — Export event(s) as ICS\n"
-                "  !calendar event import ics  — Import events from ICS file\n"
+                "  !calendar event import ics  — Import events from ICS file or email\n"
+                "  !calendar event rrule       — Manage event recurrence rules\n"
+                "  !calendar sync-status       — Show CalDAV sync queue\n"
                 "  !calendar account list      — List calendars\n"
                 "  !calendar account add       — Add a calendar\n"
                 "  !calendar account modify    — Modify a calendar\n"
@@ -75,10 +77,22 @@ def calendar_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
 @command("calendar.event.add")
 def event_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar event add <title> <start> <end> [location] [--calendar UUID]
+                                   [--rrule FREQ=WEEKLY;BYDAY=MO,WE]
 
     Calendar UUID is specified via --calendar flag. If omitted and only
     one calendar exists, it is used automatically.
+
+    Recurrence rules (RFC 5545):
+      --rrule FREQ=DAILY                  Every day
+      --rrule FREQ=WEEKLY;BYDAY=MO,WE,FR  Mon/Wed/Fri
+      --rrule FREQ=WEEKLY;INTERVAL=2      Every 2 weeks
+      --rrule FREQ=MONTHLY;BYDAY=1MO      First Monday each month
+      --rrule FREQ=YEARLY                 Yearly
+      --rrule FREQ=DAILY;COUNT=10         Every day, 10 occurrences
+      --rrule FREQ=DAILY;UNTIL=2026-12-31 Until a date
     """
+    from lighterbird.calendar.rrule import parse_rrule
+
     svc: CalendarService = get_calendar_service()
 
     # Resolve calendar UUID
@@ -104,6 +118,13 @@ def event_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
             "Usage: !calendar event add \"Title\" \"2024-06-15T09:00:00Z\" \"2024-06-15T10:00:00Z\" [location] --calendar <uuid>",
         )
 
+    rrule_str = flags.get("rrule", "")
+    if rrule_str:
+        try:
+            rrule_str = parse_rrule(rrule_str) or ""
+        except ValueError as e:
+            raise CommandValidationError(str(e))
+
     evt_data = {
         "calendar_uuid": calendar_uuid,
         "title": remaining[0],
@@ -112,9 +133,10 @@ def event_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         "location": remaining[3] if len(remaining) > 3 else "",
         "description": "",
         "category": "",
+        "rrule": rrule_str,
     }
     evt = svc.create_event(evt_data)
-    return {"type": "status", "title": "Event Created", "data": {"uuid": evt["uuid"], "title": evt["title"]}}
+    return {"type": "status", "title": "Event Created", "data": {"uuid": evt["uuid"], "title": evt["title"], "rrule": evt.get("rrule", "") or "(none)"}}
 
 
 @command("calendar.event.view")
@@ -265,6 +287,116 @@ def calendar_sync_status(remaining: list[str], flags: dict[str, str]) -> dict[st
             "SELECT * FROM calendar_sync_queue WHERE status IN ('pending','running','failed') ORDER BY id DESC"
         ))
     return {"type": "status", "title": "Calendar Sync Queue", "data": {"jobs": jobs, "count": len(jobs)}}
+
+
+@command("calendar.event.rrule")
+def event_rrule_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!calendar event rrule — Show recurrence subcommands."""
+    return {
+        "type": "status",
+        "title": "Event RRULE Commands",
+        "data": {
+            "_summary": (
+                "Available !calendar event rrule commands:\n"
+                "  !calendar event rrule set <uuid> <rrule>     — Set recurrence rule\n"
+                "  !calendar event rrule clear <uuid>           — Remove recurrence\n"
+                "  !calendar event rrule show <uuid>            — Show recurrence info\n"
+                "\nExamples:\n"
+                "  !calendar event rrule set <uuid> FREQ=WEEKLY;BYDAY=MO,WE,FR\n"
+                "  !calendar event rrule set <uuid> FREQ=MONTHLY;BYDAY=1MO\n"
+                "  !calendar event rrule set <uuid> FREQ=DAILY;COUNT=10"
+            ),
+        },
+    }
+
+
+@command("calendar.event.rrule.set")
+def event_rrule_set(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!calendar event rrule set <uuid> <rrule>
+
+    Set or change the recurrence rule on an existing event.
+    """
+    if len(remaining) < 2:
+        raise CommandValidationError(
+            "Missing event UUID or RRULE.",
+            "Usage: !calendar event rrule set <uuid> FREQ=WEEKLY;BYDAY=MO",
+        )
+    from lighterbird.calendar.rrule import parse_rrule
+
+    uuid = remaining[0]
+    rrule_str = remaining[1]
+    try:
+        rrule_str = parse_rrule(rrule_str) or ""
+    except ValueError as e:
+        raise CommandValidationError(str(e))
+    svc: CalendarService = get_calendar_service()
+    evt = svc.get_event(uuid)
+    if not evt:
+        raise CommandValidationError(f"Event not found: {uuid[:8]}")
+    svc.events.update(uuid, {"rrule": rrule_str})
+    return {"type": "status", "title": "RRULE Set", "data": {"uuid": uuid[:8], "rrule": rrule_str}}
+
+
+@command("calendar.event.rrule.clear")
+def event_rrule_clear(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!calendar event rrule clear <uuid> — Remove recurrence from an event."""
+    if not remaining:
+        raise CommandValidationError(
+            "Missing event UUID.",
+            "Usage: !calendar event rrule clear <uuid>",
+        )
+    uuid = remaining[0]
+    svc: CalendarService = get_calendar_service()
+    evt = svc.get_event(uuid)
+    if not evt:
+        raise CommandValidationError(f"Event not found: {uuid[:8]}")
+    svc.events.update(uuid, {"rrule": ""})
+    return {"type": "status", "title": "RRULE Cleared", "data": {"uuid": uuid[:8]}}
+
+
+@command("calendar.event.rrule.show")
+def event_rrule_show(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!calendar event rrule show <uuid> [--limit N]
+
+    Show a recurring event with the next N occurrences expanded.
+    Default limit is 10.
+    """
+    if not remaining:
+        raise CommandValidationError(
+            "Missing event UUID.",
+            "Usage: !calendar event rrule show <uuid>",
+        )
+    uuid = remaining[0]
+    svc: CalendarService = get_calendar_service()
+    evt = svc.get_event(uuid)
+    if not evt:
+        raise CommandValidationError(f"Event not found: {uuid[:8]}")
+    rrule_str = (evt.get("rrule") or "").strip()
+    if not rrule_str:
+        return {"type": "status", "title": "No Recurrence", "data": {"uuid": uuid[:8], "rrule": "(none)"}}
+
+    from lighterbird.calendar.rrule import expand_recurrences
+
+    limit = int(flags.get("limit", 10))
+    # Expand from today onward
+    from datetime import UTC, datetime
+
+    today = datetime.now(UTC).isoformat()
+    far = datetime(2099, 12, 31, tzinfo=UTC).isoformat()
+    instances = expand_recurrences(dict(evt), today, far, max_instances=limit)
+    return {
+        "type": "status",
+        "title": f"Recurrence: {rrule_str}",
+        "data": {
+            "master": evt,
+            "rrule": rrule_str,
+            "next_occurrences": [
+                {"start": i["start"], "end": i["end"]}
+                for i in instances[1:]  # skip the master itself
+            ],
+            "count": len(instances) - 1,
+        },
+    }
 
 
 @command("calendar.event.search")

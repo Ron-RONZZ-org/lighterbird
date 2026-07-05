@@ -268,7 +268,11 @@ class EventService(CRUDService):
         end: str,
         calendar_uuids: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """List events in a date range, optionally filtered by calendar."""
+        """List events in a date range, optionally filtered by calendar.
+
+        Recurring events (with ``rrule`` set) are expanded to include
+        generated instances within the query window.
+        """
         params: list[Any] = [start, end]
         query = "SELECT * FROM events WHERE date(start) >= ? AND date(start) <= ?"
         if calendar_uuids:
@@ -276,4 +280,15 @@ class EventService(CRUDService):
             query += f" AND calendar_uuid IN ({placeholders})"
             params.extend(calendar_uuids)
         query += " ORDER BY start ASC"
-        return self.db.execute(query, tuple(params))
+
+        events = list(self.db.execute(query, tuple(params)))
+        # Expand recurrences
+        expanded: list[dict[str, Any]] = []
+        for evt in events:
+            from lighterbird.calendar.rrule import expand_recurrences
+
+            instances = expand_recurrences(evt, start, end)
+            expanded.extend(instances)
+        # Re-sort by start date after expansion
+        expanded.sort(key=lambda e: e.get("start", ""))
+        return expanded
