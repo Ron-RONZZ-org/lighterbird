@@ -119,19 +119,30 @@ class _TodoCrudMixin:
 
     # ── Override hooks ──────────────────────────────────────────────────
 
-    def _post_delete(self, uuid_: str, data: dict[str, Any] | None) -> None:
-        """Reparent children when a todo is deleted (not cascade)."""
-        if data:
-            children = self.db.execute(
-                "SELECT uuid FROM tasks WHERE parent_uuid = ?",
-                (uuid_,),
-            )
-            grandparent = data.get("parent_uuid")
+    def delete(self, uuid_: str, soft: bool = True) -> bool:
+        """Delete a todo, reparenting children to grandparent first.
+
+        We must reparent *before* the DELETE runs because the FK constraint
+        ``ON DELETE SET NULL`` would nullify ``parent_uuid`` on children,
+        making it impossible to find them afterward.
+        """
+        old_data = self.get(uuid_)
+        if not old_data:
+            return False
+        children = list(self.db.execute(
+            "SELECT uuid FROM tasks WHERE parent_uuid = ?",
+            (uuid_,),
+        ))
+        grandparent = old_data.get("parent_uuid")
+        # Do the actual delete (FK SET NULL fires here)
+        result = super().delete(uuid_, soft=soft)
+        if result and children and grandparent is not None:
             for child in children:
                 self.db.execute(
                     "UPDATE tasks SET parent_uuid = ? WHERE uuid = ?",
                     (grandparent, child["uuid"]),
                 )
+        return result
 
     def _post_update(
         self, uuid_: str, old_data: dict[str, Any] | None,
@@ -295,7 +306,7 @@ class _TodoCrudMixin:
             return 5.0
 
     def validate_priority_formula(self, formula: str) -> bool:
-        return validate_safe(formula)
+        return validate_safe(formula, allowed_vars={"M", "D", "H", "MIN", "m"})
 
     # ── Status ──────────────────────────────────────────────────────────
 
@@ -306,6 +317,13 @@ class _TodoCrudMixin:
     # ── Labels ──────────────────────────────────────────────────────────
 
     def add_label(self, todo_uuid: str, label_name: str) -> None:
+        # Ensure label exists in labels table first (FK constraint)
+        now = datetime.now(timezone.utc).isoformat()
+        self.db.execute(
+            "INSERT OR IGNORE INTO labels (name, color, created_at, updated_at)"
+            " VALUES (?, '', ?, ?)",
+            (label_name, now, now),
+        )
         self.db.execute(
             "INSERT OR IGNORE INTO todo_labels"
             " (todo_uuid, label_name) VALUES (?, ?)",
@@ -349,7 +367,7 @@ class _TodoCrudMixin:
                 ) from e
             raise
 
-    def delete_label(self, label_uuid: str) -> None:
+    def delete_label(self, label_name: str) -> None:
         self.db.execute(
-            "DELETE FROM labels WHERE uuid = ?", (label_uuid,),
+            "DELETE FROM labels WHERE name = ?", (label_name,),
         )

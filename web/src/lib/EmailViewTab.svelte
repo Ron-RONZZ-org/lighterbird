@@ -4,6 +4,9 @@
   import { email as emailApi } from "./api.js";
   import { registerShortcuts } from "./keyboardShortcuts.svelte.js";
   import { openPrintWindow } from "./listTabShared.svelte.js";
+  import EmailHeaders from "./EmailHeaders.svelte";
+  import EmailAttachmentBar from "./EmailAttachmentBar.svelte";
+  import EmailConversationSidebar from "./EmailConversationSidebar.svelte";
 
   registerShortcuts("EmailViewTab", [
     { key: "Ctrl+R", desc: "Reply", modifiers: "Ctrl", category: "Email Detail" },
@@ -14,8 +17,6 @@
   ]);
 
   let { data = {}, tabId } = $props();
-  // $state is needed because $derived can't be assigned to (markRead updates is_read).
-  // Sync from prop on first mount only — after that, local state takes over.
   let msg = $state(data || {});
   let synced = $state(false);
   $effect(() => {
@@ -26,8 +27,6 @@
   });
 
   // Whether to prefer HTML rendering over plain text
-  // Persisted across emails via localStorage — if user toggles to plain,
-  // new emails open in plain text until toggled back.
   const LS_KEY = "lighterbird:email:viewHtml";
   function _loadHtmlPref() {
     try { const v = localStorage.getItem(LS_KEY); return v !== null ? JSON.parse(v) : true; }
@@ -37,6 +36,7 @@
   $effect(() => {
     try { localStorage.setItem(LS_KEY, JSON.stringify(useHtml)); } catch { /* best-effort */ }
   });
+
   // Conversation sidebar state
   let showConversation = $state(false);
   let conversation = $state([]);
@@ -60,9 +60,7 @@
   /** Normalize the HTML body for iframe rendering. */
   let htmlContent = $derived.by(() => {
     if (!hasHtml) return "";
-    // Basic security: ensure it's a full document
     let h = msg.html_body;
-    // If it's a fragment (no <html>/<body>), wrap it
     if (!/<\s*html\b/i.test(h)) {
       h = `<html><head><meta charset="utf-8"></head><body>${h}</body></html>`;
     }
@@ -94,14 +92,6 @@
     }
   }
 
-  /** Open a conversation message in a new tab. */
-  function openConversationMsg(convMsg) {
-    tabStore.open("email", convMsg.subject || "(no subject)", convMsg, {
-      idKey: `email-${convMsg.uuid}`,
-      replaceable: false,
-    });
-  }
-
   // ── Email actions ──────────────────────────────────────────────────────
 
   /** Quote the message body for reply/forward. */
@@ -116,8 +106,6 @@
   }
 
   function reply() {
-    // If message is from the user's own account (e.g. Sent folder),
-    // reply to the original recipient instead of self
     const isFromSelf = msg.from_addr && msg.account_email &&
       msg.from_addr.toLowerCase().includes(msg.account_email.toLowerCase());
     const to = isFromSelf
@@ -144,11 +132,9 @@
 
     let allTo, allCc;
     if (isFromSelf) {
-      // Sent by user — reply back to original recipients
       allTo = parseRecipients(msg.to_recipients).filter(Boolean).join(", ");
       allCc = parseRecipients(msg.cc_recipients).filter(Boolean).join(", ");
     } else {
-      // Received from someone — reply to sender + all To recipients
       allTo = [
         msg.from_addr || "",
         ...parseRecipients(msg.to_recipients),
@@ -236,46 +222,6 @@
     } catch { /* ignore */ }
   }
 
-  // ── Attachments ──────────────────────────────────────────────────────
-  let attachments = $state([]);
-  let attachmentsLoading = $state(false);
-  let attachmentError = $state("");
-
-  async function fetchAttachments() {
-    if (!msg.uuid || msg.attachment_count === 0) return;
-    attachmentsLoading = true;
-    attachmentError = "";
-    try {
-      const resp = await fetch(`/api/v1/email/messages/${msg.uuid}/attachments`);
-      if (resp.ok) {
-        const data = await resp.json();
-        attachments = data.attachments || [];
-      } else {
-        attachmentError = "Failed to load attachments.";
-      }
-    } catch {
-      attachmentError = "Network error loading attachments.";
-    } finally {
-      attachmentsLoading = false;
-    }
-  }
-
-  // Fetch attachments when message UUID is known
-  $effect(() => {
-    if (msg.uuid) fetchAttachments();
-  });
-
-  function downloadAttachment(att) {
-    window.open(`/api/v1/email/attachments/${att.uuid}/download`, "_blank");
-  }
-
-  function formatFileSize(bytes) {
-    if (!bytes) return "";
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / 1048576).toFixed(1)} MB`;
-  }
-
   async function trash() {
     if (!msg.uuid) return;
     try {
@@ -330,49 +276,11 @@
       </button>
     </div>
 
-    <!-- Headers -->
-    <div class="headers">
-      <div class="field">
-        <span class="label">From</span>
-        <span class="value">{msg.from_addr || ""}</span>
-      </div>
-      <div class="field">
-        <span class="label">To</span>
-        <span class="value">
-          {Array.isArray(msg.to_recipients) ? msg.to_recipients.join(", ") : (msg.to_recipients || "")}
-        </span>
-      </div>
-      <div class="field">
-        <span class="label">Subject</span>
-        <span class="value subject">{msg.subject || "(no subject)"}</span>
-      </div>
-      <div class="field">
-        <span class="label">Date</span>
-        <span class="value">{msg.received_at || ""}</span>
-      </div>
-    </div>
+    <!-- Headers (extracted) -->
+    <EmailHeaders {msg} />
 
-    <!-- Attachment list -->
-    {#if attachmentsLoading}
-      <div class="attachment-bar">
-        <span class="att-loading">Loading attachments…</span>
-      </div>
-    {:else if attachmentError}
-      <div class="attachment-bar att-error">
-        <span>{attachmentError}</span>
-      </div>
-    {:else if attachments.length > 0}
-      <div class="attachment-bar">
-        <span class="att-label">Attachments ({attachments.length})</span>
-        {#each attachments as att}
-          <button class="att-btn" onclick={() => downloadAttachment(att)} title="Download {att.filename} ({formatFileSize(att.size)})">
-            <span class="att-icon">📎</span>
-            <span class="att-name">{att.filename}</span>
-            <span class="att-size">{formatFileSize(att.size)}</span>
-          </button>
-        {/each}
-      </div>
-    {/if}
+    <!-- Attachments (extracted, self-fetching) -->
+    <EmailAttachmentBar msgUuid={msg.uuid || ""} attachmentCount={msg.attachment_count || 0} />
 
     <hr />
 
@@ -392,41 +300,14 @@
     </div>
   </div>
 
-  <!-- Conversation sidebar (inside wrapper, does not cover tab bar) -->
-  {#if showConversation}
-    <!-- svelte-ignore a11y_click_events_have_key_events,a11y_no_static_element_interactions -->
-    <div class="conv-overlay" role="presentation" onclick={() => { showConversation = false; }}>
-      <!-- svelte-ignore a11y_click_events_have_key_events,a11y_no_static_element_interactions -->
-      <div class="conv-panel" role="presentation" onclick={(e) => e.stopPropagation()}>
-        <div class="conv-header">
-          <span>Thread</span>
-          <button class="close-btn" onclick={() => { showConversation = false; }}>✕</button>
-        </div>
-        <div class="conv-list">
-          {#if conversationLoading}
-            <p class="conv-loading">Loading…</p>
-          {:else if conversation.length === 0}
-            <p class="conv-empty">No other messages in this thread.</p>
-          {:else}
-            {#each conversation as cm}
-              <div
-                class="conv-item"
-                class:active={cm.uuid === msg.uuid}
-                role="button"
-                tabindex="0"
-                onclick={() => openConversationMsg(cm)}
-                onkeydown={(e) => { if (e.key === 'Enter') openConversationMsg(cm); }}
-              >
-                <span class="conv-from">{(cm.from || "").slice(0, 24)}</span>
-                <span class="conv-subject">{(cm.subject || "").slice(0, 32)}</span>
-                <span class="conv-date">{cm.received_at || ""}</span>
-              </div>
-            {/each}
-          {/if}
-        </div>
-      </div>
-    </div>
-  {/if}
+  <!-- Conversation sidebar (extracted) -->
+  <EmailConversationSidebar
+    show={showConversation}
+    {conversation}
+    loading={conversationLoading}
+    currentUuid={msg.uuid || ""}
+    onClose={() => { showConversation = false; }}
+  />
 </div>
 
 <style>
@@ -491,86 +372,11 @@
   .toolbar-spacer {
     flex: 1;
   }
-
-  /* Attachment bar */
-  .attachment-bar {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.35rem 0.75rem;
-    background: #16162a;
-    border-bottom: 1px solid #333;
-    flex-wrap: wrap;
-    flex-shrink: 0;
-  }
-  .attachment-bar.att-error {
-    color: #c44;
-    font-size: 0.78rem;
-  }
-  .att-loading {
-    color: var(--clr-muted);
-    font-size: 0.78rem;
-    font-style: italic;
-  }
-  .att-label {
-    color: var(--clr-sub);
-    font-size: 0.72rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-right: 0.2rem;
-  }
-  .att-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.2rem;
-    padding: 0.15rem 0.5rem;
-    background: #2a2a44;
-    border: 1px solid #4a4a6a;
-    border-radius: 4px;
-    color: #b0b0c0;
-    font-family: monospace;
-    font-size: 0.75rem;
-    cursor: pointer;
-    transition: background 0.1s, border-color 0.1s;
-    white-space: nowrap;
-  }
-  .att-btn:hover {
-    background: #3a3a5a;
-    border-color: #6a6a9a;
-    color: #e0e0e0;
-  }
-  .att-icon { font-size: 0.75rem; }
-  .att-name { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; }
-  .att-size { color: var(--clr-muted); font-size: 0.68rem; }
-
   .trash-btn:hover {
     border-color: #8b3a3a;
     color: #e06060;
   }
 
-  /* ── Headers ─────────────────────────────────────── */
-  .headers {
-    padding: 8px 12px;
-    flex-shrink: 0;
-  }
-  .field {
-    display: flex;
-    gap: 0.5rem;
-    padding: 0.15rem 0;
-  }
-  .label {
-    color: var(--clr-sub);
-    min-width: 5rem;
-    flex-shrink: 0;
-  }
-  .value {
-    color: #e0e0e0;
-    word-break: break-all;
-  }
-  .subject {
-    font-weight: 600;
-  }
   hr {
     border: none;
     border-top: 1px solid #333;
@@ -603,76 +409,5 @@
     overflow-y: auto;
   }
 
-  /* ── Conversation sidebar ────────────────────────── */
-  .conv-overlay {
-    position: absolute;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.4);
-    z-index: 100;
-    display: flex;
-    justify-content: flex-end;
-  }
-  .conv-panel {
-    width: 340px;
-    max-width: 90vw;
-    background: #1e1e32;
-    border-left: 1px solid #444;
-    display: flex;
-    flex-direction: column;
-    animation: slideIn 0.15s ease;
-  }
-  @keyframes slideIn {
-    from { transform: translateX(100%); }
-    to { transform: translateX(0); }
-  }
-  .conv-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 12px;
-    border-bottom: 1px solid #333;
-    font-family: monospace;
-    font-size: 0.85rem;
-    color: var(--clr-sub);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-  .close-btn {
-    background: none;
-    border: none;
-    color: var(--clr-sub);
-    font-size: 1rem;
-    cursor: pointer;
-    padding: 2px 4px;
-  }
-  .close-btn:hover { color: #fff; }
-  .conv-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 4px 0;
-  }
-  .conv-item {
-    padding: 8px 12px;
-    cursor: pointer;
-    border-bottom: 1px solid #2a2a3e;
-    transition: background 0.1s;
-    font-family: monospace;
-    font-size: 0.8rem;
-  }
-  .conv-item:hover { background: #2a2a44; }
-  .conv-item.active {
-    background: #252540;
-    border-left: 3px solid #7c7c9a;
-  }
-  .conv-from { color: #e0e0e0; display: block; font-weight: 600; }
-  .conv-subject { color: #b0b0c0; display: block; }
-  .conv-date { color: var(--clr-muted); display: block; font-size: 0.7rem; margin-top: 2px; }
-  .conv-loading, .conv-empty {
-    color: var(--clr-muted);
-    text-align: center;
-    padding: 2rem;
-    font-family: monospace;
-    font-size: 0.8rem;
-  }
   /* Print — handled by dedicated print window, no SPA print styles needed */
 </style>
