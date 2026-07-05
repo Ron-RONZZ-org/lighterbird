@@ -1,7 +1,7 @@
 """Tests for email/services/sieve.py — SieveService CRUD and activation."""
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -357,6 +357,35 @@ class TestListActivations:
         result = sieve.list_activations("user@example.com")
         assert len(result) == 1
         assert result[0]["script_name"] == "filter1"
+
+
+class TestSpamBlocksVirtual:
+    def test_spam_blocks_no_blocks_returns_none(self, sieve, mock_db):
+        """When SpamManager.list_blocks() is empty, returns None."""
+        mock_db.execute.return_value = []
+        result = sieve._spam_blocks_virtual("user@example.com")
+        assert result is None
+
+    def test_spam_blocks_no_content_returns_none(self, sieve, mock_db):
+        """When SpamManager.to_sieve() returns empty, returns None."""
+        with patch(
+            "lighterbird.email.filters.spam.SpamManager",
+        ) as mock_spam_cls:
+            mock_instance = MagicMock()
+            mock_instance.list_blocks.return_value = [{"id": 1}]
+            mock_instance.to_sieve.return_value = ""
+            mock_spam_cls.return_value = mock_instance
+            result = sieve._spam_blocks_virtual("user@example.com")
+            assert result is None
+
+    def test_spam_blocks_exception_returns_none(self, sieve, mock_db):
+        """When SpamManager raises, returns None."""
+        with patch(
+            "lighterbird.email.filters.spam.SpamManager",
+            side_effect=RuntimeError("DB error"),
+        ):
+            result = sieve._spam_blocks_virtual("user@example.com")
+            assert result is None
 
 
 class TestUpsertSpamBlocks:

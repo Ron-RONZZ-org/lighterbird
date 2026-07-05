@@ -267,6 +267,20 @@ class TestEmailHandlers:
         assert result["title"] == "Import .eml"
         assert result["data"]["draft_uuid"] == "draft-123"
 
+    def test_email_import_eml_file_not_found(self, mock_email_svc):
+        """email import eml with non-existent file raises."""
+        mock_email_svc.import_eml.side_effect = FileNotFoundError(
+            "/tmp/nonexistent.eml"
+        )
+        with pytest.raises(CommandValidationError, match="File not found"):
+            dispatch(["email", "import", "eml", "/tmp/nonexistent.eml"], {})
+
+    def test_email_import_eml_generic_error(self, mock_email_svc):
+        """email import eml with unexpected error raises."""
+        mock_email_svc.import_eml.side_effect = ValueError("Corrupted file")
+        with pytest.raises(CommandValidationError, match="Import failed"):
+            dispatch(["email", "import", "eml", "/tmp/bad.eml"], {})
+
     def test_email_reply_missing_uuid(self):
         """email reply without uuid raises."""
         with pytest.raises(CommandValidationError, match="Missing message UUID"):

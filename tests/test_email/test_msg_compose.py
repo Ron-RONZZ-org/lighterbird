@@ -228,6 +228,43 @@ class TestSendEmail:
         host._ensure_folder("test@example.com", "Dupe")  # should not raise
 
 
+class TestSendEmailBodyFormats:
+    """Tests for different body_format values."""
+
+    @patch("lighterbird.email.smtp.SMTPClient")
+    def test_body_format_markdown(self, mock_smtp, host, db):
+        host._account_service.get_account_with_password.return_value = _mock_account()
+        mock_client = MagicMock()
+        mock_smtp.return_value = mock_client
+
+        host.send_email(
+            account_email="test@example.com",
+            to=["r@example.com"],
+            subject="MD Test",
+            body="**bold**",
+            body_format="markdown",
+        )
+        call_kwargs = mock_client.send_email.call_args.kwargs
+        # body should be the original markdown, html_body the rendered HTML
+        assert "**bold**" in call_kwargs.get("body", "")
+
+    @patch("lighterbird.email.smtp.SMTPClient")
+    def test_body_format_html(self, mock_smtp, host, db):
+        host._account_service.get_account_with_password.return_value = _mock_account()
+        mock_client = MagicMock()
+        mock_smtp.return_value = mock_client
+
+        host.send_email(
+            account_email="test@example.com",
+            to=["r@example.com"],
+            subject="HTML Test",
+            body="<p>Hello</p>",
+            body_format="html",
+        )
+        call_kwargs = mock_client.send_email.call_args.kwargs
+        assert call_kwargs.get("html_body") == "<p>Hello</p>"
+
+
 class TestSaveOutboxMessage:
     """Tests for _save_outbox_message()."""
 
@@ -291,3 +328,30 @@ class TestSaveOutboxMessage:
             "SELECT in_reply_to FROM messages WHERE uuid = ?", ("reply-uuid",)
         )
         assert msg["in_reply_to"] == "<parent@example.com>"
+
+
+class TestReconstructAttachments:
+    def test_no_attachments(self, host, db):
+        result = host._reconstruct_attachments("nonexistent-uuid")
+        assert result == []
+
+    def test_with_attachment(self, host, db):
+        """Reconstruct an attachment that was stored."""
+        att_uuid = "att-test-uuid"
+        host._save_outbox_message(
+            msg_uuid=att_uuid,
+            account_email="test@example.com",
+            sender_email="test@example.com",
+            to=["r@example.com"],
+            cc=[],
+            subject="With Att",
+            body="Body",
+            body_format="plain",
+            message_id="<mid@test>",
+            in_reply_to=None,
+            attachments=[{"name": "file.txt", "data": "aGVsbG8="}],
+        )
+        result = host._reconstruct_attachments(att_uuid)
+        assert len(result) >= 1
+        assert result[0]["name"] == "file.txt"
+        assert result[0]["data"] == "aGVsbG8="

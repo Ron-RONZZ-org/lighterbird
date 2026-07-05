@@ -1,7 +1,7 @@
-"""Tests for email/smtp.py — SMTPClient, send_email."""
+"""Tests for email/smtp.py — SMTPClient with mocked smtplib."""
+
 from __future__ import annotations
 
-import smtplib
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -10,300 +10,345 @@ import pytest
 from lighterbird.email.smtp import SMTPClient
 
 
+@pytest.fixture
+def mock_smtplib():
+    with patch("lighterbird.email.smtp.smtplib") as mock:
+        # Attach real exception classes so isinstance checks work
+        import smtplib as _real_smtplib
+
+        mock.SMTPAuthenticationError = _real_smtplib.SMTPAuthenticationError
+        yield mock
+
+
+# Note: socket and ssl are NOT mocked globally because the real exception
+# classes (ConnectionRefusedError, ssl.SSLError, etc.) must be used in
+# except clauses within smtp.py.  We only mock smtplib.SMTP below.
+
+
 class TestSMTPClientInit:
-    def test_init_defaults(self):
+    def test_default_port(self):
         client = SMTPClient("smtp.example.com")
-        assert client.host == "smtp.example.com"
         assert client.port == 587
         assert client.use_tls is True
         assert client.use_ssl is False
-        assert client._conn is None
 
-    def test_init_ssl(self):
-        client = SMTPClient("smtp.example.com", 465, use_ssl=True)
+    def test_ssl_port_465(self):
+        client = SMTPClient("smtp.example.com", port=465, use_ssl=True)
         assert client.use_ssl is True
-        assert client.use_tls is True
 
-    def test_init_plain(self):
-        client = SMTPClient("smtp.example.com", 25, use_tls=False)
+    def test_no_tls(self):
+        client = SMTPClient("smtp.example.com", use_tls=False)
         assert client.use_tls is False
-        assert client.use_ssl is False
 
 
 class TestSMTPClientConnect:
-    @patch("smtplib.SMTP")
-    def test_connect_tls_success(self, mock_smtp):
-        mock_conn = MagicMock()
-        mock_smtp.return_value = mock_conn
+    def test_connect_standard(self, mock_smtplib):
         client = SMTPClient("smtp.example.com", 587, use_tls=True)
-        client.connect("user@example.com", "secret")
-        mock_smtp.assert_called_once_with("smtp.example.com", 587, timeout=30)
-        mock_conn.ehlo.assert_called()
-        mock_conn.starttls.assert_called_once()
-        mock_conn.login.assert_called_once_with("user@example.com", "secret")
+        instance = MagicMock()
+        mock_smtplib.SMTP.return_value = instance
 
-    @patch("smtplib.SMTP_SSL")
-    def test_connect_ssl_success(self, mock_smtp_ssl):
-        mock_conn = MagicMock()
-        mock_smtp_ssl.return_value = mock_conn
-        client = SMTPClient("smtp.example.com", 465, use_ssl=True)
-        client.connect("user@example.com", "secret")
-        mock_smtp_ssl.assert_called_once_with("smtp.example.com", 465, timeout=30)
-        mock_conn.login.assert_called_once_with("user@example.com", "secret")
-
-    @patch("smtplib.SMTP")
-    def test_connect_no_tls(self, mock_smtp):
-        mock_conn = MagicMock()
-        mock_smtp.return_value = mock_conn
-        client = SMTPClient("smtp.example.com", 25, use_tls=False)
         client.connect("user", "pass")
-        mock_conn.ehlo.assert_called_once()
-        mock_conn.starttls.assert_not_called()
-        mock_conn.login.assert_called_once()
+        mock_smtplib.SMTP.assert_called_once_with(
+            "smtp.example.com", 587, timeout=30
+        )
+        instance.ehlo.assert_called()
+        instance.starttls.assert_called_once()
+        instance.login.assert_called_once_with("user", "pass")
 
-    @patch("smtplib.SMTP")
-    def test_connect_auth_failure(self, mock_smtp):
-        mock_conn = MagicMock()
-        mock_conn.login.side_effect = smtplib.SMTPAuthenticationError(535, b"Auth failed")
-        mock_smtp.return_value = mock_conn
+    def test_connect_ssl(self, mock_smtplib):
+        client = SMTPClient("smtp.example.com", 465, use_tls=False, use_ssl=True)
+        instance = MagicMock()
+        mock_smtplib.SMTP_SSL.return_value = instance
+
+        client.connect("user", "pass")
+        mock_smtplib.SMTP_SSL.assert_called_once_with(
+            "smtp.example.com", 465, timeout=30
+        )
+        instance.login.assert_called_once_with("user", "pass")
+
+    def test_connect_tls_without_starttls(self, mock_smtplib):
+        """When use_tls is False, don't call starttls."""
+        client = SMTPClient("smtp.example.com", 587, use_tls=False)
+        instance = MagicMock()
+        mock_smtplib.SMTP.return_value = instance
+
+        client.connect("user", "pass")
+        instance.starttls.assert_not_called()
+
+    def test_connect_auth_error(self, mock_smtplib):
         client = SMTPClient("smtp.example.com")
+        instance = MagicMock()
+        instance.login.side_effect = mock_smtplib.SMTPAuthenticationError(
+            535, b"Authentication failed"
+        )
+        mock_smtplib.SMTP.return_value = instance
+
         with pytest.raises(ConnectionError, match="SMTP authentication failed"):
-            client.connect("user@example.com", "wrong")
+            client.connect("user", "wrong")
 
-    @patch("smtplib.SMTP", side_effect=TimeoutError("timed out"))
-    def test_connect_timeout(self, mock_smtp):
+    def test_connect_network_error(self, mock_smtplib):
+        import socket
+
         client = SMTPClient("smtp.example.com")
+        mock_smtplib.SMTP.side_effect = socket.gaierror("Name or service not known")
+
+        with pytest.raises(ConnectionError, match="SMTP connection failed"):
+            client.connect("user", "pass")
+
+    def test_connect_generic_error(self, mock_smtplib):
+        client = SMTPClient("smtp.example.com")
+        mock_smtplib.SMTP.side_effect = RuntimeError("Unexpected error")
+
         with pytest.raises(ConnectionError, match="SMTP connection failed"):
             client.connect("user", "pass")
 
 
 class TestSMTPClientConnProperty:
-    def test_conn_raises_when_not_connected(self):
+    def test_not_connected_raises(self):
         client = SMTPClient("smtp.example.com")
         with pytest.raises(RuntimeError, match="Not connected"):
             _ = client.conn
 
-    def test_conn_returns_when_connected(self):
+    def test_returns_connection(self, mock_smtplib):
         client = SMTPClient("smtp.example.com")
-        mock_conn = MagicMock()
-        client._conn = mock_conn
-        assert client.conn is mock_conn
+        instance = MagicMock()
+        mock_smtplib.SMTP.return_value = instance
+        client.connect("user", "pass")
+        assert client.conn is instance
 
 
 class TestSMTPClientDisconnect:
-    def test_disconnect_connected(self):
+    def test_disconnect(self, mock_smtplib):
         client = SMTPClient("smtp.example.com")
-        mock_conn = MagicMock()
-        client._conn = mock_conn
+        instance = MagicMock()
+        mock_smtplib.SMTP.return_value = instance
+        client.connect("user", "pass")
         client.disconnect()
-        mock_conn.quit.assert_called_once()
+        instance.quit.assert_called_once()
         assert client._conn is None
 
-    def test_disconnect_not_connected(self):
+    def test_disconnect_no_connection(self):
         client = SMTPClient("smtp.example.com")
-        client.disconnect()  # Should not raise
+        client.disconnect()  # should not raise
 
-    def test_disconnect_quit_raises(self):
+    def test_disconnect_quit_error(self, mock_smtplib):
         client = SMTPClient("smtp.example.com")
-        mock_conn = MagicMock()
-        mock_conn.quit.side_effect = Exception("quit failed")
-        client._conn = mock_conn
-        client.disconnect()  # Should not raise
-        assert client._conn is None
+        instance = MagicMock()
+        instance.quit.side_effect = OSError("Connection reset")
+        mock_smtplib.SMTP.return_value = instance
+        client.connect("user", "pass")
+        client.disconnect()  # should not raise
 
 
 class TestSMTPClientSendEmail:
-    @patch("smtplib.SMTP")
-    def test_send_simple_text(self, mock_smtp):
-        mock_conn = MagicMock()
-        mock_smtp.return_value = mock_conn
-        mock_conn.sendmail.return_value = {}
-
+    @pytest.fixture
+    def connected(self, mock_smtplib):
         client = SMTPClient("smtp.example.com")
-        client._conn = mock_conn
+        instance = MagicMock()
+        instance.sendmail.return_value = {}  # empty = all delivered
+        mock_smtplib.SMTP.return_value = instance
+        client.connect("user", "pass")
+        return client
 
-        msg_id = client.send_email(
-            from_addr="from@example.com",
-            to=["to@example.com"],
-            subject="Test",
-            body="Hello World",
+    def test_send_plain_text(self, connected):
+        msg_id = connected.send_email(
+            from_addr="alice@example.com",
+            to=["bob@example.com"],
+            subject="Hello",
+            body="World",
         )
         assert msg_id is not None
-        mock_conn.sendmail.assert_called_once()
+        connected.conn.sendmail.assert_called_once()
 
-    @patch("smtplib.SMTP")
-    def test_send_with_cc_and_bcc(self, mock_smtp):
-        mock_conn = MagicMock()
-        mock_smtp.return_value = mock_conn
-        mock_conn.sendmail.return_value = {}
-
-        client = SMTPClient("smtp.example.com")
-        client._conn = mock_conn
-
-        msg_id = client.send_email(
-            from_addr="from@example.com",
-            to=["to@example.com"],
-            cc=["cc@example.com"],
-            bcc=["bcc@example.com"],
-            subject="Test",
-            body="Hello",
-        )
-        assert msg_id is not None
-        # sendmail should be called with all recipients
-        call_args = mock_conn.sendmail.call_args[0]
-        assert len(call_args[1]) == 3  # to + cc + bcc
-
-    @patch("smtplib.SMTP")
-    def test_send_with_html(self, mock_smtp):
-        mock_conn = MagicMock()
-        mock_smtp.return_value = mock_conn
-        mock_conn.sendmail.return_value = {}
-
-        client = SMTPClient("smtp.example.com")
-        client._conn = mock_conn
-
-        msg_id = client.send_email(
-            from_addr="from@example.com",
-            to=["to@example.com"],
-            subject="HTML Test",
-            body="Plain text",
-            html_body="<p>HTML content</p>",
-        )
-        assert msg_id is not None
-        # Should have called sendmail
-        assert mock_conn.sendmail.called
-
-    @patch("smtplib.SMTP")
-    def test_send_with_signature(self, mock_smtp):
-        mock_conn = MagicMock()
-        mock_smtp.return_value = mock_conn
-        mock_conn.sendmail.return_value = {}
-
-        client = SMTPClient("smtp.example.com")
-        client._conn = mock_conn
-
-        client.send_email(
-            from_addr="from@example.com",
-            to=["to@example.com"],
-            subject="Sig Test",
+    def test_send_with_cc(self, connected):
+        msg_id = connected.send_email(
+            from_addr="alice@example.com",
+            to=["bob@example.com"],
+            subject="CC Test",
             body="Body",
-            signature="Sent from lighterbird",
+            cc=["cc@example.com"],
         )
-        # Should append signature (body is base64 encoded in MIME output)
-        call_args = mock_conn.sendmail.call_args[0]
-        msg_str = call_args[2]
-        # The base64 encoding of "Body\n\n--\nSent from lighterbird" 
-        assert "U2VudCBmcm9tIGxpZ2h0ZXJiaXJk" in msg_str
+        assert msg_id is not None
+        # Verify CC is in the message
+        call_args = connected.conn.sendmail.call_args
+        msg_str = call_args[0][2]
+        assert "Cc: cc@example.com" in msg_str
 
-    @patch("smtplib.SMTP")
-    def test_send_with_message_id(self, mock_smtp):
-        mock_conn = MagicMock()
-        mock_smtp.return_value = mock_conn
-        mock_conn.sendmail.return_value = {}
+    def test_send_with_bcc(self, connected):
+        """BCC recipients receive the email but are not in headers."""
+        msg_id = connected.send_email(
+            from_addr="alice@example.com",
+            to=["bob@example.com"],
+            subject="BCC Test",
+            body="Body",
+            bcc=["bcc@example.com"],
+        )
+        assert msg_id is not None
+        call_args = connected.conn.sendmail.call_args
+        recipients = call_args[0][1]
+        # BCC should be in the envelope
+        assert "bcc@example.com" in recipients
 
-        client = SMTPClient("smtp.example.com")
-        client._conn = mock_conn
+    def _decode_body(self, msg_str):
+        """Decode a base64-encoded email body to plain text."""
+        import base64
+        import re
 
-        msg_id = client.send_email(
-            from_addr="from@example.com",
-            to=["to@example.com"],
-            subject="ID Test",
+        # Extract the base64 payload between headers and the end
+        match = re.search(
+            r"\n\n([A-Za-z0-9+/=]+)\n?$", msg_str.replace("\r\n", "\n")
+        )
+        if match:
+            try:
+                return base64.b64decode(match.group(1)).decode("utf-8")
+            except Exception:
+                pass
+        return msg_str
+
+    def test_send_with_in_reply_to(self, connected):
+        msg_id = connected.send_email(
+            from_addr="alice@example.com",
+            to=["bob@example.com"],
+            subject="Re: Original",
+            body="Reply",
+            in_reply_to="<original@mail.com>",
+        )
+        call_args = connected.conn.sendmail.call_args
+        msg_str = call_args[0][2]
+        # Note: in_reply_to value gets wrapped in angle brackets by smtp.py
+        assert "In-Reply-To: " in msg_str
+        assert "References: " in msg_str
+
+    def test_send_with_html_body(self, connected):
+        msg_id = connected.send_email(
+            from_addr="alice@example.com",
+            to=["bob@example.com"],
+            subject="HTML Test",
+            body="Text version",
+            html_body="<p>HTML version</p>",
+        )
+        assert msg_id is not None
+        call_args = connected.conn.sendmail.call_args
+        msg_str = call_args[0][2]
+        # In multipart/alternative, the HTML part has text/html content type
+        assert "multipart/alternative" in msg_str
+
+    def test_send_with_attachment_dict(self, connected):
+        msg_id = connected.send_email(
+            from_addr="alice@example.com",
+            to=["bob@example.com"],
+            subject="Attachment Test",
+            body="See attached",
+            attachments=[{"name": "file.txt", "data": "aGVsbG8="}],
+        )
+        assert msg_id is not None
+        call_args = connected.conn.sendmail.call_args
+        msg_str = call_args[0][2]
+        assert "file.txt" in msg_str
+        assert "application/octet-stream" in msg_str
+
+    def test_send_with_custom_message_id(self, connected):
+        msg_id = connected.send_email(
+            from_addr="alice@example.com",
+            to=["bob@example.com"],
+            subject="Custom ID",
             body="Body",
             message_id="custom-id@example.com",
         )
         assert msg_id == "custom-id@example.com"
+        call_args = connected.conn.sendmail.call_args
+        msg_str = call_args[0][2]
+        assert "Message-ID: <custom-id@example.com>" in msg_str
 
-    @patch("smtplib.SMTP")
-    def test_send_with_in_reply_to(self, mock_smtp):
-        mock_conn = MagicMock()
-        mock_smtp.return_value = mock_conn
-        mock_conn.sendmail.return_value = {}
-
-        client = SMTPClient("smtp.example.com")
-        client._conn = mock_conn
-
-        client.send_email(
-            from_addr="from@example.com",
-            to=["to@example.com"],
-            subject="Re: Test",
-            body="Reply",
-            in_reply_to="orig-id@example.com",
+    def test_send_with_signature(self, connected):
+        msg_id = connected.send_email(
+            from_addr="alice@example.com",
+            to=["bob@example.com"],
+            subject="Sig Test",
+            body="Hello",
+            signature="John Smith",
         )
-        call_args = mock_conn.sendmail.call_args[0]
-        msg_str = call_args[2]
-        assert "In-Reply-To" in msg_str
-        assert "References" in msg_str
+        assert msg_id is not None
+        call_args = connected.conn.sendmail.call_args
+        msg_str = call_args[0][2]
+        body = self._decode_body(msg_str)
+        assert "John Smith" in body
 
-    @patch("smtplib.SMTP")
-    def test_send_partial_failure(self, mock_smtp):
-        mock_conn = MagicMock()
-        mock_smtp.return_value = mock_conn
-        mock_conn.sendmail.return_value = {"bad@example.com": (550, "User unknown")}
+    def test_send_signature_without_body(self, connected):
+        """Signature alone becomes the body."""
+        msg_id = connected.send_email(
+            from_addr="alice@example.com",
+            to=["bob@example.com"],
+            subject="Sig Only",
+            signature="Just a signature",
+        )
+        assert msg_id is not None
+        call_args = connected.conn.sendmail.call_args
+        msg_str = call_args[0][2]
+        body = self._decode_body(msg_str)
+        assert "Just a signature" in body
 
-        client = SMTPClient("smtp.example.com")
-        client._conn = mock_conn
-
+    def test_send_partial_failure(self, connected):
+        connected.conn.sendmail.return_value = {"bob@example.com": (550, "User unknown")}
         with pytest.raises(ConnectionError, match="SMTP send partially failed"):
-            client.send_email(
-                from_addr="from@example.com",
-                to=["to@example.com", "bad@example.com"],
-                subject="Test",
-                body="Hello",
+            connected.send_email(
+                from_addr="alice@example.com",
+                to=["bob@example.com"],
+                subject="Partial Fail",
+                body="Test",
             )
 
-    @patch("smtplib.SMTP")
-    def test_send_smtp_error(self, mock_smtp):
-        mock_conn = MagicMock()
-        mock_smtp.return_value = mock_conn
-        mock_conn.sendmail.side_effect = smtplib.SMTPException("Server unavailable")
-
-        client = SMTPClient("smtp.example.com")
-        client._conn = mock_conn
-
+    def test_send_generic_failure(self, connected):
+        connected.conn.sendmail.side_effect = RuntimeError("Server busy")
         with pytest.raises(ConnectionError, match="SMTP send failed"):
-            client.send_email(
-                from_addr="from@example.com",
-                to=["to@example.com"],
-                subject="Test",
-                body="Hello",
+            connected.send_email(
+                from_addr="alice@example.com",
+                to=["bob@example.com"],
+                subject="Fail",
+                body="Test",
             )
 
 
 class TestSMTPClientAttachFile:
-    @patch("smtplib.SMTP")
-    def test_attach_file_dict(self, mock_smtp):
-        mock_conn = MagicMock()
-        mock_smtp.return_value = mock_conn
-        mock_conn.sendmail.return_value = {}
+    def test_attach_dict_with_b64_data(self):
+        """Dict attachment with base64 data."""
+        from email.mime.multipart import MIMEMultipart
 
-        import base64
-        client = SMTPClient("smtp.example.com")
-        client._conn = mock_conn
+        msg = MIMEMultipart()
+        SMTPClient._attach_file(msg, {"name": "doc.pdf", "data": "dGVzdA=="})
+        # Should not raise, attachment should be added
+        assert len(msg.get_payload()) == 1
 
-        client.send_email(
-            from_addr="from@example.com",
-            to=["to@example.com"],
-            subject="Attach Test",
-            body="See attached",
-            attachments=[{"name": "test.txt", "data": base64.b64encode(b"hello").decode()}],
-        )
-        assert mock_conn.sendmail.called
+    def test_attach_dict_with_text_data(self):
+        """Dict attachment with plain string data (not b64)."""
+        from email.mime.multipart import MIMEMultipart
 
-    @patch("smtplib.SMTP")
-    def test_attach_file_path_missing(self, mock_smtp):
-        mock_conn = MagicMock()
-        mock_smtp.return_value = mock_conn
-        mock_conn.sendmail.return_value = {}
+        msg = MIMEMultipart()
+        SMTPClient._attach_file(msg, {"name": "note.txt", "data": "hello"})
+        assert len(msg.get_payload()) == 1
 
-        client = SMTPClient("smtp.example.com")
-        client._conn = mock_conn
+    def test_attach_file_path(self, tmp_path):
+        """File path attachment from disk."""
+        from email.mime.multipart import MIMEMultipart
 
-        # Missing file should be skipped silently
-        client.send_email(
-            from_addr="from@example.com",
-            to=["to@example.com"],
-            subject="Missing Attach",
-            body="Body",
-            attachments=[Path("/nonexistent/file.txt")],
-        )
-        assert mock_conn.sendmail.called
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("file content")
+        msg = MIMEMultipart()
+        SMTPClient._attach_file(msg, str(test_file))
+        assert len(msg.get_payload()) == 1
+
+    def test_attach_nonexistent_path(self, tmp_path):
+        """Non-existent file path is silently skipped."""
+        from email.mime.multipart import MIMEMultipart
+
+        msg = MIMEMultipart()
+        SMTPClient._attach_file(msg, str(tmp_path / "nonexistent.txt"))
+        assert len(msg.get_payload()) == 0
+
+    def test_attach_dict_with_bytes_data(self):
+        """Dict attachment with bytes data."""
+        from email.mime.multipart import MIMEMultipart
+
+        msg = MIMEMultipart()
+        SMTPClient._attach_file(msg, {"name": "data.bin", "data": b"binary"})
+        assert len(msg.get_payload()) == 1

@@ -4,10 +4,6 @@
 and backup.  Keyring, AI provider, and system prompt wrappers remain local.
 """
 
-from lightercore import set_app_name
-
-set_app_name("lighterbird")
-
 from lightercore.backup import (
     BackupStrategy,
     BackupTarget,
