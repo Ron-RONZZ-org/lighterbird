@@ -131,7 +131,6 @@ def sync_email(
 @router.get("/folders")
 def list_folders(email_svc: EmailService = Depends(get_email_service)):
     """List all known folders with account info."""
-    {a["email"]: dict(a) for a in email_svc.list_accounts()}
     rows = list(email_svc.db.execute(
         "SELECT account_email, name FROM folders ORDER BY account_email, name"
     ))
