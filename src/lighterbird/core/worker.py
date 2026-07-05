@@ -221,7 +221,7 @@ class WorkerPool:
 
     def start_all(self) -> None:
         """Start all registered workers."""
-        for name, w in self._workers.items():
+        for _name, w in self._workers.items():
             w.start()
 
     def stop_all(self, timeout: float = 5.0) -> None:

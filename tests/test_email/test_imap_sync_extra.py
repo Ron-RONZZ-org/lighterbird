@@ -6,9 +6,7 @@ exception during move, no pending messages.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 
 class TestRetryPendingTrash:

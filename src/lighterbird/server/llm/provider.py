@@ -14,8 +14,11 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Any
 
-from lighterbird.core.ai import ProviderConfig, get_provider as _create_core_provider
-from lighterbird.core.keyring import get_password as _get_kr, set_password as _set_kr, delete_password as _del_kr
+from lighterbird.core.ai import ProviderConfig
+from lighterbird.core.ai import get_provider as _create_core_provider
+from lighterbird.core.keyring import delete_password as _del_kr
+from lighterbird.core.keyring import get_password as _get_kr
+from lighterbird.core.keyring import set_password as _set_kr
 from lighterbird.core.system_prompt import load_system_prompt, reload_system_prompt
 
 _SERVICE_NAME = "lighterbird-llm"
@@ -265,7 +268,7 @@ class LLMProviderWrapper:
             if key in kwargs:
                 profile[key] = kwargs[key]
         # api_key requires explicit non-empty value (empty = keep current)
-        if "api_key" in kwargs and kwargs["api_key"]:
+        if kwargs.get("api_key"):
             profile["api_key"] = kwargs["api_key"]
         if "temperature" in kwargs:
             profile["temperature"] = float(kwargs["temperature"])

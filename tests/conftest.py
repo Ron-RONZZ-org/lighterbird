@@ -17,13 +17,13 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
+import urllib.request
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import pytest
-import urllib.request
-import urllib.error
-
 
 # ── E2E CLI options ─────────────────────────────────────────────────────────
 

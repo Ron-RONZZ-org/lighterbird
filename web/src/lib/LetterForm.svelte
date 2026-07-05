@@ -13,8 +13,8 @@
    *   - Contact suggestions for recipient field
    */
   import { contacts as contactsApi, drafts as draftsApi } from "./api.js";
-  import SearchDialog from "./SearchDialog.svelte";
   import LetterBodyEditor from "./LetterBodyEditor.svelte";
+  import LetterAddressFields from "./LetterAddressFields.svelte";
   import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
   import MultiEntryField from "./MultiEntryField.svelte";
 
@@ -87,7 +87,7 @@
           } catch { /* ignore */ }
         }
         if (name || email || addr) {
-          entries.push({ label: [name, addr, email].filter(Boolean).join(" — "), name, addr, email });
+          entries.push({ label: [name, addr, email].filter(Boolean).join(" \u2014 "), name, addr, email });
         }
       }
       contactSuggestions = entries;
@@ -136,11 +136,9 @@
 
   // ── Import from profile/contact ────────────────────────────────────────
   function handleProfileSelect(profile) {
-    // Format: name \n address \n email \n phone
     const lines = [];
     lines.push(profile.full_name || profile.given_name || "");
     lines.push(profile.address || "");
-    // Primary email
     let email = "";
     try {
       const emails = typeof profile.emails === "string" ? JSON.parse(profile.emails) : (profile.emails || []);
@@ -149,7 +147,6 @@
       }
     } catch { email = ""; }
     lines.push(email);
-    // Primary phone
     let phone = "";
     try {
       const phones = typeof profile.phones === "string" ? JSON.parse(profile.phones) : (profile.phones || []);
@@ -167,7 +164,6 @@
     const lines = [];
     lines.push(contact.full_name || contact.given_name || contact.name || "");
     lines.push(contact.address || "");
-    // Primary email
     let email = "";
     try {
       const emails = typeof contact.emails === "string" ? JSON.parse(contact.emails) : (contact.emails || []);
@@ -176,7 +172,6 @@
       }
     } catch { email = ""; }
     lines.push(email);
-    // Primary phone
     let phone = "";
     try {
       const phones = typeof contact.phones === "string" ? JSON.parse(contact.phones) : (contact.phones || []);
@@ -285,7 +280,6 @@
       if (confirm("You have unsaved changes. Save as draft?")) {
         saveDraft();
       }
-      // Don't preventDefault — let TabView's global q handler close the tab
     }
   }
 </script>
@@ -310,53 +304,27 @@
     </div>
   {/if}
 
-  <!-- Sender field (multiline) -->
-  <div class="field-row">
-    <div class="field-header">
-      <label for="sender">{senderLabel}</label>
-      <button type="button" class="import-btn" onclick={() => (showSenderDialog = true)} title="Import from profile">
-        &#128279; Profile
-      </button>
-    </div>
-    <textarea
-      id="sender"
-      class="multi-textarea"
-      bind:value={senderText}
-      placeholder="Your name&#10;Street address&#10;email@example.com&#10;+1-234-567-8900"
-      rows="4"
-    ></textarea>
-  </div>
-
-  <!-- Recipient field (multiline) with contact suggestions -->
-  <div class="field-row">
-    <div class="field-header">
-      <label for="recipient">{recipientLabel}</label>
-      <button type="button" class="import-btn" onclick={() => (showRecipientDialog = true)} title="Import from contact">
-        &#128279; Contact
-      </button>
-    </div>
-    <textarea
-      id="recipient"
-      class="multi-textarea"
-      bind:value={recipientText}
-      placeholder="Recipient name&#10;Street address&#10;email@example.com&#10;+1-234-567-8900"
-      rows="4"
-      onfocus={() => { if (recipientText.trim()) showSuggestions = true; }}
-      onblur={() => setTimeout(() => { showSuggestions = false; }, 200)}
-      oninput={() => { showSuggestions = true; }}
-    ></textarea>
-    {#if showSuggestions && filteredSuggestions.length > 0}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="suggestion-popup" role="listbox" onmousedown={(e) => e.preventDefault()}>
-        {#each filteredSuggestions as entry}
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div class="suggestion-item" role="option" onmousedown={() => { recipientText = entry.label; showSuggestions = false; }}>
-            {entry.label}
-          </div>
-        {/each}
-      </div>
-    {/if}
-  </div>
+  <LetterAddressFields
+    {senderLabel}
+    {recipientLabel}
+    bind:senderText
+    bind:recipientText
+    {contactSuggestions}
+    {filteredSuggestions}
+    {showSuggestions}
+    onOpenSenderDialog={() => (showSenderDialog = true)}
+    onOpenRecipientDialog={() => (showRecipientDialog = true)}
+    onSuggestionSelect={(entry) => { recipientText = entry.label; showSuggestions = false; }}
+    bind:showSenderDialog
+    bind:showRecipientDialog
+    onSenderDialogClose={() => (showSenderDialog = false)}
+    onRecipientDialogClose={() => (showRecipientDialog = false)}
+    onProfileSelect={handleProfileSelect}
+    onContactSelect={handleContactSelect}
+    onRecipientFocus={() => { if (recipientText.trim()) showSuggestions = true; }}
+    onRecipientBlur={() => setTimeout(() => { showSuggestions = false; }, 200)}
+    onRecipientInput={() => { showSuggestions = true; }}
+  />
 
   {#if formType === "send"}
     <div class="field-row">
@@ -396,9 +364,9 @@
   <div class="button-row">
     <button type="button" class="btn-draft" onclick={saveDraft} disabled={savingDraft || !dirty}>
       {#if savingDraft}
-        Saving…
+        Saving\u2026
       {:else if draftSaved}
-        Draft saved ✓
+        Draft saved \u2713
       {:else}
         Save Draft <kbd>Ctrl+S</kbd>
       {/if}
@@ -406,28 +374,6 @@
     <button type="submit" class="submit-btn">{submitLabel} <kbd>Ctrl+Enter</kbd></button>
   </div>
 </form>
-
-<!-- Sender profile search dialog -->
-{#if showSenderDialog}
-  <SearchDialog
-    endpoint="/profiles/profiles"
-    title="Select Profile"
-    placeholder="Search profiles…"
-    onselect={handleProfileSelect}
-    onclose={() => (showSenderDialog = false)}
-  />
-{/if}
-
-<!-- Recipient contact search dialog -->
-{#if showRecipientDialog}
-  <SearchDialog
-    endpoint="/contacts/contacts"
-    title="Select Contact"
-    placeholder="Search contacts…"
-    onselect={handleContactSelect}
-    onclose={() => (showRecipientDialog = false)}
-  />
-{/if}
 
 {#if cowrite.isActive}
   <CowritePanel {cowrite} />
@@ -457,13 +403,7 @@
     flex-direction: column;
     gap: 0.25rem;
   }
-  .field-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .field-row > label,
-  .field-header label {
+  .field-row > label {
     color: var(--clr-sub);
     font-size: 0.8rem;
     font-weight: 600;
@@ -483,42 +423,6 @@
   }
   .field-row input::placeholder {
     color: #555;
-  }
-  .multi-textarea {
-    width: 100%;
-    padding: 0.4rem 0.5rem;
-    border: 1px solid #444;
-    border-radius: 4px;
-    background: #12122a;
-    color: #e0e0e0;
-    font-family: monospace;
-    font-size: 0.85rem;
-    line-height: 1.5;
-    resize: vertical;
-    outline: none;
-    box-sizing: border-box;
-  }
-  .multi-textarea:focus {
-    border-color: #6a6a9a;
-  }
-  .multi-textarea::placeholder {
-    color: #555;
-  }
-  .import-btn {
-    padding: 0.2rem 0.5rem;
-    border: 1px solid #444;
-    border-radius: 4px;
-    background: transparent;
-    color: #7c9acc;
-    font-family: monospace;
-    font-size: 0.72rem;
-    cursor: pointer;
-    transition: background 0.1s, color 0.1s;
-    white-space: nowrap;
-  }
-  .import-btn:hover {
-    background: #1a2a44;
-    color: #99bbee;
   }
   .button-row {
     display: flex;
@@ -573,27 +477,5 @@
     border-radius: 3px;
     font-size: 0.7rem;
     margin-left: 0.2rem;
-  }
-  .suggestion-popup {
-    background: #1e1e32;
-    border: 1px solid #444;
-    border-radius: 4px;
-    max-height: 200px;
-    overflow-y: auto;
-    z-index: 10;
-  }
-  .suggestion-item {
-    padding: 0.3rem 0.5rem;
-    cursor: pointer;
-    font-family: monospace;
-    font-size: 0.78rem;
-    color: #d0d0e0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .suggestion-item:hover {
-    background: #2a2a44;
-    color: #fff;
   }
 </style>

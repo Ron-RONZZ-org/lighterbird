@@ -8,10 +8,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from lighterbird.email.service import EmailService
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_email_service
-from lighterbird.email.service import EmailService
 
 
 def _resolve_account_identifier(identifier: str) -> str | None:
@@ -137,8 +137,8 @@ def sieve_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
             "Missing script name.", "Usage: !email sieve modify <name> [--new-name N] [--content ...|--file path]"
         )
     name = remaining[0]
-    new_name = flags.get("name", None) or flags.get("new-name", None)
-    content = flags.get("content", None)
+    new_name = flags.get("name") or flags.get("new-name")
+    content = flags.get("content")
     file_path = flags.get("file", "")
 
     if file_path:

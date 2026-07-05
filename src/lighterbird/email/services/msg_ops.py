@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from lighterbird.email.services.msg_send import MsgSendQueueMixin
@@ -26,7 +26,7 @@ class MessageOpsService(MsgSendQueueMixin):
 
     def mark_read(self, msg_uuid: str, is_read: bool = True) -> None:
         """Mark a message as read or unread locally and sync to IMAP server."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         self.db.execute(
             "UPDATE messages SET is_read = ?, updated_at = ? WHERE uuid = ?",
             (1 if is_read else 0, now, msg_uuid),
@@ -97,7 +97,7 @@ class MessageOpsService(MsgSendQueueMixin):
 
     def _enqueue_sync(self, msg: dict) -> None:
         """Queue a message flag sync request for later processing."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         msg_uuid = msg.get("uuid", "")
         self.db.execute(
             "INSERT OR REPLACE INTO _sync_backlog "
@@ -149,7 +149,6 @@ class MessageOpsService(MsgSendQueueMixin):
         if not entries:
             return 0
 
-        from collections import defaultdict
         by_account: dict[str, list[dict]] = defaultdict(list)
         for e in entries:
             by_account[e["account_email"]].append(e)
@@ -202,7 +201,7 @@ class MessageOpsService(MsgSendQueueMixin):
                         self.db.execute(
                             "UPDATE _sync_backlog SET retries = retries + 1, "
                             "last_attempt = ? WHERE id = ?",
-                            (datetime.now(timezone.utc).isoformat(), item["id"]),
+                            (datetime.now(UTC).isoformat(), item["id"]),
                         )
             except Exception:
                 pass
@@ -217,7 +216,7 @@ class MessageOpsService(MsgSendQueueMixin):
         an IMAP-level move; if that fails, the message is queued for
         background retry during the next sync.
         """
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         msg = self.db.execute_one(
             "SELECT * FROM messages WHERE uuid = ?", (msg_uuid,)
         )
@@ -272,7 +271,7 @@ class MessageOpsService(MsgSendQueueMixin):
         The trash_backlog table stores pending IMAP trash operations
         that are processed in bulk per account by the background worker.
         """
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         msg_uuid = msg.get("uuid", "")
         self.db.execute(
             "INSERT OR REPLACE INTO _sync_backlog "
@@ -301,7 +300,7 @@ class MessageOpsService(MsgSendQueueMixin):
             Dict with ``count`` of successfully trashed messages and
             ``queued`` count for background IMAP sync.
         """
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         queued = 0
         trashed = 0
 
@@ -369,13 +368,12 @@ class MessageOpsService(MsgSendQueueMixin):
         if not entries:
             return 0
 
-        from collections import defaultdict
         by_account: dict[str, list[dict]] = defaultdict(list)
         for e in entries:
             by_account[e["account_email"]].append(e)
 
         moved = 0
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         for account_email, items in by_account.items():
             acct = self._account_service.get_account_with_password(account_email)
             if not acct or not acct.get("password"):
@@ -431,7 +429,7 @@ class MessageOpsService(MsgSendQueueMixin):
 
     def move_message(self, msg_uuid: str, destination_folder_name: str) -> None:
         """Move a message to a different folder (by folder name)."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         self.db.execute(
             "UPDATE messages SET folder_name = ?, updated_at = ? WHERE uuid = ?",
             (destination_folder_name, now, msg_uuid),

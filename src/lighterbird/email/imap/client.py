@@ -11,9 +11,8 @@ import re
 import socket
 import ssl
 import uuid as uuid_mod
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
-
 
 _SPECIAL_USE_MAP = {
     "\\Inbox": "INBOX",
@@ -111,8 +110,7 @@ class IMAPClient:
             self._conn.login(username, password)
         except imaplib.IMAP4.error as e:
             raise ConnectionError(f"IMAP authentication failed for {username} at {self.host}:{self.port} — {e}") from e
-        except (socket.gaierror, ConnectionRefusedError,
-                TimeoutError, socket.timeout, ssl.SSLError, OSError) as e:
+        except (socket.gaierror, ConnectionRefusedError, TimeoutError, ssl.SSLError, OSError) as e:
             raise ConnectionError(f"IMAP connection failed: {username} at {self.host}:{self.port} — {e}") from e
         except Exception as e:
             raise ConnectionError(f"IMAP connection failed: {username} at {self.host}:{self.port} — {e}") from e
@@ -154,7 +152,7 @@ class IMAPClient:
 
         Uses ``(account_email, name)`` as the natural key (INSERT OR IGNORE).
         """
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         try:
             db_store.db.execute(
                 "INSERT OR IGNORE INTO folders "
@@ -349,8 +347,8 @@ class IMAPClient:
                         imap_uid = int(uid_match.group(1))
                         if not force and imap_uid in known_uids:
                             continue
-                        from lighterbird.email.imap.parser import parse_email_message
                         from lighterbird.core.storage import AttachmentStore
+                        from lighterbird.email.imap.parser import parse_email_message
                         msg = email_lib.message_from_bytes(raw_data)
                         data = parse_email_message(msg, account_email, folder_name, imap_uid, store_attachments=True)
                         # Insert or update message FIRST to get the canonical msg_uuid
@@ -367,7 +365,7 @@ class IMAPClient:
                                     )
                         # Store attachment metadata in email_attachments table
                         if "_attachments_meta" in data:
-                            now_ts = datetime.now(timezone.utc).isoformat()
+                            now_ts = datetime.now(UTC).isoformat()
                             for meta in data["_attachments_meta"]:
                                 try:
                                     att_uuid = str(uuid_mod.uuid4())
@@ -433,7 +431,7 @@ def store_message(
                     "UPDATE messages SET folder_name = ?, imap_uid = ?, "
                     "updated_at = ? WHERE uuid = ?",
                     (folder_name, data.get("imap_uid"),
-                     datetime.now(timezone.utc).isoformat(), msg_uuid),
+                     datetime.now(UTC).isoformat(), msg_uuid),
                 )
             return msg_uuid
 

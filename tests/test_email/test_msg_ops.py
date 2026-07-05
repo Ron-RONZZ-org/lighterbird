@@ -1,9 +1,7 @@
 """Tests for email/services/msg_ops.py — MessageOpsService."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 

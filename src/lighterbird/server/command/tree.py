@@ -13,10 +13,9 @@ from __future__ import annotations
 # tree.py used to be the single source of truth; now registry.py is.
 # These imports ensure existing code that does
 # ``from lighterbird.server.command.tree import ...`` continues to work.
-
 from lighterbird.server.command.registry import (  # noqa: F401
-    get_command_tree,
-    find_tree_node,
     find_command_depth,
+    find_tree_node,
+    get_command_tree,
     get_param_names,
 )

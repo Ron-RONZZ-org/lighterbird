@@ -33,7 +33,6 @@ from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import reset_services
 
-
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 
@@ -95,7 +94,7 @@ def backup_now(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     # Copy strategies with a custom target (non-local) are handled
     # inside backup_with_strategy already. For the legacy external_dir
     # path, we also copy to it.
-    cfg = load_config()
+    load_config()
 
     # One-off --target: copy all created backups to the given path
     one_off_target = flags.get("target", "")

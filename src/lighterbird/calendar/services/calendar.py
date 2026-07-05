@@ -6,7 +6,7 @@ Stripped of CalDAV sync hooks for MVP (local-only events).
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from lighterbird.core.backoff import compute_backoff_seconds
@@ -95,7 +95,7 @@ class EventService(CRUDService):
             cal = self._get_calendar(event_uuid)
         if not cal or not cal.get("remote") or not cal.get("url"):
             return  # local-only calendar, no sync needed
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         self.db.execute(
             "INSERT INTO calendar_sync_queue "
             "(calendar_uuid, event_uuid, operation, remote_href, status, created_at, updated_at) "
@@ -132,7 +132,7 @@ class EventService(CRUDService):
         """Store the remote_href returned after a successful push."""
         self.db.execute(
             "UPDATE events SET remote_href = ?, updated_at = ? WHERE uuid = ?",
-            (remote_href, datetime.now(timezone.utc).isoformat(), event_uuid),
+            (remote_href, datetime.now(UTC).isoformat(), event_uuid),
         )
 
     def process_sync_queue(self, limit: int = 50) -> list[dict[str, Any]]:
@@ -154,11 +154,15 @@ class EventService(CRUDService):
         Returns:
             List of job result dicts with id, event, status, and optional error.
         """
-        from lighterbird.calendar.caldav import push_event, delete_event, remote_http_url
+        from lighterbird.calendar.caldav import (
+            delete_event,
+            push_event,
+            remote_http_url,
+        )
         from lighterbird.calendar.ics import events_to_ics
         from lighterbird.calendar.keyring import get_password
 
-        now_ts = datetime.now(timezone.utc)
+        now_ts = datetime.now(UTC)
         now_iso = now_ts.isoformat()
 
         jobs = list(self.db.execute(

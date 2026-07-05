@@ -8,7 +8,7 @@ Follows the same pattern as ``email/services/accounts.py``.
 from __future__ import annotations
 
 import uuid as uuid_mod
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from lighterbird.user_commands.db import get_db
@@ -96,7 +96,7 @@ class UserCommandsService:
                 f"Use `!user saved-commands modify {alias} --command ...` to update it.",
             )
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         uuid_val = str(uuid_mod.uuid4())
         self.db.execute(
             "INSERT INTO saved_commands (uuid, alias, command_template, hint, created_at, modified_at) "
@@ -127,7 +127,7 @@ class UserCommandsService:
         if not existing:
             return None
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         updates: list[str] = []
         params: list[Any] = []
 

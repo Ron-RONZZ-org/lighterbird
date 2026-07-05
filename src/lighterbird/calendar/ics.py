@@ -6,7 +6,7 @@ Forked from A-organizi's utils/ics.py.
 from __future__ import annotations
 
 import uuid as uuid_mod
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -51,17 +51,17 @@ def ics_dt(value: str) -> datetime:
     - ``YYYYMMDD`` (all-day, treated as UTC midnight)
     """
     if value.endswith("Z"):
-        return datetime.strptime(value, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+        return datetime.strptime(value, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
     if "T" in value:
-        return datetime.strptime(value, "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
-    return datetime.strptime(value, "%Y%m%d").replace(tzinfo=timezone.utc)
+        return datetime.strptime(value, "%Y%m%dT%H%M%S").replace(tzinfo=UTC)
+    return datetime.strptime(value, "%Y%m%d").replace(tzinfo=UTC)
 
 
 def _to_iso(dt: datetime) -> str:
     """Convert a datetime to ISO 8601 string in UTC."""
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc).replace(microsecond=0).isoformat()
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC).replace(microsecond=0).isoformat()
 
 
 def events_to_ics(rows: list[dict[str, Any]]) -> str:
@@ -79,12 +79,12 @@ def events_to_ics(rows: list[dict[str, Any]]) -> str:
         out.extend([
             "BEGIN:VEVENT",
             f"UID:{row['uuid']}",
-            f"SUMMARY:{str(row.get('title') or '')}",
+            f"SUMMARY:{row.get('title') or ''!s}",
             f"DTSTART:{start}",
             f"DTEND:{end}",
-            f"LOCATION:{str(row.get('location') or '')}",
-            f"CATEGORIES:{str(row.get('category') or '')}",
-            f"DESCRIPTION:{str(row.get('description') or '')}",
+            f"LOCATION:{row.get('location') or ''!s}",
+            f"CATEGORIES:{row.get('category') or ''!s}",
+            f"DESCRIPTION:{row.get('description') or ''!s}",
             "END:VEVENT",
         ])
     out.append("END:VCALENDAR")
@@ -124,7 +124,7 @@ def insert_ics_events(
     Returns:
         List of newly inserted (or updated) event UUIDs.
     """
-    ts = now or datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    ts = now or datetime.now(UTC).replace(microsecond=0).isoformat()
     added: list[str] = []
     for event in iter_ics_events(text):
         start = _to_iso(ics_dt(str(event.get("DTSTART", ts))))

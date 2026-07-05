@@ -13,11 +13,10 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
+from lighterbird.journal.services import JournalService
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
-
 from lighterbird.server.deps import get_journal_service
-from lighterbird.journal.services import JournalService
 
 
 @command("journal")
@@ -71,6 +70,7 @@ def journal_write(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     cowrite_instr = flags.get("cowrite", "")
     if cowrite_instr:
         import asyncio
+
         from lighterbird.server.cowrite.engine import cowrite as _cowrite_call
 
         fields = {"title": title, "text": text}

@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import UTC
 from pathlib import Path
-from unittest.mock import Mock, patch
 
 import pytest
 
 from lighterbird.email.db import get_db
-from lighterbird.email.keyring import get_password, set_password, delete_password
-from lighterbird.email.services import AccountService, MessageService, MessageOpsService
+from lighterbird.email.keyring import delete_password, get_password, set_password
 from lighterbird.email.service import EmailService
+from lighterbird.email.services import AccountService, MessageService
 
 
 @pytest.fixture
@@ -38,7 +38,6 @@ class TestEmailDB:
 
     @pytest.mark.no_isolation
     def test_db_path_defaults_to_data_dir(self):
-        from lighterbird.core.paths import data_dir
         from lighterbird.email.db import _email_db_path
 
         assert "email.db" in str(_email_db_path())
@@ -68,9 +67,9 @@ class TestAccountService:
             "imap_server": "imap.example.com",
             "smtp_server": "smtp.example.com",
         }
-        account = svc.create_account(data, "mypassword")
+        svc.create_account(data, "mypassword")
         # Account uses email (email) as PK
-        result = svc.get_account_with_password("pw@example.com")
+        svc.get_account_with_password("pw@example.com")
         # Since keyring is unavailable in test, password may be empty
         svc.set_password("pw@example.com", "mypassword")
 
@@ -106,8 +105,8 @@ class TestMessageService:
         # Insert a message manually using email as account_email
         import uuid
         msg_uuid = str(uuid.uuid4())
-        from datetime import datetime, timezone
-        now = datetime.now(timezone.utc).isoformat()
+        from datetime import datetime
+        now = datetime.now(UTC).isoformat()
         db.execute(
             "INSERT INTO messages (uuid, account_email, from_addr, to_recipients, subject, body, "
             "received_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -214,6 +213,7 @@ class TestSMTP:
 class TestParser:
     def test_parse_simple_message(self):
         from email.message import Message
+
         from lighterbird.email.imap.parser import parse_email_message
 
         msg = Message()
@@ -234,6 +234,7 @@ class TestParser:
     def test_parse_multipart_message(self):
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
+
         from lighterbird.email.imap.parser import parse_email_message
 
         msg = MIMEMultipart("alternative")

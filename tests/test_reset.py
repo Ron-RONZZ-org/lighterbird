@@ -22,7 +22,6 @@ from fastapi.testclient import TestClient
 from lighterbird.core.reset import reset_to_fresh_state
 from lighterbird.server.app import create_app
 
-
 # ── Fixtures ───────────────────────────────────────────────────────────────
 
 
@@ -141,7 +140,7 @@ class TestResetToFreshState:
         set_password("lighterbird-llm", "active-provider", json.dumps({"key": "val"}))
         set_password("lighterbird/email/test@example.com", "password", "secret123")
 
-        with patch("lighterbird.core.reset.delete_password", return_value=True) as mock_del:
+        with patch("lighterbird.core.reset.delete_password", return_value=True):
             result = reset_to_fresh_state(backup_path=None)
             assert result["credentials_cleared"] >= 1
 
@@ -151,9 +150,9 @@ class TestResetToFreshState:
         backup_path = tmp / "reset.7z"
 
         # Get expected DB names before reset
-        expected_dbs = {p.name for p in data_dir_path.glob("*.db")}
+        {p.name for p in data_dir_path.glob("*.db")}
 
-        result = reset_to_fresh_state(backup_path=str(backup_path))
+        reset_to_fresh_state(backup_path=str(backup_path))
         assert backup_path.exists()
 
         # Extract and verify contents

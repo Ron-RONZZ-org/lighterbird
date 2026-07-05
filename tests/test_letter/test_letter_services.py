@@ -208,7 +208,7 @@ class TestConversationThread:
             "direction": "sent", "object": "Root",
             "sender_manual": "A", "recipient_manual": "B",
         })
-        reply = svc.create({
+        svc.create({
             "direction": "received", "object": "Reply",
             "sender_manual": "B", "recipient_manual": "A",
             "respond_to_uuid": root["uuid"],

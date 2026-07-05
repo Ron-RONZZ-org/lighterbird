@@ -16,11 +16,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from lighterbird.contacts.services import ContactService
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
-
 from lighterbird.server.deps import get_contact_service
-from lighterbird.contacts.services import ContactService
 
 
 def _parse_custom_fields(raw: str) -> dict[str, str]:

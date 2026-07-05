@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from lighterbird.core.priority import eval_safe, validate_safe
@@ -168,7 +168,7 @@ class _TodoCrudMixin:
         """Handle dependency and tag setup after creation."""
         depends_on = data.pop("_depends_on", None)
         if depends_on:
-            now = datetime.now(timezone.utc).isoformat()
+            now = datetime.now(UTC).isoformat()
             dep_list = depends_on if isinstance(depends_on, list) else [depends_on]
             for dep_uuid in dep_list:
                 if dep_uuid:
@@ -188,7 +188,7 @@ class _TodoCrudMixin:
     def add_dependency(self, task_uuid: str, depends_on_uuid: str) -> None:
         if task_uuid == depends_on_uuid:
             raise ValueError("A task cannot depend on itself.")
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         self.db.execute(
             "INSERT OR IGNORE INTO todo_dependencies"
             " (task_uuid, depends_on, type, created_at)"
@@ -228,7 +228,7 @@ class _TodoCrudMixin:
                        mime_type: str = "",
                        size: int = 0,
                        md5_checksum: str = "") -> dict[str, Any]:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         att_uuid = str(uuid.uuid4())
         self.db.execute(
             "INSERT INTO attachments"
@@ -264,7 +264,7 @@ class _TodoCrudMixin:
 
     def mark_attachment_synced(self, attachment_uuid: str,
                                md5_checksum: str = "") -> None:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         self.db.execute(
             "UPDATE attachments SET sync_status = 'synced',"
             " md5_checksum = ?, last_synced_at = ?, updated_at = ?"
@@ -280,7 +280,7 @@ class _TodoCrudMixin:
         if not created_at:
             return float(formula) if formula.replace(".", "").isdigit() else 5.0
 
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         try:
             created = datetime.fromisoformat(
@@ -289,8 +289,8 @@ class _TodoCrudMixin:
         except (ValueError, TypeError):
             return 5.0
 
-        now = datetime.now(timezone.utc)
-        delta = now - created.astimezone(timezone.utc)
+        now = datetime.now(UTC)
+        delta = now - created.astimezone(UTC)
 
         context = {
             "M": delta.total_seconds() / (86400.0 * 30.0),
@@ -318,7 +318,7 @@ class _TodoCrudMixin:
 
     def add_label(self, todo_uuid: str, label_name: str) -> None:
         # Ensure label exists in labels table first (FK constraint)
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         self.db.execute(
             "INSERT OR IGNORE INTO labels (name, color, created_at, updated_at)"
             " VALUES (?, '', ?, ?)",
@@ -349,7 +349,7 @@ class _TodoCrudMixin:
         return self.db.execute("SELECT * FROM labels ORDER BY name")
 
     def create_label(self, data: dict[str, Any]) -> dict[str, Any]:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         name = data.get("name", "").strip()
         if not name:
             raise ValueError("Label name is required.")

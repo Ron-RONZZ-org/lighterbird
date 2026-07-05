@@ -10,10 +10,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from lighterbird.letter.services.letters import LetterService
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_letter_service
-from lighterbird.letter.services.letters import LetterService
 
 
 def _normalize_letter(letter: dict[str, Any]) -> dict[str, Any]:

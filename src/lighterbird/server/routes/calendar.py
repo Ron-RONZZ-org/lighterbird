@@ -5,12 +5,18 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from lighterbird.calendar.service import CalendarService
 from lighterbird.server.deps import get_calendar_service
 from lighterbird.server.schemas import (
-    CalendarCreate, CalendarResponse, CalendarListResponse, CalendarUpdate,
-    EventCreate, EventUpdate, EventResponse, EventListResponse, EventQueryParams,
+    CalendarCreate,
+    CalendarListResponse,
+    CalendarResponse,
+    CalendarUpdate,
+    EventCreate,
+    EventListResponse,
+    EventResponse,
+    EventUpdate,
 )
-from lighterbird.calendar.service import CalendarService
 
 
 class ImportIcsRequest(BaseModel):

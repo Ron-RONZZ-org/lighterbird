@@ -9,8 +9,6 @@ autouse ``auto_isolate_data_dir`` fixture.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from lighterbird.core.storage import AttachmentStore
@@ -64,7 +62,7 @@ class TestAttachmentStore:
         assert "\\" not in result
 
     def test_store_creates_base_dir(self):
-        store = AttachmentStore()
+        AttachmentStore()
         from lighterbird.core.paths import data_dir
         assert (data_dir() / "attachments").is_dir()
 

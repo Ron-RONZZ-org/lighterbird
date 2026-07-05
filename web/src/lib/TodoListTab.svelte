@@ -7,10 +7,12 @@
   import {
     createSelectionManager,
     createCopyState,
-    formatListItemDate,
-    truncate,
   } from "./listTabShared.svelte.js";
   import { renderMarkdown } from "./markdown.js";
+  import TodoListRow from "./TodoListRow.svelte";
+  import TodoSearchBar from "./TodoSearchBar.svelte";
+  import ExportDialog from "./ExportDialog.svelte";
+  import ImportDialog from "./ImportDialog.svelte";
 
   let { data = {} } = $props();
   let todos = $derived(data?.todos || []);
@@ -62,8 +64,6 @@
       idKey: "todo-add",
     });
   }
-
-
 
   // Shared selection state (stable reference — not $derived)
   let sel = createSelectionManager(
@@ -243,142 +243,52 @@
 <svelte:window onkeydown={handleWindowKeydown} />
 
 <div class="todo-list">
-  <!-- Toolbar -->
-  <div class="toolbar" class:active={sel.selectionMode || sel.numSelected > 0}>
-    {#if showSearch}
-      <div class="search-bar">
-        <span class="search-icon">🔍</span>
-        <input
-          type="text"
-          class="tl-search-input"
-          placeholder="Search todos… (min 2 chars)"
-          value={searchQuery}
-          oninput={handleSearchInput}
-          onkeydown={(e) => {
-            if (e.key === "Enter") { e.preventDefault(); performSearch(searchQuery); }
-            if (e.key === "Escape") { e.stopPropagation(); closeSearch(); }
-          }}
-          aria-label="Search todos"
-        />
-        {#if searchQuery}
-          <button class="search-clear" onclick={() => { searchQuery = ""; performSearch(""); }} aria-label="Clear search">✕</button>
-        {/if}
-      </div>
-    {:else if sel.selectionMode}
-      <div class="left">
-        <button class="tool-btn" title="Exit selection mode (V)" onclick={() => sel.toggleSelectionMode()}>
-          Exit <kbd>V</kbd>
-        </button>
-      </div>
-      <div class="center">
-        {#if sel.numSelected > 0}
-          <span class="count">{sel.numSelected} selected</span>
-        {:else}
-          <span class="count muted">Select todos with click or <kbd>Space</kbd></span>
-        {/if}
-      </div>
-      <div class="right">
-        <button class="tool-btn" disabled={sel.numSelected === 0} title="Export selected (E)"
-          onclick={openExportDialog}>Export <kbd>E</kbd></button>
-        <button class="tool-btn danger" disabled={sel.numSelected === 0} title="Delete selected (Delete key)"
-          onclick={() => { sel.confirmDelete = true; }}>Delete <kbd>Del</kbd></button>
-      </div>
-    {:else}
-      <div class="left">
-        <button class="tool-btn" title="Toggle selection mode (V)" onclick={() => sel.toggleSelectionMode()}>Select <kbd>V</kbd></button>
-        <button class="tool-btn" title="Toggle tree/flat view" onclick={toggleMode}>
-          {displayMode === "tree" ? "Flat" : "Tree"}
-        </button>
-        <label class="sort-label" title="Sort order">
-          <select class="sort-select" value={sortOrder} onchange={handleSortChange}>
-            <option value="created">Newest</option>
-            <option value="priority">Priority</option>
-            <option value="due">Due date</option>
-            <option value="title">Title</option>
-          </select>
-        </label>
-      </div>
-      <div class="center">
-        {#if showSearch}
-          <input type="text" class="tl-tag-filter"
-            placeholder="Filter tags: tag1,tag2"
-            value={tagFilter}
-            oninput={handleTagFilterInput}
-            aria-label="Filter by tags"
-          />
-        {:else}
-          <span class="hint"><kbd>/</kbd> search</span>
-        {/if}
-      </div>
-      <div class="right">
-        <button class="tool-btn primary" onclick={handleNew} title="Add new todo">+ New <kbd>N</kbd></button>
-        <button class="tool-btn" onclick={openImportDialog} title="Import todos (M)">Import <kbd>M</kbd></button>
-      </div>
-    {/if}
-  </div>
+  <TodoSearchBar
+    {showSearch}
+    {searchQuery}
+    selectionMode={sel.selectionMode}
+    numSelected={sel.numSelected}
+    {displayMode}
+    {sortOrder}
+    {tagFilter}
+    onToggleSelectionMode={() => sel.toggleSelectionMode()}
+    onSearchInput={handleSearchInput}
+    onSearchKeydown={(e) => {
+      if (e.key === "Enter") { e.preventDefault(); performSearch(searchQuery); }
+      if (e.key === "Escape") { e.stopPropagation(); closeSearch(); }
+    }}
+    onClearSearch={() => { searchQuery = ""; performSearch(""); }}
+    onCloseSearch={closeSearch}
+    onNew={handleNew}
+    onImport={openImportDialog}
+    onExport={openExportDialog}
+    onDelete={() => { sel.confirmDelete = true; }}
+    onToggleMode={toggleMode}
+    onSortChange={handleSortChange}
+    onTagFilterInput={handleTagFilterInput}
+  />
 
   <!-- Todo list -->
   <div class="list" role="listbox" aria-label="Todos" aria-multiselectable="true">
     {#each todos as todo, i (todo.uuid)}
       <!-- In tree mode, skip items whose parent is collapsed -->
       {#if !isTree || todo._depth === 0 || isParentExpanded(todo, i, todos, expanded)}
-          <div
-            id="row-{todo.uuid}"
-            class="row"
-            class:selected={sel.isSelected(todo.uuid)}
-            class:focused={i === sel.focusedIndex}
-            class:highlight={todo.uuid === highlight && highlightActive}
-            class:selection-mode={sel.selectionMode}
-            class:done={todo.status === "done"}
-            class:tree-mode={isTree}
-            style={isTree ? `padding-left: ${0.5 + (todo._depth || 0) * 1.5}rem` : ""}
-            role="option"
-            aria-selected={sel.isSelected(todo.uuid)}
-            tabindex={sel.selectionMode ? (i === sel.focusedIndex ? 0 : -1) : 0}
-            onclick={(e) => sel.handleRowClick(e, todo.uuid)}
-            onkeydown={(e) => { if (e.key === "Enter") sel.handleRowClick(e, todo.uuid); }}
-          >
-            <span class="checkbox-cell">
-              {#if sel.selectionMode}
-                <span class="checkbox" class:checked={sel.isSelected(todo.uuid)}>
-                  {sel.isSelected(todo.uuid) ? "✓" : ""}
-                </span>
-              {/if}
-            </span>
-
-            {#if isTree}
-              <span class="tree-toggle-cell">
-                {#if todo._has_children}
-                  <button class="tree-toggle"
-                    onclick={(e) => { e.stopPropagation(); toggleExpand(todo.uuid); }}
-                    aria-label={expanded.has(todo.uuid) ? "Collapse" : "Expand"}>
-                    {expanded.has(todo.uuid) ? "▼" : "▶"}
-                  </button>
-                {:else}
-                  <span class="tree-toggle-placeholder"></span>
-                {/if}
-              </span>
-            {/if}
-
-            <span class="tuuid" role="button" tabindex="-1"
-                  onclick={(e) => { e.stopPropagation(); uuidCopy.copyToClipboard(todo.uuid); }}
-                  onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); uuidCopy.copyToClipboard(todo.uuid); } }}
-                  title="Click to copy UUID">
-              {uuidCopy.copiedKey === todo.uuid ? "Copied!" : todo.uuid.slice(0, 8)}
-            </span>
-            <span class="title">{truncate(todo.title || "(untitled)", 32)}</span>
-            <span class="priority {priorityClass(todo.priority)}">{todo.priority || ""}</span>
-            <span class="due">{formatListItemDate(todo.due)}</span>
-            {#if todo.labels && todo.labels.length > 0}
-              <span class="labels">
-                {#each todo.labels as lbl}
-                  <span class="tag" style={lbl.color ? `border-color:${lbl.color};color:${lbl.color}` : ""}>{lbl.name}</span>
-                {/each}
-              </span>
-            {/if}
-            <span class="status">{todo.status === "done" ? "✓ done" : "○"}</span>
-          </div>
-        {/if}
+        <TodoListRow
+          {todo}
+          {i}
+          isSelected={sel.isSelected(todo.uuid)}
+          isFocused={i === sel.focusedIndex}
+          {highlight}
+          {highlightActive}
+          selectionMode={sel.selectionMode}
+          {uuidCopy}
+          {isTree}
+          {expanded}
+          onToggleExpand={toggleExpand}
+          onRowClick={(e, key) => sel.handleRowClick(e, key)}
+          {priorityClass}
+        />
+      {/if}
     {:else}
       <p class="empty">No todos.</p>
     {/each}
@@ -414,116 +324,6 @@
     display: flex; flex-direction: column; height: 100%;
     font-family: monospace; font-size: 0.85rem; position: relative;
   }
-  .toolbar {
-    display: flex; align-items: center; gap: 0.5rem;
-    padding: 0.3rem 0.5rem; background: #16162a;
-    border-bottom: 1px solid #333; min-height: 2.2rem;
-    flex-shrink: 0; font-family: monospace; font-size: 0.82rem;
-  }
-  .toolbar.active { background: #1a1a32; border-bottom-color: #4a4a6a; }
-  .left, .right { display: flex; align-items: center; gap: 0.5rem; }
-  .center { flex: 1; text-align: center; }
-  .tool-btn {
-    padding: 0.25rem 0.6rem; border: 1px solid #444; border-radius: 4px;
-    background: #2a2a3e; color: #e0e0e0; cursor: pointer;
-    font-family: monospace; font-size: 0.8rem; transition: background 0.1s;
-  }
-  .tool-btn kbd {
-    display: inline-block; padding: 0 3px; margin-left: 2px;
-    font-family: monospace; font-size: 0.68rem; background: #222;
-    border: 1px solid #555; border-radius: 3px; color: #999; line-height: 1.3;
-  }
-  .tool-btn:hover:not(:disabled) { background: #3a3a5e; }
-  .tool-btn:disabled { opacity: 0.4; cursor: default; }
-  .tool-btn.danger:hover:not(:disabled) { background: #6b2020; border-color: #8b3030; }
-  .tool-btn.primary { border-color: #3a6a3a; color: #7fdb7f; }
-  .tool-btn.primary:hover { background: #1e3a1e; }
-  .sort-label { display: inline-flex; align-items: center; }
-  .sort-select {
-    padding: 0.15rem 0.3rem; border: 1px solid #444; border-radius: 3px;
-    background: #2a2a3e; color: #c0c0e0; font-family: monospace; font-size: 0.72rem;
-    cursor: pointer; outline: none;
-  }
-  .sort-select:focus { border-color: #6a6a9a; }
-  .sort-select option { background: #1a1a2e; color: #e0e0e0; }
-  .tl-tag-filter {
-    width: 12rem; padding: 0.2rem 0.4rem; border: 1px solid #444; border-radius: 3px;
-    background: #12122a; color: #e0e0e0; font-family: monospace; font-size: 0.78rem; outline: none;
-  }
-  .tl-tag-filter:focus { border-color: #6a6a9a; }
-  .tl-tag-filter::placeholder { color: #555; }
-  .hint { color: #5a5a7a; font-size: 0.72rem; }
-  .hint kbd {
-    display: inline-block; padding: 0 3px; font-family: monospace;
-    background: #222; border: 1px solid #444; border-radius: 3px; color: #888; font-size: 0.7rem;
-  }
-  .count { color: #7c7c9a; font-size: 0.82rem; }
-  .count.muted { color: #555; }
-  .tree-indicator { color: var(--clr-muted); font-size: 0.72rem; font-style: italic; }
-  .search-bar { display: flex; align-items: center; gap: 0.4rem; flex: 1; }
-  .search-icon { font-size: 0.75rem; opacity: 0.6; }
-  .tl-search-input {
-    flex: 1; padding: 0.3rem 0.4rem; border: 1px solid #444; border-radius: 4px;
-    background: #12122a; color: #e0e0e0; font-family: monospace; font-size: 0.82rem; outline: none;
-  }
-  .tl-search-input:focus { border-color: #6a6a9a; }
-  .tl-search-input::placeholder { color: #555; }
-  .search-clear { background: none; border: none; color: #7c7c9a; cursor: pointer; font-size: 0.8rem; padding: 0.2rem; }
-  .search-clear:hover { color: #e0e0e0; }
   .list { flex: 1; overflow-y: auto; padding: 0; }
-  .row {
-    display: flex; align-items: center; gap: 0.5rem;
-    padding: 0.4rem 0.5rem; border-bottom: 1px solid #2a2a3e;
-    cursor: default; transition: background 0.08s; min-height: 2rem;
-  }
-  .row:hover { background: #2a2a44; }
-  .row.focused { background: #2a2a50; outline: 1px solid #5a5a8a; outline-offset: -1px; }
-  .row.selected { background: #2a2a50; }
-  .row.highlight { animation: todo-highlight-fade 2s ease-out; }
-  @keyframes todo-highlight-fade {
-    0% { background: rgba(42, 90, 42, 0.6); }
-    100% { background: transparent; }
-  }
-  .row.selection-mode { cursor: pointer; }
-  .row.done .title { opacity: 0.5; text-decoration: line-through; }
-  .checkbox-cell {
-    display: flex; align-items: center; justify-content: center;
-    width: 1.8rem; flex-shrink: 0;
-  }
-  .checkbox {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 1.1rem; height: 1.1rem; border: 1.5px solid #7c7c9a; border-radius: 3px;
-    font-size: 0.7rem; color: #e0e0e0; background: transparent;
-    transition: background 0.1s, border-color 0.1s;
-  }
-  .checkbox.checked { background: #4a6fa5; border-color: #4a6fa5; }
-  .tree-toggle-cell {
-    display: flex; align-items: center; justify-content: center;
-    width: 1.2rem; flex-shrink: 0;
-  }
-  .tree-toggle {
-    background: none; border: 1px solid transparent; color: var(--clr-muted);
-    cursor: pointer; padding: 0; font-size: 0.55rem; width: 1.2rem; height: 1.2rem;
-    display: flex; align-items: center; justify-content: center;
-    border-radius: 3px; transition: all 0.1s;
-  }
-  .tree-toggle:hover {
-    color: #e0e0e0; border-color: #4a4a6a; background: #2a2a3e;
-  }
-  .tree-toggle-placeholder { width: 1.2rem; }
-  .tuuid {
-    color: var(--clr-muted); font-size: 0.72rem; min-width: 5rem;
-    flex-shrink: 0; cursor: pointer;
-  }
-  .tuuid:hover { color: #7c7c9a; text-decoration: underline; }
-  .title { color: #e0e0e0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .priority { font-size: 0.75rem; min-width: 2rem; text-align: center; flex-shrink: 0; }
-  .priority.high { color: #e07070; }
-  .priority.mid { color: #d0b060; }
-  .priority.low { color: var(--clr-muted); }
-  .due { color: var(--clr-muted); min-width: 6rem; flex-shrink: 0; font-size: 0.78rem; }
-  .labels { display: flex; gap: 0.25rem; flex-shrink: 0; min-width: 4rem; flex-wrap: wrap; }
-  .tag { font-size: 0.65rem; padding: 0.05rem 0.3rem; border: 1px solid #4a4a6a; border-radius: 3px; color: #7c7c9a; white-space: nowrap; }
-  .status { color: var(--clr-muted); min-width: 3rem; flex-shrink: 0; text-align: right; }
   .empty { color: var(--clr-muted); text-align: center; padding: 2rem; }
 </style>

@@ -52,4 +52,23 @@ markers = [
 asyncio_mode = "auto"
 
 [tool.ruff.lint]
-select = ["S110", "S112", "E", "F", "I"]
+select = [
+    "S110", "S112",    # flake8-bandit (security)
+    "E", "F",          # pycodestyle + pyflakes
+    "I",               # isort
+    "B",               # flake8-bugbear
+    "SIM",             # flake8-simplify
+    "UP",              # pyupgrade
+    "RUF",             # Ruff-specific
+]
+ignore = [
+    "B008",            # do not perform function calls in argument defaults
+    "B904",            # raise-without-from-inside-except (noisy, low value)
+    "E501",            # line-too-long (pre-existing)
+    "E741",            # ambiguous-variable-name (single-letter vars are fine)
+    "RUF012",          # mutable class attributes
+    "RUF059",          # unused-unpacked-variable (too noisy)
+    "SIM105",          # suppressible-exception (sometimes pass is intentional)
+    "SIM108",          # use ternary operator (prefer if/else for readability)
+    "B017",            # assert-raises-exception (legitimate use in tests)
+]

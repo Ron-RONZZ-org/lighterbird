@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC
 from typing import Any
 
 from lighterbird.core.crud import CRUDService
@@ -215,10 +216,10 @@ class ContactService(CRUDService):
     @staticmethod
     def _vcard_to_contact(vcard: Any) -> dict[str, Any]:
         """Convert a vobject vCard to a contact dict."""
-        from datetime import datetime, timezone
         import uuid
+        from datetime import datetime
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         contact: dict[str, Any] = {
             "uuid": str(uuid.uuid4()),
             "created_at": now,

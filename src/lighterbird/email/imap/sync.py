@@ -5,6 +5,7 @@ Forked from A-lien's imap/sync.py, simplified for MVP.
 
 from __future__ import annotations
 
+from datetime import UTC
 from typing import Any
 
 from lighterbird.email.imap.client import IMAPClient
@@ -78,7 +79,7 @@ def _retry_pending_trash(client: IMAPClient, db_store: Any, account_email: str) 
     Called after each sync pass to catch messages that were trashed while
     offline or when the IMAP connection was unavailable on the first attempt.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     pending = list(db_store.db.execute(
         "SELECT uuid, imap_uid, folder_name FROM messages "
@@ -89,7 +90,7 @@ def _retry_pending_trash(client: IMAPClient, db_store: Any, account_email: str) 
     if not pending:
         return
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     for msg in pending:
         uid = msg["imap_uid"]
         src_folder = msg["folder_name"]

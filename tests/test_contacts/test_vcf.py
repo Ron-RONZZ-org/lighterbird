@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-
 SAMPLE_VCF_SINGLE = """BEGIN:VCARD
 VERSION:3.0
 FN:John Doe

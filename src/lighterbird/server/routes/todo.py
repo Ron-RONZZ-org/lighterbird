@@ -5,8 +5,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 
-from lighterbird.server.deps import get_todo_service
 from lighterbird.server.command.response import normalize_todo
+from lighterbird.server.deps import get_todo_service
 from lighterbird.todo.services import TodoService
 
 router = APIRouter(prefix="/api/v1/todo", tags=["todo"])

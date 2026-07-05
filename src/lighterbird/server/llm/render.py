@@ -7,7 +7,6 @@ Also provides a lightweight HTML sanitizer to strip dangerous tags.
 from __future__ import annotations
 
 import re
-from typing import Any
 
 import mistune
 

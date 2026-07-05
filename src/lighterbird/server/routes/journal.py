@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
-from lighterbird.server.deps import get_journal_service
 from lighterbird.journal.services import JournalService
+from lighterbird.server.deps import get_journal_service
 
 router = APIRouter(prefix="/api/v1/journal", tags=["journal"])
 
@@ -100,7 +99,7 @@ def export_md(
         raise HTTPException(status_code=400, detail="No valid UUIDs provided")
     md = svc.export_md(uuids=ids)
     return PlainTextResponse(md, media_type="text/markdown",
-                            headers={"Content-Disposition": f'attachment; filename="journal-export.md"'})
+                            headers={"Content-Disposition": 'attachment; filename="journal-export.md"'})
 
 
 @router.get("/export-md/{uuid}", response_class=PlainTextResponse)

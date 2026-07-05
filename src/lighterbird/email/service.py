@@ -10,8 +10,13 @@ from pathlib import Path
 from typing import Any
 
 from lighterbird.core.drafts import save_draft
-from lighterbird.email.services import AccountService, MessageService, MessageOpsService, SieveService
 from lighterbird.email.db import get_db
+from lighterbird.email.services import (
+    AccountService,
+    MessageOpsService,
+    MessageService,
+    SieveService,
+)
 
 
 class EmailService:

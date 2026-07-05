@@ -120,7 +120,7 @@ class _TodoExportImportMixin:
 
         import yaml
 
-        with open(path, "r") as f:
+        with open(path) as f:
             text = f.read()
 
         entries: list[tuple[dict[str, Any], str]] = []

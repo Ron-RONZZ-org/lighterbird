@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import uuid as uuid_mod
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from typing import Any
 
@@ -35,7 +35,7 @@ def parse_email_message(
         Dict with all fields for the messages table, plus an extra
         ``_attachments`` key with attachment metadata if any were found.
     """
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     raw_message_id = decode_mime_header(msg.get("Message-ID", ""))
     # Strip angle brackets from Message-ID
     message_id = raw_message_id.strip("<>") if raw_message_id else ""

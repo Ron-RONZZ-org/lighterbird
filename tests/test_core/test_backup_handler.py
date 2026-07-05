@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 
+from lighterbird.core.backup import (
+    get_strategy,
+)
+
 # Import to register handlers via side-effects
 from lighterbird.server.command.handlers import backup  # noqa: F401
-from lighterbird.core.backup import get_strategy, list_strategies, load_config, save_config
 from lighterbird.server.command.registry import dispatch
 
 
@@ -277,7 +279,7 @@ def test_backup_now_with_external(tmp_data_dir: Path, tmp_path: Path, monkeypatc
     # Update default strategy target to external dir
     dispatch(["backup", "config", "modify", "default"], {"target": str(ext_dir)})
 
-    result = dispatch(["backup", "now"], {})
+    dispatch(["backup", "now"], {})
     # External dir should have the backup
     assert len(list(ext_dir.iterdir())) >= 1
 
@@ -307,7 +309,7 @@ def test_backup_export_import_roundtrip(tmp_data_dir: Path, tmp_path: Path):
 
     # Import
     import_result = dispatch(["backup", "import", export_path], {"force": "true"})
-    imported = import_result["data"]["imported"]
+    import_result["data"]["imported"]
 
     # Verify
     for name in ["email.db", "todo.db", "calendar.db"]:

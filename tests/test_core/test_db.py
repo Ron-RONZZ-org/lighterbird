@@ -8,7 +8,7 @@ import pytest
 
 from lighterbird.core.db import LighterbirdDB
 from lighterbird.core.exceptions import ProtectedPathError
-from lighterbird.core.paths import safe_rmtree, safe_unlink, protect_directory
+from lighterbird.core.paths import protect_directory, safe_rmtree, safe_unlink
 
 
 class TestLighterbirdDB:
@@ -128,7 +128,13 @@ class TestPaths:
         assert str(data_dir()) == "/tmp/lbroot/data"
 
     def test_ensure_dirs_creates_dirs(self, monkeypatch, tmp_path):
-        from lighterbird.core.paths import ensure_dirs, data_dir, config_dir, cache_dir, state_dir
+        from lighterbird.core.paths import (
+            cache_dir,
+            config_dir,
+            data_dir,
+            ensure_dirs,
+            state_dir,
+        )
 
         monkeypatch.setenv("LIGHTERBIRD_DIR", str(tmp_path / "lb"))
         ensure_dirs()
@@ -177,16 +183,15 @@ class TestPaths:
 
 class TestKeyring:
     def test_get_none_for_unknown_key(self):
-        from lighterbird.core.keyring import get_password
-
         # For a key that was never stored, returns None
         import uuid
+
+        from lighterbird.core.keyring import get_password
         pw = get_password(f"unknown_svc_{uuid.uuid4().hex}", "not_stored")
         assert pw is None
 
     def test_set_password_behavior(self):
-        from lighterbird.core.keyring import set_password
-        from lighterbird.core.keyring import _keyring_available
+        from lighterbird.core.keyring import _keyring_available, set_password
 
         result = set_password("test_service", "test_key", "sekret")
         # If keyring is available, returns True; otherwise False

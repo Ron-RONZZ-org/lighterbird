@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from lighterbird.server.deps import get_email_service, get_calendar_service
-from lighterbird.server.schemas import HealthResponse
-from lighterbird.email.service import EmailService
 from lighterbird.calendar.service import CalendarService
+from lighterbird.email.service import EmailService
+from lighterbird.server.deps import get_calendar_service, get_email_service
+from lighterbird.server.schemas import HealthResponse
 
 router = APIRouter(prefix="/api/v1", tags=["admin"])
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from lighterbird.user_commands.service import UserCommandsService, UserCommandsError
+from lighterbird.user_commands.service import UserCommandsError, UserCommandsService
 
 
 @pytest.fixture

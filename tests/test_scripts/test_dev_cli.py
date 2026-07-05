@@ -1,7 +1,6 @@
 """Tests for scripts/dev_cli.py — dev_main, _find_dot_dev."""
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -13,7 +12,6 @@ from lighterbird.scripts.dev_cli import _find_dot_dev, dev_main
 class TestFindDotDev:
     def test_find_dot_dev_not_found(self, tmp_path: Path):
         """_find_dot_dev returns None when .dev doesn't exist."""
-        from lighterbird.scripts.dev_cli import _find_dot_dev
         # Simple existence check
         assert callable(_find_dot_dev)
 

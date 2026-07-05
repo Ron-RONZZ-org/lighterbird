@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from lighterbird.email.imap.sync import SyncResult, sync_account, _retry_pending_trash
+from lighterbird.email.imap.sync import SyncResult, _retry_pending_trash, sync_account
 
 
 class TestSyncResult:
