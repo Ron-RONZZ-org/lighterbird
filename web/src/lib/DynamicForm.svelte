@@ -25,6 +25,7 @@
     commandPath = [],
     initialData = {},
     onsubmit = async () => {},
+    onDirtyChange = () => {},
   } = $props();
 
   let node = $derived(findNode(commandPath));
@@ -51,6 +52,28 @@
       }
     }
     fieldValues = vals;
+  });
+
+  // ── Dirty tracking — compare current field values against initial data ──
+  let dirty = $state(false);
+
+  $effect(() => {
+    const keys = Object.keys(fieldValues);
+    if (keys.length === 0) { dirty = false; return; }
+
+    let isDirty = false;
+    for (const key of keys) {
+      const cur = fieldValues[key];
+      const init = initialData[key];
+      const curStr = typeof cur === "boolean" ? String(cur) : cur ?? "";
+      const initStr = typeof init === "boolean" ? String(init) : init ?? "";
+      if (curStr !== initStr) { isDirty = true; break; }
+    }
+    dirty = isDirty;
+  });
+
+  $effect(() => {
+    onDirtyChange(dirty);
   });
 
   function setField(name, val) {

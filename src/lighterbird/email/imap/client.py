@@ -14,6 +14,9 @@ import uuid as uuid_mod
 from datetime import UTC, datetime
 from typing import Any
 
+from lighterbird.core.storage import AttachmentStore
+from lighterbird.email.imap.parser import parse_email_message
+
 _SPECIAL_USE_MAP = {
     "\\Inbox": "INBOX",
     "\\Sent": "Sent",
@@ -331,6 +334,7 @@ class IMAPClient:
                 if typ != "OK" or not fetch_data:
                     result["errors"].append(f"FETCH error at IDs {chunk[0]}..{chunk[-1]}")
                     continue
+                pending_attachments: list[tuple[str, str, bytes]] = []
                 for item in fetch_data:
                     if not isinstance(item, tuple):
                         continue
@@ -347,23 +351,15 @@ class IMAPClient:
                         imap_uid = int(uid_match.group(1))
                         if not force and imap_uid in known_uids:
                             continue
-                        from lighterbird.core.storage import AttachmentStore
-                        from lighterbird.email.imap.parser import parse_email_message
                         msg = email_lib.message_from_bytes(raw_data)
                         data = parse_email_message(msg, account_email, folder_name, imap_uid, store_attachments=True)
                         # Insert or update message FIRST to get the canonical msg_uuid
                         msg_uuid = store_message(db_store.db, data, force=force, account_email=account_email, folder_name=folder_name)
-                        # Store attachment blobs using msg_uuid as directory name
+                        # Queue attachment blobs for batch write (deferred from fetch loop)
                         if "_attachments_data" in data:
-                            store = AttachmentStore()
                             for att in data["_attachments_data"]:
-                                try:
-                                    store.store(msg_uuid, att["content_id"], att["data"])
-                                except Exception as store_err:
-                                    result["errors"].append(
-                                        f"Attachment store error for UID {imap_uid}: {store_err}"
-                                    )
-                        # Store attachment metadata in email_attachments table
+                                pending_attachments.append((msg_uuid, att["content_id"], att["data"]))
+                        # Store attachment metadata in email_attachments table (fast SQLite op)
                         if "_attachments_meta" in data:
                             now_ts = datetime.now(UTC).isoformat()
                             for meta in data["_attachments_meta"]:
@@ -385,6 +381,17 @@ class IMAPClient:
                         result["new"] += 1
                     except Exception as e:
                         result["errors"].append(f"Parse/store error at UID {imap_uid}: {e}")
+                # Batch-flush attachment blobs after each chunk (decouples slow
+                # disk I/O from the fast fetch-and-parse loop)
+                if pending_attachments:
+                    store = AttachmentStore()
+                    for msg_uuid, content_id, blob_data in pending_attachments:
+                        try:
+                            store.store(msg_uuid, content_id, blob_data)
+                        except Exception as store_err:
+                            result["errors"].append(
+                                f"Attachment store error for UID batch: {store_err}"
+                            )
             self.conn.close()
         except Exception as e:
             result["errors"].append(f"Sync error: {e}")

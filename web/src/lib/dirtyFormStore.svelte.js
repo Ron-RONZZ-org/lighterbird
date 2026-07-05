@@ -43,3 +43,36 @@ export const dirtyFormStore = {
     return false;
   },
 };
+
+/**
+ * Create a per-instance form guard that auto-wires dirty state to the global store.
+ *
+ * Forms can use this instead of manual `onDirtyChange` prop wiring.
+ *
+ * Usage:
+ * ```js
+ *   let guard = createFormGuard(tabId);
+ *   let dirty = $derived(…);
+ *   $effect(() => { guard.setDirty(dirty); });
+ * ```
+ *
+ * @param {string} tabId - Unique tab identifier
+ * @returns {{ dirty: boolean, setDirty: (v: boolean) => void, clear: () => void }}
+ */
+export function createFormGuard(tabId) {
+  let dirty = $state(false);
+
+  return {
+    get dirty() {
+      return dirty;
+    },
+    setDirty(v) {
+      dirty = v;
+      if (tabId) dirtyFormStore.setDirty(tabId, v);
+    },
+    clear() {
+      dirty = false;
+      if (tabId) dirtyFormStore.clear(tabId);
+    },
+  };
+}
