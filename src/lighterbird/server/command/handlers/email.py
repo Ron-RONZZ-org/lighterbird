@@ -57,6 +57,8 @@ def email_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "  !email search            — Search messages\n"
                 "  !email trash <uuid>      — Trash a message\n"
                 "  !email archive <uuid>    — Archive a message\n"
+                "  !email move <uuid> --folder NAME  — Move to specific folder\n"
+                "  !email folders           — List IMAP folders\n"
                 "  !email account list      — List email accounts\n"
                 "  !email account add       — Add an email account\n"
                 "  !email account modify    — Modify an email account\n"
@@ -375,6 +377,53 @@ def email_archive(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     folder = flags.get("folder", "Archive")
     svc.move_message(remaining[0], folder)
     return {"type": "status", "title": "Archived", "data": {"uuid": remaining[0][:8], "folder": folder}}
+
+
+@command("email.move")
+def email_move(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!email move <uuid> --folder NAME
+
+    Move a message to a specific folder.
+    Use ``!email folders`` to see available folders.
+    """
+    if not remaining:
+        raise CommandValidationError(
+            "Missing message UUID.",
+            "Usage: !email move <uuid> --folder NAME",
+        )
+    folder = flags.get("folder", "")
+    if not folder:
+        raise CommandValidationError(
+            "Missing --folder flag.",
+            "Usage: !email move <uuid> --folder NAME",
+        )
+    svc: EmailService = get_email_service()
+    svc.move_message(remaining[0], folder)
+    return {
+        "type": "status",
+        "title": "Moved",
+        "data": {"uuid": remaining[0][:8], "folder": folder},
+    }
+
+
+@command("email.folders")
+def email_folders(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!email folders [--account email]
+
+    List known IMAP folders from the database (populated during sync).
+    Use ``--account`` to filter by account email.
+    """
+    svc: EmailService = get_email_service()
+    account = flags.get("account", "")
+    if account:
+        folders = svc.messages.list_folders(account_email=account)
+    else:
+        folders = svc.messages.list_folders()
+    return {
+        "type": "status",
+        "title": "Folders",
+        "data": {"folders": folders, "count": len(folders)},
+    }
 
 
 

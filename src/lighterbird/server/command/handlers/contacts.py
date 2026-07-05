@@ -245,3 +245,108 @@ def contact_import_vcf(remaining: list[str], flags: dict[str, str]) -> dict[str,
     svc: ContactService = get_contact_service()
     count = svc.import_vcf(remaining[0])
     return {"type": "status", "title": "VCF Import", "data": {"imported": count}}
+
+
+@command("contact.category")
+def contact_category_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!contact category — Show category subcommands."""
+    return {
+        "type": "status",
+        "title": "Contact Category Commands",
+        "data": {
+            "_summary": (
+                "Available !contact category commands:\n"
+                "  !contact category list [--all]      — List all known categories\n"
+                "  !contact category set <uuid> <cat>   — Set category on a contact\n"
+                "  !contact category add <uuid> <cat>   — Add category to a contact\n"
+                "  !contact category remove <uuid> <cat> — Remove category from a contact"
+            ),
+        },
+    }
+
+
+@command("contact.category.list")
+def contact_category_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!contact category list [--all]
+
+    Lists categories. By default shows categories in use.
+    Use ``--all`` to show all distinct category values.
+    """
+    svc: ContactService = get_contact_service()
+    contacts = svc.list(limit=10000)
+    all_cats: set[str] = set()
+    for c in contacts:
+        cat_str = (c.get("category") or "").strip()
+        if cat_str:
+            for cat in cat_str.split(","):
+                cat = cat.strip()
+                if cat:
+                    all_cats.add(cat)
+    sorted_cats = sorted(all_cats)
+    return {"type": "status", "title": "Contact Categories", "data": {"categories": sorted_cats, "count": len(sorted_cats)}}
+
+
+@command("contact.category.set")
+def contact_category_set(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!contact category set <uuid> <category>
+
+    Replaces all categories on a contact. Multiple categories: comma-separated.
+    """
+    if len(remaining) < 2:
+        raise CommandValidationError(
+            "Missing contact UUID and category.",
+            "Usage: !contact category set <uuid> <category>",
+        )
+    uuid = remaining[0]
+    category = remaining[1]
+    svc: ContactService = get_contact_service()
+    svc.update(uuid, {"category": category})
+    return {"type": "status", "title": "Category Set", "data": {"uuid": uuid[:8], "category": category}}
+
+
+@command("contact.category.add")
+def contact_category_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!contact category add <uuid> <category>
+
+    Appends a category to a contact's existing categories.
+    """
+    if len(remaining) < 2:
+        raise CommandValidationError(
+            "Missing contact UUID and category.",
+            "Usage: !contact category add <uuid> <category>",
+        )
+    uuid = remaining[0]
+    category = remaining[1]
+    svc: ContactService = get_contact_service()
+    contact = svc.get(uuid)
+    if not contact:
+        raise CommandValidationError(f"Contact not found: {uuid[:8]}")
+    existing = (contact.get("category") or "").strip()
+    cats = [c.strip() for c in existing.split(",") if c.strip()]
+    if category not in cats:
+        cats.append(category)
+    svc.update(uuid, {"category": ",".join(cats)})
+    return {"type": "status", "title": "Category Added", "data": {"uuid": uuid[:8], "category": category}}
+
+
+@command("contact.category.remove")
+def contact_category_remove(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!contact category remove <uuid> <category>
+
+    Removes a category from a contact's existing categories.
+    """
+    if len(remaining) < 2:
+        raise CommandValidationError(
+            "Missing contact UUID and category.",
+            "Usage: !contact category remove <uuid> <category>",
+        )
+    uuid = remaining[0]
+    category = remaining[1]
+    svc: ContactService = get_contact_service()
+    contact = svc.get(uuid)
+    if not contact:
+        raise CommandValidationError(f"Contact not found: {uuid[:8]}")
+    existing = (contact.get("category") or "").strip()
+    cats = [c.strip() for c in existing.split(",") if c.strip() and c.strip() != category]
+    svc.update(uuid, {"category": ",".join(cats)})
+    return {"type": "status", "title": "Category Removed", "data": {"uuid": uuid[:8], "category": category}}

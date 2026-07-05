@@ -44,6 +44,7 @@ group("todo", description="Task management", default_action="list")
 group("journal", description="Journal entries", default_action="list")
 group("email.spam", description="Spam block management")
 group("tag", description="Cross-domain tag management")
+group("contact.category", description="Contact category management")
 
 # ── Interactive forms ─────────────────────────────────────────────────────
 # Commands that have an interactive form popup in the frontend.

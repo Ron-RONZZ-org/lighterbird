@@ -168,6 +168,20 @@ class MessageService:
 
         return eml.as_string()
 
+    # ── Folder queries ──────────────────────────────────────────────────
+
+    def list_folders(self, account_email: str | None = None) -> list[dict[str, Any]]:
+        """List cached IMAP folders from the database.
+
+        Populated during sync. Returns ordered list with hierarchy hints.
+        """
+        if account_email:
+            return self.db.execute(
+                "SELECT * FROM folders WHERE account_email = ? ORDER BY name",
+                (account_email,),
+            )
+        return self.db.execute("SELECT * FROM folders ORDER BY account_email, name")
+
     def find_conversation(
         self, message_id: str, references: str = "", in_reply_to: str = "",
         limit: int = 20,
