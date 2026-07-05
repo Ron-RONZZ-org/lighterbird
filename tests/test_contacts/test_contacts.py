@@ -194,23 +194,22 @@ class TestUpdate:
     def test_update_recomputes_full_name(self, svc):
         """When full_name is empty after update, it's recomputed."""
         contact = svc.create({"given_name": "Alice"})
+        # full_name is recomputed from the actual INSERT (created override)
+        assert contact["full_name"] == "Alice"
         updated = svc.update(contact["uuid"], {"family_name": "Smith"})
-        # NOTE: full_name is "" in DB because _post_create only adds it to
-        # the return dict, not to the INSERT data.  The _post_update hook
-        # also can't persist it because CRUDService.update() runs SQL
-        # before calling the hook.  This is a known source-code bug.
-        assert updated["full_name"] == ""
+        # full_name recomputed from merged old + new data
+        assert updated["full_name"] == "Alice Smith"
 
-    def test_update_preserves_explicit_full_name(self, svc):
-        """Explicitly set full_name is preserved on update."""
+    def test_update_recomputes_when_name_fields_change(self, svc):
+        """When name fields change, full_name is recomputed even if previously set."""
         contact = svc.create({
             "given_name": "John",
             "family_name": "Doe",
             "full_name": "Dr. John Doe",
         })
         updated = svc.update(contact["uuid"], {"given_name": "Jonathan"})
-        # full_name was in INSERT data so it IS stored in DB → survives update
-        assert updated["full_name"] == "Dr. John Doe"
+        # full_name is recomputed from merged: given_name=Jonathan, family_name=Doe
+        assert updated["full_name"] == "Jonathan Doe"
 
     def test_update_clears_full_name_recomputes(self, svc):
         """Setting full_name to empty triggers recompute."""

@@ -64,10 +64,14 @@ class ContactService(CRUDService):
         return super().create(data)
 
     def update(self, pk: str, data: dict[str, Any]) -> dict[str, Any] | None:
-        """Update a contact, auto-computing full_name from given/middle/family."""
+        """Update a contact, auto-computing full_name when name fields change."""
         data = dict(data)
-        if not data.get("full_name"):
-            computed = self._compute_full_name(data)
+        name_fields = {"given_name", "middle_names", "family_name"}
+        if not data.get("full_name") and name_fields & data.keys():
+            # Merge with existing data so we don't lose fields not in the update
+            old = self.get(pk)
+            merged = {**(old or {}), **data}
+            computed = self._compute_full_name(merged)
             if computed:
                 data["full_name"] = computed
         return super().update(pk, data)
