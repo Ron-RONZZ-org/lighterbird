@@ -43,22 +43,34 @@ class ContactService(CRUDService):
         return phones
 
     def _post_create(self, data: dict[str, Any], result: dict[str, Any]) -> None:
-        if not result.get("full_name"):
-            result["full_name"] = self._compute_full_name(data)
         self._validate_email_json(result.get("emails", "[]"))
         self._validate_phone_json(result.get("phones", "[]"))
 
     def _post_update(
         self, uuid: str, old_data: dict[str, Any] | None, new_data: dict[str, Any]
     ) -> None:
-        if new_data.get("full_name") is None or not new_data.get("full_name"):
-            combined = self._compute_full_name(new_data)
-            if combined:
-                new_data["full_name"] = combined
         for fld in ("emails", "phones"):
             val = new_data.get(fld)
             if val is not None:
                 (self._validate_email_json if fld == "emails" else self._validate_phone_json)(val)
+
+    # ── Override create/update to ensure full_name is computed ──────────
+
+    def create(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Create a contact, auto-computing full_name from given/middle/family."""
+        data = dict(data)
+        if not data.get("full_name"):
+            data["full_name"] = self._compute_full_name(data)
+        return super().create(data)
+
+    def update(self, pk: str, data: dict[str, Any]) -> dict[str, Any] | None:
+        """Update a contact, auto-computing full_name from given/middle/family."""
+        data = dict(data)
+        if not data.get("full_name"):
+            computed = self._compute_full_name(data)
+            if computed:
+                data["full_name"] = computed
+        return super().update(pk, data)
 
     # ── Helpers ─────────────────────────────────────────────────────────
 
@@ -268,7 +280,11 @@ class ContactService(CRUDService):
             contact["phones"] = json.dumps(phones)
 
         if hasattr(vcard, "org"):
-            org_val = str(vcard.org.value) if vcard.org.value else ""
+            # vobject stores ORG as a list, e.g. ["Acme Corp"]
+            org_raw = vcard.org.value if vcard.org.value else []
+            org_val = str(org_raw[0]) if isinstance(org_raw, list) and org_raw else ""
+            if not org_val:
+                org_val = str(org_raw) if org_raw else ""
             if org_val:
                 contact["organization"] = org_val
 
