@@ -343,12 +343,10 @@ class TestCalDAVWorker:
 
 class TestBackupScheduler:
     def test_execute_job_dispatch_scheduled(self):
-        """BackupScheduler.execute_job has a broken _run_due_backups ref.
-
-        The scheduler uses _run() + _check_and_backup_if_due() directly
-        (not via the queue), so this path is never exercised in practice.
-        Verified via _check_and_backup_if_due tests below.
-        """
+        worker = BackupScheduler("test-backup")
+        with patch.object(worker, "_check_and_backup_if_due") as mock_check:
+            worker.execute_job(Job("backup", "scheduled_backup"))
+            mock_check.assert_called_once()
 
     def test_execute_job_unknown_operation(self):
         worker = BackupScheduler("test-backup")

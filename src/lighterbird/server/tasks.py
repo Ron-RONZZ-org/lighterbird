@@ -341,7 +341,7 @@ class BackupScheduler(BackgroundWorker):
             logger.debug("Ignoring non-backup job: %s/%s", job.domain, job.operation)
             return
         if job.operation == "scheduled_backup":
-            self._run_due_backups()
+            self._check_and_backup_if_due()
         else:
             logger.warning("Unknown backup operation: %s", job.operation)
 
