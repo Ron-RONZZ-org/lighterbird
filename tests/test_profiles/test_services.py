@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from lighterbird.profiles.services.profiles import ProfileService, ProfileError
+from lighterbird.profiles.services.profiles import ProfileError, ProfileService
 
 
 @pytest.fixture

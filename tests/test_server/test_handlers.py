@@ -7,15 +7,15 @@ real services or databases.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-# Import early to trigger @command side effects
-from lighterbird.server.command.handlers import *  # noqa: F401, F403
-from lighterbird.server.command.registry import dispatch, get_definitions
 from lighterbird.server.command.errors import CommandNotFound, CommandValidationError
 
+# Import early to trigger @command side effects
+from lighterbird.server.command.handlers import *  # noqa: F403
+from lighterbird.server.command.registry import dispatch, get_definitions
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -321,7 +321,6 @@ class TestEmailHandlers:
 
     def test_email_send_cowrite(self, mock_email_svc, monkeypatch):
         """email send with --cowrite processes cowrite instruction."""
-        import asyncio
         mock_email_svc.list_accounts.return_value = [{"email": "me@b.com"}]
         # Mock the cowrite engine — it's async so we return a coroutine
         async def mock_cowrite(**kwargs):

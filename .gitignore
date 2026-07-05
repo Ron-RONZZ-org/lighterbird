@@ -33,8 +33,7 @@ dist/
 build/
 junit-*.xml
 
-# UV
-uv.lock
+# Dev environment
 .dev
 
 # Agent memory

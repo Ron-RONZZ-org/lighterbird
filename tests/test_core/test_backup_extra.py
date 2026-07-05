@@ -15,7 +15,7 @@ Patching strategy:
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -23,8 +23,9 @@ import pytest
 class TestBackupWithStrategy:
     def test_with_strategy_object(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """backup_with_strategy should accept a BackupStrategy object."""
-        from lighterbird.core.backup import backup_with_strategy
         from lightercore.backup import BackupStrategy
+
+        from lighterbird.core.backup import backup_with_strategy
 
         strategy = BackupStrategy(id="test", max_copies=5, target="local")
         db_path = tmp_path / "test.db"

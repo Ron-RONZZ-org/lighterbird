@@ -8,13 +8,11 @@ from pathlib import Path
 import pytest
 
 from lighterbird.core.backup import (
-    _known_db_paths,
-    _sha256,
     BackupStrategy,
+    _known_db_paths,
     add_strategy,
     backup_all,
     backup_database,
-    backup_config_files,
     copy_to_external,
     export_data,
     get_strategy,
@@ -27,9 +25,8 @@ from lighterbird.core.backup import (
     remove_strategy,
     restore_latest,
     save_config,
-    verify_strategy_target,
     update_strategy,
-    _create_strategy_archive,
+    verify_strategy_target,
 )
 
 # Current config version
@@ -432,7 +429,10 @@ class TestExportImport:
         """Export manifest.json contains valid metadata."""
         self._make_db_files(tmp_data_dir, ["email.db"])
         result = export_data(str(tmp_path))
-        import py7zr, json, tempfile
+        import json
+        import tempfile
+
+        import py7zr
         with tempfile.TemporaryDirectory() as tmp:
             with py7zr.SevenZipFile(str(result), "r") as arc:
                 arc.extractall(path=tmp)

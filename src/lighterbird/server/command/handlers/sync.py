@@ -7,11 +7,10 @@ from typing import Any
 
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import (
-    get_email_service,
     get_calendar_service,
+    get_email_service,
     get_todo_service,
 )
-from lighterbird.server.command.errors import CommandValidationError
 
 
 @command("sync")

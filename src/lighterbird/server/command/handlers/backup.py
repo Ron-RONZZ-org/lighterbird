@@ -20,27 +20,25 @@ from __future__ import annotations
 
 from typing import Any
 
-from lighterbird.server.command.registry import command
-
 # Side-effect imports to register handlers split into sub-modules
 from lighterbird.server.command.handlers.backup_actions import (  # noqa: F401
-    backup_now,
-    backup_list,
-    backup_restore,
-    backup_prune,
     backup_export,
     backup_import,
+    backup_list,
+    backup_now,
+    backup_prune,
+    backup_restore,
 )
 from lighterbird.server.command.handlers.backup_config import (  # noqa: F401
     backup_config,
-    backup_config_list,
     backup_config_add,
-    backup_config_modify,
     backup_config_default_path,
     backup_config_delete,
+    backup_config_list,
+    backup_config_modify,
     backup_config_test,
 )
-
+from lighterbird.server.command.registry import command
 
 # ── Root handler ───────────────────────────────────────────────────────────
 

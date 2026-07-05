@@ -12,10 +12,10 @@ import json
 import logging
 from typing import Any
 
+from lighterbird.core.ai import get_provider as create_core_provider
 from lighterbird.core.cowrite_style import load_cowrite_style
 from lighterbird.server.cowrite.context import gather_context
 from lighterbird.server.llm.provider import get_provider
-from lighterbird.core.ai import get_provider as create_core_provider
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ class EditOp:
         inserted: The text being added (for replace/insert).
     """
 
-    __slots__ = ("tag", "start_orig", "end_orig", "deleted", "inserted")
+    __slots__ = ("deleted", "end_orig", "inserted", "start_orig", "tag")
 
     def __init__(
         self,

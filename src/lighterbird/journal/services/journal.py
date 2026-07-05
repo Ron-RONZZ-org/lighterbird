@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any
-
+from datetime import UTC
 from pathlib import Path
+from typing import Any
 
 from lighterbird.core.crud import CRUDService
 from lighterbird.core.yaml_frontmatter import unwrap, wrap
@@ -132,9 +132,9 @@ class JournalService(CRUDService):
 
     def create_label(self, data: dict[str, Any]) -> dict[str, Any]:
         """Create a new label."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         name = data.get("name", "").strip()
         if not name:
             raise ValueError("Label name is required.")

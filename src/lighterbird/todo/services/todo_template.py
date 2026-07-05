@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -14,7 +14,7 @@ class _TodoTemplateMixin:
     # ── Templates ───────────────────────────────────────────────────────
 
     def create_template(self, data: dict[str, Any]) -> dict[str, Any]:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         tpl_uuid = str(uuid.uuid4())
         name = data.get("name", "").strip()
         if not name:
@@ -75,7 +75,7 @@ class _TodoTemplateMixin:
 
     def update_template(self, uuid_: str,
                         data: dict[str, Any]) -> dict[str, Any]:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         if "name" in data:
             self.db.execute(
                 "UPDATE templates SET name = ?, updated_at = ?"

@@ -13,10 +13,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from lighterbird.core.drafts import list_drafts, get_draft, delete_draft
+from lighterbird.core.drafts import get_draft, list_drafts
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
-
 
 DOMAIN_MAP = {
     "email": "email",

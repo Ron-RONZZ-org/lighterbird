@@ -11,11 +11,10 @@ import smtplib
 import socket
 import ssl
 import uuid as uuid_mod
+from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email import encoders
-from email.utils import make_msgid
 from pathlib import Path
 from typing import Any
 
@@ -46,8 +45,7 @@ class SMTPClient:
             raise ConnectionError(
                 f"SMTP authentication failed for {username}@{self.host}:{self.port} — {e}"
             ) from e
-        except (socket.gaierror, ConnectionRefusedError,
-                TimeoutError, socket.timeout, ssl.SSLError, OSError) as e:
+        except (socket.gaierror, ConnectionRefusedError, TimeoutError, ssl.SSLError, OSError) as e:
             raise ConnectionError(
                 f"SMTP connection failed to {username}@{self.host}:{self.port} — {e}"
             ) from e
@@ -192,7 +190,6 @@ class SMTPClient:
           - A file path (str or Path) — reads from disk.
           - A dict with ``name`` (str) and ``data`` (bytes or base64 str).
         """
-        import base64
 
         if isinstance(item, dict):
             filename = item.get("name", "attachment")

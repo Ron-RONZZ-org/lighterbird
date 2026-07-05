@@ -10,23 +10,17 @@ Verifies that the scheduler:
 
 from __future__ import annotations
 
-import json
-import threading
-import time
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import pytest
-
-from lighterbird.server.tasks import BackupScheduler
 from lighterbird.core.backup import (
-    load_config,
-    save_config,
-    list_strategies,
-    add_strategy,
     BackupStrategy,
     _backup_dir,
+    add_strategy,
+    load_config,
+    save_config,
 )
+from lighterbird.server.tasks import BackupScheduler
 
 
 class TestBackupScheduler:
@@ -56,7 +50,7 @@ class TestBackupScheduler:
 
     def test_strategy_due_after_interval(self, tmp_data_dir: Path, monkeypatch):
         """A strategy with a stale last_backup_at (past interval) is due."""
-        old_time = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        old_time = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
         cfg = load_config()
         cfg["strategies"][0]["interval_minutes"] = 60
         cfg["strategies"][0]["last_backup_at"] = old_time
@@ -75,7 +69,7 @@ class TestBackupScheduler:
 
     def test_strategy_not_due_before_interval(self, tmp_data_dir: Path, monkeypatch):
         """A strategy with recent last_backup_at is NOT due."""
-        recent = datetime.now(timezone.utc).isoformat()
+        recent = datetime.now(UTC).isoformat()
         cfg = load_config()
         cfg["strategies"][0]["interval_minutes"] = 60
         cfg["strategies"][0]["last_backup_at"] = recent
@@ -85,9 +79,7 @@ class TestBackupScheduler:
 
         scheduler = BackupScheduler("test-scheduler")
         # Track whether backup_all_strategies was called
-        called = []
 
-        original_backup = scheduler._check_and_backup_if_due
         # Just call the method — it should detect no due strategies
         scheduler._check_and_backup_if_due()
 
@@ -103,7 +95,7 @@ class TestBackupScheduler:
 
     def test_disabled_strategy_not_run(self, tmp_data_dir: Path, monkeypatch):
         """A disabled strategy (enabled=False) is NOT run even if overdue."""
-        old_time = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        old_time = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
         cfg = load_config()
         cfg["strategies"][0]["interval_minutes"] = 60
         cfg["strategies"][0]["last_backup_at"] = old_time
@@ -143,7 +135,7 @@ class TestBackupScheduler:
 
     def test_scheduler_creates_backup_archive(self, tmp_data_dir: Path, monkeypatch):
         """_check_and_backup_if_due creates a .7z archive in .backups/."""
-        old_time = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        old_time = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
         cfg = load_config()
         cfg["strategies"][0]["interval_minutes"] = 60
         cfg["strategies"][0]["last_backup_at"] = old_time
@@ -168,7 +160,7 @@ class TestBackupScheduler:
         cfg = load_config()
         cfg["strategies"][0]["interval_minutes"] = 60
         cfg["strategies"][0]["last_backup_at"] = (
-            datetime.now(timezone.utc) - timedelta(hours=2)
+            datetime.now(UTC) - timedelta(hours=2)
         ).isoformat()
         save_config(cfg)
 

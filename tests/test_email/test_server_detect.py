@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from lighterbird.email.server_detect import detect_servers, known_providers, _lookup_mx
+from lighterbird.email.server_detect import _lookup_mx, detect_servers, known_providers
 
 
 def _fake_mx_answer(hostname: str, preference: int = 10):

@@ -11,24 +11,23 @@ from __future__ import annotations
 
 from typing import Any
 
-from lighterbird.server.command.registry import command
-
 # Side-effect imports to register handlers split into sub-modules
 from lighterbird.server.command.handlers.letter_crud import (  # noqa: F401
-    letter_list,
     letter_add,
+    letter_list,
     letter_view,
-)
-from lighterbird.server.command.handlers.letter_send import (  # noqa: F401
-    letter_send,
-    letter_pdf,
 )
 from lighterbird.server.command.handlers.letter_export_import import (  # noqa: F401
     letter_export,
     letter_export_md,
-    letter_import_root,
     letter_import_md,
+    letter_import_root,
 )
+from lighterbird.server.command.handlers.letter_send import (  # noqa: F401
+    letter_pdf,
+    letter_send,
+)
+from lighterbird.server.command.registry import command
 
 
 @command("letter")

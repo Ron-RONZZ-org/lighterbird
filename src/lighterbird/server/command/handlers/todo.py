@@ -15,22 +15,35 @@ from __future__ import annotations
 
 from typing import Any
 
-from lighterbird.server.command.registry import command
+from lighterbird.server.command.handlers.todo_crud import (  # noqa: F401
+    todo_add,
+    todo_delete,
+    todo_done,
+    todo_modify,
+    todo_view,
+)
+from lighterbird.server.command.handlers.todo_export_import import (  # noqa: F401
+    todo_export_md,
+    todo_export_root,
+    todo_import_md,
+    todo_import_root,
+)
 
 # Side-effect imports to register handlers split into sub-modules
 from lighterbird.server.command.handlers.todo_list import (  # noqa: F401
-    todo_list, todo_tree, todo_search,
-)
-from lighterbird.server.command.handlers.todo_crud import (  # noqa: F401
-    todo_add, todo_view, todo_done, todo_modify, todo_delete,
+    todo_list,
+    todo_search,
+    todo_tree,
 )
 from lighterbird.server.command.handlers.todo_template import (  # noqa: F401
-    todo_template_root, todo_template_list, todo_template_add, todo_template_view,
-    todo_template_modify, todo_template_delete,
+    todo_template_add,
+    todo_template_delete,
+    todo_template_list,
+    todo_template_modify,
+    todo_template_root,
+    todo_template_view,
 )
-from lighterbird.server.command.handlers.todo_export_import import (  # noqa: F401
-    todo_export_root, todo_export_md, todo_import_root, todo_import_md,
-)
+from lighterbird.server.command.registry import command
 
 
 @command("todo")

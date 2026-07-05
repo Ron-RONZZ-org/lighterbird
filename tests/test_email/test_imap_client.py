@@ -1,11 +1,8 @@
 """Tests for email/imap/client.py — IMAPClient, _parse_list_response, store_message."""
 from __future__ import annotations
 
-import email as email_lib
-import uuid
-from datetime import datetime, timezone
-from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from datetime import UTC, datetime
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -13,9 +10,7 @@ from lighterbird.email.imap.client import (
     IMAPClient,
     _parse_list_response,
     store_message,
-    _insert_message,
 )
-
 
 # ── _parse_list_response ─────────────────────────────────────────────────────
 
@@ -386,9 +381,9 @@ class TestStoreMessage:
             "imap_uid": 42,
             "account_email": "user@example.com",
             "folder_name": "INBOX",
-            "received_at": datetime.now(timezone.utc).isoformat(),
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "received_at": datetime.now(UTC).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
         }
         msg_uuid = store_message(db, data, account_email="user@example.com", folder_name="INBOX")
         assert msg_uuid is not None
@@ -403,9 +398,9 @@ class TestStoreMessage:
             "imap_uid": 42,
             "account_email": "user@example.com",
             "folder_name": "INBOX",
-            "received_at": datetime.now(timezone.utc).isoformat(),
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "received_at": datetime.now(UTC).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
         }
         msg_uuid = store_message(db, data, account_email="user@example.com", folder_name="INBOX")
         # Should return the existing UUID
@@ -421,9 +416,9 @@ class TestStoreMessage:
             "imap_uid": 42,
             "account_email": "user@example.com",
             "folder_name": "INBOX",
-            "received_at": datetime.now(timezone.utc).isoformat(),
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "received_at": datetime.now(UTC).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
         }
         msg_uuid = store_message(
             db, data, force=True,
@@ -450,9 +445,9 @@ class TestStoreMessage:
             "imap_uid": 99,
             "account_email": "user@example.com",
             "folder_name": "INBOX",
-            "received_at": datetime.now(timezone.utc).isoformat(),
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "received_at": datetime.now(UTC).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
         }
         msg_uuid = store_message(db, data, account_email="user@example.com", folder_name="INBOX")
         assert msg_uuid == "uid-uuid"

@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -45,12 +45,12 @@ def _parse_dot_dev(dot_dev_path: str | Path | None) -> dict[str, str]:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _ts(days_ago: int = 0, hours_ago: int = 0) -> str:
     """Return an ISO timestamp offset from now."""
-    dt = datetime.now(timezone.utc) - timedelta(days=days_ago, hours=hours_ago)
+    dt = datetime.now(UTC) - timedelta(days=days_ago, hours=hours_ago)
     return dt.isoformat()
 
 
@@ -257,7 +257,7 @@ def _seed_calendar(data_dir: Path, creds: dict[str, str]) -> None:
         set_password(f"lighterbird/calendar/{cal_uuid}", "password", password)
 
     # Filler events
-    base = datetime.now(timezone.utc).replace(hour=10, minute=0, second=0, microsecond=0)
+    base = datetime.now(UTC).replace(hour=10, minute=0, second=0, microsecond=0)
     for i in range(3):
         start = base + timedelta(days=1 + i)
         end = start + timedelta(hours=1)
@@ -407,7 +407,7 @@ def _seed_journal(data_dir: Path) -> None:
     now = _now()
 
     for i in range(3):
-        day = datetime.now(timezone.utc) - timedelta(days=2 - i)
+        day = datetime.now(UTC) - timedelta(days=2 - i)
         db.execute(
             """INSERT OR IGNORE INTO journal
                (uuid, title, text, date, created_at, updated_at)
@@ -573,7 +573,7 @@ def _seed_llm_config(creds: dict[str, str]) -> None:
 
 def _seed_backup_config(data_dir: Path) -> None:
     """Create a basic backup config so backup commands don't error."""
-    from lighterbird.core.backup import save_config, BackupStrategy
+    from lighterbird.core.backup import BackupStrategy, save_config
 
     save_config({"version": 3, "strategies": [
         BackupStrategy(

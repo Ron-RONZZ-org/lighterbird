@@ -7,10 +7,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from lighterbird.email.service import EmailService
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_email_service
-from lighterbird.email.service import EmailService
 
 
 @command("email.account.list")
@@ -39,7 +39,6 @@ def account_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     password = flags.get("password", "")
     name = flags.get("name", "")
 
-    from lighterbird.server.schemas import AccountCreate
     from lighterbird.email.server_detect import detect_servers
 
     detected = detect_servers(email_addr, imap_server=imap_server, smtp_server=smtp_server)

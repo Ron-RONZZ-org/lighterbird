@@ -16,7 +16,6 @@ Grammar (matching frontend ``parser.js``):
 from __future__ import annotations
 
 import shlex
-from typing import Any
 
 
 def parse_expanded(cmd_str: str) -> tuple[list[str], dict[str, str]]:

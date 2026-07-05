@@ -144,7 +144,6 @@ def _extract_domain(hostname: str) -> str:
     Uses a simple heuristic: take the last 2 or 3 dot-separated parts
     depending on known 2-part TLDs.
     """
-    import re
     # Known 2-part TLDs (co.uk, com.au, co.jp, etc.)
     two_part_tlds = {
         "co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au",

@@ -29,7 +29,6 @@ from lighterbird.core.paths import data_dir
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 
-
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 

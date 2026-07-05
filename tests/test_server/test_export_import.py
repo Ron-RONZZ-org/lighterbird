@@ -410,7 +410,7 @@ class TestExportImportCLI:
 class TestYamlFrontmatter:
     def test_wrap_and_unwrap(self):
         """core.yaml_frontmatter.wrap/unwrap roundtrip."""
-        from lighterbird.core.yaml_frontmatter import wrap, unwrap
+        from lighterbird.core.yaml_frontmatter import unwrap, wrap
 
         meta = {"uuid": "test-uuid", "domain": "todo", "tags": ["a", "b"]}
         body = "# Hello\n\nThis is the body."

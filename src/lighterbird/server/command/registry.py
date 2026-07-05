@@ -225,7 +225,7 @@ def dispatch(
                 gkey = ".".join(resolved[:i])
                 gmeta = _group_metadata.get(gkey)
                 if gmeta and "default_action" in gmeta:
-                    redirected = resolved[:i] + [gmeta["default_action"]]
+                    redirected = [*resolved[:i], gmeta["default_action"]]
                     if redirected != resolved:
                         return dispatch(redirected, flags)
 

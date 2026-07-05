@@ -5,14 +5,18 @@ Flat service class (not mixin), forked from A-lien's RetpostoAccountsMixin.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from lighterbird.core.crud import CRUDService
 from lighterbird.email.keyring import (
-    get_password as _get_keyring_pw,
-    set_password as _set_keyring_pw,
     delete_password as _del_keyring_pw,
+)
+from lighterbird.email.keyring import (
+    get_password as _get_keyring_pw,
+)
+from lighterbird.email.keyring import (
+    set_password as _set_keyring_pw,
 )
 
 
@@ -36,10 +40,10 @@ class AccountService(CRUDService):
     def update(self, email: str, data: dict[str, Any]) -> dict[str, Any]:
         """Update an account by email, preserving creation timestamp."""
         old_data = self.get(email)
-        data["updated_at"] = datetime.now(timezone.utc).isoformat()
+        data["updated_at"] = datetime.now(UTC).isoformat()
 
         set_clauses = [f"{k} = ?" for k in data]
-        values = list(data.values()) + [email.lower().strip()]
+        values = [*list(data.values()), email.lower().strip()]
         self.db.execute(
             f"UPDATE {self.table} SET {', '.join(set_clauses)} WHERE email = ?",
             values,
@@ -60,7 +64,7 @@ class AccountService(CRUDService):
 
     def create(self, data: dict[str, Any]) -> dict[str, Any]:
         """Create a new account with email as PK (no UUID)."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         # Normalize email to lowercase
         if "email" in data:
             data["email"] = data["email"].lower().strip()

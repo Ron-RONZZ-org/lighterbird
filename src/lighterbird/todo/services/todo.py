@@ -10,7 +10,6 @@ See individual sub-modules for implementation details:
 from __future__ import annotations
 
 from lighterbird.core.crud import CRUDService
-
 from lighterbird.todo.services.todo_crud import _TodoCrudMixin
 from lighterbird.todo.services.todo_export_import import _TodoExportImportMixin
 from lighterbird.todo.services.todo_template import _TodoTemplateMixin

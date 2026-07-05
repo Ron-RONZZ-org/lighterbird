@@ -2,20 +2,18 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 from lighterbird.email.filters.combiner import (
-    combine_scripts,
-    check_conflicts,
+    _fileinto_targets,
     _parse_require,
     _strip_require,
-    _fileinto_targets,
+    check_conflicts,
+    combine_scripts,
 )
 from lighterbird.email.filters.sieve import validate_sieve
 from lighterbird.email.filters.spam import SpamManager
-
 
 # ── Sieve validation ─────────────────────────────────────────────────────────
 

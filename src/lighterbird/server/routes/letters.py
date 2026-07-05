@@ -9,8 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
-from lighterbird.server.deps import get_letter_service
 from lighterbird.letter.services.letters import LetterService
+from lighterbird.server.deps import get_letter_service
 
 router = APIRouter(prefix="/api/v1/letters", tags=["letters"])
 

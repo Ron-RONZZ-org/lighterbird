@@ -6,18 +6,22 @@ live in ``email_actions.py`` — this file is kept under 500 lines.
 
 from __future__ import annotations
 
-import json
+from datetime import UTC
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 
+from lighterbird.email.server_detect import detect_servers
+from lighterbird.email.service import EmailService
 from lighterbird.server.deps import get_email_service
 from lighterbird.server.schemas import (
-    AccountCreate, AccountUpdate, AccountResponse, AccountListResponse,
-    SyncRequest, SyncResultResponse, SyncAllResponse,
+    AccountCreate,
+    AccountListResponse,
+    AccountResponse,
+    AccountUpdate,
+    SyncRequest,
+    SyncResultResponse,
 )
-from lighterbird.email.service import EmailService
-from lighterbird.email.server_detect import detect_servers
 
 router = APIRouter(prefix="/api/v1/email", tags=["email"])
 
@@ -127,7 +131,7 @@ def sync_email(
 @router.get("/folders")
 def list_folders(email_svc: EmailService = Depends(get_email_service)):
     """List all known folders with account info."""
-    accounts = {a["email"]: dict(a) for a in email_svc.list_accounts()}
+    {a["email"]: dict(a) for a in email_svc.list_accounts()}
     rows = list(email_svc.db.execute(
         "SELECT account_email, name FROM folders ORDER BY account_email, name"
     ))
@@ -184,8 +188,8 @@ def create_folder(
         raise HTTPException(status_code=500, detail=f"Failed to create folder: {e}")
 
     # Insert into local DB
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc).isoformat()
+    from datetime import datetime
+    now = datetime.now(UTC).isoformat()
     try:
         email_svc.db.execute(
             "INSERT OR IGNORE INTO folders (account_email, name, created_at, updated_at) VALUES (?, ?, ?, ?)",

@@ -5,9 +5,9 @@ Composes CalendarCRUD and EventService.
 
 from __future__ import annotations
 
-from lighterbird.calendar.services import CalendarCRUD, EventService
 from lighterbird.calendar.db import get_db
-from lighterbird.calendar.keyring import get_password, set_password, delete_password
+from lighterbird.calendar.keyring import delete_password, get_password, set_password
+from lighterbird.calendar.services import CalendarCRUD, EventService
 
 
 class CalendarService:
@@ -28,13 +28,12 @@ class CalendarService:
                 is unavailable or fails to store it.
         """
         cal = self.calendars.create(data)
-        if password:
-            if not set_password(cal["uuid"], password):
-                self.calendars.delete(cal["uuid"])
-                raise RuntimeError(
-                    "System keyring is unavailable — cannot store calendar password. "
-                    "Install a keyring backend (e.g. 'sudo apt install gnome-keyring'). "
-                )
+        if password and not set_password(cal["uuid"], password):
+            self.calendars.delete(cal["uuid"])
+            raise RuntimeError(
+                "System keyring is unavailable — cannot store calendar password. "
+                "Install a keyring backend (e.g. 'sudo apt install gnome-keyring'). "
+            )
         return cal
 
     def list_calendars(self):
@@ -162,6 +161,6 @@ class CalendarService:
         """
         from lighterbird.calendar.ics import insert_ics_events
 
-        with open(path, "r") as f:
+        with open(path) as f:
             text = f.read()
         return insert_ics_events(self.db, calendar_uuid, text)

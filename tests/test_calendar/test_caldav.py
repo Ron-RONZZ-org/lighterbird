@@ -7,14 +7,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from lighterbird.calendar.caldav import (
-    remote_http_url,
-    http_fetch_text,
-    fetch_remote_calendar_payloads,
-    _parse_multistatus,
     _event_url,
-    push_event,
+    _parse_multistatus,
     delete_event,
+    fetch_remote_calendar_payloads,
+    http_fetch_text,
     probe_calendar_config,
+    push_event,
+    remote_http_url,
 )
 
 
@@ -62,7 +62,6 @@ class TestHttpFetchText:
 
     @patch("urllib.request.urlopen", side_effect=urllib.error.URLError(TimeoutError("timeout")))
     def test_timeout_returns_0(self, mock_urlopen):
-        import urllib.error
         status, body = http_fetch_text("https://example.com", "u", "p")
         assert status == 0
 

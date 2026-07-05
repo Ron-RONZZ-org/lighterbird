@@ -1,8 +1,6 @@
 """Tests for server-side command parser."""
 from __future__ import annotations
 
-import pytest
-
 from lighterbird.server.command.parser import parse_expanded
 
 

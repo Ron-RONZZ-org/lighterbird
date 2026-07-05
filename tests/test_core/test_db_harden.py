@@ -5,14 +5,12 @@ import sqlite3
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from lighterbird.core.db_harden import (
     backup_db,
     health_check,
-    repair_db,
-    open_healthy_db,
     init_db,
+    open_healthy_db,
+    repair_db,
 )
 
 

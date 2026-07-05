@@ -8,15 +8,21 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from lighterbird.email.service import EmailService
 from lighterbird.server.deps import get_email_service
 from lighterbird.server.schemas import (
-    SieveScriptCreate, SieveScriptUpdate, SieveScriptResponse,
+    SieveActivateRequest,
+    SieveActivationInfo,
+    SieveAnalyzeRequest,
+    SieveAnalyzeResponse,
+    SievePriorityUpdate,
+    SieveScriptCreate,
     SieveScriptListResponse,
-    SieveActivateRequest, SieveActivationInfo,
-    SievePriorityUpdate, SieveAnalyzeRequest, SieveAnalyzeResponse,
-    SieveValidateRequest, SieveValidateResponse,
+    SieveScriptResponse,
+    SieveScriptUpdate,
+    SieveValidateRequest,
+    SieveValidateResponse,
 )
-from lighterbird.email.service import EmailService
 
 router = APIRouter(prefix="/api/v1/email/sieve", tags=["sieve"])
 

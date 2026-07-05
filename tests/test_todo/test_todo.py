@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import uuid as uuid_mod
 
 import pytest
-
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -195,7 +193,7 @@ class TestList:
 
     def test_list_attaches_labels(self, svc):
         """List attaches label info to each todo."""
-        todo = svc.create({"title": "Labeled", "_tags": ["test-tag"]})
+        svc.create({"title": "Labeled", "_tags": ["test-tag"]})
         results = svc.list()
         assert len(results) == 1
         labels = results[0].get("labels", [])
@@ -251,7 +249,7 @@ class TestUpdate:
     def test_update_tags(self, svc):
         """Update replaces tags when _tags is provided."""
         todo = svc.create({"title": "Re-tag", "_tags": ["old-tag"]})
-        updated = svc.update(todo["uuid"], {"_tags": ["new-tag"]})
+        svc.update(todo["uuid"], {"_tags": ["new-tag"]})
         labels = svc.get_labels(todo["uuid"])
         label_names = [l["name"] for l in labels]
         assert "new-tag" in label_names
@@ -355,7 +353,7 @@ class TestTree:
     def test_get_tree_parent_child(self, svc):
         """get_tree returns nested structure for parent-child."""
         parent = svc.create({"title": "Parent"})
-        child = svc.create({"title": "Child", "parent_uuid": parent["uuid"]})
+        svc.create({"title": "Child", "parent_uuid": parent["uuid"]})
         tree = svc.get_tree()
         assert len(tree) == 1
         assert tree[0]["title"] == "Parent"
@@ -366,7 +364,7 @@ class TestTree:
         """get_tree respects max_depth."""
         parent = svc.create({"title": "L1"})
         child = svc.create({"title": "L2", "parent_uuid": parent["uuid"]})
-        grandchild = svc.create({"title": "L3", "parent_uuid": child["uuid"]})
+        svc.create({"title": "L3", "parent_uuid": child["uuid"]})
         # max_depth=0: root items included (depth 0), but children excluded
         tree = svc.get_tree(max_depth=0)
         assert len(tree) == 1  # root item L1 at depth 0 is included
@@ -376,7 +374,7 @@ class TestTree:
     def test_flatten_tree(self, svc):
         """flatten_tree returns flat list with depth info."""
         parent = svc.create({"title": "Parent"})
-        child = svc.create({"title": "Child", "parent_uuid": parent["uuid"]})
+        svc.create({"title": "Child", "parent_uuid": parent["uuid"]})
         flat = svc.flatten_tree()
         assert len(flat) == 2
         items_by_title = {i["title"]: i for i in flat}
@@ -388,7 +386,7 @@ class TestTree:
     def test_get_with_children(self, svc):
         """get_with_children returns a todo with its children."""
         parent = svc.create({"title": "Parent"})
-        child = svc.create({"title": "Child", "parent_uuid": parent["uuid"]})
+        svc.create({"title": "Child", "parent_uuid": parent["uuid"]})
         result = svc.get_with_children(parent["uuid"])
         assert result is not None
         assert result["title"] == "Parent"
@@ -1027,7 +1025,7 @@ class TestEdgeCases:
 
     def test_create_with_invalid_priority_string(self, svc):
         """Creating with a non-numeric priority sets _computed_priority to 5.0."""
-        todo = svc.create({"title": "Bad priority", "priority": "abc"})
+        svc.create({"title": "Bad priority", "priority": "abc"})
         # Computed should fallback to 5.0
         fetched = svc.list()[0]
         assert fetched["_computed_priority"] == 5.0

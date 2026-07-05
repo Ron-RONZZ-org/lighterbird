@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from lighterbird.server.deps import get_profiles_service
 from lighterbird.profiles.services.profiles import ProfileService
+from lighterbird.server.deps import get_profiles_service
 
 router = APIRouter(prefix="/api/v1/profiles", tags=["profiles"])
 

@@ -2,17 +2,16 @@
 from __future__ import annotations
 
 import json
-import re
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from lighterbird.core.ai import ProviderConfig
 from lighterbird.core.providers import (
-    OpenAICompatibleProvider,
-    OllamaProvider,
-    _resolve_base_url,
     _CMD_PATTERN,
+    OllamaProvider,
+    OpenAICompatibleProvider,
+    _resolve_base_url,
     _response_error_detail,
 )
 

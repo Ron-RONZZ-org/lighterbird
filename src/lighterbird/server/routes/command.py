@@ -10,10 +10,22 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from lighterbird.server.command.errors import CommandError, CommandNotFound, CommandValidationError
+from lighterbird.server.command.errors import (
+    CommandError,
+    CommandNotFound,
+    CommandValidationError,
+)
 from lighterbird.server.command.models import CommandRequest, CommandResponse
-from lighterbird.server.command.registry import dispatch, get_definitions, resolve_form_type
-from lighterbird.server.command.tree import get_command_tree, find_command_depth, get_param_names
+from lighterbird.server.command.registry import (
+    dispatch,
+    get_definitions,
+    resolve_form_type,
+)
+from lighterbird.server.command.tree import (
+    find_command_depth,
+    get_command_tree,
+    get_param_names,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["command"])
 
@@ -24,7 +36,7 @@ def _extract_partial_data(tokens: list[str], flags: dict[str, str]) -> dict[str,
     cmd_depth = find_command_depth(tokens)
     if cmd_depth < len(tokens):
         params = tokens[cmd_depth:]
-        key = ".".join(tokens[:cmd_depth]) if cmd_depth > 0 else ""
+        ".".join(tokens[:cmd_depth]) if cmd_depth > 0 else ""
         if resolve_form_type(tokens[:cmd_depth]):
             names = get_param_names(tokens[:cmd_depth])
             for i, val in enumerate(params):

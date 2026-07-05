@@ -144,7 +144,7 @@ class TestGet:
         """Short or ambiguous prefix returns the first match."""
         c1 = svc.create({"given_name": "First"})
         # Second contact with different UUID — ensure prefix is unique
-        c2 = svc.create({"given_name": "Second"})
+        svc.create({"given_name": "Second"})
         # Use the full UUID for the first contact
         fetched = svc.get(c1["uuid"])
         assert fetched["given_name"] == "First"
@@ -423,8 +423,9 @@ class TestHelpers:
 
     def test_get_primary_email_invalid_json(self):
         """Invalid JSON in emails raises JSONDecodeError."""
-        from lighterbird.contacts.services import ContactService
         import json
+
+        from lighterbird.contacts.services import ContactService
         with pytest.raises(json.JSONDecodeError):
             ContactService.get_primary_email({"emails": "bad"})
 
