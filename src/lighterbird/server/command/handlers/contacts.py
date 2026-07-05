@@ -234,6 +234,52 @@ def contact_export_vcf(remaining: list[str], flags: dict[str, str]) -> dict[str,
     return {"type": "status", "title": "VCF Export", "data": {"vcf": vcf_text}}
 
 
+@command("contact.clean")
+def contact_clean(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!contact clean — Find and report duplicate contacts.
+
+    Scans all contacts for duplicates by email address and name+org.
+    Returns groups of potential duplicates for review.
+    Use ``!contact merge <keep-uuid> <remove-uuid>...`` to merge.
+    """
+    svc: ContactService = get_contact_service()
+    groups = svc.find_duplicates()
+    if not groups:
+        return {"type": "status", "title": "No Duplicates Found", "data": {"groups": []}}
+    return {
+        "type": "status",
+        "title": f"Found {len(groups)} Duplicate Group(s)",
+        "data": {"groups": groups, "count": len(groups)},
+    }
+
+
+@command("contact.merge")
+def contact_merge(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!contact merge <keep-uuid> <remove-uuid> [remove-uuid...]
+
+    Merges duplicate contacts into one. The first UUID is kept; the
+    rest are merged into it and then deleted.
+    Emails, phones, and notes are consolidated.
+    """
+    if len(remaining) < 2:
+        raise CommandValidationError(
+            "Missing UUIDs.",
+            "Usage: !contact merge <keep-uuid> <remove-uuid> [remove-uuid...]",
+        )
+    keep_uuid = remaining[0]
+    remove_uuids = remaining[1:]
+    svc: ContactService = get_contact_service()
+    try:
+        result = svc.merge_duplicates(keep_uuid, remove_uuids)
+    except ValueError as e:
+        raise CommandValidationError(str(e))
+    return {
+        "type": "status",
+        "title": "Contacts Merged",
+        "data": {"kept": keep_uuid[:8], "merged": len(remove_uuids), "updated": result},
+    }
+
+
 @command("contact.import.vcf")
 def contact_import_vcf(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!contact import vcf <path>"""

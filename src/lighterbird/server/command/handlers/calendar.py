@@ -213,6 +213,25 @@ def event_import_ics(remaining: list[str], flags: dict[str, str]) -> dict[str, A
     return {"type": "status", "title": "ICS Import", "data": {"imported": len(uuids), "uuids": uuids}}
 
 
+@command("calendar.sync-status")
+def calendar_sync_status(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!calendar sync-status [--all]
+
+    Shows pending/retrying/failed sync jobs from the CalDAV sync queue.
+    Use ``--all`` to show completed jobs too.
+    """
+    svc = get_calendar_service()
+    if "all" in flags:
+        jobs = list(svc.events.db.execute(
+            "SELECT * FROM calendar_sync_queue ORDER BY id DESC LIMIT 100"
+        ))
+    else:
+        jobs = list(svc.events.db.execute(
+            "SELECT * FROM calendar_sync_queue WHERE status IN ('pending','running','failed') ORDER BY id DESC"
+        ))
+    return {"type": "status", "title": "Calendar Sync Queue", "data": {"jobs": jobs, "count": len(jobs)}}
+
+
 @command("calendar.event.search")
 def event_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar event search [--query TEXT] [--start DATE] [--end DATE] [--calendar UUID]"""
