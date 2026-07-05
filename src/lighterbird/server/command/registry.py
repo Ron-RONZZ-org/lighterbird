@@ -165,7 +165,7 @@ def _resolve_user_aliases(
     try:
         from lighterbird.server.deps import get_user_commands_service
         svc = get_user_commands_service()
-    except Exception:
+    except (ImportError, RuntimeError, LookupError):
         return tokens, flags  # graceful degradation
 
     result = svc.resolve_and_expand(tokens)

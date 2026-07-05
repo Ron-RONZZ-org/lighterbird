@@ -7,7 +7,10 @@ from ``.dev`` if present and no provider is configured yet.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def _auto_configure_from_dev() -> None:
@@ -44,7 +47,7 @@ def _auto_configure_from_dev() -> None:
             "max_tokens": 4096,
         }
         set_password("lighterbird-llm", "active-provider", json.dumps(config))
-        print("[lighterbird] Auto-configured LLM provider from .dev (DeepSeek)")
+        logger.info("[lighterbird] Auto-configured LLM provider from .dev (DeepSeek)")
 
 
 _auto_configure_from_dev()

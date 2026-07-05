@@ -9,6 +9,7 @@
 
 import { parseCommand, hasTrailingSpace } from "./parser.js";
 import { findNode, commandTree } from "./commandTree.js";
+import { resolveListIdKey as _resolveListIdKey } from "./persistentTypes.js";
 
 /**
  * Determine whether a !command should be intercepted and routed to a list+form.
@@ -152,23 +153,10 @@ function resolveListCommand(node, tokens) {
 
 /**
  * Resolve the persistent idKey for a list command path.
- * Matches the patterns in HomeTab/App detectPersistentType.
+ * Delegates to shared persistentTypes.js module.
  */
 function resolveListIdKey(listTokens) {
-  const path = listTokens.join(" ");
-  if (/^email(\s+account)?\s+list$/i.test(path)) return "accounts";
-  if (/^calendar(\s+account)?\s+list$/i.test(path)) return "calendars";
-  if (/^contact\s+list$/i.test(path)) return "contacts-list";
-  if (/^todo\s+list$/i.test(path)) return "todo-list";
-  if (/^journal\s+list$/i.test(path)) return "journal-list";
-  if (/^calendar\s+list$/i.test(path)) return "calendar-events";
-  if (/^email\s+list$/i.test(path)) return "email-list";
-  if (/^user\s+saved-commands\s+list$/i.test(path)) return "saved-commands";
-  if (/^user\s+info\s+list$/i.test(path)) return "user-info-list";
-  if (/^email\s+sieve\s+list$/i.test(path)) return "sieve-list";
-  if (/^email\s+signature\s+list$/i.test(path)) return "signature-list";
-  if (/^letter\s+list$/i.test(path)) return "letter-list";
-  return null;
+  return _resolveListIdKey(listTokens);
 }
 
 /**
@@ -228,7 +216,8 @@ function resolveAddFormType(tokens, leafName) {
   if (/^letter\s+add$/i.test(path)) return "letter-add";
   if (/^letter\s+send$/i.test(path)) return "letter-send";
 
-  // Fallback: use leaf name
+  // Fallback: use leaf name — warn developer that a form type mapping is missing
+  console.warn(`[commandRouter] No form type mapping for: ${path} — add to resolveAddFormType()`);
   return leafName;
 }
 

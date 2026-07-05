@@ -9,6 +9,7 @@
   import { parseCommand } from "./parser.js";
   import { commandTree, findNode } from "./commandTree.js";
   import { shouldIntercept } from "./commandRouter.js";
+  import { detectPersistentType } from "./persistentTypes.js";
   import ConfirmDialog from "./ConfirmDialog.svelte";
 
   let hasSentLlmMessage = $state(false);
@@ -322,20 +323,6 @@
         actions: [],
       },
     ];
-  }
-
-  function detectPersistentType(input) {
-    const t = input.trim();
-    if (/^!(email\s+)?account\s+list\s*$/i.test(t)) return "accounts";
-    if (/^!(calendar\s+)?account\s+list\s*$/i.test(t)) return "calendars";
-    if (/^!contacts\s+(list|search)\b/i.test(t)) return "contacts-list";
-    if (/^!todo\s+(list|search)\b/i.test(t)) return "todo-list";
-    if (/^!journal\s+(list|search)\b/i.test(t)) return "journal-list";
-    if (/^!calendar\s+(list|search)\b/i.test(t)) return "calendar-events";
-    if (/^!email\s+(list|search)\b/i.test(t)) return "email-list";
-    if (/^!user\s+saved-commands\s+list\s*$/i.test(t)) return "saved-commands";
-    if (/^!letter\s+(list|search)\b/i.test(t)) return "letter-list";
-    return null;
   }
 
   // Refresh data cache on mount (and when messages change — triggers re-cache
