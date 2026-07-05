@@ -871,7 +871,7 @@ class TestLabels:
 
     def test_create_label_empty_name_raises(self, svc):
         """Creating a label with empty name raises ValueError."""
-        with pytest.raises(ValueError, match="Label name is required"):
+        with pytest.raises(ValueError, match="Tag name is required"):
             svc.create_label({"name": ""})
 
     def test_delete_label(self, svc):
@@ -985,8 +985,6 @@ class TestDB:
 
         db = get_db(tmp_path / "test_todo.db")
         assert db.table_exists("tasks")
-        assert db.table_exists("labels")
-        assert db.table_exists("todo_labels")
         assert db.table_exists("todo_dependencies")
         assert db.table_exists("attachments")
         assert db.table_exists("templates")

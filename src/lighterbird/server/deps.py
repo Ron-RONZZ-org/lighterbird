@@ -12,6 +12,7 @@ from lighterbird.journal.services import JournalService
 from lighterbird.letter.db import get_db as get_letter_db
 from lighterbird.letter.services.letters import LetterService
 from lighterbird.profiles.services.profiles import ProfileService
+from lighterbird.tags.service import TagService
 from lighterbird.todo.db import get_db as get_todo_db
 from lighterbird.todo.services import TodoService
 from lighterbird.user_commands.service import UserCommandsService
@@ -25,6 +26,7 @@ _attachment_store: AttachmentStore | None = None
 _profiles_service: ProfileService | None = None
 _user_commands_service: UserCommandsService | None = None
 _letter_service: LetterService | None = None
+_tag_service: TagService | None = None
 
 
 def get_email_service() -> EmailService:
@@ -95,6 +97,14 @@ def get_letter_service() -> LetterService:
     return _letter_service
 
 
+def get_tag_service() -> TagService:
+    """Get the singleton TagService."""
+    global _tag_service
+    if _tag_service is None:
+        _tag_service = TagService()
+    return _tag_service
+
+
 def get_attachment_store() -> AttachmentStore:
     """Get the singleton AttachmentStore."""
     global _attachment_store
@@ -107,7 +117,7 @@ def reset_services() -> None:
     """Reset all service singletons (useful for testing)."""
     global _email_service, _calendar_service
     global _contact_service, _todo_service, _journal_service
-    global _attachment_store, _profiles_service, _user_commands_service, _letter_service
+    global _attachment_store, _profiles_service, _user_commands_service, _letter_service, _tag_service
     _email_service = None
     _calendar_service = None
     _contact_service = None
@@ -117,3 +127,4 @@ def reset_services() -> None:
     _profiles_service = None
     _user_commands_service = None
     _letter_service = None
+    _tag_service = None

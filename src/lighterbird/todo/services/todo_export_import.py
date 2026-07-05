@@ -179,15 +179,6 @@ class _TodoExportImportMixin:
 
             tags = meta.get("tags", [])
             if tags:
-                for tag_name in tags:
-                    existing = self.db.execute_one(
-                        "SELECT name FROM labels WHERE name = ?", (tag_name,),
-                    )
-                    if not existing:
-                        try:
-                            self.create_label({"name": tag_name})
-                        except ValueError:
-                            pass
                 data["_tags"] = tags
 
             deps = meta.get("dependencies", [])

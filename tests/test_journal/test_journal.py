@@ -335,7 +335,7 @@ class TestLabels:
 
     def test_create_label_missing_name_raises(self, svc):
         """Creating a label with empty name raises ValueError."""
-        with pytest.raises(ValueError, match="Label name is required"):
+        with pytest.raises(ValueError, match="Tag name is required"):
             svc.create_label({"name": ""})
 
     def test_create_label_duplicate_raises(self, svc):
@@ -588,8 +588,6 @@ class TestDB:
 
         db = get_db(tmp_path / "test_journal.db")
         assert db.table_exists("journal")
-        assert db.table_exists("labels")
-        assert db.table_exists("journal_labels")
 
     def test_get_db_idempotent(self, tmp_path):
         """Calling get_db multiple times does not raise."""
@@ -609,10 +607,8 @@ class TestDB:
         assert expected.issubset(cols), f"Missing columns: {expected - cols}"
 
     def test_labels_table_columns(self, tmp_path):
-        """labels table has expected columns."""
+        """Labels are now managed in the shared tags.db — no local labels table."""
         from lighterbird.journal.db import get_db
 
         db = get_db(tmp_path / "labels.db")
-        cols = {r["name"] for r in db.get_pragma_table_info("labels")}
-        expected = {"name", "color", "created_at", "updated_at"}
-        assert expected.issubset(cols)
+        assert not db.table_exists("labels")

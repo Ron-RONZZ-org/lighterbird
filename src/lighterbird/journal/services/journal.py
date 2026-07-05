@@ -1,4 +1,4 @@
-"""Journal CRUD service with label management."""
+"""Journal CRUD service with label management (via shared tag system)."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from typing import Any
 
 from lighterbird.core.crud import CRUDService
 from lighterbird.core.yaml_frontmatter import unwrap, wrap
+from lighterbird.tags.service import TagService
 
 
 class JournalService(CRUDService):
@@ -15,6 +16,13 @@ class JournalService(CRUDService):
 
     def __init__(self, db):
         super().__init__(db, "journal")
+
+    def _tag_svc(self) -> TagService:
+        svc = getattr(self, "_tag_service", None)
+        if svc is None:
+            svc = TagService()
+            self._tag_service = svc
+        return svc
 
     def create(self, data: dict[str, Any]) -> dict[str, Any]:
         """Create a journal entry with a default date if not provided."""
@@ -108,57 +116,25 @@ class JournalService(CRUDService):
             (date_str,),
         )
 
-    # ── Labels ──────────────────────────────────────────────────────────
+    # ── Labels (via shared tag system) ──────────────────────────────────
 
     def add_label(self, entry_uuid: str, label_name: str) -> None:
-        """Attach a label to a journal entry."""
-        self.db.execute(
-            "INSERT OR IGNORE INTO journal_labels (entry_uuid, label_name) "
-            "VALUES (?, ?)",
-            (entry_uuid, label_name),
-        )
+        self._tag_svc().add_tag("journal", entry_uuid, label_name)
 
     def remove_label(self, entry_uuid: str, label_name: str) -> None:
-        """Detach a label from a journal entry."""
-        self.db.execute(
-            "DELETE FROM journal_labels "
-            "WHERE entry_uuid = ? AND label_name = ?",
-            (entry_uuid, label_name),
-        )
+        self._tag_svc().remove_tag("journal", entry_uuid, label_name)
 
     def get_labels(self, entry_uuid: str) -> list[dict[str, Any]]:
-        """Get all labels attached to a journal entry."""
-        return self.db.execute(
-            "SELECT l.* FROM labels l "
-            "JOIN journal_labels jl ON l.name = jl.label_name "
-            "WHERE jl.entry_uuid = ? ORDER BY l.name",
-            (entry_uuid,),
-        )
+        return self._tag_svc().get_tags_for("journal", entry_uuid)
 
     def list_all_labels(self) -> list[dict[str, Any]]:
-        """List all available labels."""
-        return self.db.execute("SELECT * FROM labels ORDER BY name")
+        return self._tag_svc().list_tags()
 
     def create_label(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Create a new label."""
-        from datetime import datetime
-
-        now = datetime.now(UTC).isoformat()
-        name = data.get("name", "").strip()
-        if not name:
-            raise ValueError("Label name is required.")
-        color = data.get("color", "")
-        try:
-            return self.db.execute_one(
-                "INSERT INTO labels (name, color, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?) RETURNING *",
-                (name, color, now, now),
-            )
-        except Exception as e:
-            if "UNIQUE" in str(e) or "PRIMARY KEY" in str(e):
-                raise ValueError(f"Label '{name}' already exists.") from e
-            raise
+        return self._tag_svc().create_tag(
+            name=data.get("name", ""),
+            color=data.get("color", ""),
+        )
 
     def delete_label(self, label_name: str) -> None:
-        """Delete a label and all its associations."""
-        self.db.execute("DELETE FROM labels WHERE name = ?", (label_name,))
+        self._tag_svc().delete_tag(label_name)

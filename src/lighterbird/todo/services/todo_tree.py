@@ -76,7 +76,7 @@ class _TodoTreeMixin:
             return None
         todo["children"] = self.get_tree(uuid_, depth=1)
         todo["_computed_priority"] = self._compute_priority(todo)
-        todo["labels"] = self.get_labels(uuid_)
+        todo["labels"] = self._tag_svc().get_tags_for("todo", uuid_)
         return todo
 
     def move_as_child(self, uuid_: str, parent_uuid_: str | None) -> None:

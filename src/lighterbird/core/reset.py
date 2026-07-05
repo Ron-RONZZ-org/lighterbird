@@ -155,6 +155,11 @@ def _recreate_schemas() -> list[str]:
     uc_get_db()
     created.append("user_commands.db")
 
+    # tags
+    from lighterbird.tags.db import get_db as tags_get_db
+    tags_get_db()
+    created.append("tags.db")
+
     return created
 
 

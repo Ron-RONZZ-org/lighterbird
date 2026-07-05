@@ -37,16 +37,5 @@ class TodoService(
         tags = data.pop("_tags", None)
         result = super().update(pk, data)
         if tags is not None and result is not None:
-            # Remove existing labels, then add new ones
-            current = self.db.execute(
-                "SELECT label_name FROM todo_labels WHERE todo_uuid = ?",
-                (pk,),
-            )
-            for row in current:
-                self.db.execute(
-                    "DELETE FROM todo_labels WHERE todo_uuid = ? AND label_name = ?",
-                    (pk, row["label_name"]),
-                )
-            for tag_name in tags:
-                self.add_label(pk, tag_name)
+            self._tag_svc().set_tags("todo", pk, tags)
         return result

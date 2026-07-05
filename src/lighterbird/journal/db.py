@@ -22,30 +22,9 @@ CREATE TABLE IF NOT EXISTS journal (
 );
 """
 
-_CREATE_LABELS = """
-CREATE TABLE IF NOT EXISTS labels (
-    name        TEXT PRIMARY KEY COLLATE NOCASE,
-    color       TEXT NOT NULL DEFAULT '',
-    created_at  TEXT NOT NULL,
-    updated_at  TEXT NOT NULL
-);
-"""
-
-_CREATE_JOURNAL_LABELS = """
-CREATE TABLE IF NOT EXISTS journal_labels (
-    entry_uuid  TEXT NOT NULL REFERENCES journal(uuid) ON DELETE CASCADE,
-    label_name  TEXT NOT NULL REFERENCES labels(name) ON DELETE CASCADE,
-    PRIMARY KEY (entry_uuid, label_name)
-);
-"""
-
 _SCHEMA_STMTS: list[str] = [
     _CREATE_JOURNAL,
-    _CREATE_LABELS,
-    _CREATE_JOURNAL_LABELS,
     "CREATE INDEX IF NOT EXISTS idx_journal_date ON journal(date);",
-    "CREATE INDEX IF NOT EXISTS idx_journal_labels_entry ON journal_labels(entry_uuid);",
-    "CREATE INDEX IF NOT EXISTS idx_journal_labels_label ON journal_labels(label_name);",
 ]
 
 

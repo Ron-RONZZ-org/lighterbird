@@ -23,6 +23,8 @@ The interaction model is a **centralized command box** — type `!account add` t
 
 The backend is forked from proven code in [A-lien](../A-lien) (email), [A-organizi](../A-organizi) (calendar), and [A-core](../A-core) (DB, crypto, keyring, AI providers), with contacts, todo, and journal extracted into standalone modules. The frontend is a Svelte 5 SPA served by a FastAPI Python server.
 
+> **Pre-release — not a backward-compatible upgrade.** lighterbird is a ground-up redesign with a different CLI schema, a web GUI, LLM integration, letters, and a shared tag system. There is no migration path from A-lien/A-organizi. Old `!` command syntax, plural aliases (`!contacts` → use `!contact`), Esperanto option names, and Esperanto data schemas are **not** carried forward.
+
 **Shared core**: lighterbird now depends on [lightercore](../lightercore) for cross-cutting infrastructure — database, paths, exceptions, CRUD, and backup. The local ``lighterbird/core/`` modules are thin re-exports; the canonical implementations live in lightercore.
 
 ---

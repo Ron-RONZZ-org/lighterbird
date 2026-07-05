@@ -29,23 +29,6 @@ CREATE TABLE IF NOT EXISTS tasks (
 );
 """
 
-_CREATE_LABELS = """
-CREATE TABLE IF NOT EXISTS labels (
-    name        TEXT PRIMARY KEY COLLATE NOCASE,
-    color       TEXT NOT NULL DEFAULT '',
-    created_at  TEXT NOT NULL,
-    updated_at  TEXT NOT NULL
-);
-"""
-
-_CREATE_TODO_LABELS = """
-CREATE TABLE IF NOT EXISTS todo_labels (
-    todo_uuid   TEXT NOT NULL REFERENCES tasks(uuid) ON DELETE CASCADE,
-    label_name  TEXT NOT NULL REFERENCES labels(name) ON DELETE CASCADE,
-    PRIMARY KEY (todo_uuid, label_name)
-);
-"""
-
 _CREATE_TODO_DEPENDENCIES = """
 CREATE TABLE IF NOT EXISTS todo_dependencies (
     task_uuid     TEXT NOT NULL REFERENCES tasks(uuid) ON DELETE CASCADE,
@@ -112,16 +95,12 @@ ALTER TABLE tasks ADD COLUMN template_uuid TEXT;
 
 _SCHEMA_STMTS: list[str] = [
     _CREATE_TASKS,
-    _CREATE_LABELS,
-    _CREATE_TODO_LABELS,
     _CREATE_TODO_DEPENDENCIES,
     _CREATE_ATTACHMENTS,
     _CREATE_TEMPLATES,
     _CREATE_TEMPLATE_FIELDS,
     "CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);",
     "CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_uuid);",
-    "CREATE INDEX IF NOT EXISTS idx_todo_labels_todo ON todo_labels(todo_uuid);",
-    "CREATE INDEX IF NOT EXISTS idx_todo_labels_label ON todo_labels(label_name);",
     "CREATE INDEX IF NOT EXISTS idx_todo_dependencies_task ON todo_dependencies(task_uuid);",
     "CREATE INDEX IF NOT EXISTS idx_todo_dependencies_dep ON todo_dependencies(depends_on);",
     "CREATE INDEX IF NOT EXISTS idx_attachments_todo ON attachments(todo_uuid);",

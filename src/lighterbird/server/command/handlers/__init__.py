@@ -1,6 +1,6 @@
 """Side-effect imports to register all command handlers.
 
-Each module is imported for its ``@command`` / ``@alias`` side effects.
+Each module is imported for its ``@command`` side effects.
 """
 
 import lighterbird.server.command.registry as _reg
@@ -25,6 +25,7 @@ try:
         letter,  # noqa: F401
         llm,  # noqa: F401
         sync,  # noqa: F401
+        tags,  # noqa: F401
         todo,  # noqa: F401
         user_commands,  # noqa: F401
         user_profiles,  # noqa: F401
@@ -34,9 +35,7 @@ finally:
 
 # ── Group metadata ────────────────────────────────────────────────────────
 
-from lighterbird.server.command.registry import alias, group, register_interactive_form
-
-# ── Group metadata ────────────────────────────────────────────────────────
+from lighterbird.server.command.registry import group, register_interactive_form
 
 group("email", description="Email operations", default_action="list")
 group("calendar", description="Calendar operations", default_action="list")
@@ -44,18 +43,7 @@ group("contact", description="Contact management", default_action="list")
 group("todo", description="Task management", default_action="list")
 group("journal", description="Journal entries", default_action="list")
 group("email.spam", description="Spam block management")
-
-# ── Command aliases ────────────────────────────────────────────────────────
-# Plural-form aliases for intuitive command entry.
-
-alias(["contacts"], ["contact"])
-alias(["inbox"], ["email", "list"])
-alias(["tasks"], ["todo", "list"])
-alias(["journals"], ["journal", "list"])
-alias(["calendars"], ["calendar", "list"])
-alias(["letters"], ["letter", "list"])
-alias(["profiles"], ["user", "info", "list"])
-alias(["commands"], ["user", "saved-commands", "list"])
+group("tag", description="Cross-domain tag management")
 
 # ── Interactive forms ─────────────────────────────────────────────────────
 # Commands that have an interactive form popup in the frontend.

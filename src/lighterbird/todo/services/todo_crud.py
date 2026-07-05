@@ -7,11 +7,20 @@ from datetime import UTC, datetime
 from typing import Any
 
 from lighterbird.core.priority import eval_safe, validate_safe
+from lighterbird.tags.service import TagService
 
 
 class _TodoCrudMixin:
     """Mixin providing CRUD operations, labels, dependencies, and attachments
     for the TodoService class."""
+
+    def _tag_svc(self) -> TagService:
+        """Lazy-initialised TagService for cross-domain tag management."""
+        svc = getattr(self, "_tag_service", None)
+        if svc is None:
+            svc = TagService()
+            self._tag_service = svc  # type: ignore[attr-defined]
+        return svc
 
     # ── Search & List ───────────────────────────────────────────────────
 
@@ -20,11 +29,8 @@ class _TodoCrudMixin:
                sort: str | None = None) -> list[dict[str, Any]]:
         if not query and not status and not tags:
             return self.list(limit=limit, sort=sort)
-        joins: list[str] = []
         conditions: list[str] = []
         params: list[Any] = []
-        group_by = None
-        having = None
 
         if query:
             conditions.append("(LOWER(t.title) LIKE LOWER(?)"
@@ -34,12 +40,29 @@ class _TodoCrudMixin:
             conditions.append("t.status = ?")
             params.append(status)
         if tags:
-            joins.append("JOIN todo_labels tl ON t.uuid = tl.todo_uuid")
-            placeholders = ",".join("?" for _ in tags)
-            conditions.append(f"tl.label_name IN ({placeholders})")
-            params.extend(tags)
-            group_by = "t.uuid"
-            having = f"COUNT(DISTINCT tl.label_name) = {len(tags)}"
+            # Look up todo UUIDs that have ALL specified tags via the shared tag system
+            tag_svc = self._tag_svc()
+            tag_uuids: set[str] | None = None
+            for tag_name in tags:
+                items = set(
+                    r["item_uuid"]
+                    for r in tag_svc.db.execute(
+                        "SELECT item_uuid FROM taggings"
+                        " WHERE domain = 'todo' AND tag_name = ?",
+                        (tag_name,),
+                    )
+                )
+                if tag_uuids is None:
+                    tag_uuids = items
+                else:
+                    tag_uuids &= items
+            if tag_uuids is not None and len(tag_uuids) > 0:
+                placeholders = ",".join("?" for _ in tag_uuids)
+                conditions.append(f"t.uuid IN ({placeholders})")
+                params.extend(tag_uuids)
+            elif tag_uuids is not None:
+                # No tasks match the tag intersection; return empty
+                return []
 
         # Sort order
         sort_map = {
@@ -51,13 +74,9 @@ class _TodoCrudMixin:
         order_by = sort_map.get(sort or "", "t.created_at DESC")
 
         where = " AND ".join(conditions) if conditions else "1=1"
-        group_clause = f" GROUP BY {group_by}" if group_by else ""
-        having_clause = f" HAVING {having}" if having else ""
         sql = (
             f"SELECT t.* FROM tasks t"
-            f" {' '.join(joins)}"
             f" WHERE {where}"
-            f"{group_clause}{having_clause}"
             f" ORDER BY {order_by} LIMIT ?"
         )
         rows = list(self.db.execute(sql, (*params, limit)))
@@ -93,28 +112,21 @@ class _TodoCrudMixin:
             row["_computed_priority"] = self._compute_priority(row)
         return self._attach_labels(rows)
 
-    # ── Labels batch fetch ──────────────────────────────────────────────
+    # ── Labels batch fetch (via shared tag system) ──────────────────────
 
     def _attach_labels(self, todos: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Batch-attach label info to each todo in the list."""
+        """Batch-attach label info to each todo from the shared tag system."""
         if not todos:
             return todos
-        uuids = [t["uuid"] for t in todos]
-        placeholders = ",".join("?" for _ in uuids)
-        rows = self.db.execute(
-            f"SELECT tl.todo_uuid, l.name, l.color"
-            f" FROM todo_labels tl"
-            f" JOIN labels l ON tl.label_name = l.name"
-            f" WHERE tl.todo_uuid IN ({placeholders})",
-            uuids,
-        )
-        label_map: dict[str, list[dict[str, str]]] = {}
-        for row in rows:
-            label_map.setdefault(row["todo_uuid"], []).append(
-                {"name": row["name"], "color": row["color"]},
-            )
+        tag_svc = self._tag_svc()
+        uuid_map: dict[str, list[dict[str, str]]] = {}
         for t in todos:
-            t["labels"] = label_map.get(t["uuid"], [])
+            uid = t["uuid"]
+            labels = tag_svc.get_tags_for("todo", uid)
+            if labels:
+                uuid_map[uid] = [{"name": l["name"], "color": l["color"]} for l in labels]
+        for t in todos:
+            t["labels"] = uuid_map.get(t["uuid"], [])
         return todos
 
     # ── Override hooks ──────────────────────────────────────────────────
@@ -151,18 +163,7 @@ class _TodoCrudMixin:
         """Handle tag updates after a normal update."""
         tags = new_data.pop("_tags", None)
         if tags is not None:
-            # Remove existing labels, then add new ones
-            current = self.db.execute(
-                "SELECT label_name FROM todo_labels WHERE todo_uuid = ?",
-                (uuid_,),
-            )
-            for row in current:
-                self.db.execute(
-                    "DELETE FROM todo_labels WHERE todo_uuid = ? AND label_name = ?",
-                    (uuid_, row["label_name"]),
-                )
-            for tag_name in tags:
-                self.add_label(uuid_, tag_name)
+            self._tag_svc().set_tags("todo", uuid_, tags)
 
     def _post_create(self, data: dict[str, Any], result: dict[str, Any]) -> None:
         """Handle dependency and tag setup after creation."""
@@ -314,60 +315,25 @@ class _TodoCrudMixin:
         result = self.update(uuid_, {"status": "done"})
         return result is not None
 
-    # ── Labels ──────────────────────────────────────────────────────────
+    # ── Labels (via shared tag system) ──────────────────────────────────
 
     def add_label(self, todo_uuid: str, label_name: str) -> None:
-        # Ensure label exists in labels table first (FK constraint)
-        now = datetime.now(UTC).isoformat()
-        self.db.execute(
-            "INSERT OR IGNORE INTO labels (name, color, created_at, updated_at)"
-            " VALUES (?, '', ?, ?)",
-            (label_name, now, now),
-        )
-        self.db.execute(
-            "INSERT OR IGNORE INTO todo_labels"
-            " (todo_uuid, label_name) VALUES (?, ?)",
-            (todo_uuid, label_name),
-        )
+        self._tag_svc().add_tag("todo", todo_uuid, label_name)
 
     def remove_label(self, todo_uuid: str, label_name: str) -> None:
-        self.db.execute(
-            "DELETE FROM todo_labels"
-            " WHERE todo_uuid = ? AND label_name = ?",
-            (todo_uuid, label_name),
-        )
+        self._tag_svc().remove_tag("todo", todo_uuid, label_name)
 
     def get_labels(self, todo_uuid: str) -> list[dict[str, Any]]:
-        return self.db.execute(
-            "SELECT l.* FROM labels l"
-            " JOIN todo_labels tl ON l.name = tl.label_name"
-            " WHERE tl.todo_uuid = ? ORDER BY l.name",
-            (todo_uuid,),
-        )
+        return self._tag_svc().get_tags_for("todo", todo_uuid)
 
     def list_all_labels(self) -> list[dict[str, Any]]:
-        return self.db.execute("SELECT * FROM labels ORDER BY name")
+        return self._tag_svc().list_tags()
 
     def create_label(self, data: dict[str, Any]) -> dict[str, Any]:
-        now = datetime.now(UTC).isoformat()
-        name = data.get("name", "").strip()
-        if not name:
-            raise ValueError("Label name is required.")
-        color = data.get("color", "")
-        try:
-            return self.db.execute_one(
-                "INSERT INTO labels (name, color, created_at, updated_at)"
-                " VALUES (?, ?, ?, ?) RETURNING *",
-                (name, color, now, now),
-            )
-        except Exception as e:
-            if "UNIQUE" in str(e) or "PRIMARY KEY" in str(e):
-                raise ValueError(
-                    f"Label '{name}' already exists.",
-                ) from e
-            raise
+        return self._tag_svc().create_tag(
+            name=data.get("name", ""),
+            color=data.get("color", ""),
+        )
 
     def delete_label(self, label_name: str) -> None:
-        self.db.execute(
-            "DELETE FROM labels WHERE name = ?", (label_name,),
-        )
+        self._tag_svc().delete_tag(label_name)
