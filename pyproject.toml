@@ -42,6 +42,9 @@ lighterbird-dev = "lighterbird.scripts.dev_cli:dev_main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/lighterbird"]
 
+[tool.uv.sources]
+lightercore = { path = "../lightercore" }
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [

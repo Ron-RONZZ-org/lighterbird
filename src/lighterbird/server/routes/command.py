@@ -53,7 +53,7 @@ def _extract_partial_data(tokens: list[str], flags: dict[str, str]) -> dict[str,
 
 
 @router.post("/command", response_model=CommandResponse)
-def execute_command(req: CommandRequest) -> dict[str, Any]:
+def execute_command(req: CommandRequest) -> CommandResponse:
     """Execute a parsed command and return structured output.
 
     The frontend sends tokenised input; the backend resolves the command
@@ -68,37 +68,36 @@ def execute_command(req: CommandRequest) -> dict[str, Any]:
         if "form" in req.flags:
             form_type = resolve_form_type(req.tokens)
             if form_type:
-                return {
-                    "type": "form-required",
-                    "title": f"Complete {form_type.replace('-', ' ').title()}",
-                    "data": {
+                return CommandResponse(
+                    type="form-required",
+                    title=f"Complete {form_type.replace('-', ' ').title()}",
+                    data={
                         "form": form_type,
                         "initialData": _extract_partial_data(req.tokens, req.flags),
                     },
-                }
+                )
 
         result = dispatch(req.tokens, req.flags)
-        # Ensure type/title/data keys exist
-        return {
-            "type": result.get("type", "status"),
-            "title": result.get("title", ""),
-            "data": result.get("data", result),
-        }
+        return CommandResponse(
+            type=result.get("type", "status"),
+            title=result.get("title", ""),
+            data=result.get("data", result),
+        )
     except CommandNotFound as e:
         raise HTTPException(status_code=400, detail=str(e))
     except CommandValidationError as e:
         # If the failed command has an interactive form, return form-required
         form_type = resolve_form_type(req.tokens)
         if form_type:
-            return {
-                "type": "form-required",
-                "title": f"Complete {form_type.replace('-', ' ').title()}",
-                "data": {
+            return CommandResponse(
+                type="form-required",
+                title=f"Complete {form_type.replace('-', ' ').title()}",
+                data={
                     "form": form_type,
                     "initialData": _extract_partial_data(req.tokens, req.flags),
                     "message": str(e),
                 },
-            }
+            )
         # Fall back to standard error response
         raise HTTPException(
             status_code=400,

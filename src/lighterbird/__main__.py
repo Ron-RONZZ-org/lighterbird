@@ -12,12 +12,23 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# Module-level guard: once configured, skip on reload (uvicorn --reload
+# re-imports this module on every file change). Without this guard,
+# the keyring lookup runs on every reload.
+_auto_configured: bool = False
+
 
 def _auto_configure_from_dev() -> None:
     """Seed the LLM provider config from a ``.dev`` file in the project root.
 
     Only applies when no provider is configured yet (fresh install).
+    Only runs once per process — subsequent imports (reloads) are no-ops.
     """
+    global _auto_configured
+    if _auto_configured:
+        return
+    _auto_configured = True
+
     from lighterbird.core.keyring import get_password, set_password
 
     configured = get_password("lighterbird-llm", "active-provider")
