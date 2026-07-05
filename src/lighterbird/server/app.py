@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from lighterbird.server.middleware import add_middleware
 from lighterbird.server.routes.email import router as email_router
+from lighterbird.server.routes.email_actions import router as email_actions_router
 from lighterbird.server.routes.email_sieve import router as email_sieve_router
 from lighterbird.server.routes.calendar import router as calendar_router
 from lighterbird.server.routes.admin import router as admin_router
@@ -58,6 +59,7 @@ def create_app(static_dir: str | Path | None = None) -> FastAPI:
 
     # ── API routes ───────────────────────────────────────────────────────
     app.include_router(email_router)
+    app.include_router(email_actions_router)
     app.include_router(email_sieve_router)
     app.include_router(calendar_router)
     app.include_router(admin_router)
