@@ -10,7 +10,6 @@ import socket
 import ssl
 from typing import Any
 
-
 # ── Local validation ────────────────────────────────────────────────────────
 
 
@@ -76,8 +75,7 @@ class SieveManager:
             if login_ok != "OK":
                 reason = self._client.response_text or login_ok
                 raise ConnectionError(f"Sieve login failed for {username}: {reason}")
-        except (socket.gaierror, ConnectionRefusedError,
-                TimeoutError, socket.timeout, ssl.SSLError, OSError) as e:
+        except (socket.gaierror, ConnectionRefusedError, TimeoutError, ssl.SSLError, OSError) as e:
             raise ConnectionError(
                 f"Sieve connection failed to {username}@{self.host}:{self.port} — {e}"
             ) from e

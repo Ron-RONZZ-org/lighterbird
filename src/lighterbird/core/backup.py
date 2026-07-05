@@ -7,21 +7,22 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from lightercore.backup import *  # noqa: F401, F403
+from lightercore.backup import *  # noqa: F403
 
 # Keep backward-compatible aliases
-from lightercore.backup import (  # noqa: F401
+from lightercore.backup import (  # noqa: F401  # noqa: F401 — private, not in __all__
+    BackupStrategy,
+    _backup_dir,
     _checkpoint_known_dbs,
     _create_strategy_archive,
     _extract_archive,
-    _known_db_paths,
     _known_config_files,
-    BackupStrategy,
+    _known_db_paths,
+    _sha256,
     get_strategy,
     prune_backups,
     resolve_target_path,
 )
-from lightercore.backup import _backup_dir, _sha256  # noqa: F401 — private, not in __all__
 from lightercore.backup import backup_database as _lightercore_backup_database
 
 # ── Lighterbird-specific wrappers (not in lightercore) ──────────────
@@ -44,7 +45,7 @@ def backup_config_files(*, retention: int | None = None) -> list[Path]:
     Creates individual backup files for each discovered config file using
     the first enabled strategy, or a default strategy.
     """
-    from lightercore.backup import _backup_dir, _timestamp, _backup_filename, _copy_with_verify
+    from lightercore.backup import _backup_filename, _copy_with_verify, _timestamp
 
     strategies = list_strategies()
     enabled = (

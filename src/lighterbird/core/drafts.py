@@ -15,12 +15,11 @@ from __future__ import annotations
 
 import json
 import uuid as _uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from lighterbird.core.paths import data_dir
-
 
 _DRAFTS_FILE = ".drafts.json"
 
@@ -48,7 +47,7 @@ def _save_all(drafts: list[dict[str, Any]]) -> None:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _next_uuid() -> str:
@@ -149,7 +148,7 @@ def cleanup_old_drafts(max_age_days: int = 30) -> int:
     """Delete drafts older than *max_age_days*. Returns count deleted."""
     drafts = _load_all()
     before = len(drafts)
-    cutoff = datetime.now(timezone.utc).timestamp() - max_age_days * 86400
+    cutoff = datetime.now(UTC).timestamp() - max_age_days * 86400
     drafts = [
         d for d in drafts
         if _parse_ts(d.get("updated_at", "")) > cutoff
@@ -166,10 +165,10 @@ def _parse_ts(ts: str) -> float:
 
 
 __all__ = [
-    "list_drafts",
-    "get_draft",
-    "save_draft",
+    "cleanup_old_drafts",
     "delete_draft",
     "delete_drafts_by_domain",
-    "cleanup_old_drafts",
+    "get_draft",
+    "list_drafts",
+    "save_draft",
 ]

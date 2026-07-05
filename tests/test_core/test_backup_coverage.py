@@ -9,19 +9,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from lighterbird.core.backup import (
     BackupTarget,
-    _known_db_paths,
     _known_config_files,
-    get_backup_targets,
-    export_data,
-    import_data,
+    _known_db_paths,
     backup_all,
+    export_data,
+    get_backup_targets,
+    import_data,
 )
-from lighterbird.core.paths import data_dir, config_dir
-
+from lighterbird.core.paths import config_dir
 
 # ── get_backup_targets() autodiscovery tests ──────────────────────────────
 
@@ -160,7 +157,10 @@ def test_export_includes_all_modules(tmp_data_dir: Path, tmp_path: Path):
     export_path = export_data(str(tmp_path))
     assert export_path.suffix == ".7z"
 
-    import py7zr, json, tempfile
+    import json
+    import tempfile
+
+    import py7zr
     with tempfile.TemporaryDirectory() as tmp:
         with py7zr.SevenZipFile(str(export_path), "r") as arc:
             arc.extractall(path=tmp)

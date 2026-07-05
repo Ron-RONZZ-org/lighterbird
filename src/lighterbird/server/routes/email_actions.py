@@ -10,12 +10,15 @@ import re
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 
+from lighterbird.email.service import EmailService
 from lighterbird.server.deps import get_email_service
 from lighterbird.server.schemas import (
-    SendRequest, MarkReadRequest,
-    BatchDeleteRequest, BatchMoveRequest, BatchResultResponse,
+    BatchDeleteRequest,
+    BatchMoveRequest,
+    BatchResultResponse,
+    MarkReadRequest,
+    SendRequest,
 )
-from lighterbird.email.service import EmailService
 
 router = APIRouter(prefix="/api/v1/email", tags=["email"])
 
@@ -137,6 +140,7 @@ def download_attachment(
 ):
     """Download a single attachment by its UUID."""
     from fastapi.responses import Response as FastResponse
+
     from lighterbird.core.storage import AttachmentStore
 
     row = email_svc.db.execute_one(

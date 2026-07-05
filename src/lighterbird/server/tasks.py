@@ -9,9 +9,7 @@ from __future__ import annotations
 import logging
 import threading
 import time as _time
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any
+from datetime import UTC, datetime
 
 from lighterbird.core.worker import BackgroundWorker, Job, WorkerPool
 
@@ -248,9 +246,9 @@ class CalDAVWorker(BackgroundWorker):
     def _do_push(payload: dict) -> None:
         """Push an event to a remote calendar."""
         from lighterbird.calendar.caldav import push_event
-        from lighterbird.calendar.service import CalendarService
-        from lighterbird.calendar.keyring import get_password
         from lighterbird.calendar.ics import events_to_ics
+        from lighterbird.calendar.keyring import get_password
+        from lighterbird.calendar.service import CalendarService
 
         cal_uuid = payload.get("calendar_uuid", "")
         event_uuid = payload.get("event_uuid", "")
@@ -292,8 +290,8 @@ class CalDAVWorker(BackgroundWorker):
     def _do_delete(payload: dict) -> None:
         """Delete an event from a remote calendar."""
         from lighterbird.calendar.caldav import delete_event
-        from lighterbird.calendar.service import CalendarService
         from lighterbird.calendar.keyring import get_password
+        from lighterbird.calendar.service import CalendarService
 
         cal_uuid = payload.get("calendar_uuid", "")
         event_uuid = payload.get("event_uuid", "")
@@ -365,7 +363,7 @@ class BackupScheduler(BackgroundWorker):
                         "[%s] Backup check failed: %s", self.name, exc, exc_info=True
                     )
             # Sleep in short intervals so we can react to stop signal
-            self._stop_event.wait(10.0)
+            self._stop_event.wait(2.0)
 
         logger.info("[%s] Worker loop exited", self.name)
 
@@ -373,14 +371,14 @@ class BackupScheduler(BackgroundWorker):
         """Check all strategies and run backups for those that are due."""
         try:
             from lighterbird.core.backup import (
-                load_config,
                 backup_all_strategies,
+                load_config,
                 save_config,
             )
 
             cfg = load_config()
             strategies = cfg.get("strategies", [])
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             triggered: list[str] = []
 
             for s in strategies:
@@ -435,14 +433,14 @@ class BackupScheduler(BackgroundWorker):
 
 
 __all__ = [
-    "init_workers",
-    "shutdown_workers",
-    "get_worker_pool",
-    "enqueue_email_sync",
-    "enqueue_email_trash",
+    "BackupScheduler",
+    "CalDAVWorker",
+    "EmailSyncWorker",
     "enqueue_caldav_push",
     "enqueue_caldav_sync",
-    "EmailSyncWorker",
-    "CalDAVWorker",
-    "BackupScheduler",
+    "enqueue_email_sync",
+    "enqueue_email_trash",
+    "get_worker_pool",
+    "init_workers",
+    "shutdown_workers",
 ]

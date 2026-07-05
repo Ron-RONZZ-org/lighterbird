@@ -194,16 +194,16 @@ class MessageService:
         sql = (
             "SELECT m.* FROM messages m"
             " WHERE m.is_deleted = 0"
-            " AND (m.message_id IN ({p}) OR m.in_reply_to IN ({p})"
-            "      OR m.references IN ({p})"
+            f" AND (m.message_id IN ({placeholders}) OR m.in_reply_to IN ({placeholders})"
+            f"      OR m.references IN ({placeholders})"
             "      OR EXISTS ("
             "        SELECT 1 FROM messages m2"
-            "        WHERE m2.message_id IN ({p})"
+            f"        WHERE m2.message_id IN ({placeholders})"
             "        AND (m.references LIKE '%' || m2.message_id || '%'"
             "             OR m.in_reply_to LIKE '%' || m2.message_id || '%')"
             "      ))"
             " ORDER BY m.received_at ASC"
             " LIMIT ?"
-        ).format(p=placeholders)
+        )
         params = list(ids) * 4 + [limit]
         return list(self.db.execute(sql, tuple(params)))

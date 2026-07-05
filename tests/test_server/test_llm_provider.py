@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
-from lighterbird.server.llm.provider import LLMProviderWrapper, _build_messages, get_provider
+from lighterbird.server.llm.provider import (
+    LLMProviderWrapper,
+    _build_messages,
+)
 
 
 def _fresh_provider():

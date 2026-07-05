@@ -17,12 +17,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from lighterbird.calendar.service import CalendarService
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
-
 from lighterbird.server.deps import get_calendar_service
-from lighterbird.calendar.service import CalendarService
-
 
 # ── Handlers ────────────────────────────────────────────────────────────
 

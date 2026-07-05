@@ -5,10 +5,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 
-from lighterbird.server.deps import get_contact_service
 from lighterbird.contacts.services import ContactService
+from lighterbird.server.deps import get_contact_service
 
 router = APIRouter(prefix="/api/v1/contacts", tags=["contacts"])
 

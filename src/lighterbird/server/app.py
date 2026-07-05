@@ -10,21 +10,21 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from lighterbird.server.middleware import add_middleware
+from lighterbird.server.routes.admin import router as admin_router
+from lighterbird.server.routes.calendar import router as calendar_router
+from lighterbird.server.routes.chat import router as chat_router
+from lighterbird.server.routes.command import router as command_router
+from lighterbird.server.routes.contacts import router as contacts_router
+from lighterbird.server.routes.cowrite import router as cowrite_router
+from lighterbird.server.routes.drafts import router as drafts_router
 from lighterbird.server.routes.email import router as email_router
 from lighterbird.server.routes.email_actions import router as email_actions_router
 from lighterbird.server.routes.email_sieve import router as email_sieve_router
-from lighterbird.server.routes.calendar import router as calendar_router
-from lighterbird.server.routes.admin import router as admin_router
-from lighterbird.server.routes.command import router as command_router
-from lighterbird.server.routes.contacts import router as contacts_router
-from lighterbird.server.routes.todo import router as todo_router
 from lighterbird.server.routes.journal import router as journal_router
-from lighterbird.server.routes.chat import router as chat_router
-from lighterbird.server.routes.llm import router as llm_router
-from lighterbird.server.routes.drafts import router as drafts_router
 from lighterbird.server.routes.letters import router as letters_router
+from lighterbird.server.routes.llm import router as llm_router
 from lighterbird.server.routes.profiles import router as profiles_router
-from lighterbird.server.routes.cowrite import router as cowrite_router
+from lighterbird.server.routes.todo import router as todo_router
 from lighterbird.server.tasks import init_workers, shutdown_workers
 
 

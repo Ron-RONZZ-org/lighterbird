@@ -23,15 +23,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from lighterbird.server.command.errors import CommandValidationError
-from lighterbird.server.command.registry import command
-
-from lighterbird.server.deps import get_email_service
 from lighterbird.email.service import EmailService
+from lighterbird.server.command.errors import CommandValidationError
+from lighterbird.server.command.handlers.email_eml import (  # noqa: F401
+    email_export_eml,
+    email_import_eml,
+)
+
 # Side-effect imports to register handlers split into sub-modules
 from lighterbird.server.command.handlers.email_send import email_send  # noqa: F401
-from lighterbird.server.command.handlers.email_eml import email_export_eml, email_import_eml  # noqa: F401
-
+from lighterbird.server.command.registry import command
+from lighterbird.server.deps import get_email_service
 
 # ── Handlers ────────────────────────────────────────────────────────────
 
@@ -128,7 +130,7 @@ def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
     if not folder_filter and not include_all:
         existing_exclude = filters.get("exclude_folder", [])
-        filters["exclude_folder"] = existing_exclude + ["Trash", "Spam", "Junk", "Bin"]
+        filters["exclude_folder"] = [*existing_exclude, "Trash", "Spam", "Junk", "Bin"]
 
     if sort_by:
         filters["sort"] = sort_by

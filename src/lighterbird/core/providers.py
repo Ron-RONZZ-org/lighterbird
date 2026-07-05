@@ -15,7 +15,7 @@ from typing import Any
 
 import httpx
 
-from lighterbird.core.ai import LLMProvider, ProviderConfig
+from lighterbird.core.ai import ProviderConfig
 
 logger = logging.getLogger(__name__)
 
@@ -360,6 +360,6 @@ class OllamaProvider:
 
 
 __all__ = [
-    "OpenAICompatibleProvider",
     "OllamaProvider",
+    "OpenAICompatibleProvider",
 ]

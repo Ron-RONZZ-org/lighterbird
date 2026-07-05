@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
+from lighterbird.calendar.service import CalendarService
+from lighterbird.contacts.db import get_db as get_contacts_db
+from lighterbird.contacts.services import ContactService
 from lighterbird.core.storage import AttachmentStore
 from lighterbird.email.service import EmailService
-from lighterbird.calendar.service import CalendarService
-from lighterbird.contacts.services import ContactService
-from lighterbird.contacts.db import get_db as get_contacts_db
-from lighterbird.todo.services import TodoService
-from lighterbird.todo.db import get_db as get_todo_db
-from lighterbird.journal.services import JournalService
 from lighterbird.journal.db import get_db as get_journal_db
-from lighterbird.profiles.services.profiles import ProfileService
-from lighterbird.user_commands.service import UserCommandsService
-from lighterbird.letter.services.letters import LetterService
+from lighterbird.journal.services import JournalService
 from lighterbird.letter.db import get_db as get_letter_db
+from lighterbird.letter.services.letters import LetterService
+from lighterbird.profiles.services.profiles import ProfileService
+from lighterbird.todo.db import get_db as get_todo_db
+from lighterbird.todo.services import TodoService
+from lighterbird.user_commands.service import UserCommandsService
 
 _email_service: EmailService | None = None
 _calendar_service: CalendarService | None = None

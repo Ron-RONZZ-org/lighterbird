@@ -8,10 +8,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from lighterbird.email.service import EmailService
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_email_service
-from lighterbird.email.service import EmailService
 
 
 @command("email.send")
@@ -88,6 +88,7 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     # ── LLM co-writing ─────────────────────────────────────────────────
     if cowrite_instr:
         import asyncio
+
         from lighterbird.server.cowrite.engine import cowrite as _cowrite_call
 
         fields = {"subject": subject, "body": body}
@@ -111,7 +112,7 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                         elif op["tag"] == "insert":
                             diff_lines.append(f"+ {field}: {op['inserted']!r}")
                 if diff_lines:
-                    body = body + f"\n\n-- Cowrite diff:\n" + "\n".join(diff_lines)
+                    body = body + "\n\n-- Cowrite diff:\n" + "\n".join(diff_lines)
         except (RuntimeError, ValueError) as exc:
             raise CommandValidationError(f"Co-writing failed: {exc}")
 

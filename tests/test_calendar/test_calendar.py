@@ -6,13 +6,17 @@ from pathlib import Path
 
 import pytest
 
+from lighterbird.calendar.caldav import remote_http_url
 from lighterbird.calendar.db import get_db
 from lighterbird.calendar.ics import (
-    iter_ics_events, ics_dt, events_to_ics, event_exists, insert_ics_events,
+    event_exists,
+    events_to_ics,
+    ics_dt,
+    insert_ics_events,
+    iter_ics_events,
 )
-from lighterbird.calendar.services import CalendarCRUD, EventService
 from lighterbird.calendar.service import CalendarService
-from lighterbird.calendar.caldav import remote_http_url
+from lighterbird.calendar.services import CalendarCRUD, EventService
 
 
 @pytest.fixture

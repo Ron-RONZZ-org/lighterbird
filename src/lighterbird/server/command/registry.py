@@ -165,7 +165,7 @@ def _resolve_user_aliases(
     try:
         from lighterbird.server.deps import get_user_commands_service
         svc = get_user_commands_service()
-    except Exception:
+    except (ImportError, RuntimeError, LookupError):
         return tokens, flags  # graceful degradation
 
     result = svc.resolve_and_expand(tokens)
@@ -225,7 +225,7 @@ def dispatch(
                 gkey = ".".join(resolved[:i])
                 gmeta = _group_metadata.get(gkey)
                 if gmeta and "default_action" in gmeta:
-                    redirected = resolved[:i] + [gmeta["default_action"]]
+                    redirected = [*resolved[:i], gmeta["default_action"]]
                     if redirected != resolved:
                         return dispatch(redirected, flags)
 

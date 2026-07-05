@@ -7,6 +7,7 @@ Sieve script generation.
 
 from __future__ import annotations
 
+from datetime import UTC
 from typing import Any
 
 
@@ -31,10 +32,10 @@ class SpamManager:
         Returns:
             Block record dict.
         """
-        from datetime import datetime, timezone
         import uuid
+        from datetime import datetime
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         block = {
             "uuid": str(uuid.uuid4()),
             "type": "sender",
@@ -58,9 +59,9 @@ class SpamManager:
             Block record dict.
         """
         import uuid
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         domain = domain.strip().lower()
         if domain.startswith("@"):
             domain = domain[1:]

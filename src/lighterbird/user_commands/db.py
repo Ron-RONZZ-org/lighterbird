@@ -5,8 +5,6 @@ Follows the per-module SQLite file pattern from email/, contacts/, etc.
 
 from __future__ import annotations
 
-from typing import Any
-
 from lighterbird.core.db import LighterbirdDB
 from lighterbird.core.paths import data_dir
 

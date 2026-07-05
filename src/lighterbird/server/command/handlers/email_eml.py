@@ -9,10 +9,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from lighterbird.email.service import EmailService
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_email_service
-from lighterbird.email.service import EmailService
 
 
 @command("email.export.eml")

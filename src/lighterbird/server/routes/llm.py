@@ -19,12 +19,12 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
+from lighterbird.core.system_prompt import load_system_prompt, system_prompt_path
 from lighterbird.server.llm.provider import get_provider
 from lighterbird.server.schemas import (
     LLMProfileCreate,
     LLMProfileUpdate,
 )
-from lighterbird.core.system_prompt import load_system_prompt, system_prompt_path
 
 router = APIRouter(prefix="/api/v1/llm", tags=["llm"])
 

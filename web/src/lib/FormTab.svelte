@@ -12,6 +12,7 @@
    */
 
   import { tabStore } from "./tabStore.svelte.js";
+  import { dirtyFormStore } from "./dirtyFormStore.svelte.js";
   import { banner } from "./bannerStore.svelte.js";
   import { journal as journalApi, todo as todoApi, contacts as contactsApi, calendar as calendarApi, letters as lettersApi, email as emailApi } from "./api.js";
   import ComposeEmail from "./ComposeEmail.svelte";
@@ -41,6 +42,17 @@
   function handleDirtyChange(dirty) {
     formDirty = dirty;
   }
+
+  // ── Wire dirty state to global store (beforeunload + tab-close guards) ──
+  // This ensures the browser beforeunload handler (App.svelte) and the tab
+  // close confirmation (TabView.svelte) work for ALL form types.
+  // Store entry is cleaned up by TabView.handleCloseTab or form submit.
+  $effect(() => {
+    const tabId = tabStore.active?.id;
+    if (tabId) {
+      dirtyFormStore.setDirty(tabId, formDirty);
+    }
+  });
 
   /** Infer command path from form type name */
   function _inferCommandPath(formType) {
@@ -184,7 +196,7 @@
   {:else if formType === "letter-add" || formType === "letter-send"}
     <LetterForm {initialData} formType={formType === "letter-send" ? "send" : "add"} onsubmit={handleFormSubmit} onDirtyChange={handleDirtyChange} />
   {:else if commandPath.length > 0}
-    <DynamicForm {commandPath} {initialData} onsubmit={handleFormSubmit} />
+    <DynamicForm {commandPath} {initialData} onsubmit={handleFormSubmit} onDirtyChange={handleDirtyChange} />
   {:else}
     <p class="unknown-form">Unknown form type: {formType}</p>
   {/if}

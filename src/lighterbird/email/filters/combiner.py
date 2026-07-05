@@ -20,7 +20,6 @@ from __future__ import annotations
 import re
 from typing import Any
 
-
 _REQUIRE_RE = re.compile(r'require\s+\[([^\]]+)\]\s*;')
 _STOP_RE = re.compile(r'\bstop\s*;')
 _VACATION_RE = re.compile(r'\bvacation\s')
@@ -150,4 +149,4 @@ def check_conflicts(
     return warnings
 
 
-__all__ = ["combine_scripts", "check_conflicts"]
+__all__ = ["check_conflicts", "combine_scripts"]

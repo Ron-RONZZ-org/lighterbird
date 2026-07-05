@@ -10,10 +10,22 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from lighterbird.server.command.errors import CommandError, CommandNotFound, CommandValidationError
+from lighterbird.server.command.errors import (
+    CommandError,
+    CommandNotFound,
+    CommandValidationError,
+)
 from lighterbird.server.command.models import CommandRequest, CommandResponse
-from lighterbird.server.command.registry import dispatch, get_definitions, resolve_form_type
-from lighterbird.server.command.tree import get_command_tree, find_command_depth, get_param_names
+from lighterbird.server.command.registry import (
+    dispatch,
+    get_definitions,
+    resolve_form_type,
+)
+from lighterbird.server.command.tree import (
+    find_command_depth,
+    get_command_tree,
+    get_param_names,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["command"])
 
@@ -24,7 +36,7 @@ def _extract_partial_data(tokens: list[str], flags: dict[str, str]) -> dict[str,
     cmd_depth = find_command_depth(tokens)
     if cmd_depth < len(tokens):
         params = tokens[cmd_depth:]
-        key = ".".join(tokens[:cmd_depth]) if cmd_depth > 0 else ""
+        ".".join(tokens[:cmd_depth]) if cmd_depth > 0 else ""
         if resolve_form_type(tokens[:cmd_depth]):
             names = get_param_names(tokens[:cmd_depth])
             for i, val in enumerate(params):
@@ -41,7 +53,7 @@ def _extract_partial_data(tokens: list[str], flags: dict[str, str]) -> dict[str,
 
 
 @router.post("/command", response_model=CommandResponse)
-def execute_command(req: CommandRequest) -> dict[str, Any]:
+def execute_command(req: CommandRequest) -> CommandResponse:
     """Execute a parsed command and return structured output.
 
     The frontend sends tokenised input; the backend resolves the command
@@ -56,37 +68,36 @@ def execute_command(req: CommandRequest) -> dict[str, Any]:
         if "form" in req.flags:
             form_type = resolve_form_type(req.tokens)
             if form_type:
-                return {
-                    "type": "form-required",
-                    "title": f"Complete {form_type.replace('-', ' ').title()}",
-                    "data": {
+                return CommandResponse(
+                    type="form-required",
+                    title=f"Complete {form_type.replace('-', ' ').title()}",
+                    data={
                         "form": form_type,
                         "initialData": _extract_partial_data(req.tokens, req.flags),
                     },
-                }
+                )
 
         result = dispatch(req.tokens, req.flags)
-        # Ensure type/title/data keys exist
-        return {
-            "type": result.get("type", "status"),
-            "title": result.get("title", ""),
-            "data": result.get("data", result),
-        }
+        return CommandResponse(
+            type=result.get("type", "status"),
+            title=result.get("title", ""),
+            data=result.get("data", result),
+        )
     except CommandNotFound as e:
         raise HTTPException(status_code=400, detail=str(e))
     except CommandValidationError as e:
         # If the failed command has an interactive form, return form-required
         form_type = resolve_form_type(req.tokens)
         if form_type:
-            return {
-                "type": "form-required",
-                "title": f"Complete {form_type.replace('-', ' ').title()}",
-                "data": {
+            return CommandResponse(
+                type="form-required",
+                title=f"Complete {form_type.replace('-', ' ').title()}",
+                data={
                     "form": form_type,
                     "initialData": _extract_partial_data(req.tokens, req.flags),
                     "message": str(e),
                 },
-            }
+            )
         # Fall back to standard error response
         raise HTTPException(
             status_code=400,

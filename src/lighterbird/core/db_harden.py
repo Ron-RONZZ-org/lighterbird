@@ -45,7 +45,7 @@ def health_check(db_path: Path) -> bool:
     if not db_path.exists():
         return True
     try:
-        conn = sqlite3.connect(f"file:{str(db_path)}?mode=ro", uri=True, timeout=5)
+        conn = sqlite3.connect(f"file:{db_path!s}?mode=ro", uri=True, timeout=5)
         (result,) = conn.execute("PRAGMA quick_check").fetchone()
         conn.close()
         return result == "ok"
@@ -106,7 +106,7 @@ def init_db(
     schema_sql: str | list[str],
     *,
     backup: bool = True,
-) -> "LighterbirdDB":
+) -> LighterbirdDB:
     """Create or open a database with schema initialization.
 
     Args:

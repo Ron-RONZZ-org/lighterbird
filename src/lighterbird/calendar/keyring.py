@@ -5,9 +5,9 @@ Service pattern: ``lighterbird/calendar/{calendar_uuid}``.
 
 from __future__ import annotations
 
+from lighterbird.core.keyring import delete_password as _core_del
 from lighterbird.core.keyring import get_password as _core_get
 from lighterbird.core.keyring import set_password as _core_set
-from lighterbird.core.keyring import delete_password as _core_del
 
 _SERVICE_PREFIX = "lighterbird/calendar"
 

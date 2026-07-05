@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any
-
+from datetime import UTC
 from pathlib import Path
+from typing import Any
 
 from lighterbird.core.crud import CRUDService
 from lighterbird.core.yaml_frontmatter import unwrap, wrap
@@ -15,6 +15,14 @@ class JournalService(CRUDService):
 
     def __init__(self, db):
         super().__init__(db, "journal")
+
+    def create(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Create a journal entry with a default date if not provided."""
+        from datetime import UTC, datetime
+
+        data = dict(data)
+        data.setdefault("date", datetime.now(UTC).date().isoformat())
+        return super().create(data)
 
     # ── Markdown export / import ────────────────────────────────────────
 
@@ -69,7 +77,6 @@ class JournalService(CRUDService):
             return []
 
         entry_data = {
-            "uuid": meta.get("uuid"),
             "title": meta.get("title", ""),
             "text": body,
             "date": meta.get("date", ""),
@@ -78,6 +85,8 @@ class JournalService(CRUDService):
             entry_data["created_at"] = meta["created_at"]
         if meta.get("updated_at"):
             entry_data["updated_at"] = meta["updated_at"]
+        # Don't pass uuid from frontmatter — let create() generate a new one
+        # so re-importing an exported file doesn't hit UNIQUE constraint.
         entry = self.create(entry_data)
         return [entry["uuid"]]
 
@@ -132,9 +141,9 @@ class JournalService(CRUDService):
 
     def create_label(self, data: dict[str, Any]) -> dict[str, Any]:
         """Create a new label."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         name = data.get("name", "").strip()
         if not name:
             raise ValueError("Label name is required.")

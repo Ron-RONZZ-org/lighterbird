@@ -1,12 +1,11 @@
 """Tests for email/services/sieve.py — SieveService CRUD and activation."""
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from lighterbird.email.services.sieve import SieveService
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 

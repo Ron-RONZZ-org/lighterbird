@@ -24,12 +24,12 @@ The function performs a coordinated teardown across all domains:
 from __future__ import annotations
 
 import shutil
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
-from lighterbird.core.paths import data_dir, config_dir, ensure_dirs, protect_directory
 from lighterbird.core.keyring import delete_password
-
+from lighterbird.core.paths import data_dir, ensure_dirs
 
 # ── Known keyring services ────────────────────────────────────────────────
 
@@ -193,8 +193,8 @@ def reset_to_fresh_state(
         backup = Path(backup_path)
         if backup.is_dir():
             # Auto-generate filename
-            from datetime import datetime, timezone
-            ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+            from datetime import datetime
+            ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
             backup = backup / f"reset-{ts}.7z"
         # Ensure parent exists
         backup.parent.mkdir(parents=True, exist_ok=True)
@@ -212,8 +212,9 @@ def reset_to_fresh_state(
             created_backup = str(backup.resolve())
         else:
             # Fallback: create archive directly at target
-            from lighterbird.core.backup import _known_db_paths, _known_config_files
             import py7zr
+
+            from lighterbird.core.backup import _known_config_files, _known_db_paths
             with py7zr.SevenZipFile(
                 backup, mode="w", filters=[{"id": py7zr.FILTER_LZMA2}]
             ) as arc:

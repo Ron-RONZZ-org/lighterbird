@@ -16,12 +16,12 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
+from lighterbird.core.ai import get_provider as _create_core_provider
 from lighterbird.core.system_prompt import load_system_prompt
 from lighterbird.server.command.models import CommandResponse
 from lighterbird.server.command.registry import dispatch, get_definitions
-from lighterbird.core.ai import get_provider as _create_core_provider
 from lighterbird.server.llm.provider import get_provider
-from lighterbird.server.llm.render import render_markdown, render_streaming_markdown
+from lighterbird.server.llm.render import render_markdown
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +122,7 @@ async def chat_endpoint(data: dict[str, Any]) -> dict[str, Any]:
           ``[{"role": "user"|"assistant", "content": "..."}]``.
     """
     message = data.get("message", "").strip()
-    context = data.get("context", None)
+    context = data.get("context")
     if not message:
         raise HTTPException(status_code=400, detail="Message is required.")
 
@@ -228,7 +228,7 @@ async def chat_stream(data: dict[str, Any]) -> StreamingResponse:
         - ``context``: Optional list of previous messages.
     """
     message = data.get("message", "").strip()
-    context = data.get("context", None)
+    context = data.get("context")
     if not message:
         raise HTTPException(status_code=400, detail="Message is required.")
 

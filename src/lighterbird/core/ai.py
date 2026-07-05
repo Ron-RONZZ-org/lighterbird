@@ -7,7 +7,7 @@ Provider state (which provider is active) is managed by the server layer.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Protocol
 
 

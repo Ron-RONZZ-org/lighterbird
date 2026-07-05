@@ -62,7 +62,7 @@ def llm_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 @command("llm.prompt")
 def llm_prompt(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!llm prompt — Show current system prompt path."""
-    from lighterbird.core.system_prompt import system_prompt_path, load_system_prompt
+    from lighterbird.core.system_prompt import load_system_prompt, system_prompt_path
 
     path = system_prompt_path()
     content = load_system_prompt()

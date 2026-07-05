@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS journal (
     uuid            TEXT PRIMARY KEY,
     title           TEXT NOT NULL DEFAULT '',
     text            TEXT NOT NULL DEFAULT '',
-    date            TEXT NOT NULL,
+    date            TEXT NOT NULL DEFAULT (date('now')),
     created_at      TEXT NOT NULL,
     updated_at      TEXT NOT NULL
 );

@@ -64,7 +64,16 @@ def dev_main() -> None:
         action="store_true",
         help="Do not clean up the temp data directory on exit",
     )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress informational output (errors still displayed)",
+    )
     args = parser.parse_args()
+
+    def _log(msg: str) -> None:
+        if not args.quiet:
+            print(msg)
 
     # Resolve port: CLI arg > LIGHTERBIRD_PORT env var > 8000
     port = args.port or int(os.environ.get("LIGHTERBIRD_PORT", 8000))
@@ -82,8 +91,8 @@ def dev_main() -> None:
     os.environ["LIGHTERBIRD_CACHE_DIR"] = str(tmp_dir / "cache")
     os.environ["LIGHTERBIRD_STATE_DIR"] = str(tmp_dir / "state")
 
-    print(f"[lighterbird-dev] Data dir: {data_dir}")
-    print(f"[lighterbird-dev] Config dir: {config_dir}")
+    _log(f"[lighterbird-dev] Data dir: {data_dir}")
+    _log(f"[lighterbird-dev] Config dir: {config_dir}")
 
     # ── Seed from archive ────────────────────────────────────────────────
     if args.seed_from:
@@ -92,12 +101,12 @@ def dev_main() -> None:
             print(f"[lighterbird-dev] ERROR: Seed archive not found: {archive_path}")
             raise SystemExit(1)
 
-        print(f"[lighterbird-dev] Restoring seed from: {archive_path}")
+        _log(f"[lighterbird-dev] Restoring seed from: {archive_path}")
         from lighterbird.core.backup import _extract_archive
 
         extracted = _extract_archive(archive_path, data_dir)
         if extracted:
-            print(f"[lighterbird-dev] Restored {len(extracted)} file(s)")
+            _log(f"[lighterbird-dev] Restored {len(extracted)} file(s)")
 
         # Also try to restore config files
         config_restore_dir = data_dir / "config"
@@ -105,7 +114,7 @@ def dev_main() -> None:
             for f in config_restore_dir.iterdir():
                 dst = config_dir / f.name
                 shutil.copy2(str(f), str(dst))
-                print(f"[lighterbird-dev] Restored config: {f.name}")
+                _log(f"[lighterbird-dev] Restored config: {f.name}")
 
     # ── Seed from .dev ───────────────────────────────────────────────────
     elif args.seed is not None:
@@ -115,22 +124,22 @@ def dev_main() -> None:
                 print("[lighterbird-dev] WARNING: No .dev file found. Seeding skipped.")
                 dot_dev = None
             else:
-                print(f"[lighterbird-dev] Using .dev file: {dot_dev}")
+                _log(f"[lighterbird-dev] Using .dev file: {dot_dev}")
         else:
             dot_dev = Path(args.seed)
             if not dot_dev.exists():
                 print(f"[lighterbird-dev] ERROR: .dev file not found: {dot_dev}")
                 raise SystemExit(1)
-            print(f"[lighterbird-dev] Using .dev file: {dot_dev}")
+            _log(f"[lighterbird-dev] Using .dev file: {dot_dev}")
 
         if dot_dev:
             from lighterbird.scripts.seed import seed_data_dir
             seed_data_dir(data_dir, dot_dev)
-            print("[lighterbird-dev] Seed data generated successfully.")
+            _log("[lighterbird-dev] Seed data generated successfully.")
 
     # ── Start server ─────────────────────────────────────────────────────
-    print(f"[lighterbird-dev] Starting server on http://127.0.0.1:{port}")
-    print("[lighterbird-dev] Press Ctrl+C to stop.")
+    _log(f"[lighterbird-dev] Starting server on http://127.0.0.1:{port}")
+    _log("[lighterbird-dev] Press Ctrl+C to stop.")
 
     import uvicorn
 
@@ -144,10 +153,10 @@ def dev_main() -> None:
         )
     finally:
         if not args.keep_data:
-            print(f"[lighterbird-dev] Cleaning up: {tmp_dir}")
+            _log(f"[lighterbird-dev] Cleaning up: {tmp_dir}")
             shutil.rmtree(tmp_dir, ignore_errors=True)
         else:
-            print(f"[lighterbird-dev] Data preserved at: {tmp_dir}")
+            _log(f"[lighterbird-dev] Data preserved at: {tmp_dir}")
 
 
 if __name__ == "__main__":

@@ -9,8 +9,6 @@ autouse ``auto_isolate_data_dir`` fixture.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from lighterbird.core.storage import AttachmentStore
@@ -56,15 +54,18 @@ class TestAttachmentStore:
         store = AttachmentStore()
         assert store.total_size("nonexistent") == 0
 
-    def test_safe_filename_replaces_path_seps(self):
+    def test_safe_filename_strips_path_components(self):
+        """Path components and dangerous chars are removed from content_id."""
         store = AttachmentStore()
+        # Directory traversal attempts are neutralized
+        assert store._safe_filename("../../etc/passwd") == "passwd"
+        # Mixed path separators: `/` is stripped by Path.name, `\` replaced
         result = store._safe_filename("a/b\\c")
-        assert result == "a_b_c"
+        assert result == "b_c"
         assert "/" not in result
-        assert "\\" not in result
 
     def test_store_creates_base_dir(self):
-        store = AttachmentStore()
+        AttachmentStore()
         from lighterbird.core.paths import data_dir
         assert (data_dir() / "attachments").is_dir()
 

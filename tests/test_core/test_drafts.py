@@ -10,6 +10,7 @@ autouse ``auto_isolate_data_dir`` fixture.
 from __future__ import annotations
 
 import json
+from datetime import UTC
 from pathlib import Path
 
 import pytest
@@ -59,9 +60,9 @@ class TestSaveDraft:
         assert draft["uuid"] != "nonexistent-uuid"
 
     def test_multiple_drafts(self):
-        d1 = save_draft("email", "D1", {})
-        d2 = save_draft("journal", "D2", {})
-        d3 = save_draft("email", "D3", {})
+        save_draft("email", "D1", {})
+        save_draft("journal", "D2", {})
+        save_draft("email", "D3", {})
         assert len(list_drafts()) == 3
 
 
@@ -156,12 +157,12 @@ class TestDeleteDraftsByDomain:
 class TestCleanupOldDrafts:
     def test_cleanup_deletes_old_drafts(self):
         """cleanup_old_drafts should delete drafts older than max_age_days."""
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta
 
         draft = save_draft("email", "Old", {})
 
         # Manually rewrite its updated_at to be 60 days ago
-        old_ts = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+        old_ts = (datetime.now(UTC) - timedelta(days=60)).isoformat()
         path = data_dir() / ".drafts.json"
         data = json.loads(path.read_text(encoding="utf-8"))
         for d in data:
