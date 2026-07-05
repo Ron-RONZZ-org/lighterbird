@@ -247,3 +247,73 @@ class TestParser:
         data = parse_email_message(msg, "user@example.com", "INBOX", 1)
         assert "Plain body" in data["body"]
         assert "HTML body" in data["html_body"] or "p" in data.get("html_body", "")
+
+    def test_parse_invalid_date(self):
+        """Invalid Date header does not crash."""
+        from email.message import Message
+
+        from lighterbird.email.imap.parser import parse_email_message
+
+        msg = Message()
+        msg["Subject"] = "Bad Date"
+        msg["From"] = "a@b.com"
+        msg["To"] = "c@d.com"
+        msg["Date"] = "Not a date"
+        msg.set_payload("Body")
+        data = parse_email_message(msg, "user@example.com", "INBOX", 1)
+        assert data["subject"] == "Bad Date"
+        assert data["received_at"] is not None
+
+    def test_parse_with_attachments(self):
+        """Message with attachments includes attachment metadata."""
+        from email.mime.base import MIMEBase
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+
+        from lighterbird.email.imap.parser import parse_email_message
+
+        msg = MIMEMultipart("mixed")
+        msg["Subject"] = "With Attachments"
+        msg["From"] = "a@b.com"
+        msg["To"] = "c@d.com"
+        msg.attach(MIMEText("Body text", "plain", "utf-8"))
+
+        att = MIMEBase("application", "pdf")
+        att.set_payload(b"%PDF-1.4 mock content")
+        att.add_header("Content-Disposition", 'attachment; filename="doc.pdf"')
+        att.add_header("Content-ID", "<att123@local>")
+        msg.attach(att)
+
+        data = parse_email_message(
+            msg, "user@example.com", "INBOX", 1, store_attachments=True,
+        )
+        assert data["subject"] == "With Attachments"
+        assert "_attachments_meta" in data
+        assert len(data["_attachments_meta"]) == 1
+        assert data["_attachments_meta"][0]["filename"] == "doc.pdf"
+
+    def test_parse_inline_image_skipped(self):
+        """Inline image without attachment disposition is not treated as attachment."""
+        from email.mime.base import MIMEBase
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+
+        from lighterbird.email.imap.parser import parse_email_message
+
+        msg = MIMEMultipart("related")
+        msg["Subject"] = "Inline Image"
+        msg["From"] = "a@b.com"
+        msg["To"] = "c@d.com"
+        msg.attach(MIMEText("Body", "plain", "utf-8"))
+
+        inline = MIMEBase("image", "png")
+        inline.set_payload(b"\x89PNG mock")
+        inline.add_header("Content-ID", "<logo@local>")
+        inline.add_header("Content-Disposition", "inline")
+        msg.attach(inline)
+
+        data = parse_email_message(
+            msg, "user@example.com", "INBOX", 1, store_attachments=True,
+        )
+        # Inline images without filename/attachment disposition are skipped
+        assert "_attachments_meta" not in data or len(data.get("_attachments_meta", [])) == 0

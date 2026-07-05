@@ -133,3 +133,83 @@ class TestTemplateExpansion:
             "email send $1 Test", ["to@b.com"]
         )
         assert result == "email send to@b.com Test"
+
+
+class TestGetByUuid:
+    def test_get_by_full_uuid(self, svc):
+        cmd = svc.create("full-uuid-test", "email list")
+        found = svc.get_by_uuid(cmd["uuid"])
+        assert found is not None
+        assert found["alias"] == "full-uuid-test"
+
+    def test_get_by_prefix_single_match(self, svc):
+        cmd = svc.create("prefix-match", "email list")
+        found = svc.get_by_uuid(cmd["uuid"][:8])
+        assert found is not None
+        assert found["alias"] == "prefix-match"
+
+    def test_get_by_prefix_no_match(self, svc):
+        assert svc.get_by_uuid("nonexistent") is None
+
+    def test_get_by_prefix_multiple_matches_raises(self, svc):
+        """When UUID prefix matches multiple rows, raise UserCommandsError."""
+        from datetime import UTC, datetime
+
+        # Create two commands with the same UUID prefix by directly
+        # manipulating the DB
+        prefix = "abc12345"
+        now = datetime.now(UTC).isoformat()
+        svc.db.execute(
+            "INSERT INTO saved_commands (uuid, alias, command_template, hint, created_at, modified_at)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (prefix + "xxxxxxxxxxxxxxxxxxxx", "first", "cmd1", "", now, now),
+        )
+        svc.db.execute(
+            "INSERT INTO saved_commands (uuid, alias, command_template, hint, created_at, modified_at)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (prefix + "yyyyyyyyyyyyyyyyyyyy", "second", "cmd2", "", now, now),
+        )
+        with pytest.raises(UserCommandsError, match="Multiple saved commands"):
+            svc.get_by_uuid(prefix)
+
+
+class TestUpdateAdditional:
+    def test_update_strips_bang_from_template(self, svc):
+        svc.create("bang-test", "email list")
+        updated = svc.update("bang-test", command_template="!email search")
+        assert updated["command_template"] == "email search"
+
+    def test_update_empty_new_alias_raises(self, svc):
+        svc.create("alias-a", "cmd")
+        with pytest.raises(UserCommandsError, match="cannot be empty"):
+            svc.update("alias-a", new_alias="")
+
+    def test_update_new_alias_conflict_raises(self, svc):
+        svc.create("alias-a", "cmd1")
+        svc.create("alias-b", "cmd2")
+        with pytest.raises(UserCommandsError, match="already in use"):
+            svc.update("alias-a", new_alias="alias-b")
+
+    def test_update_no_changes_returns_existing(self, svc):
+        cmd = svc.create("no-change", "cmd")
+        updated = svc.update("no-change")
+        assert updated is not None
+        assert updated["uuid"] == cmd["uuid"]
+
+
+class TestResolveAndExpand:
+    def test_resolve_nonexistent(self, svc):
+        result = svc.resolve_and_expand(["nonexistent", "arg1"])
+        assert result is None
+
+    def test_resolve_empty_tokens(self, svc):
+        result = svc.resolve_and_expand([])
+        assert result is None
+
+    def test_resolve_and_expand_alias(self, svc):
+        svc.create("myalias", "email list --folder $1")
+        result = svc.resolve_and_expand(["myalias", "INBOX"])
+        assert result is not None
+        expanded_tokens, _flags = result
+        assert "myalias" not in expanded_tokens
+        assert "email" in expanded_tokens
