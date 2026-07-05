@@ -12,6 +12,7 @@ from typing import Any
 
 from lighterbird.letter.services.letters import LetterService
 from lighterbird.server.command.errors import CommandValidationError
+from lighterbird.server.command.helpers import require_uuid, require_found
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_letter_service
 
@@ -84,8 +85,7 @@ def letter_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     respond_to = flags.get("respond-to", "")
     if respond_to:
         parent = svc.get(respond_to)
-        if not parent:
-            raise CommandValidationError(f"Letter not found: {respond_to[:8]}")
+        require_found(parent, respond_to[:8], "letter")
         data["respond_to_uuid"] = parent["uuid"]
 
     letter = svc.create(data)
@@ -132,13 +132,10 @@ def letter_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 @command("letter.view")
 def letter_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!letter view <uuid>"""
-    if not remaining:
-        raise CommandValidationError("Missing letter UUID.", "Usage: !letter view <uuid>")
-    uuid = remaining[0]
+    uuid = require_uuid(remaining, "Usage: !letter view <uuid>")
     svc: LetterService = get_letter_service()
     letter_data = svc.get_with_thread(uuid)
-    if not letter_data:
-        raise CommandValidationError(f"Letter not found: {uuid[:8]}")
+    require_found(letter_data, uuid[:8], "letter")
     body = svc.get_body(uuid)
     return {
         "type": "letter-view",

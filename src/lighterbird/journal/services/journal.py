@@ -16,6 +16,14 @@ class JournalService(CRUDService):
     def __init__(self, db):
         super().__init__(db, "journal")
 
+    def create(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Create a journal entry with a default date if not provided."""
+        from datetime import UTC, datetime
+
+        data = dict(data)
+        data.setdefault("date", datetime.now(UTC).date().isoformat())
+        return super().create(data)
+
     # ── Markdown export / import ────────────────────────────────────────
 
     def export_md(self, uuid: str | None = None, uuids: list[str] | None = None) -> str:
@@ -69,7 +77,6 @@ class JournalService(CRUDService):
             return []
 
         entry_data = {
-            "uuid": meta.get("uuid"),
             "title": meta.get("title", ""),
             "text": body,
             "date": meta.get("date", ""),
@@ -78,6 +85,8 @@ class JournalService(CRUDService):
             entry_data["created_at"] = meta["created_at"]
         if meta.get("updated_at"):
             entry_data["updated_at"] = meta["updated_at"]
+        # Don't pass uuid from frontmatter — let create() generate a new one
+        # so re-importing an exported file doesn't hit UNIQUE constraint.
         entry = self.create(entry_data)
         return [entry["uuid"]]
 
