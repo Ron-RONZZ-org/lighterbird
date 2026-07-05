@@ -27,8 +27,11 @@ Then::
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from lighterbird.server.command.errors import CommandNotFound
 
@@ -134,9 +137,18 @@ def alias(old_tokens: list[str], new_tokens: list[str]) -> None:
 
 
 def _resolve_aliases(tokens: list[str]) -> list[str]:
-    """Resolve backward-compat aliases."""
+    """Resolve backward-compat aliases.
+
+    Uses a visited-set guard to detect circular alias chains
+    (e.g. a → b → a) and break the loop.
+    """
+    seen: set[str] = set()
     key = ".".join(tokens)
     while key in _aliases:
+        if key in seen:
+            logger.error("Circular alias detected: %s is already in the resolution chain", key)
+            break
+        seen.add(key)
         tokens = _aliases[key]
         key = ".".join(tokens)
     return tokens

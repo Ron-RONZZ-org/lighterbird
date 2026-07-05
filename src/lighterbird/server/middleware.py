@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sqlite3
 
 from fastapi import FastAPI, Request
@@ -61,12 +62,23 @@ def add_middleware(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
+        if os.environ.get("LIGHTERBIRD_DEBUG"):
+            raise  # Re-raise in dev so the traceback is visible
         return _error_response(500, exc)
+
+    # CORS: allow all origins during development.
+    # When deploying, set `LIGHTERBIRD_ORIGINS` env var to a comma-separated
+    # list of allowed origins (e.g. "https://app.example.com").
+    # Credentials + wildcard origin is invalid per CORS spec, so we only
+    # allow credentials when explicit origins are configured.
+    origins_str = os.environ.get("LIGHTERBIRD_ORIGINS", "*")
+    origins = [o.strip() for o in origins_str.split(",") if o.strip()]
+    has_credentials = origins != ["*"]
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
+        allow_origins=origins,
+        allow_credentials=has_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
     )
