@@ -97,15 +97,20 @@ class LetterService(CRUDService):
         return letter
 
     def _get_thread(self, uuid_: str) -> list[dict[str, Any]]:
-        """Get all letters in a conversation thread (linked via respond_to_uuid)."""
+        """Get all letters in a conversation thread (linked via respond_to_uuid).
+
+        Uses a path-based cycle guard to prevent infinite loops in the
+        bidirectional recursive traversal (e.g. A→B→A→…).
+        """
         return self.db.execute(
-            "WITH RECURSIVE thread(uuid, respond_to_uuid) AS ("
-            "  SELECT uuid, respond_to_uuid FROM letters WHERE uuid = ?"
+            "WITH RECURSIVE thread(uuid, respond_to_uuid, path) AS ("
+            "  SELECT uuid, respond_to_uuid, ',' || uuid || ',' FROM letters WHERE uuid = ?"
             "  UNION ALL"
-            "  SELECT l.uuid, l.respond_to_uuid FROM letters l"
+            "  SELECT l.uuid, l.respond_to_uuid, thread.path || l.uuid || ','"
+            "  FROM letters l"
             "  JOIN thread ON l.uuid = thread.respond_to_uuid"
             "  OR l.respond_to_uuid = thread.uuid"
-            "  WHERE l.uuid != thread.uuid"
+            "  WHERE instr(thread.path, ',' || l.uuid || ',') = 0"
             ") SELECT DISTINCT letters.* FROM letters"
             " JOIN thread ON letters.uuid = thread.uuid"
             " ORDER BY letters.created_at ASC",

@@ -3,22 +3,31 @@
 Each module is imported for its ``@command`` / ``@alias`` side effects.
 """
 
-from lighterbird.server.command.handlers import email  # noqa: F401
-from lighterbird.server.command.handlers import email_sieve  # noqa: F401
-from lighterbird.server.command.handlers import email_signature  # noqa: F401
-from lighterbird.server.command.handlers import email_account  # noqa: F401
-from lighterbird.server.command.handlers import calendar  # noqa: F401
-from lighterbird.server.command.handlers import sync  # noqa: F401
-from lighterbird.server.command.handlers import help  # noqa: F401
-from lighterbird.server.command.handlers import contacts  # noqa: F401
-from lighterbird.server.command.handlers import todo  # noqa: F401
-from lighterbird.server.command.handlers import journal  # noqa: F401
-from lighterbird.server.command.handlers import llm  # noqa: F401
-from lighterbird.server.command.handlers import backup  # noqa: F401
-from lighterbird.server.command.handlers import user_commands  # noqa: F401
-from lighterbird.server.command.handlers import user_profiles  # noqa: F401
-from lighterbird.server.command.handlers import drafts  # noqa: F401
-from lighterbird.server.command.handlers import letter  # noqa: F401
+import lighterbird.server.command.registry as _reg
+
+# Suppress per-registration cache invalidations during bulk load.
+# Use try/finally so an import failure doesn't leave _bulk_loading stuck True,
+# which would permanently disable cache invalidation.
+_reg._bulk_loading = True  # noqa: SLF001
+try:
+    from lighterbird.server.command.handlers import email  # noqa: F401
+    from lighterbird.server.command.handlers import email_sieve  # noqa: F401
+    from lighterbird.server.command.handlers import email_signature  # noqa: F401
+    from lighterbird.server.command.handlers import email_account  # noqa: F401
+    from lighterbird.server.command.handlers import calendar  # noqa: F401
+    from lighterbird.server.command.handlers import sync  # noqa: F401
+    from lighterbird.server.command.handlers import help  # noqa: F401
+    from lighterbird.server.command.handlers import contacts  # noqa: F401
+    from lighterbird.server.command.handlers import todo  # noqa: F401
+    from lighterbird.server.command.handlers import journal  # noqa: F401
+    from lighterbird.server.command.handlers import llm  # noqa: F401
+    from lighterbird.server.command.handlers import backup  # noqa: F401
+    from lighterbird.server.command.handlers import user_commands  # noqa: F401
+    from lighterbird.server.command.handlers import user_profiles  # noqa: F401
+    from lighterbird.server.command.handlers import drafts  # noqa: F401
+    from lighterbird.server.command.handlers import letter  # noqa: F401
+finally:
+    _reg._bulk_loading = False  # noqa: SLF001
 
 # ── Group metadata ────────────────────────────────────────────────────────
 

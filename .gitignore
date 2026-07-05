@@ -41,6 +41,12 @@ uv.lock
 .serena/
 export-20260629T060827372733913/
 
+# Coverage
+.coverage
+coverage.xml
+coverage/
+htmlcov/
+
 # Test data (individual files)
 /test-contact.toml
 /test-profile.toml

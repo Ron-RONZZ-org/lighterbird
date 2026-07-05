@@ -27,8 +27,11 @@ Then::
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from lighterbird.server.command.errors import CommandNotFound
 
@@ -45,6 +48,23 @@ _aliases: dict[str, list[str]] = {}
 
 # (command_path: "email.send") → form type string: "email-send"
 _interactive_forms: dict[str, str] = {}
+
+# Command tree cache — invalidated whenever @command() or @group() is called.
+# Avoids rebuilding the nested tree dict on every autocomplete keystroke.
+_tree_cache: list[dict[str, Any]] | None = None
+_tree_version: int = 0
+
+# Flag to skip cache invalidation during initial bulk registration.
+# Set to True while __init__.py imports all handler modules.
+_bulk_loading: bool = False
+
+
+def _invalidate_tree_cache() -> None:
+    """Mark the command tree cache as stale."""
+    global _tree_version, _tree_cache
+    if not _bulk_loading:
+        _tree_version += 1
+        _tree_cache = None
 
 
 # ── Decorators ────────────────────────────────────────────────────────────
@@ -75,6 +95,7 @@ def command(path: str, **metadata: Any) -> Callable:
 
     def wrapper(fn: Callable) -> Callable:
         _commands[path] = (fn, metadata)
+        _invalidate_tree_cache()
         return fn
 
     return wrapper
@@ -93,6 +114,7 @@ def group(path: str, **metadata: Any) -> Callable:
         **metadata: Recognized keys: description, default_action.
     """
     _group_metadata[path] = metadata
+    _invalidate_tree_cache()
 
     # Return a no-op decorator that does nothing (groups have no handler)
     def wrapper(fn: Callable | None = None) -> Callable:
@@ -115,9 +137,18 @@ def alias(old_tokens: list[str], new_tokens: list[str]) -> None:
 
 
 def _resolve_aliases(tokens: list[str]) -> list[str]:
-    """Resolve backward-compat aliases."""
+    """Resolve backward-compat aliases.
+
+    Uses a visited-set guard to detect circular alias chains
+    (e.g. a → b → a) and break the loop.
+    """
+    seen: set[str] = set()
     key = ".".join(tokens)
     while key in _aliases:
+        if key in seen:
+            logger.error("Circular alias detected: %s is already in the resolution chain", key)
+            break
+        seen.add(key)
         tokens = _aliases[key]
         key = ".".join(tokens)
     return tokens
@@ -213,9 +244,17 @@ def get_command_tree() -> list[dict[str, Any]]:
     decorator registrations, so it never goes out of sync with the
     available commands.
 
+    The result is cached and invalidated automatically whenever
+    a new command or group is registered, avoiding redundant rebuilds
+    on every autocomplete keystroke.
+
     Returns:
         List of command node dicts suitable for frontend autocomplete.
     """
+    global _tree_cache
+    if _tree_cache is not None:
+        return _tree_cache
+
     root: dict[str, Any] = {}
 
     # 1. Build tree structure from registered leaf commands
@@ -286,10 +325,12 @@ def get_command_tree() -> list[dict[str, Any]]:
             result["interactive"] = True
         return result
 
-    return sorted(
+    tree = sorted(
         [_to_list(v) for v in root.values()],
         key=lambda x: x["name"],
     )
+    _tree_cache = tree
+    return tree
 
 
 # ── Tree helpers (ported from tree.py) ────────────────────────────────────

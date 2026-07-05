@@ -9,7 +9,6 @@ from typing import Any
 
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
-from lighterbird.server.command.response import normalize_account
 from lighterbird.server.deps import get_email_service
 from lighterbird.email.service import EmailService
 
@@ -18,7 +17,7 @@ from lighterbird.email.service import EmailService
 def account_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email account list"""
     svc: EmailService = get_email_service()
-    accounts = [normalize_account(a) for a in svc.list_accounts()]
+    accounts = [dict(a) for a in svc.list_accounts()]
     return {"type": "status", "title": "Email Accounts", "data": {"accounts": accounts}}
 
 

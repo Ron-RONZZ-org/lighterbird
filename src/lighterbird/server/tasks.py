@@ -203,17 +203,16 @@ class EmailSyncWorker(BackgroundWorker):
 
         Opens one IMAP connection per account and moves all queued
         messages to the server-side Trash folder.
+
+        Args:
+            payload: May contain ``"account_email"`` to process a single
+                     account, or ``None`` / missing to process all accounts.
         """
         from lighterbird.email.service import EmailService
 
         svc = EmailService()
         account_email = payload.get("account_email")
-        if account_email:
-            # Only process trash for specific account
-            svc.msg_ops.process_trash_backlog()
-        else:
-            # Process trash for all accounts
-            svc.msg_ops.process_trash_backlog()
+        svc.msg_ops.process_trash_backlog(account_email=account_email)
 
 
 class CalDAVWorker(BackgroundWorker):
