@@ -1,12 +1,11 @@
 """LLM provider — thin wrapper around core providers.
 
-Provides a singleton provider instance with configuration resolved
-from keyring and environment. The server layer manages which provider
-is "active"; the core providers are stateless.
+Configuration and named profiles are persisted in the system keyring via
+``lightercore.llm`` modules.  Core provider instances are created on each
+call (stateless, per AGENTS-core.md).
 
-The system prompt is loaded from the user-editable file at
-``~/.config/lighterbird/system_prompt.md`` and automatically prepended
-as a ``system`` message to every conversation.
+The system prompt is loaded from a user-editable file via
+:mod:`lighterbird.core.system_prompt`.
 """
 
 from __future__ import annotations
@@ -14,40 +13,20 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Any
 
-from lighterbird.core.ai import ProviderConfig
+from lightercore.exceptions import AIError
+from lightercore.llm import ProviderConfig
+from lightercore.llm.config import (
+    clear_active_config,
+    load_active_config,
+    save_active_config,
+)
+from lightercore.llm.profiles import ProfileManager
+from lightercore.llm.utils import build_messages
+
 from lighterbird.core.ai import get_provider as _create_core_provider
-from lighterbird.core.keyring import delete_password as _del_kr
-from lighterbird.core.keyring import get_password as _get_kr
-from lighterbird.core.keyring import set_password as _set_kr
 from lighterbird.core.system_prompt import load_system_prompt, reload_system_prompt
 
 _SERVICE_NAME = "lighterbird-llm"
-_CONFIG_ACCOUNT = "active-provider"
-_PROFILES_ACCOUNT = "saved-profiles"
-
-
-def _build_messages(
-    message: str,
-    context: list[dict] | None = None,
-    *,
-    system_override: str | None = None,
-) -> list[dict]:
-    """Build the messages list with system prompt prepended.
-
-    Args:
-        message: User message text.
-        context: Optional message history (will be placed after system).
-        system_override: If set, use this instead of the file-based prompt.
-
-    Returns:
-        List of message dicts suitable for the provider API.
-    """
-    system_content = system_override if system_override is not None else load_system_prompt()
-    messages: list[dict] = [{"role": "system", "content": system_content}]
-    if context:
-        messages.extend(context)
-    messages.append({"role": "user", "content": message})
-    return messages
 
 
 class LLMProviderWrapper:
@@ -60,21 +39,20 @@ class LLMProviderWrapper:
 
     def __init__(self) -> None:
         self._config: ProviderConfig | None = None
+        self._profile_mgr = ProfileManager(_SERVICE_NAME)
         self._active_profile_name: str | None = None
 
     @property
     def config(self) -> ProviderConfig:
         """Get the current provider config (lazy-loaded from keyring)."""
         if self._config is None:
-            self._config = self._load_config()
+            loaded = load_active_config(_SERVICE_NAME)
+            self._config = loaded if loaded is not None else ProviderConfig()
         return self._config
 
     def is_available(self) -> bool:
         """Check if a provider is configured and ready."""
-        cfg = self.config
-        if cfg.provider_type == "ollama":
-            return True  # tested on first call
-        return bool(cfg.api_key)
+        return self.config.is_available()
 
     async def chat(
         self,
@@ -97,14 +75,29 @@ class LLMProviderWrapper:
         """
         if not self.is_available():
             if stream:
+
                 async def _placeholder() -> AsyncIterator[str]:
                     yield "LLM not configured. Use ! commands or configure a provider."
+
                 return _placeholder()
             return "LLM not configured. Use ! commands or configure a provider."
 
-        messages = _build_messages(message, context)
+        messages = build_messages(
+            message,
+            context=context,
+            default_system=load_system_prompt(),
+        )
         provider = _create_core_provider(self.config)
-        return await provider.chat(messages, stream=stream)
+        try:
+            return await provider.chat(messages, stream=stream)
+        except AIError:
+            if stream:
+
+                async def _err_placeholder() -> AsyncIterator[str]:
+                    yield "LLM request failed. Check your provider configuration."
+
+                return _err_placeholder()
+            return "LLM request failed. Check your provider configuration."
 
     async def generate_command(
         self,
@@ -120,8 +113,8 @@ class LLMProviderWrapper:
         if not self.is_available():
             return None
 
-        core_provider = _create_core_provider(self.config)
-        result = await core_provider.generate_command(message, command_defs)
+        provider = _create_core_provider(self.config)
+        result = await provider.generate_command(message, command_defs)
         if isinstance(result, dict):
             return result
         return None
@@ -142,45 +135,21 @@ class LLMProviderWrapper:
         Returns:
             The active :class:`ProviderConfig`.
         """
-        config_data = {
-            "provider_type": provider_type,
-            "api_key": kwargs.get("api_key", ""),
-            "base_url": kwargs.get("base_url", ""),
-            "model": kwargs.get("model", ""),
-            "temperature": float(kwargs.get("temperature", 0.7)),
-            "max_tokens": int(kwargs.get("max_tokens", 2048)),
-        }
-        import json
-        _set_kr(_SERVICE_NAME, _CONFIG_ACCOUNT, json.dumps(config_data))
-        self._config = self._load_config()
-        return self._config  # type: ignore[return-value]
-
-    def _load_config(self) -> ProviderConfig:
-        """Load provider config from keyring or return defaults."""
-        raw = _get_kr(_SERVICE_NAME, _CONFIG_ACCOUNT)
-        if not raw:
-            return ProviderConfig()
-
-        import json
-        try:
-            data = json.loads(raw)
-            return ProviderConfig(
-                provider_type=data.get("provider_type", "openai"),
-                api_key=data.get("api_key", ""),
-                base_url=data.get("base_url", ""),
-                model=data.get("model", ""),
-                temperature=float(data.get("temperature", 0.7)),
-                max_tokens=int(data.get("max_tokens", 2048)),
-            )
-        except (json.JSONDecodeError, ValueError, TypeError):
-            return ProviderConfig()
+        config = ProviderConfig(
+            provider_type=provider_type,
+            api_key=kwargs.get("api_key", ""),
+            base_url=kwargs.get("base_url", ""),
+            model=kwargs.get("model", ""),
+            temperature=float(kwargs.get("temperature", 0.7)),
+            max_tokens=int(kwargs.get("max_tokens", 2048)),
+        )
+        save_active_config(_SERVICE_NAME, config)
+        self._config = config
+        return config
 
     def clear_config(self) -> None:
         """Remove provider configuration from keyring."""
-        try:
-            _del_kr(_SERVICE_NAME, _CONFIG_ACCOUNT)
-        except Exception:
-            pass
+        clear_active_config(_SERVICE_NAME)
         self._config = None
 
     # ── Profile management ────────────────────────────────────────────────
@@ -188,57 +157,29 @@ class LLMProviderWrapper:
     def save_profile(self, name: str, provider_type: str, **kwargs: Any) -> dict:
         """Save a named LLM profile.
 
-        Profiles are stored as a JSON dict keyed by name.
+        Profiles are stored as a JSON dict keyed by name in keyring.
         """
-        import json as _json
-
-        raw = _get_kr(_SERVICE_NAME, _PROFILES_ACCOUNT) or "{}"
-        try:
-            profiles = _json.loads(raw)
-        except (_json.JSONDecodeError, ValueError):
-            profiles = {}
-
-        profiles[name] = {
-            "provider_type": provider_type,
-            "api_key": kwargs.get("api_key", ""),
-            "base_url": kwargs.get("base_url", ""),
-            "model": kwargs.get("model", ""),
-            "temperature": float(kwargs.get("temperature", 0.7)),
-            "max_tokens": int(kwargs.get("max_tokens", 2048)),
-        }
-        _set_kr(_SERVICE_NAME, _PROFILES_ACCOUNT, _json.dumps(profiles))
-        return profiles[name]
+        config = ProviderConfig(
+            provider_type=provider_type,
+            api_key=kwargs.get("api_key", ""),
+            base_url=kwargs.get("base_url", ""),
+            model=kwargs.get("model", ""),
+            temperature=float(kwargs.get("temperature", 0.7)),
+            max_tokens=int(kwargs.get("max_tokens", 2048)),
+        )
+        self._profile_mgr.save(name, config)
+        return config.to_dict()
 
     def list_profiles(self) -> list[dict]:
         """Return all saved profiles (without API keys)."""
-        import json as _json
-
-        raw = _get_kr(_SERVICE_NAME, _PROFILES_ACCOUNT) or "{}"
-        try:
-            profiles = _json.loads(raw)
-        except (_json.JSONDecodeError, ValueError):
-            return []
-        result = []
-        for name, data in profiles.items():
-            result.append({
-                "name": name,
-                "provider_type": data.get("provider_type", ""),
-                "base_url": data.get("base_url", ""),
-                "model": data.get("model", ""),
-                "has_api_key": bool(data.get("api_key", "")),
-            })
-        return result
+        return self._profile_mgr.list()
 
     def get_profile(self, name: str) -> dict | None:
         """Get a saved profile by name (WITH api_key)."""
-        import json as _json
-
-        raw = _get_kr(_SERVICE_NAME, _PROFILES_ACCOUNT) or "{}"
-        try:
-            profiles = _json.loads(raw)
-        except (_json.JSONDecodeError, ValueError):
+        cfg = self._profile_mgr.get(name)
+        if cfg is None:
             return None
-        return profiles.get(name)
+        return cfg.to_dict()
 
     def modify_profile(self, name: str, **kwargs: Any) -> dict | None:
         """Partially update a saved profile.
@@ -250,57 +191,23 @@ class LLMProviderWrapper:
                       Empty string for api_key is treated as "keep current".
 
         Returns:
-            The updated profile dict, or None if profile not found.
+            The updated profile dict (without API key), or None if not found.
         """
-        import json as _json
-
-        raw = _get_kr(_SERVICE_NAME, _PROFILES_ACCOUNT) or "{}"
-        try:
-            profiles = _json.loads(raw)
-        except (_json.JSONDecodeError, ValueError):
+        config = self._profile_mgr.modify(name, **kwargs)
+        if config is None:
             return None
-
-        if name not in profiles:
-            return None
-
-        profile = profiles[name]
-        for key in ("provider_type", "base_url", "model"):
-            if key in kwargs:
-                profile[key] = kwargs[key]
-        # api_key requires explicit non-empty value (empty = keep current)
-        if kwargs.get("api_key"):
-            profile["api_key"] = kwargs["api_key"]
-        if "temperature" in kwargs:
-            profile["temperature"] = float(kwargs["temperature"])
-        if "max_tokens" in kwargs:
-            profile["max_tokens"] = int(kwargs["max_tokens"])
-
-        profiles[name] = profile
-        _set_kr(_SERVICE_NAME, _PROFILES_ACCOUNT, _json.dumps(profiles))
-
-        # Return without API key for safety
+        # Return without API key for safety (matches lighterbird convention)
         return {
             "name": name,
-            "provider_type": profile.get("provider_type", ""),
-            "base_url": profile.get("base_url", ""),
-            "model": profile.get("model", ""),
-            "has_api_key": bool(profile.get("api_key", "")),
+            "provider_type": config.provider_type,
+            "base_url": config.base_url,
+            "model": config.model,
+            "has_api_key": bool(config.api_key),
         }
 
     def delete_profile(self, name: str) -> bool:
         """Delete a saved profile. Returns True if deleted."""
-        import json as _json
-
-        raw = _get_kr(_SERVICE_NAME, _PROFILES_ACCOUNT) or "{}"
-        try:
-            profiles = _json.loads(raw)
-        except (_json.JSONDecodeError, ValueError):
-            return False
-        if name not in profiles:
-            return False
-        del profiles[name]
-        _set_kr(_SERVICE_NAME, _PROFILES_ACCOUNT, _json.dumps(profiles))
-        return True
+        return self._profile_mgr.delete(name)
 
     @property
     def active_profile_name(self) -> str | None:
@@ -309,19 +216,13 @@ class LLMProviderWrapper:
 
     def switch_to_profile(self, name: str) -> ProviderConfig | None:
         """Activate a saved profile. Returns the config or None."""
-        profile = self.get_profile(name)
-        if not profile:
+        config = self._profile_mgr.switch_to(name)
+        if config is None:
             return None
-        cfg = self.configure(
-            provider_type=profile["provider_type"],
-            api_key=profile.get("api_key", ""),
-            base_url=profile.get("base_url", ""),
-            model=profile.get("model", ""),
-            temperature=profile.get("temperature", 0.7),
-            max_tokens=profile.get("max_tokens", 2048),
-        )
+        # switch_to already calls save_active_config — just update cache
+        self._config = config
         self._active_profile_name = name
-        return cfg
+        return config
 
 
 # Singleton

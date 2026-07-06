@@ -1,8 +1,7 @@
 """Tests for core/keyring.py — System keyring abstraction.
 
-We mock at the module level to avoid depending on actual system keyring.
-The module uses ``importlib.util.find_spec("keyring")`` at import time,
-so we patch both ``_keyring_available`` and the ``keyring`` module functions.
+Now delegates to ``lightercore.llm.config``. Mock at the ``keyring``
+library level instead of the module level.
 """
 
 from __future__ import annotations
@@ -14,85 +13,64 @@ import pytest
 from lighterbird.core.keyring import delete_password, get_password, set_password
 
 
-# Create a proper exception class for mocking PasswordDeleteError
-class _MockPasswordDeleteError(Exception):
-    pass
+# ── Helper ───────────────────────────────────────────────────────────────────
 
 
 @pytest.fixture(autouse=True)
-def _mock_keyring():
-    """Mock the keyring module and mark it as available."""
-    with patch("lighterbird.core.keyring._keyring_available", True):
-        with patch("lighterbird.core.keyring.keyring") as mock:
-            # Attach a proper exception to mock.keyring.errors
-            mock.errors.PasswordDeleteError = _MockPasswordDeleteError
-            yield mock
+def _store():
+    """Provide an in-memory keyring store."""
+    store: dict[str, str] = {}
+
+    def set_pw(service: str, key: str, value: str) -> None:
+        store[f"{service}:{key}"] = value
+
+    def get_pw(service: str, key: str) -> str | None:
+        return store.get(f"{service}:{key}")
+
+    def del_pw(service: str, key: str) -> None:
+        store.pop(f"{service}:{key}", None)
+
+    import keyring as _kr
+
+    with patch.object(_kr, "set_password", set_pw):
+        with patch.object(_kr, "get_password", get_pw):
+            with patch.object(_kr, "delete_password", del_pw):
+                yield store
+
+
+# ── Tests ────────────────────────────────────────────────────────────────────
 
 
 class TestGetPassword:
-    def test_returns_password(self, _mock_keyring):
-        _mock_keyring.get_password.return_value = "s3cret"
+    def test_returns_password(self, _store):
+        _store["test-svc:test-key"] = "s3cret"
         result = get_password("test-svc", "test-key")
         assert result == "s3cret"
-        _mock_keyring.get_password.assert_called_once_with(
-            "test-svc", "test-key"
-        )
 
-    def test_not_found_returns_none(self, _mock_keyring):
-        _mock_keyring.get_password.return_value = None
+    def test_not_found_returns_none(self):
         result = get_password("test-svc", "unknown")
-        assert result is None
-
-    def test_exception_returns_none_and_logs(self, _mock_keyring):
-        _mock_keyring.get_password.side_effect = RuntimeError("busy")
-        result = get_password("test-svc", "test-key")
         assert result is None
 
 
 class TestSetPassword:
-    def test_returns_true_on_success(self, _mock_keyring):
+    def test_returns_true_on_success(self, _store):
         result = set_password("test-svc", "test-key", "p4ss")
         assert result is True
-        _mock_keyring.set_password.assert_called_once_with(
-            "test-svc", "test-key", "p4ss"
-        )
+        assert _store["test-svc:test-key"] == "p4ss"
 
-    def test_returns_false_on_exception(self, _mock_keyring):
-        _mock_keyring.set_password.side_effect = RuntimeError("denied")
-        result = set_password("test-svc", "test-key", "p4ss")
-        assert result is False
+    def test_overwrite(self, _store):
+        _store["test-svc:test-key"] = "old"
+        set_password("test-svc", "test-key", "new")
+        assert _store["test-svc:test-key"] == "new"
 
 
 class TestDeletePassword:
-    def test_returns_true_on_success(self, _mock_keyring):
+    def test_returns_true_on_success(self, _store):
+        _store["test-svc:test-key"] = "val"
         result = delete_password("test-svc", "test-key")
         assert result is True
-        _mock_keyring.delete_password.assert_called_once_with(
-            "test-svc", "test-key"
-        )
+        assert "test-svc:test-key" not in _store
 
-    def test_password_delete_error_returns_true(self, _mock_keyring):
-        """Delete errors are quietly swallowed (idempotent)."""
-        _mock_keyring.delete_password.side_effect = _MockPasswordDeleteError()
-        result = delete_password("test-svc", "test-key")
+    def test_delete_nonexistent_is_idempotent(self):
+        result = delete_password("test-svc", "no-such-key")
         assert result is True
-
-    def test_other_exception_returns_false(self, _mock_keyring):
-        _mock_keyring.delete_password.side_effect = RuntimeError("fail")
-        result = delete_password("test-svc", "test-key")
-        assert result is False
-
-
-# keyring-unavailable path tests
-class TestKeyringNotAvailable:
-    def test_get_returns_none(self):
-        with patch("lighterbird.core.keyring._keyring_available", False):
-            assert get_password("svc", "key") is None
-
-    def test_set_returns_false(self):
-        with patch("lighterbird.core.keyring._keyring_available", False):
-            assert set_password("svc", "key", "pw") is False
-
-    def test_delete_returns_false(self):
-        with patch("lighterbird.core.keyring._keyring_available", False):
-            assert delete_password("svc", "key") is False

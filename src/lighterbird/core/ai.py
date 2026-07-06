@@ -1,84 +1,18 @@
 """LLM provider abstraction — config, factory, and interface.
 
-Providers are stateless and created on demand per AGENTS-core.md rules.
+Provider configuration now comes from ``lightercore.llm.config``.
+Providers are stateless and created on demand.
 Provider state (which provider is active) is managed by the server layer.
 """
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
 from typing import Protocol
 
-
-@dataclass
-class ProviderConfig:
-    """Configuration for an LLM provider instance.
-
-    Attributes:
-        provider_type: ``"openai"``, ``"deepseek"``, ``"ollama"``, or any
-            OpenAI-compatible provider name.
-        api_key: API key (retrieved from keyring at instantiation time).
-        base_url: API base URL.
-        model: Model name (e.g. ``"gpt-4o"``, ``"llama3"``).
-        temperature: Sampling temperature (0.0 — 2.0).
-        max_tokens: Maximum tokens in the response.
-    """
-
-    provider_type: str = "openai"
-    api_key: str = ""
-    base_url: str = ""
-    model: str = ""
-    temperature: float = 0.7
-    max_tokens: int = 2048
-
-    def __repr__(self) -> str:
-        """Return a safe repr with the API key redacted."""
-        redacted = "****" if self.api_key else ""
-        return (
-            f"ProviderConfig(provider_type={self.provider_type!r}, "
-            f"api_key={redacted!r}, "
-            f"base_url={self.base_url!r}, "
-            f"model={self.model!r}, "
-            f"temperature={self.temperature}, "
-            f"max_tokens={self.max_tokens})"
-        )
-
-
-class LLMProvider(Protocol):
-    """Stateless provider interface for chat and command generation."""
-
-    async def chat(
-        self,
-        messages: list[dict],
-        stream: bool = False,
-    ) -> str | AsyncIterator[str]:
-        """Send a chat completion request.
-
-        Args:
-            messages: List of message dicts with ``role`` and ``content``.
-            stream: If True, return an async iterator of tokens.
-
-        Returns:
-            Full response string (non-streaming) or async iterator (streaming).
-        """
-        ...
-
-    async def generate_command(
-        self,
-        message: str,
-        command_defs: list[dict],
-    ) -> dict | None:
-        """Ask the LLM to generate a structured command from natural language.
-
-        Args:
-            message: User's natural language input.
-            command_defs: List of available command definitions.
-
-        Returns:
-            ``{"tokens": [...], "flags": {...}}`` or ``None``.
-        """
-        ...
+from lightercore.llm import ProviderConfig
+from lightercore.llm.protocol import LLMProvider
+from lightercore.llm.utils import resolve_base_url
 
 
 def get_provider(config: ProviderConfig) -> LLMProvider:
@@ -92,10 +26,11 @@ def get_provider(config: ProviderConfig) -> LLMProvider:
     """
     if config.provider_type == "ollama":
         from lighterbird.core.providers import OllamaProvider
+
         return OllamaProvider(config)
-    # Everything else is treated as OpenAI-compatible (openai, deepseek,
-    # groq, together, or any custom endpoint).
+    # Everything else is treated as OpenAI-compatible
     from lighterbird.core.providers import OpenAICompatibleProvider
+
     return OpenAICompatibleProvider(config)
 
 
