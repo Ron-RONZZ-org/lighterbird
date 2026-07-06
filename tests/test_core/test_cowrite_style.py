@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
-
 from lighterbird.core.cowrite_style import (
     DEFAULT_COWRITE_STYLE,
     cowrite_style_path,

@@ -11,6 +11,7 @@ Registered paths:
 from __future__ import annotations
 
 import json
+import logging
 import os
 from typing import Any
 from urllib.parse import urlparse
@@ -19,6 +20,8 @@ from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_todo_service
 from lighterbird.todo.services import TodoService
+
+logger = logging.getLogger(__name__)
 
 
 @command("todo.add")
@@ -109,7 +112,7 @@ def todo_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
             try:
                 svc.create_label({"name": tag_name})
             except ValueError:
-                pass  # label already exists
+                pass  # label already exists — expected, no action needed
         data["_tags"] = tag_names
 
     # ── LLM co-writing ─────────────────────────────────────────────────
@@ -140,7 +143,7 @@ def todo_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
             try:
                 _attach_file(svc, todo["uuid"], fp)
             except CommandValidationError:
-                pass
+                logger.warning("Failed to attach file to todo %s: %s", todo["uuid"][:8], fp)
 
     return {
         "type": "status",

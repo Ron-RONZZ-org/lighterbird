@@ -7,12 +7,8 @@ Provider state (which provider is active) is managed by the server layer.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from typing import Protocol
-
 from lightercore.llm import ProviderConfig
 from lightercore.llm.protocol import LLMProvider
-from lightercore.llm.utils import resolve_base_url
 
 
 def get_provider(config: ProviderConfig) -> LLMProvider:

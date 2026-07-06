@@ -6,7 +6,6 @@ from lightercore.llm.utils import build_messages
 
 from lighterbird.server.llm.provider import LLMProviderWrapper
 
-
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
 

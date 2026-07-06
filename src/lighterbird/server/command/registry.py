@@ -31,9 +31,9 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from lighterbird.server.command.errors import CommandNotFound
+
+logger = logging.getLogger(__name__)
 
 # ── Data structures ───────────────────────────────────────────────────────
 
@@ -198,6 +198,9 @@ def dispatch(
     """
     tokens, flags = _resolve_user_aliases(tokens, flags)
     resolved = _resolve_aliases(tokens)
+
+    # Copy flags to avoid mutating the caller's dict
+    flags = dict(flags)
 
     for i in range(len(resolved), 0, -1):
         key = ".".join(resolved[:i])

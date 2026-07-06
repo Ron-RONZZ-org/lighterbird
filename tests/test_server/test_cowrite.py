@@ -13,7 +13,6 @@ from lighterbird.server.cowrite.engine import (
     cowrite,
 )
 
-
 # ── _clean_llm_response ──────────────────────────────────────────────────────
 
 
@@ -192,9 +191,8 @@ class TestCowrite:
         with patch(
             "lighterbird.server.cowrite.engine.get_provider",
             return_value=mock_provider,
-        ):
-            with pytest.raises(RuntimeError, match="LLM not configured"):
-                await cowrite("email-send", {"subject": "Hi"}, "improve")
+        ), pytest.raises(RuntimeError, match="LLM not configured"):
+            await cowrite("email-send", {"subject": "Hi"}, "improve")
 
     @pytest.mark.asyncio
     async def test_raises_error_on_empty_llm_response(self):
@@ -218,10 +216,9 @@ class TestCowrite:
             patch(
                 "lighterbird.server.cowrite.engine._get_core_provider",
                 return_value=mock_core,
-            ),
+            ),pytest.raises(RuntimeError, match="empty response")
         ):
-            with pytest.raises(RuntimeError, match="empty response"):
-                await cowrite("email-send", {"subject": "Hi"}, "improve")
+            await cowrite("email-send", {"subject": "Hi"}, "improve")
 
     @pytest.mark.asyncio
     async def test_raises_on_invalid_json_response(self):
@@ -245,10 +242,9 @@ class TestCowrite:
             patch(
                 "lighterbird.server.cowrite.engine._get_core_provider",
                 return_value=mock_core,
-            ),
+            ),pytest.raises(ValueError)
         ):
-            with pytest.raises(ValueError):
-                await cowrite("email-send", {"subject": "Hi"}, "improve")
+            await cowrite("email-send", {"subject": "Hi"}, "improve")
 
     @pytest.mark.asyncio
     async def test_raises_on_llm_call_failure(self):
@@ -272,10 +268,9 @@ class TestCowrite:
             patch(
                 "lighterbird.server.cowrite.engine._get_core_provider",
                 return_value=mock_core,
-            ),
+            ),pytest.raises(RuntimeError, match="LLM call failed")
         ):
-            with pytest.raises(RuntimeError, match="LLM call failed"):
-                await cowrite("email-send", {"subject": "Hi"}, "improve")
+            await cowrite("email-send", {"subject": "Hi"}, "improve")
 
     @pytest.mark.asyncio
     async def test_uses_context_mode_none(self):
@@ -333,11 +328,10 @@ class TestCowrite:
             patch(
                 "lighterbird.server.cowrite.engine._get_core_provider",
                 return_value=mock_core,
-            ),
+            ),pytest.raises(ValueError, match="missing or empty field 'body'")
         ):
-            with pytest.raises(ValueError, match="missing or empty field 'body'"):
-                await cowrite(
-                    "email-send",
-                    {"subject": "Original", "body": "Original body"},
-                    "improve",
-                )
+            await cowrite(
+                "email-send",
+                {"subject": "Original", "body": "Original body"},
+                "improve",
+            )

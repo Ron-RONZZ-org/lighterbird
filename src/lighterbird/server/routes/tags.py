@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
 
 from lighterbird.server.deps import get_tag_service
 

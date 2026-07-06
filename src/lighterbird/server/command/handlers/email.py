@@ -239,6 +239,9 @@ def email_reply(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     orig_to = (json.loads(msg.get("to_recipients", "[]"))
                if isinstance(msg.get("to_recipients"), str)
                else (msg.get("to_recipients") or []))
+    orig_cc = (json.loads(msg.get("cc_recipients", "[]"))
+               if isinstance(msg.get("cc_recipients"), str)
+               else (msg.get("cc_recipients") or []))
 
     if is_from_self:
         # Message sent by user — reply to original To recipients
@@ -246,13 +249,21 @@ def email_reply(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     else:
         to = msg.get("from_addr", "")
 
-    if reply_all and not is_from_self:
-        # Include original To recipients (excluding self)
-        to_list = [to]
-        for r in orig_to:
-            if r.strip().lower() != account_email:
-                to_list.append(r.strip())
-        to = ", ".join(to_list)
+    cc = ""
+    if reply_all:
+        if is_from_self:
+            # Reply-all to self — include CC recipients alongside To
+            cc_list = [r.strip() for r in orig_cc if r.strip().lower() != account_email]
+            cc = ", ".join(cc_list) if cc_list else ""
+        else:
+            # Reply-all from someone else — include To + CC (excluding self)
+            to_list = [to]
+            for r in orig_to:
+                if r.strip().lower() != account_email:
+                    to_list.append(r.strip())
+            to = ", ".join(to_list)
+            cc_list = [r.strip() for r in orig_cc if r.strip().lower() != account_email]
+            cc = ", ".join(cc_list) if cc_list else ""
 
     subject = msg.get("subject", "")
     if not subject.lower().startswith("re:"):
@@ -261,17 +272,21 @@ def email_reply(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     body = msg.get("body", "") or ""
     quoted = "\n".join(f"> {line}" for line in body.split("\n"))
 
+    initial_data: dict[str, Any] = {
+        "to": to,
+        "subject": subject,
+        "body": f"\n\n{quoted}",
+        "account": msg.get("account_email", ""),
+    }
+    if cc:
+        initial_data["cc"] = cc
+
     return {
         "type": "form-required",
         "title": "Reply",
         "data": {
             "form": "email-send",
-            "initialData": {
-                "to": to,
-                "subject": subject,
-                "body": f"\n\n{quoted}",
-                "account": msg.get("account_email", ""),
-            },
+            "initialData": initial_data,
         },
     }
 

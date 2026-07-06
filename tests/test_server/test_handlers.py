@@ -256,30 +256,31 @@ class TestEmailHandlers:
         with pytest.raises(CommandValidationError, match="Missing file path"):
             dispatch(["email", "import", "eml"], {})
 
-    def test_email_import_eml_success(self, mock_email_svc):
+    def test_email_import_eml_success(self, mock_email_svc, tmp_path):
         """email import eml returns status with draft info."""
+        eml_file = tmp_path / "test.eml"
+        eml_file.write_text("From: test@x.com\nSubject: Test\n")
         mock_email_svc.import_eml.return_value = {
             "uuid": "draft-123",
             "data": {"subject": "Imported"},
         }
-        result = dispatch(["email", "import", "eml", "/tmp/test.eml"], {})
+        result = dispatch(["email", "import", "eml", str(eml_file)], {})
         assert result["type"] == "status"
         assert result["title"] == "Import .eml"
         assert result["data"]["draft_uuid"] == "draft-123"
 
     def test_email_import_eml_file_not_found(self, mock_email_svc):
         """email import eml with non-existent file raises."""
-        mock_email_svc.import_eml.side_effect = FileNotFoundError(
-            "/tmp/nonexistent.eml"
-        )
         with pytest.raises(CommandValidationError, match="File not found"):
-            dispatch(["email", "import", "eml", "/tmp/nonexistent.eml"], {})
+            dispatch(["email", "import", "eml", "/nonexistent/test.eml"], {})
 
-    def test_email_import_eml_generic_error(self, mock_email_svc):
+    def test_email_import_eml_generic_error(self, mock_email_svc, tmp_path):
         """email import eml with unexpected error raises."""
+        eml_file = tmp_path / "bad.eml"
+        eml_file.write_text("From: test@x.com\nSubject: Bad\n")
         mock_email_svc.import_eml.side_effect = ValueError("Corrupted file")
         with pytest.raises(CommandValidationError, match="Import failed"):
-            dispatch(["email", "import", "eml", "/tmp/bad.eml"], {})
+            dispatch(["email", "import", "eml", str(eml_file)], {})
 
     def test_email_reply_missing_uuid(self):
         """email reply without uuid raises."""

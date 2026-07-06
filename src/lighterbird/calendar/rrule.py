@@ -5,7 +5,7 @@ Leverages ``dateutil.rrule`` for RFC 5545 RRULE parsing and expansion.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 from dateutil.rrule import rrulestr

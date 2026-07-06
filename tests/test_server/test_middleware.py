@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from lighterbird.core.exceptions import LighterbirdError
-from lighterbird.server.middleware import add_middleware, _error_response
+from lighterbird.server.middleware import _error_response, add_middleware
 
 
 class TestErrorResponse:

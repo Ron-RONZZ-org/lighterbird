@@ -16,11 +16,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from lightercore.permissions import PermissionLevel
+
 from lighterbird.contacts.services import ContactService
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_contact_service
-from lightercore.permissions import PermissionLevel
 
 
 def _parse_custom_fields(raw: str) -> dict[str, str]:

@@ -12,7 +12,6 @@ import pytest
 
 from lighterbird.core.keyring import delete_password, get_password, set_password
 
-
 # ── Helper ───────────────────────────────────────────────────────────────────
 
 

@@ -43,6 +43,6 @@ class TestGetProvider:
 
     def test_provider_config_defaults(self):
         config = ProviderConfig()
-        assert config.provider_type == "openai"
+        assert config.provider_type == ""  # empty = not configured
         assert config.temperature == 0.7
         assert config.max_tokens == 2048

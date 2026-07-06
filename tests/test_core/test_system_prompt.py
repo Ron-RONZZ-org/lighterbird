@@ -21,7 +21,6 @@ from lighterbird.core.system_prompt import (
     system_prompt_path,
 )
 
-
 # The DEFAULT_SYSTEM_PROMPT has a trailing newline from the triple-quoted
 # string; SystemPromptManager.load() strips whitespace, so we strip here too.
 _EXPECTED = DEFAULT_SYSTEM_PROMPT.strip()

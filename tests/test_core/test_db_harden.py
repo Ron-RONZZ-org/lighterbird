@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from lighterbird.core.db_harden import (
     backup_db,
     health_check,

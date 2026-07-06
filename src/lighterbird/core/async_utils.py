@@ -5,14 +5,21 @@ application (e.g. FastAPI/uvicorn) needs to call an async function,
 ``asyncio.run()`` raises ``RuntimeError`` because an event loop is already
 running in the current thread.
 
-This module provides a safe, thread-based workaround.
+This module provides a safe, thread-based workaround using a shared thread
+pool to avoid per-call pool creation overhead.
 """
 
 from __future__ import annotations
 
 import asyncio
 import concurrent.futures
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
+
+_POOL = concurrent.futures.ThreadPoolExecutor(
+    max_workers=4,
+    thread_name_prefix="async_utils",
+)
 
 
 def run_async_sync(coro_factory: Callable[[], Any], timeout: float | None = None) -> Any:
@@ -21,6 +28,9 @@ def run_async_sync(coro_factory: Callable[[], Any], timeout: float | None = None
     Spawns the coroutine in a **separate thread with its own event loop**,
     avoiding the ``asyncio.run()`` restriction of "cannot be called from a
     running event loop in the same thread".
+
+    Uses a shared module-level thread pool to avoid the overhead of
+    creating a new pool on every call.
 
     Args:
         coro_factory: A zero-argument callable that returns a coroutine.
@@ -49,9 +59,8 @@ def run_async_sync(coro_factory: Callable[[], Any], timeout: float | None = None
         finally:
             loop.close()
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(_inner)
-        return future.result(timeout=timeout)
+    future = _POOL.submit(_inner)
+    return future.result(timeout=timeout)
 
 
 __all__ = [

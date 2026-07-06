@@ -45,6 +45,7 @@ class TestValidateSieveExtended:
         """When sievelib is not installed, validation is skipped."""
         # Ensure the module is loaded first
         import importlib
+
         import lighterbird.email.filters.sieve
 
         # Simulate sievelib not being available
@@ -137,6 +138,7 @@ class TestSieveManagerConnect:
         if "managesieve" in sys.modules:
             del sys.modules["managesieve"]
         import importlib
+
         import lighterbird.email.filters.sieve as sieve_mod
         importlib.reload(sieve_mod)
 

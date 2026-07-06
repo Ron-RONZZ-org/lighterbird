@@ -26,7 +26,7 @@ class JournalService(CRUDService):
 
     def create(self, data: dict[str, Any]) -> dict[str, Any]:
         """Create a journal entry with a default date if not provided."""
-        from datetime import UTC, datetime
+        from datetime import datetime
 
         data = dict(data)
         data.setdefault("date", datetime.now(UTC).date().isoformat())

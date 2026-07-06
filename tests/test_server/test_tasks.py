@@ -6,10 +6,7 @@ so we mock those imports to test dispatch logic and error paths.
 
 from __future__ import annotations
 
-import json
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from lighterbird.core.worker import BackgroundWorker, Job, WorkerPool
 from lighterbird.server.tasks import (
@@ -24,7 +21,6 @@ from lighterbird.server.tasks import (
     init_workers,
     shutdown_workers,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Module-level functions

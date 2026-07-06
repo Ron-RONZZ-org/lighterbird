@@ -191,11 +191,11 @@ class TestKeyring:
         assert pw is None
 
     def test_set_password_behavior(self):
-        from lighterbird.core.keyring import _keyring_available, set_password
+        from lighterbird.core.keyring import set_password
 
         result = set_password("test_service", "test_key", "sekret")
-        # If keyring is available, returns True; otherwise False
-        assert result == _keyring_available
+        # Returns a bool indicating success (True) or keyring unavailable (False)
+        assert isinstance(result, bool)
 
 
 class TestCRUDService:

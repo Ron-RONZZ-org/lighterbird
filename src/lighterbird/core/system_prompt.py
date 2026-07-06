@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from lightercore.system_prompt import SystemPromptManager
+
 from lighterbird.core.paths import config_dir
 
 _SYSTEM_PROMPT_FILENAME = "system_prompt.md"

@@ -31,7 +31,9 @@ dev = [
     "pytest>=8.0.0",
     "pytest-mock>=3.14.0",
     "pytest-asyncio>=0.24.0",
+    "pytest-timeout>=2.3.0",
     "ruff>=0.4.0",
+    "vobject>=0.9.0",
 ]
 pdf = [
     "fpdf2>=2.7.0",
@@ -54,6 +56,7 @@ markers = [
     "no_isolation: do not isolate data directory (test checks default paths)",
 ]
 asyncio_mode = "auto"
+timeout = 300
 
 [tool.ruff.lint]
 select = [

@@ -7,6 +7,7 @@ Registered paths:
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from lighterbird.email.service import EmailService
@@ -53,19 +54,34 @@ def email_import_eml(remaining: list[str], flags: dict[str, str]) -> dict[str, A
             "Missing file path.",
             "Usage: !email import eml /path/to/file.eml",
         )
-    path = remaining[0]
+    path_str = remaining[0]
+    # Path traversal protection: reject ".." components to prevent
+    # directory escape. Absolute paths are allowed (users may import
+    # from anywhere on their filesystem).
+    raw = Path(path_str)
+    if ".." in raw.parts:
+        raise CommandValidationError(
+            f"Path traversal not allowed: {path_str}",
+            "Use a path without '..' components.",
+        )
+    resolved = raw.resolve()
+    if not resolved.exists():
+        raise CommandValidationError(f"File not found: {path_str}")
+    if not resolved.is_file():
+        raise CommandValidationError(f"Not a file: {path_str}")
+
     svc: EmailService = get_email_service()
     try:
-        draft = svc.import_eml(path)
+        draft = svc.import_eml(str(resolved))
     except FileNotFoundError:
-        raise CommandValidationError(f"File not found: {path}")
+        raise CommandValidationError(f"File not found: {path_str}")
     except Exception as e:
         raise CommandValidationError(f"Import failed: {e}")
     return {
         "type": "status",
         "title": "Import .eml",
         "data": {
-            "_summary": f"Imported {path} as draft {draft['uuid']}",
+            "_summary": f"Imported {path_str} as draft {draft['uuid']}",
             "draft_uuid": draft["uuid"],
             "subject": draft["data"].get("subject", ""),
         },

@@ -193,9 +193,8 @@ class TestIsoConversions:
         assert iso == "2026-01-15T10:00:00+00:00"
 
     def test_dt_to_iso_converts_tz(self):
-        from datetime import timezone
 
-        est = timezone.utc  # simplified: just confirm it normalizes to UTC
+        est = UTC  # simplified: just confirm it normalizes to UTC
         dt = datetime(2026, 1, 15, 5, 0, 0, tzinfo=est)
         iso = _dt_to_iso(dt)
         assert iso.endswith("+00:00")

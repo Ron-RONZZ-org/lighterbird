@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from lighterbird.server.llm.render import (
     _escape_attr,
     _escape_lt,
@@ -13,7 +11,6 @@ from lighterbird.server.llm.render import (
     render_markdown,
     render_streaming_markdown,
 )
-
 
 # ── render_markdown ───────────────────────────────────────────────────────────
 

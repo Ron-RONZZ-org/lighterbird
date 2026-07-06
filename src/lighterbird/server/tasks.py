@@ -362,8 +362,9 @@ class BackupScheduler(BackgroundWorker):
                     logger.error(
                         "[%s] Backup check failed: %s", self.name, exc, exc_info=True
                     )
-            # Sleep in short intervals so we can react to stop signal
-            self._stop_event.wait(2.0)
+            # _stop_event.wait() returns immediately when the event is set,
+            # so a 60-second wait still reacts instantly on shutdown.
+            self._stop_event.wait(60.0)
 
         logger.info("[%s] Worker loop exited", self.name)
 
