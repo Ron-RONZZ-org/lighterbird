@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+
+logger = logging.getLogger(__name__)
 
 from lighterbird.server.middleware import add_middleware
 from lighterbird.server.routes.admin import router as admin_router
@@ -85,6 +88,12 @@ def create_app(static_dir: str | Path | None = None) -> FastAPI:
     static_path = Path(static_dir)
     if static_path.is_dir():
         app.mount("/", StaticFiles(directory=str(static_path), html=True), name="spa")
+    else:
+        logger.warning(
+            "Static directory %s not found — frontend SPA unavailable. "
+            "Build it with: cd web && npm run build",
+            static_path,
+        )
 
     return app
 

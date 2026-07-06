@@ -34,8 +34,8 @@
   let focusedIndex = $state(-1);
   let editingIndex = $state(-1); // -1 = not editing
   let inputEl = $state(null);
-  let debounceTimer = $state(null);
-  let abortController = $state(null);
+  let debounceTimer = null;
+  let abortController = null;
   /** Maps stored value -> display label when value differs from label (e.g. UUID vs title). */
   let displayMap = $state(new Map());
 

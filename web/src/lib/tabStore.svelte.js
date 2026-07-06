@@ -109,6 +109,19 @@ export const tabStore = {
     );
   },
 
+  /**
+   * Safe update — guards against stale tab references.
+   * Only updates if the tab still exists (user may have closed the tab
+   * during an async operation).
+   */
+  safeUpdate(id, data, title) {
+    if (_tabs.find((t) => t.id === id)) {
+      _tabs = _tabs.map((t) =>
+        t.id === id ? { ...t, data, ...(title !== undefined ? { title } : {}) } : t,
+      );
+    }
+  },
+
   closeAll() {
     _tabs = [HOME_TAB];
     _activeId = HOME_TAB.id;

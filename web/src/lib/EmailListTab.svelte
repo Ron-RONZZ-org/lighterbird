@@ -183,6 +183,7 @@
   });
 
   function performSearch(query) {
+    const tabId = tabStore.active.id;
     if (abortController) abortController.abort();
     abortController = new AbortController();
     const params = { ...currentFilters, limit: 50 };
@@ -191,7 +192,7 @@
     }
     emailApi.listMessages(params)
       .then((result) => {
-        tabStore.update(tabStore.active.id, result);
+        tabStore.safeUpdate(tabId, result);
       })
       .catch((err) => {
         if (err?.name === "AbortError") return;
@@ -215,13 +216,14 @@
   }
 
   async function refreshList() {
+    const tabId = tabStore.active.id;
     try {
       const params = { ...currentFilters, limit: 50 };
       if (searchQuery && searchQuery.length >= 2) {
         params.query = searchQuery;
       }
       const result = await emailApi.listMessages(params);
-      tabStore.update(tabStore.active.id, result);
+      tabStore.safeUpdate(tabId, result);
     } catch { /* silent */ }
   }
 
@@ -288,9 +290,10 @@
     if (searchQuery && searchQuery.length >= 2) {
       params.query = searchQuery;
     }
+    const tabId = tabStore.active.id;
     emailApi.listMessages(params)
       .then((result) => {
-        tabStore.update(tabStore.active.id, result);
+        tabStore.safeUpdate(tabId, result);
       })
       .catch(() => {});
   }

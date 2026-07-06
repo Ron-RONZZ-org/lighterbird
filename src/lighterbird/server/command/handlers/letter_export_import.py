@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from lighterbird.core.paths import safe_resolve_path
 from lighterbird.letter.services.letters import LetterService
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
@@ -82,6 +83,10 @@ def letter_import_md(remaining: list[str], flags: dict[str, str]) -> dict[str, A
             "Missing file path.",
             "Usage: !letter import md <path>",
         )
+    try:
+        safe_resolve_path(remaining[0])
+    except (ValueError, FileNotFoundError, IsADirectoryError) as e:
+        raise CommandValidationError(str(e))
     path = remaining[0]
     svc: LetterService = get_letter_service()
     try:

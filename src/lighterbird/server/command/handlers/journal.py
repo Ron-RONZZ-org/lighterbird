@@ -13,9 +13,9 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
+from lighterbird.core.paths import safe_resolve_path
 from lighterbird.journal.services import JournalService
 from lighterbird.server.command.errors import CommandValidationError
-from lighterbird.server.command.helpers import require_found, require_uuid
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_journal_service
 
@@ -152,6 +152,10 @@ def journal_import(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
             "Missing file path.",
             "Usage: !journal import md <path>",
         )
+    try:
+        safe_resolve_path(remaining[1])
+    except (ValueError, FileNotFoundError, IsADirectoryError) as e:
+        raise CommandValidationError(str(e))
     path = remaining[1]
     svc: JournalService = get_journal_service()
     try:

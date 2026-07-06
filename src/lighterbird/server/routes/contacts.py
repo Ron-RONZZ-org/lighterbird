@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 
 from lighterbird.contacts.services import ContactService
+from lighterbird.core.paths import safe_resolve_path
 from lighterbird.server.deps import get_contact_service
 
 router = APIRouter(prefix="/api/v1/contacts", tags=["contacts"])
@@ -67,6 +68,10 @@ def import_vcf(
     path = data.get("path", "")
     if not path:
         raise HTTPException(status_code=400, detail="Path is required.")
+    try:
+        safe_resolve_path(path)
+    except (ValueError, FileNotFoundError, IsADirectoryError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
     try:
         count = svc.import_vcf(path)
         return {"imported": count, "message": f"Imported {count} contact(s)"}

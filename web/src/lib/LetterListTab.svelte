@@ -95,6 +95,7 @@
   }
 
   function performSearch(query) {
+    const tabId = tabStore.active.id;
     if (abortController) abortController.abort();
     abortController = new AbortController();
 
@@ -108,7 +109,7 @@
 
     lettersApi.list(params)
       .then((result) => {
-        tabStore.update(tabStore.active.id, result);
+        tabStore.safeUpdate(tabId, result);
       })
       .catch((err) => {
         if (err?.name === "AbortError") return;
@@ -132,6 +133,7 @@
   }
 
   async function refreshList() {
+    const tabId = tabStore.active.id;
     try {
       const params = { ...currentFilters, limit: 50 };
       if (searchQuery && searchQuery.length >= 2) {
@@ -141,7 +143,7 @@
         params.tag = tagFilterEntries.join(",");
       }
       const result = await lettersApi.list(params);
-      tabStore.update(tabStore.active.id, result);
+      tabStore.safeUpdate(tabId, result);
     } catch { /* silent */ }
   }
 

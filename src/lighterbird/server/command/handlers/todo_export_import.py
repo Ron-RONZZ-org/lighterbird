@@ -12,6 +12,7 @@ from __future__ import annotations
 import datetime
 from typing import Any
 
+from lighterbird.core.paths import safe_resolve_path
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_todo_service
@@ -94,6 +95,11 @@ def todo_import_md(remaining: list[str],
             "Missing file path.",
             "Usage: !todo import md <path>",
         )
+
+    try:
+        safe_resolve_path(remaining[0])
+    except (ValueError, FileNotFoundError, IsADirectoryError) as e:
+        raise CommandValidationError(str(e))
 
     path = remaining[0]
     svc: TodoService = get_todo_service()

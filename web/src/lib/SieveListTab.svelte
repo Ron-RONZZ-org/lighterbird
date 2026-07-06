@@ -148,10 +148,11 @@
   }
 
   async function refreshList() {
+    const tabId = tabStore.active.id;
     try {
       const params = accountFilter ? { account_email: accountFilter } : {};
       const result = await sieveApi.list(params);
-      tabStore.update(tabStore.active.id, result);
+      tabStore.safeUpdate(tabId, result);
       selectedNames = new Set();
     } catch { /* silent */ }
   }

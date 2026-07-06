@@ -93,23 +93,25 @@
   }
 
   async function refreshList() {
+    const tabId = tabStore.active.id;
     try {
       const params = { ...currentFilters, limit: 50 };
       if (searchQuery && searchQuery.length >= 2) {
         params.query = searchQuery;
       }
       const result = await calendarApi.listEvents(params);
-      tabStore.update(tabStore.active.id, result);
+      tabStore.safeUpdate(tabId, result);
     } catch { /* silent */ }
   }
 
   function performSearch(query) {
+    const tabId = tabStore.active.id;
     if (abortController) abortController.abort();
     abortController = new AbortController();
     const params = { ...currentFilters, limit: 50 };
     if (query && query.length >= 2) params.query = query;
     calendarApi.listEvents(params)
-      .then((result) => { tabStore.update(tabStore.active.id, result); })
+      .then((result) => { tabStore.safeUpdate(tabId, result); })
       .catch((err) => { if (err?.name === "AbortError") return; });
   }
 

@@ -7,9 +7,9 @@ Registered paths:
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
+from lighterbird.core.paths import safe_resolve_path
 from lighterbird.email.service import EmailService
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
@@ -55,20 +55,10 @@ def email_import_eml(remaining: list[str], flags: dict[str, str]) -> dict[str, A
             "Usage: !email import eml /path/to/file.eml",
         )
     path_str = remaining[0]
-    # Path traversal protection: reject ".." components to prevent
-    # directory escape. Absolute paths are allowed (users may import
-    # from anywhere on their filesystem).
-    raw = Path(path_str)
-    if ".." in raw.parts:
-        raise CommandValidationError(
-            f"Path traversal not allowed: {path_str}",
-            "Use a path without '..' components.",
-        )
-    resolved = raw.resolve()
-    if not resolved.exists():
-        raise CommandValidationError(f"File not found: {path_str}")
-    if not resolved.is_file():
-        raise CommandValidationError(f"Not a file: {path_str}")
+    try:
+        resolved = safe_resolve_path(path_str)
+    except (ValueError, FileNotFoundError, IsADirectoryError) as e:
+        raise CommandValidationError(str(e))
 
     svc: EmailService = get_email_service()
     try:
