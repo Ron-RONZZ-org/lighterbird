@@ -103,4 +103,5 @@ def get_attachment_store() -> AttachmentStore:
 def reset_services() -> None:
     """Reset all service singletons (useful for testing)."""
     global _services
-    _services = {}
+    with _lock:
+        _services = {}

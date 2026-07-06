@@ -9,8 +9,8 @@ import pytest
 from lighterbird.email.imap.client import (
     IMAPClient,
     _parse_list_response,
-    store_message,
 )
+from lighterbird.email.imap.storage import store_message
 
 # ── _parse_list_response ─────────────────────────────────────────────────────
 

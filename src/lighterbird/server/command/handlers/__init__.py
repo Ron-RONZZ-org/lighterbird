@@ -61,6 +61,8 @@ _INTERACTIVE_FORMS = {
     "contact.modify": "contacts-modify",
     "email.account.add": "email-account-add",
     "email.account.modify": "email-account-modify",
+    "email.signature.add": "email-signature-add",
+    "email.signature.modify": "email-signature-modify",
     "calendar.account.add": "calendar-account-add",
     "calendar.account.modify": "calendar-account-modify",
     "todo.add": "todo-add",
