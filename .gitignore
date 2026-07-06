@@ -45,6 +45,7 @@ export-20260629T060827372733913/
 coverage.xml
 coverage/
 htmlcov/
+*.py,cover
 
 # Test data (individual files)
 /test-contact.toml
