@@ -451,6 +451,26 @@ def _seed_user_commands(data_dir: Path) -> None:
     uc_db.get_db()
 
 
+def _seed_prompt_commands(data_dir: Path) -> None:
+    """Create a demo prompt command file for development/testing.
+
+    Resolves the commands directory from the current ``LIGHTERBIRD_CONFIG_DIR``
+    env var (set by ``seed_data_dir``), falling back to ``data_dir / "config"``.
+    """
+    cfg = Path(os.environ.get("LIGHTERBIRD_CONFIG_DIR", str(data_dir / "config")))
+    commands_dir = cfg / "commands"
+    commands_dir.mkdir(parents=True, exist_ok=True)
+
+    demo_file = commands_dir / "demo.md"
+    if not demo_file.exists():
+        demo_file.write_text(
+            "# Demo prompt command for testing\n"
+            "This is a sample prompt command for testing purposes.\n"
+            "The argument passed was: $1\n",
+            encoding="utf-8",
+        )
+
+
 def _seed_llm_config(creds: dict[str, str]) -> None:
     """Configure the LLM provider from .dev credentials if not already set."""
     from lighterbird.core.keyring import get_password, set_password
@@ -501,7 +521,7 @@ def seed_data_dir(
 
     Creates eight database files (email, calendar, contacts, todo, journal,
     letters, profiles, user_commands) with schemas initialized and seed
-    data inserted.
+    data inserted. Also creates a demo prompt command file for ``/*`` testing.
 
     Passwords for test accounts are stored in the system keyring.
     The LLM provider is auto-configured from ``.dev`` if not already set.
@@ -528,6 +548,7 @@ def seed_data_dir(
     _seed_letters(target)
     _seed_profiles(target)
     _seed_user_commands(target)
+    _seed_prompt_commands(target)
     _seed_llm_config(creds)
     _seed_backup_config(target)
 

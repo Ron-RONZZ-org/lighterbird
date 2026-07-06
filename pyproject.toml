@@ -46,7 +46,7 @@ lighterbird-dev = "lighterbird.scripts.dev_cli:dev_main"
 packages = ["src/lighterbird"]
 
 [tool.uv.sources]
-lightercore = { path = "../lightercore" }
+lightercore = { path = "../lightercore", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

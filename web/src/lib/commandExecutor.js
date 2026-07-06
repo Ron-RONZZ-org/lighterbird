@@ -4,11 +4,12 @@
  * The backend owns validation, alias resolution, and execution.
  * The frontend only handles autocomplete (local, instant).
  *
- * Non-``!`` input is sent to the LLM chat endpoint.``!`` commands go
- * to the command endpoint.
+ * ``/*name`` prompt commands go to the prompt-commands endpoint.
+ * ``!command`` goes to the command endpoint.
+ * Plain text goes to the LLM chat endpoint.
  */
 
-import { parseCommand } from "./parser.js";
+import { parseCommand, parsePromptCommand } from "./parser.js";
 
 const COMMAND_ENDPOINT = "/api/v1/command";
 const CHAT_ENDPOINT = "/api/v1/chat";
@@ -21,6 +22,41 @@ const CHAT_ENDPOINT = "/api/v1/chat";
  */
 export async function execute(input) {
   const trimmed = input.trim();
+
+  // ── Prompt command (/*name) → prompt-commands execute endpoint ──────
+  if (trimmed.startsWith("/*")) {
+    const parsed = parsePromptCommand(trimmed);
+    if (!parsed || !parsed.name) {
+      return {
+        type: "error",
+        title: "Invalid Command",
+        data: { message: "Usage: /*command-name [args...]" },
+      };
+    }
+    try {
+      const resp = await fetch("/api/v1/prompt-commands/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: parsed.name, args: parsed.args }),
+      });
+      if (!resp.ok) {
+        const detail = await resp.json().catch(() => ({}));
+        const msg = detail.detail?.error || detail.error || `HTTP ${resp.status}`;
+        return {
+          type: "error",
+          title: "Prompt Command Failed",
+          data: { message: msg },
+        };
+      }
+      return await resp.json();
+    } catch (err) {
+      return {
+        type: "error",
+        title: "Connection Error",
+        data: { message: `Prompt command error: ${err.message}` },
+      };
+    }
+  }
 
   // ── Natural language → LLM chat ─────────────────────────────────────
   if (!trimmed.startsWith("!")) {

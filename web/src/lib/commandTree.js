@@ -4,6 +4,9 @@
  * ``GET /api/v1/command/tree``. This file starts empty and fetches the
  * live tree on startup via :func:`initCommandTree`.
  *
+ * ``/*`` prompt commands are also fetched from the backend and appended as
+ * a virtual root node with children. See :func:`initPromptCommands`.
+ *
  * There is NO hardcoded fallback — the only source of truth is the backend.
  * See ``src/lighterbird/server/command/tree.py``.
  */
@@ -17,6 +20,13 @@
  * @type {CommandNode[]}
  */
 export let commandTree = [];
+
+/**
+ * List of prompt commands (/* prefix) — flat array of {name, description}.
+ * Populated by :func:`initPromptCommands`.
+ * @type {{name:string, description:string}[]}
+ */
+export let promptCommands = [];
 
 /* ── Dynamic fetch from backend ────────────────────────────────────────── */
 
@@ -42,9 +52,46 @@ export async function initCommandTree() {
   }
 }
 
+/**
+ * Fetch prompt commands from the backend and populate the ``promptCommands``
+ * list. Also appends a virtual ``/*`` node to ``commandTree`` for autocomplete.
+ *
+ * Call this alongside :func:`initCommandTree` on app startup.
+ */
+export async function initPromptCommands() {
+  try {
+    const resp = await fetch("/api/v1/prompt-commands/list");
+    if (resp.ok) {
+      const cmds = await resp.json();
+      promptCommands = cmds;
+
+      // Append virtual /* root node to the command tree
+      if (cmds.length > 0) {
+        const existing = commandTree.find((n) => n.name === "/*");
+        if (!existing) {
+          commandTree.push({
+            name: "/*",
+            description: "Prompt commands",
+            children: cmds.map((c) => ({
+              name: c.name,
+              description: c.description,
+            })),
+          });
+        }
+      }
+    }
+  } catch {
+    // Fetch failed — degrade gracefully: no prompt command autocomplete,
+    // but /* commands still work via direct backend execution.
+  }
+}
+
 // Auto-init on module load. The tree starts empty; the dynamic fetch
 // replaces it when the response arrives (typically <100ms on localhost).
 initCommandTree();
+
+// Also fetch prompt commands. Both fetches run in parallel.
+initPromptCommands();
 
 /** Build a flat list of all root-level command names (for initial ! completion). */
 export function getRootNames() {

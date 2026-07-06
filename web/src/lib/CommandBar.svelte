@@ -1,7 +1,7 @@
 <script>
-  import { commandTree } from "./commandTree.js";
-  import { getCompletions, getDataCompletionsFromCache } from "./commandEngine.js";
-  import { parseCommand, hasTrailingSpace } from "./parser.js";
+  import { commandTree, promptCommands } from "./commandTree.js";
+  import { getCompletions, getPromptCompletions, getDataCompletionsFromCache } from "./commandEngine.js";
+  import { parseCommand, parsePromptCommand, hasTrailingSpace } from "./parser.js";
   import { email as emailApi, calendar as calendarApi, contacts as contactsApi, todo as todoApi, journal as journalApi } from "./api.js";
   import { history } from "./commandHistory.svelte.js";
   import { popup } from "./popupStore.svelte.js";
@@ -54,6 +54,19 @@
   }
 
   function updateSuggestions() {
+    // ── Prompt commands (/* prefix) — flat name+description autocomplete ─
+    if (inputValue.startsWith("/*") || (inputValue.trim().startsWith("/") && !inputValue.trim().startsWith("//"))) {
+      const result = getPromptCompletions(inputValue);
+      suggestions = result.completions;
+      hints = result.hints;
+      dataCompletions = [];
+      positionals = [];
+      selectedSuggestion = -1;
+      selectedDataIndex = -1;
+      return;
+    }
+
+    // ── Regular ! commands ────────────────────────────────────────────
     if (!inputValue.startsWith("!")) {
       suggestions = [];
       hints = [];
