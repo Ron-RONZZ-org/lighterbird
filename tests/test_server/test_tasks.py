@@ -159,21 +159,21 @@ class TestEmailSyncWorker:
         worker = EmailSyncWorker("test-email")
         worker.execute_job(Job("caldav", "sync"))  # should not raise
 
-    @patch("lighterbird.email.service.EmailService")
-    def test_do_sync_single_account(self, mock_svc_cls):
+    @patch("lighterbird.server.deps.get_email_service")
+    def test_do_sync_single_account(self, mock_get_svc):
         worker = EmailSyncWorker("test-email")
         svc = MagicMock()
         svc.process_sync_backlog.return_value = 0
         svc.process_send_queue.return_value = {}
-        mock_svc_cls.return_value = svc
+        mock_get_svc.return_value = svc
 
         worker._do_sync({"account_email": "user@example.com"})
         svc.sync_account.assert_called_once_with("user@example.com")
         svc.process_sync_backlog.assert_called_once()
         svc.process_send_queue.assert_called_once()
 
-    @patch("lighterbird.email.service.EmailService")
-    def test_do_sync_all_accounts(self, mock_svc_cls):
+    @patch("lighterbird.server.deps.get_email_service")
+    def test_do_sync_all_accounts(self, mock_get_svc):
         worker = EmailSyncWorker("test-email")
         svc = MagicMock()
         svc.list_accounts.return_value = [
@@ -182,18 +182,18 @@ class TestEmailSyncWorker:
         ]
         svc.process_sync_backlog.return_value = 3
         svc.process_send_queue.return_value = {"sent": 1, "retrying": 0}
-        mock_svc_cls.return_value = svc
+        mock_get_svc.return_value = svc
 
         worker._do_sync({})
         assert svc.sync_account.call_count == 2
         svc.sync_account.assert_any_call("a@b.com")
         svc.sync_account.assert_any_call("c@d.com")
 
-    @patch("lighterbird.email.service.EmailService")
-    def test_do_process_trash(self, mock_svc_cls):
+    @patch("lighterbird.server.deps.get_email_service")
+    def test_do_process_trash(self, mock_get_svc):
         worker = EmailSyncWorker("test-email")
         svc = MagicMock()
-        mock_svc_cls.return_value = svc
+        mock_get_svc.return_value = svc
 
         worker._do_process_trash({"account_email": "user@example.com"})
         svc.msg_ops.process_trash_backlog.assert_called_once_with(

@@ -166,9 +166,9 @@ class EmailSyncWorker(BackgroundWorker):
     @staticmethod
     def _do_sync(payload: dict) -> None:
         """Run email sync — imports here to avoid circular deps."""
-        from lighterbird.email.service import EmailService
+        from lighterbird.server.deps import get_email_service
 
-        svc = EmailService()
+        svc = get_email_service()
         account_email = payload.get("account_email")
         if account_email:
             svc.sync_account(account_email)
@@ -206,9 +206,9 @@ class EmailSyncWorker(BackgroundWorker):
             payload: May contain ``"account_email"`` to process a single
                      account, or ``None`` / missing to process all accounts.
         """
-        from lighterbird.email.service import EmailService
+        from lighterbird.server.deps import get_email_service
 
-        svc = EmailService()
+        svc = get_email_service()
         account_email = payload.get("account_email")
         svc.msg_ops.process_trash_backlog(account_email=account_email)
 
