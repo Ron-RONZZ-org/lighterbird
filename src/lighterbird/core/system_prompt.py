@@ -1,19 +1,16 @@
 """Editable system prompt for the lighterbird LLM agent.
 
-Users can customise the system prompt by placing a file at::
+Delegates to :class:`lightercore.system_prompt.SystemPromptManager` for
+file-based prompt management with auto-seed on first run.
 
-    ~/.config/lighterbird/system_prompt.md
-
-On first run (when no file exists) a shipped default is automatically
-copied to that location so the user can edit it.
-
-Pattern inspired by A-kunpiloto's config.py.
+The shipped default is defined here (app-specific content).
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
+from lightercore.system_prompt import SystemPromptManager
 from lighterbird.core.paths import config_dir
 
 _SYSTEM_PROMPT_FILENAME = "system_prompt.md"
@@ -52,14 +49,12 @@ ERROR RECOVERY:
 - If the user provides partial information, ask for the missing details.
 """
 
+# ── Manager factory ─────────────────────────────────────────────────────────
 
-def _lighterbird_config_dir() -> Path:
-    """Return the lighterbird config directory.
 
-    Returns:
-        ``~/.config/lighterbird/`` (XDG-compliant).
-    """
-    return config_dir()
+def _get_manager() -> SystemPromptManager:
+    """Return a fresh SystemPromptManager for the current config dir."""
+    return SystemPromptManager(config_dir(), _SYSTEM_PROMPT_FILENAME)
 
 
 def system_prompt_path() -> Path:
@@ -68,39 +63,16 @@ def system_prompt_path() -> Path:
     Returns:
         ``~/.config/lighterbird/system_prompt.md``.
     """
-    return _lighterbird_config_dir() / _SYSTEM_PROMPT_FILENAME
+    return _get_manager().path()
 
 
 def load_system_prompt() -> str:
     """Load the system prompt, auto-seeding the shipped default on first run.
 
-    Resolution order:
-    1. If ``~/.config/lighterbird/system_prompt.md`` exists and is
-       non-empty → return its content (never modified).
-    2. Otherwise, write the shipped default to that location and
-       return its content.
-    3. Fall back to :data:`DEFAULT_SYSTEM_PROMPT`.
-
     Returns:
         The system prompt string.
     """
-    path = system_prompt_path()
-
-    try:
-        if path.exists():
-            content = path.read_text(encoding="utf-8").strip()
-            if content:
-                return content
-    except OSError:
-        pass
-
-    # 2. Auto-seed on first run
-    path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        path.write_text(DEFAULT_SYSTEM_PROMPT, encoding="utf-8")
-    except OSError:
-        pass  # Non-critical
-    return DEFAULT_SYSTEM_PROMPT
+    return _get_manager().load(DEFAULT_SYSTEM_PROMPT)
 
 
 def reload_system_prompt() -> str:
@@ -108,7 +80,7 @@ def reload_system_prompt() -> str:
 
     Useful when the user edits the prompt file while the server is running.
     """
-    return load_system_prompt()
+    return _get_manager().reload(DEFAULT_SYSTEM_PROMPT)
 
 
 __all__ = [
