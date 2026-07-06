@@ -107,6 +107,7 @@ def contact_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
              {"name": "position", "type": "string", "help": "Job position"},
          ],
          interactive=True,
+         form_type="contacts-add",
 )
 def contact_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!contact add --first-name GIVEN --last-name FAMILY [--middle-names M]
@@ -170,7 +171,7 @@ def contact_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "status", "title": contact.get("given_name", "(unnamed)"), "data": dict(contact)}
 
 
-@command("contact.modify")
+@command("contact.modify", interactive=True, form_type="contacts-modify")
 def contact_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!contact modify <uuid> [--first-name GIVEN] [--last-name FAMILY]
     [--email tag:value,...] [--phone tag:value,...] [--organization ORG]

@@ -130,7 +130,7 @@ def llm_profile_show(remaining: list[str], flags: dict[str, str]) -> dict[str, A
     }
 
 
-@command("llm.profile.new")
+@command("llm.profile.new", interactive=True)
 def llm_profile_new(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!llm profile new <protocol> [--alias NAME] [--api-key KEY] [--base-url URL] [--model MODEL] [--temperature TEMP] [--max-tokens N]
 
@@ -180,7 +180,7 @@ def llm_profile_new(remaining: list[str], flags: dict[str, str]) -> dict[str, An
     }
 
 
-@command("llm.profile.set")
+@command("llm.profile.set", interactive=True)
 def llm_profile_set(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!llm profile set [--protocol TYPE] [--alias NAME] [--api-key KEY] [--base-url URL] [--model MODEL] [--temperature TEMP] [--max-tokens N]
 

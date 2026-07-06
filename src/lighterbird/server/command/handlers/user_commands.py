@@ -60,7 +60,7 @@ def saved_commands_list(remaining: list[str], flags: dict[str, str]) -> dict[str
     }
 
 
-@command("user.saved-commands.add")
+@command("user.saved-commands.add", interactive=True)
 def saved_commands_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!user saved-commands add [--alias ALIAS] [--command TEMPLATE] [--hint HINT]
 
@@ -111,7 +111,7 @@ def saved_commands_add(remaining: list[str], flags: dict[str, str]) -> dict[str,
     }
 
 
-@command("user.saved-commands.modify")
+@command("user.saved-commands.modify", interactive=True)
 def saved_commands_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!user saved-commands modify <alias> [--command TEMPLATE] [--hint HINT] [--alias NEW_ALIAS]
 
@@ -151,7 +151,7 @@ def saved_commands_modify(remaining: list[str], flags: dict[str, str]) -> dict[s
     }
 
 
-@command("user.saved-commands.delete")
+@command("user.saved-commands.delete", interactive=True)
 def saved_commands_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!user saved-commands delete <alias> [alias...]
 

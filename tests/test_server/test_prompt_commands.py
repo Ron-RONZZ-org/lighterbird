@@ -15,27 +15,32 @@ from lighterbird.server.deps import reset_services
 
 
 @pytest.fixture
-def client(tmp_path: Path):
+def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest):
     """Create a TestClient with isolated config directory."""
     reset_services()
     app = create_app()
 
     # Override config_dir so prompt-commands routes scan tmp_path/commands/
     import lightercore.paths as lc_paths
-    original_config_dir = lc_paths.config_dir
 
     def _mock_config_dir() -> Path:
         return tmp_path
 
-    lc_paths.config_dir = _mock_config_dir  # type: ignore[assignment]
+    monkeypatch.setattr(lc_paths, "config_dir", _mock_config_dir)
 
     # Ensure commands dir exists
     (tmp_path / "commands").mkdir(exist_ok=True)
 
-    yield TestClient(app)
+    # Isolate LLM provider — forcibly clear any cached config and patch to return None
+    from unittest.mock import patch as _ump
+    import lighterbird.server.llm.provider as llm_provider_mod
+    llm_provider_mod._provider = None
+    _patch_active = _ump.object(llm_provider_mod, "load_active_config", return_value=None)
+    _patch_active.start()
+    # Restore after test
+    request.addfinalizer(_patch_active.stop)
 
-    # Restore
-    lc_paths.config_dir = original_config_dir
+    yield TestClient(app)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

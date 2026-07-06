@@ -21,7 +21,7 @@ def account_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "status", "title": "Email Accounts", "data": {"accounts": accounts}}
 
 
-@command("email.account.add")
+@command("email.account.add", interactive=True)
 def account_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email account add <email> [--imap HOST] [--smtp HOST] [--password PW] [--name NAME]
 
@@ -66,7 +66,7 @@ def account_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("email.account.modify")
+@command("email.account.modify", interactive=True)
 def account_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email account modify <email> [--name NAME] [--password PW]
                     [--imap-server HOST] [--smtp-server HOST]
@@ -113,7 +113,7 @@ def account_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     return {"type": "status", "title": "Account Modified", "data": {"email": email}}
 
 
-@command("email.account.delete")
+@command("email.account.delete", interactive=True)
 def account_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email account delete <email> [email...]"""
     if not remaining:

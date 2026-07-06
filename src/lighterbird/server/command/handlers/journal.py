@@ -55,7 +55,7 @@ def journal_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "journal-list", "title": "Journal", "data": {"entries": entries, "total": len(entries)}}
 
 
-@command("journal.write")
+@command("journal.write", interactive=True)
 def journal_write(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!journal write <title> [--date YYYY-MM-DD] [--text CONTENT]
 
@@ -92,7 +92,7 @@ def journal_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     return {"type": "journal-list", "title": "Journal Search", "data": {"entries": entries, "total": len(entries)}}
 
 
-@command("journal.delete")
+@command("journal.delete", interactive=True)
 def journal_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!journal delete <uuid> [uuid...] — Delete one or more journal entries."""
     if not remaining:

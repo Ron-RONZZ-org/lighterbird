@@ -14,7 +14,7 @@ from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_email_service
 
 
-@command("email.send")
+@command("email.send", interactive=True)
 def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email send <to> <subject> [body] [--account <email>] [--cc email]
                     [--bcc email] [--priority N] [--body-format fmt]

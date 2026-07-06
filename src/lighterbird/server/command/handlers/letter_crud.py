@@ -61,7 +61,7 @@ def letter_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("letter.add")
+@command("letter.add", interactive=True)
 def letter_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!letter add <object> [--body <file-path>] [--body-text CONTENT] [--body-format FORMAT]
                               [--sender SENDER] [--recipient RECIPIENT] [--respond-to UUID]

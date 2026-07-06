@@ -23,7 +23,7 @@ from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 
 
-@command("reset")
+@command("reset", interactive=True, form_type="reset-no-backup")
 def reset_cmd(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!reset [path] [--no-backup]
 

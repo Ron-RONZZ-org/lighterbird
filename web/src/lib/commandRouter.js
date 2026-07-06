@@ -85,7 +85,8 @@ export function shouldIntercept(input) {
   const initialData = buildInitialData(node, leafName, paramTokens, flags);
 
   // ── Resolve the add form type for StatusPopup ────────────────────
-  const addFormType = resolveAddFormType(effectiveTokens, leafName);
+  // Prefer the node's form_type from backend tree metadata
+  const addFormType = node.form_type || resolveAddFormType(effectiveTokens, leafName);
   const addTitle = resolveAddTitle(addFormType);
 
   return {
@@ -217,7 +218,12 @@ function resolveAddFormType(tokens, leafName) {
   if (/^letter\s+send$/i.test(path)) return "letter-send";
 
   // Fallback: use leaf name — warn developer that a form type mapping is missing
-  console.warn(`[commandRouter] No form type mapping for: ${path} — add to resolveAddFormType()`);
+  const msg = `[commandRouter] No form type mapping for: "${path}" — add form_type to @command() decorator or update resolveAddFormType()`;
+  console.warn(msg);
+  // In dev mode, also surface this as a visible error for test detection
+  if (import.meta.env?.DEV) {
+    console.error(msg);
+  }
   return leafName;
 }
 

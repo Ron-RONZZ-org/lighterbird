@@ -15,7 +15,7 @@ from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_letter_service
 
 
-@command("letter.send")
+@command("letter.send", interactive=True)
 def letter_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!letter send <recipient> [--object OBJECT] [--body <file-path>]
                                   [--body-text CONTENT] [--body-format FORMAT]

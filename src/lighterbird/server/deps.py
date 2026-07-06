@@ -105,3 +105,6 @@ def reset_services() -> None:
     global _services
     with _lock:
         _services = {}
+        # Also reset the LLM provider singleton so tests start clean
+        import lighterbird.server.llm.provider as llm_provider
+        llm_provider._provider = None

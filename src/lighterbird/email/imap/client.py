@@ -408,6 +408,4 @@ class IMAPClient:
         return result
 
 
-logger = logging.getLogger(__name__)
-
 # store_message and _insert_message moved to storage.py

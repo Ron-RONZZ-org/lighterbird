@@ -230,7 +230,7 @@ def email_read(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 
 
-@command("email.reply")
+@command("email.reply", interactive=True, form_type="email-send")
 def email_reply(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email reply <uuid> [--all]
 
@@ -311,7 +311,7 @@ def email_reply(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("email.forward")
+@command("email.forward", interactive=True, form_type="email-send")
 def email_forward(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email forward <uuid>
 

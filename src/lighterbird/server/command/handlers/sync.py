@@ -13,7 +13,7 @@ from lighterbird.server.deps import (
 )
 
 
-@command("sync")
+@command("sync", interactive=True)
 def sync_cmd(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!sync [--email [account_email]] [--calendar] [--todo-attachments] [--all]
 

@@ -24,7 +24,7 @@ from lighterbird.todo.services import TodoService
 logger = logging.getLogger(__name__)
 
 
-@command("todo.add")
+@command("todo.add", interactive=True)
 def todo_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!todo add <title> [--parent UUID] [--dependency UUID]
                       [--file PATH|URL] [--template NAME]
@@ -209,7 +209,7 @@ def todo_done(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "status", "title": "Todo(s) Done", "data": {"done": done}}
 
 
-@command("todo.modify")
+@command("todo.modify", interactive=True)
 def todo_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!todo modify <uuid> [--title TITLE] [--description DESC]
                            [--priority N] [--due DATE] [--status STATE]
@@ -272,7 +272,7 @@ def todo_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("todo.delete")
+@command("todo.delete", interactive=True)
 def todo_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!todo delete <uuid> [uuid...]"""
     if not remaining:

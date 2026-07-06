@@ -86,7 +86,7 @@ def sieve_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "status", "title": f"Sieve: {name}", "data": script}
 
 
-@command("email.sieve.add")
+@command("email.sieve.add", interactive=True)
 def sieve_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email sieve add <name> [--content \"...\"] [--file path]"""
     from pathlib import Path
@@ -127,7 +127,7 @@ def sieve_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "status", "title": "Script Created", "data": {"name": script["name"]}}
 
 
-@command("email.sieve.modify")
+@command("email.sieve.modify", interactive=True)
 def sieve_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email sieve modify <name> [--new-name N] [--content ...|--file path]"""
     from pathlib import Path

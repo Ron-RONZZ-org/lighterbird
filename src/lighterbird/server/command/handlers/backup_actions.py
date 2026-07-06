@@ -207,7 +207,7 @@ def backup_restore(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
 # ── !backup prune ──────────────────────────────────────────────────────────
 
 
-@command("backup.prune")
+@command("backup.prune", interactive=True)
 def backup_prune(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!backup prune [--keep N]
 

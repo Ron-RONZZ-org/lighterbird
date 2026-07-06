@@ -94,7 +94,7 @@ def backup_config_list(remaining: list[str], flags: dict[str, str]) -> dict[str,
 # ── !backup config add ─────────────────────────────────────────────────────
 
 
-@command("backup.config.add")
+@command("backup.config.add", interactive=True)
 def backup_config_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!backup config add --id ID --label LABEL [--interval MINUTES] [--max-copies N] [--target PATH] [--enabled true|false]
 
@@ -160,7 +160,7 @@ def backup_config_add(remaining: list[str], flags: dict[str, str]) -> dict[str, 
 # ── !backup config modify ──────────────────────────────────────────────────
 
 
-@command("backup.config.modify")
+@command("backup.config.modify", interactive=True)
 def backup_config_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!backup config modify <id> [--label LABEL] [--interval MINUTES] [--max-copies N] [--target PATH] [--enabled true|false]
 
@@ -238,7 +238,7 @@ def backup_config_default_path(remaining: list[str], flags: dict[str, str]) -> d
 # ── !backup config delete ──────────────────────────────────────────────────
 
 
-@command("backup.config.delete")
+@command("backup.config.delete", interactive=True)
 def backup_config_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!backup config delete <id>
 

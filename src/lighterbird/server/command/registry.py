@@ -165,7 +165,8 @@ def _resolve_user_aliases(
     try:
         from lighterbird.server.deps import get_user_commands_service
         svc = get_user_commands_service()
-    except (ImportError, RuntimeError, LookupError):
+    except Exception:
+        logger.exception("Failed to resolve user aliases — degraded dispatch")
         return tokens, flags  # graceful degradation
 
     result = svc.resolve_and_expand(tokens)
@@ -276,6 +277,11 @@ def get_command_tree() -> list[dict[str, Any]]:
                         entry["flags"] = list(meta["flags"])
                     if meta.get("interactive"):
                         entry["interactive"] = True
+                    if meta.get("form_type"):
+                        entry["form_type"] = meta["form_type"]
+                    elif meta.get("interactive"):
+                        # Default form_type is path with dots replaced by dashes
+                        entry["form_type"] = path_str.replace(".", "-")
                 else:
                     gkey = ".".join(parts[: idx + 1])
                     gmeta = _group_metadata.get(gkey, {})
@@ -326,6 +332,8 @@ def get_command_tree() -> list[dict[str, Any]]:
             result["flags"] = node["flags"]
         if node.get("interactive"):
             result["interactive"] = True
+        if node.get("form_type"):
+            result["form_type"] = node["form_type"]
         return result
 
     tree = sorted(

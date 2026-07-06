@@ -169,7 +169,11 @@ async def execute_endpoint(data: dict[str, Any]) -> dict[str, Any]:
     try:
         response = await core.chat(messages)
     except Exception as exc:
-        logger.exception("Prompt command /*%s LLM call failed", name)
+        from lightercore.exceptions import AIError
+        if isinstance(exc, AIError):
+            logger.warning("Prompt command /*%s AI error: %s", name, exc)
+        else:
+            logger.exception("Prompt command /*%s LLM call failed", name)
         return {
             "type": "status",
             "title": f"/*{name}",

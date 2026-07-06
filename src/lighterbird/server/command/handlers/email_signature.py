@@ -50,7 +50,7 @@ def signature_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     }
 
 
-@command("email.signature.add")
+@command("email.signature.add", interactive=True)
 def signature_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email signature add <email> <text>
 
@@ -81,7 +81,7 @@ def signature_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     }
 
 
-@command("email.signature.modify")
+@command("email.signature.modify", interactive=True)
 def signature_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email signature modify <email> <text>
 

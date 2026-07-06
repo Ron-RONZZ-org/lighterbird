@@ -178,7 +178,7 @@ def user_info_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     }
 
 
-@command("user.info.add")
+@command("user.info.add", interactive=True)
 def user_info_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!user info add <profile-name> [--first-name ...] [--last-name ...] ...
 
@@ -248,7 +248,7 @@ def user_info_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     }
 
 
-@command("user.info.modify")
+@command("user.info.modify", interactive=True)
 def user_info_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!user info modify <uuid> [--first-name ...] [--last-name ...] ...
 

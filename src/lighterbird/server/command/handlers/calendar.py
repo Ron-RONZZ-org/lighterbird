@@ -74,7 +74,7 @@ def calendar_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     return {"type": "calendar-events", "title": "Events", "data": {"events": events}}
 
 
-@command("calendar.event.add")
+@command("calendar.event.add", interactive=True)
 def event_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar event add <title> <start> <end> [location] [--calendar UUID]
                                    [--rrule FREQ=WEEKLY;BYDAY=MO,WE]
@@ -178,7 +178,7 @@ def event_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "status", "title": "Event Modified", "data": {"uuid": uuid[:8]}}
 
 
-@command("calendar.event.delete")
+@command("calendar.event.delete", interactive=True)
 def event_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar event delete <uuid> [uuid...]"""
     if not remaining:
@@ -430,7 +430,7 @@ def cal_account_list(remaining: list[str], flags: dict[str, str]) -> dict[str, A
     return {"type": "status", "title": "Calendars", "data": {"calendars": calendars}}
 
 
-@command("calendar.account.add")
+@command("calendar.account.add", interactive=True)
 def cal_account_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar account add <url> [--username USER] [--password PW]"""
     if not remaining:
@@ -444,7 +444,7 @@ def cal_account_add(remaining: list[str], flags: dict[str, str]) -> dict[str, An
     return {"type": "status", "title": "Calendar Added", "data": {"uuid": cal["uuid"], "url": url}}
 
 
-@command("calendar.account.modify")
+@command("calendar.account.modify", interactive=True)
 def cal_account_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar account modify <uuid> [--url URL] [--username USER] [--password PW]"""
     if not remaining:
@@ -464,7 +464,7 @@ def cal_account_modify(remaining: list[str], flags: dict[str, str]) -> dict[str,
     return {"type": "status", "title": "Calendar Modified", "data": {"uuid": uuid[:8]}}
 
 
-@command("calendar.account.delete")
+@command("calendar.account.delete", interactive=True)
 def cal_account_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar account delete <uuid> [uuid...]"""
     if not remaining:

@@ -59,7 +59,7 @@ def todo_template_list(remaining: list[str],
     }
 
 
-@command("todo.template.add")
+@command("todo.template.add", interactive=True)
 def todo_template_add(remaining: list[str],
                       flags: dict[str, str]) -> dict[str, Any]:
     """!todo template add <name> [--text NAME] [--file NAME]
@@ -116,7 +116,7 @@ def todo_template_view(remaining: list[str],
     return {"type": "status", "title": f"Template: {tpl['name']}", "data": tpl}
 
 
-@command("todo.template.modify")
+@command("todo.template.modify", interactive=True)
 def todo_template_modify(remaining: list[str],
                          flags: dict[str, str]) -> dict[str, Any]:
     """!todo template modify <name> [--title-placeholder TEXT]
@@ -192,7 +192,7 @@ def todo_template_modify(remaining: list[str],
     }
 
 
-@command("todo.template.delete")
+@command("todo.template.delete", interactive=True)
 def todo_template_delete(remaining: list[str],
                          flags: dict[str, str]) -> dict[str, Any]:
     """!todo template delete <name>"""
