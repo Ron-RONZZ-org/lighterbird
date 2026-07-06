@@ -1,11 +1,13 @@
 <script>
   import { tabStore } from "./tabStore.svelte.js";
   import { email as emailApi } from "./api.js";
+  import { openMessage, openMessageInNewTab, handleRowClick, deleteSelected, moveSelected } from "./emailMessageOps.svelte.js";
   import EmailListToolbar from "./EmailListToolbar.svelte";
-  import EmailFolderTree from "./EmailFolderTree.svelte";
+  import EmailFolderPanel from "./EmailFolderPanel.svelte";
   import EmailListRow from "./EmailListRow.svelte";
   import EmailParamsDialog from "./EmailParamsDialog.svelte";
-  import SortDropdown from "./SortDropdown.svelte";
+  import EmailSortOverlay from "./EmailSortOverlay.svelte";
+  import DropdownPanel from "./DropdownPanel.svelte";
   import MoveDialog from "./MoveDialog.svelte";
   import KeyboardShortcutOverlay from "./KeyboardShortcutOverlay.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
@@ -53,40 +55,28 @@
   let groupByConversation = $state(false);
   let groupBySender = $state(false);
 
-  // Sync config when tab data changes (e.g., !email list --sort oldest)
-  // and re-query the backend so the sort/group/folder params take effect.
   $effect(() => {
-    if (data?.filters) {
-      const cliFlags = {};
-      if (data.filters.folder) cliFlags.folder = data.filters.folder;
-      if (data.filters.sort) cliFlags.sort = data.filters.sort;
-      if (data.filters.group === "conversation") cliFlags.group = "conversation";
-      if (data.filters.group === "sender") cliFlags.group = "sender";
-      let needsRequery = false;
-      if (Object.keys(cliFlags).length > 0) {
-        // CLI flags from the backend command are already applied — just apply
-        // matching config so the toolbar reflects the correct state.
-        const merged = config.mergeWithCliFlags(cliFlags);
-        folderVisibility = merged.folderVisibility || {};
-        sort = merged.sort || "newest";
-        groupByConversation = !!merged.groupByConversation;
-        groupBySender = !!merged.groupBySender;
-        // No re-query needed — CLI response is the authoritative view
-        needsRequery = false;
-      } else {
-        // No CLI flags — apply lastConfig from store
-        const lastCfg = config.getLastConfig();
-        folderVisibility = lastCfg.folderVisibility || {};
-        expandedFolders = lastCfg.expandedFolders || [];
-        sort = lastCfg.sort || "newest";
-        groupByConversation = !!lastCfg.groupByConversation;
-        groupBySender = !!lastCfg.groupBySender;
-        // When restoring from lastConfig, only re-query if sort differs from default
-        needsRequery = lastCfg.sort !== "newest" || !!lastCfg.groupByConversation || !!lastCfg.groupBySender;
-      }
-      if (needsRequery) {
-        applyFolderFilter();
-      }
+    if (!data?.filters) return;
+    const cliFlags = {};
+    if (data.filters.folder) cliFlags.folder = data.filters.folder;
+    if (data.filters.sort) cliFlags.sort = data.filters.sort;
+    if (data.filters.group === "conversation") cliFlags.group = "conversation";
+    if (data.filters.group === "sender") cliFlags.group = "sender";
+    if (Object.keys(cliFlags).length > 0) {
+      const merged = config.mergeWithCliFlags(cliFlags);
+      folderVisibility = merged.folderVisibility || {};
+      sort = merged.sort || "newest";
+      groupByConversation = !!merged.groupByConversation;
+      groupBySender = !!merged.groupBySender;
+    } else {
+      const lastCfg = config.getLastConfig();
+      folderVisibility = lastCfg.folderVisibility || {};
+      expandedFolders = lastCfg.expandedFolders || [];
+      sort = lastCfg.sort || "newest";
+      groupByConversation = !!lastCfg.groupByConversation;
+      groupBySender = !!lastCfg.groupBySender;
+      const needsRequery = lastCfg.sort !== "newest" || !!lastCfg.groupByConversation || !!lastCfg.groupBySender;
+      if (needsRequery) applyFolderFilter();
     }
   });
 
@@ -115,43 +105,15 @@
       onBeforeKeydown(e) {
         const tag = e.target.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA" || e.target.isContentEditable) return true;
-
-        if (showMoveDialog) {
-          if (e.key === "Escape") { showMoveDialog = false; e.preventDefault(); }
-          return true;
-        }
-
+        if (showMoveDialog && e.key === "Escape") { showMoveDialog = false; e.preventDefault(); return true; }
         const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
         switch (e.key) {
-          case "e":
-            if (plain && sel.selectionMode && sel.numSelected > 0) {
-              openExportDialog(); e.preventDefault();
-            }
-            return true;
-          case "/":
-            if (plain) {
-              showSearch = !showSearch;
-              if (showSearch) requestAnimationFrame(() => document.querySelector(".search-input")?.focus());
-              else closeSearch();
-              e.preventDefault();
-            }
-            return true;
-          case "f":
-          case "F":
-            if (plain) { showFolderTree = !showFolderTree; e.preventDefault(); }
-            return true;
-          case "s":
-          case "S":
-            if (plain) { showSortDropdown = !showSortDropdown; e.preventDefault(); }
-            return true;
-          case "p":
-          case "P":
-            if (plain) { showParamsDialog = !showParamsDialog; e.preventDefault(); }
-            return true;
-          case "l":
-          case "L":
-            if (plain && hasMore) { loadMore(); e.preventDefault(); }
-            return true;
+          case "e": if (plain && sel.selectionMode && sel.numSelected > 0) { openExportDialog(); e.preventDefault(); } return true;
+          case "/": if (plain) { showSearch = !showSearch; if (showSearch) requestAnimationFrame(() => document.querySelector(".search-input")?.focus()); else closeSearch(); e.preventDefault(); } return true;
+          case "f": case "F": if (plain) { showFolderTree = !showFolderTree; e.preventDefault(); } return true;
+          case "s": case "S": if (plain) { showSortDropdown = !showSortDropdown; e.preventDefault(); } return true;
+          case "p": case "P": if (plain) { showParamsDialog = !showParamsDialog; e.preventDefault(); } return true;
+          case "l": case "L": if (plain && hasMore) { loadMore(); e.preventDefault(); } return true;
           case "Escape":
             if (showShortcutHelp) { showShortcutHelp = false; e.preventDefault(); return true; }
             if (showSearch) { closeSearch(); e.preventDefault(); return true; }
@@ -160,23 +122,10 @@
             if (showSortDropdown) { showSortDropdown = false; e.preventDefault(); return true; }
             if (showParamsDialog) { showParamsDialog = false; e.preventDefault(); return true; }
             if (sel.selectionMode) { sel.toggleSelectionMode(); e.preventDefault(); return true; }
-            // No active UI state — close the tab
-            tabStore.close(tabStore.active?.id);
-            return true;
+            tabStore.close(tabStore.active?.id); return true;
         }
-
-        if ((e.ctrlKey || e.metaKey) && e.key === "r") {
-          e.preventDefault();
-          handleSync();
-          return true;
-        }
-
-        if ((e.ctrlKey || e.metaKey) && e.key === "m") {
-          e.preventDefault();
-          if (sel.numSelected > 0) showMoveDialog = true;
-          return true;
-        }
-
+        if ((e.ctrlKey || e.metaKey) && e.key === "r") { e.preventDefault(); handleSync(); return true; }
+        if ((e.ctrlKey || e.metaKey) && e.key === "m") { e.preventDefault(); if (sel.numSelected > 0) showMoveDialog = true; return true; }
         return false;
       },
     }
@@ -218,61 +167,8 @@
   let searchTimeout;
   let abortController = null;
 
-  function handleRowClick(e, msg) {
-    if (sel.selectionMode) {
-      sel.handleRowClick(e, msg.uuid);
-    } else if (e.ctrlKey || e.metaKey || e.button === 1) {
-      openMessageInNewTab(e, msg.uuid);
-    } else {
-      openMessage(msg.uuid);
-    }
-  }
-
-  async function openMessage(uuid) {
-    if (!uuid) return;
-    try {
-      const msg = await emailApi.getMessage(uuid);
-      tabStore.open("email", msg.subject || "(no subject)", msg, {
-        idKey: `email-${uuid}`,
-        replaceable: false,
-      });
-    } catch (err) {
-      tabStore.open("error", "Error", { message: err.message || "Failed to load message" });
-    }
-  }
-
-  function openMessageInNewTab(e, uuid) {
-    if (!uuid) return;
-    e.preventDefault();
-    window.open(`/api/v1/email/messages/${uuid}/view`, "_blank");
-  }
-
-  async function deleteSelected() {
-    const uuids = [...sel.selectedKeys];
-    if (uuids.length === 0) return;
-    try {
-      await emailApi.batchDelete(uuids);
-      await refreshList();
-    } catch (err) {
-      tabStore.open("error", "Delete Failed", {
-        message: err.message || "Failed to delete messages",
-      });
-    }
-  }
-
-  async function handleMoveConfirmed(destinationFolderUuid) {
-    const uuids = [...sel.selectedKeys];
-    if (uuids.length === 0) return;
-    try {
-      await emailApi.batchMove(uuids, destinationFolderUuid);
-      showMoveDialog = false;
-      await refreshList();
-    } catch (err) {
-      tabStore.open("error", "Move Failed", {
-        message: err.message || "Failed to move messages",
-      });
-    }
-  }
+  // handleRowClick, openMessage, openMessageInNewTab, deleteSelected
+  // and moveSelected are imported from emailMessageOps.svelte.js
 
   $effect(() => {
     if (data && (data.filters !== undefined || data.query !== undefined)) {
@@ -354,43 +250,12 @@
 
   // Live-update read status — handled in App.svelte (always-mounted root)
 
+  // ── Auto-save config when folder/sort/group state changes ──────────
+  $effect(() => {
+    config.autoSave({ folderVisibility, expandedFolders, sort, groupByConversation, groupBySender });
+  });
+
   // ── Folder tree callbacks ──────────────────────────────────────────
-  function handleToggleFolder(folderName) {
-    const next = { ...folderVisibility };
-    next[folderName] = !(next[folderName] !== false);
-    folderVisibility = next;
-    config.autoSave({ folderVisibility: next });
-    // Refresh list with the new folder filter
-    applyFolderFilter();
-  }
-
-  function handleToggleExpand(path) {
-    const next = expandedFolders.includes(path)
-      ? expandedFolders.filter((p) => p !== path)
-      : [...expandedFolders, path];
-    expandedFolders = next;
-    config.autoSave({ expandedFolders: next });
-  }
-
-  function handleSortChange(val) {
-    sort = val;
-    config.autoSave({ sort: val, groupBySender: false });
-    if (groupBySender) { groupBySender = false; }
-    applyFolderFilter();
-  }
-
-  function handleGroupChange(val) {
-    groupByConversation = val;
-    config.autoSave({ groupByConversation: val });
-    applyFolderFilter();
-  }
-
-  function handleGroupBySenderChange(val) {
-    groupBySender = val;
-    config.autoSave({ groupBySender: val });
-    applyFolderFilter();
-  }
-
   async function handleCreateFolder(folderName) {
     // Determine the account from the first folder in the list
     const firstFolder = folders[0];
@@ -488,58 +353,37 @@
     {syncing}
   />
 
-  <!-- Folder tree dropdown overlay -->
-  {#if showFolderTree}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="dropdown-backdrop" onclick={() => { showFolderTree = false; }} role="presentation"></div>
-    <div class="dropdown-panel folder-panel">
-      <EmailFolderTree
-        {folders}
-        {folderVisibility}
-        {expandedFolders}
-        {sort}
-        {groupByConversation}
-        {groupBySender}
-        onToggleFolder={handleToggleFolder}
-        onToggleExpand={handleToggleExpand}
-        onSortChange={handleSortChange}
-        onGroupChange={handleGroupChange}
-        onGroupBySenderChange={handleGroupBySenderChange}
-        onCreateFolder={handleCreateFolder}
-      />
-    </div>
-  {/if}
+  <!-- Folder tree panel -->
+  <EmailFolderPanel
+    folderTree={folders}
+    bind:folderVisibility
+    bind:expandedFolders
+    bind:show={showFolderTree}
+    onRefresh={applyFolderFilter}
+    onCreateFolder={handleCreateFolder}
+    onClose={() => { showFolderTree = false; }}
+  />
 
   <!-- Sort dropdown overlay -->
-  {#if showSortDropdown}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="dropdown-backdrop" onclick={() => { showSortDropdown = false; }} role="presentation"></div>
-    <div class="dropdown-panel sort-panel">
-      <SortDropdown
-        {sort}
-        {groupByConversation}
-        {groupBySender}
-        onSortChange={handleSortChange}
-        onGroupChange={handleGroupChange}
-        onGroupBySenderChange={handleGroupBySenderChange}
-      />
-    </div>
-  {/if}
+  <EmailSortOverlay
+    bind:sort
+    bind:groupByConversation
+    bind:groupBySender
+    bind:show={showSortDropdown}
+    onRefresh={applyFolderFilter}
+    onClose={() => { showSortDropdown = false; }}
+  />
 
   <!-- Params dialog -->
-  {#if showParamsDialog}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="dropdown-backdrop" onclick={() => { showParamsDialog = false; }} role="presentation"></div>
-    <div class="dropdown-panel">
-      <EmailParamsDialog
-        {config}
-        onSave={handleSaveConfig}
-        onActivate={handleActivateConfig}
-        onDelete={handleDeleteConfig}
-        onClose={() => { showParamsDialog = false; }}
-      />
-    </div>
-  {/if}
+  <DropdownPanel show={showParamsDialog} onClose={() => { showParamsDialog = false; }}>
+    <EmailParamsDialog
+      {config}
+      onSave={handleSaveConfig}
+      onActivate={handleActivateConfig}
+      onDelete={handleDeleteConfig}
+      onClose={() => { showParamsDialog = false; }}
+    />
+  </DropdownPanel>
 
   <!-- Message list -->
   <div class="list" role="listbox" aria-label="Email messages" aria-multiselectable="true">
@@ -567,14 +411,14 @@
   {#if sel.confirmDelete}
     <ConfirmDialog
       message="Delete {sel.numSelected} message{sel.numSelected !== 1 ? 's' : ''}?"
-      onConfirm={async () => { sel.confirmDelete = false; await deleteSelected(); }}
+      onConfirm={async () => { sel.confirmDelete = false; await deleteSelected([...sel.selectedKeys], refreshList); }}
       onDismiss={() => { sel.confirmDelete = false; }}
     />
   {/if}
 
   {#if showMoveDialog}
     <MoveDialog
-      onConfirm={(destUuid) => handleMoveConfirmed(destUuid)}
+      onConfirm={async (destUuid) => { await moveSelected([...sel.selectedKeys], destUuid, refreshList); showMoveDialog = false; }}
       onDismiss={() => { showMoveDialog = false; }}
     />
   {/if}
@@ -643,27 +487,4 @@
     cursor: default;
   }
 
-  /* Dropdown overlay */
-  .dropdown-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 200;
-    background: transparent;
-  }
-  .dropdown-panel {
-    position: absolute;
-    top: 2.4rem;
-    left: 0.3rem;
-    z-index: 300;
-    background: #1e1e32;
-    border: 1px solid #4a4a6a;
-    border-radius: 8px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-    max-height: 70vh;
-    overflow-y: auto;
-  }
-  .folder-panel {
-    width: 320px;
-    padding: 0.75rem;
-  }
 </style>
