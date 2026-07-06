@@ -119,6 +119,11 @@ def e2e_server(request: pytest.FixtureRequest) -> Iterator[dict[str, Any]]:
 
     from lighterbird.scripts.seed import seed_data_dir
     seed_data_dir(tmp_dir)
+
+    # seed_data_dir may have changed config_dir to target/config internally.
+    # Sync the env dict so the subprocess uses the same paths.
+    env["LIGHTERBIRD_CONFIG_DIR"] = str(tmp_dir / "config")
+
     print(f"[e2e] Seeded data at: {tmp_dir}")
 
     # ── 4. Start uvicorn subprocess ──────────────────────────────────────

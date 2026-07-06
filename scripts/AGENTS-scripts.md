@@ -11,7 +11,7 @@ Code lives in `src/lighterbird/scripts/`.
 | File | Purpose |
 |------|---------|
 | `__init__.py` | Package init |
-| `seed.py` | `seed_data_dir(target_dir, dot_dev_path)` — populates a directory with all 8 domain databases (email, calendar, contacts, todo, journal, letters, profiles, user_commands) containing test data from ``.dev`` credentials |
+| `seed.py` | `seed_data_dir(target_dir, dot_dev_path)` — populates a directory with all 8 domain databases (email, calendar, contacts, todo, journal, letters, profiles, user_commands) + a demo prompt command file, containing test data from ``.dev`` credentials |
 | `dev_cli.py` | `dev_main()` — CLI entry point registered as `lighterbird-dev` in `pyproject.toml` under `[project.scripts]` |
 
 ## Usage

@@ -4,10 +4,12 @@
  *   0: Root command (after !)
  *   1-N: Children of the current node
  *   N+1: Parameters and flags of a leaf node
+ *
+ * ``/*`` prompt commands are also supported — see :func:`getPromptCompletions`.
  */
 
-import { commandTree, findNode, matchChildren } from "./commandTree.js";
-import { parseCommand, hasTrailingSpace } from "./parser.js";
+import { commandTree, promptCommands, findNode, matchChildren } from "./commandTree.js";
+import { parseCommand, parsePromptCommand, hasTrailingSpace } from "./parser.js";
 
 /**
  * @param {string} input — raw user input
@@ -334,4 +336,48 @@ function addFolders(cache, result) {
       });
     }
   }
+}
+
+/**
+ * Get autocomplete completions for prompt commands (/* prefix).
+ *
+ * When input starts with ``/`` or ``/*``, returns matching prompt command names
+ * with descriptions as hints. Otherwise returns empty arrays.
+ *
+ * @param {string} input — the raw user input
+ * @returns {{ completions: string[], hints: string[] }}
+ */
+export function getPromptCompletions(input) {
+  const parsed = parsePromptCommand(input);
+  if (!parsed) {
+    // Check if input starts with just "/" (but not "/*")
+    const trimmed = input.trim();
+    if (trimmed.startsWith("/") && !trimmed.startsWith("/*")) {
+      // Show all prompt commands when user types just "/"
+      return {
+        completions: promptCommands.map((c) => `/*${c.name}`),
+        hints: promptCommands.map((c) => c.description || ""),
+      };
+    }
+    return { completions: [], hints: [] };
+  }
+
+  // User has typed "/*" or "/*name"
+  const prefix = parsed.name.toLowerCase();
+  if (!prefix) {
+    // Just "/*" — show all
+    return {
+      completions: promptCommands.map((c) => `/*${c.name}`),
+      hints: promptCommands.map((c) => c.description || ""),
+    };
+  }
+
+  // Filter by prefix
+  const matches = promptCommands.filter((c) =>
+    c.name.toLowerCase().startsWith(prefix),
+  );
+  return {
+    completions: matches.map((c) => `/*${c.name}`),
+    hints: matches.map((c) => c.description || ""),
+  };
 }

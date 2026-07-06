@@ -46,6 +46,10 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 - `GET /api/v1/profiles` — list user profiles
 - `POST /api/v1/cowrite` — AI-assisted writing
 - `WebSocket /api/v1/ai/chat` — streaming LLM chat
+- `GET /api/v1/prompt-commands/list` — list prompt commands for autocomplete
+- `POST /api/v1/prompt-commands/expand` — preview expanded prompt text
+- `POST /api/v1/prompt-commands/execute` — expand + send to LLM (sync JSON)
+- `POST /api/v1/prompt-commands/execute/stream` — expand + stream LLM response (SSE)
 
 ## Documentation Reference
 

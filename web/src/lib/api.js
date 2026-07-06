@@ -381,6 +381,18 @@ export const profiles = {
   get: (uuid) => request("GET", `/profiles/profiles/${uuid}`),
 };
 
+// ── Prompt Commands API (/* prefix) ─────────────────────────────────────
+
+export const promptCommands = {
+  list: () => request("GET", "/prompt-commands/list"),
+
+  expand: (name, args = []) =>
+    request("POST", "/prompt-commands/expand", { name, args }),
+
+  execute: (name, args = []) =>
+    request("POST", "/prompt-commands/execute", { name, args }),
+};
+
 // ── Drafts API (Ctrl+S save / !{domain} draft recall) ──────────────────
 
 export const drafts = {

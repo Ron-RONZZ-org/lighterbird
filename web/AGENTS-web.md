@@ -14,8 +14,10 @@ The web frontend provides:
   - Empty content area (no results until a command is run)
 - **Command bar** — text input area with:
   - `!` prefix → execute a structured command (`!email list`, `!new`, `!search`)
-  - no `!` prefix → send as LLM chat message
+  - `/*` prefix → execute a file-based prompt command (`/*weekly INBOX`, `/*summarize`)
+  - no `!` or `/*` prefix → send as LLM chat message
   - As-you-type autocomplete with UUID and label-based suggestion dropdown
+  - `/*` autocomplete shows prompt command names and descriptions
   - Arrow key history navigation (up/down through command history)
   - Tab completion for command names, flags, and folder paths
   - Disabled with animated spinner while command is running

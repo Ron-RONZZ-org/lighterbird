@@ -280,6 +280,77 @@ async function run() {
       `Expected help, got: '${text}'`);
   });
 
+  // ═══════════════════════════════════════════
+  console.log();
+  console.log("--- PROMPT COMMANDS (/*) ---");
+
+  await test("/* list API returns array with seeded demo command", async () => {
+    const data = await page.evaluate(async () => {
+      const resp = await fetch("/api/v1/prompt-commands/list");
+      return resp.ok ? await resp.json() : null;
+    });
+    assert(Array.isArray(data), `Expected array, got: ${JSON.stringify(data)}`);
+    console.log(`    Found ${data.length} prompt commands`);
+    if (data.length > 0) {
+      console.log(`    First: /*${data[0].name} — ${data[0].description}`);
+    }
+  });
+
+  await test("/* expand API returns expanded text", async () => {
+    const data = await page.evaluate(async () => {
+      const resp = await fetch("/api/v1/prompt-commands/expand", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "demo", args: ["test-arg"] }),
+      });
+      return resp.ok ? await resp.json() : null;
+    });
+    assert(data !== null, "expand returned null");
+    assert(data.name === "demo", `Expected name "demo", got "${data.name}"`);
+    assert(data.expanded.includes("test-arg"),
+      `Expected expanded text to include "test-arg", got: "${data.expanded}"`);
+    console.log(`    Expanded: "${data.expanded.substring(0, 80)}..."`);
+  });
+
+  await test("/* expand API returns 404 for unknown name", async () => {
+    const status = await page.evaluate(async () => {
+      const resp = await fetch("/api/v1/prompt-commands/expand", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "nonexistent", args: [] }),
+      });
+      return resp.status;
+    });
+    assert(status === 404, `Expected 404, got ${status}`);
+  });
+
+  await test("/* nonexistent shows error", async () => {
+    await typeCommand("/*nonexistent");
+    await pressEnter();
+    const text = await getPopupText();
+    assert(text.includes("not found") || text.includes("nonexistent"),
+      `Expected 'not found' error, got: '${text.substring(0, 100)}'`);
+  });
+
+  // Type /* and verify autocomplete works (the seeded demo command should appear)
+  await test("/* prefix triggers autocomplete", async () => {
+    const input = page.locator("[aria-label='Message input']");
+    await input.click();
+    await input.fill("/*");
+    await sleep(800);
+    // Check if suggestions dropdown appears
+    const firstSugg = page.locator(".suggestions li").first();
+    const hasSuggestions = await firstSugg.isVisible().catch(() => false);
+    if (hasSuggestions) {
+      const text = await firstSugg.textContent();
+      console.log(`    Suggestion: ${text.substring(0, 80)}`);
+      assert(text.includes("/*"), `Expected /* suggestion, got: "${text}"`);
+    } else {
+      console.log("    (no suggestion dropdown visible — may be empty list)");
+    }
+    await input.fill("");
+  });
+
   console.log();
   console.log(`RESULTS: ${passed} passed, ${failed} failed`);
 

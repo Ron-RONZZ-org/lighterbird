@@ -75,6 +75,14 @@ This project uses **uv** for development:
 
 ---
 
+## Prompt Commands (`/*` prefix)
+
+File-based LLM prompt commands live in ``~/.config/lighterbird/commands/*.md`` and are invoked via the ``/*`` prefix (e.g. ``/*weekly INBOX``). Unlike ``!commands``, these are **not** dispatched through the command engine — they load the prompt template, substitute ``$1``–``$9`` args, and send the result to the LLM.
+
+The canonical implementation lives in ``lightercore.prompt_commands``; the lighterbird server provides the API endpoints (``/api/v1/prompt-commands/*``) and the frontend handles ``/*`` prefix routing and autocomplete.
+
+See ``core/AGENTS-core.md`` and ``lightcore/docs/AGENTS-prompt-commands.md`` for details.
+
 ## Source Tree Structure
 
 ```
