@@ -304,8 +304,11 @@ class CalDAVWorker(BackgroundWorker):
             return
 
         event = svc.events.get(event_uuid)
+        if not event:
+            return
+
         password = get_password(cal_uuid)
-        remote_href = event.get("remote_href") if event else None
+        remote_href = event.get("remote_href")
 
         delete_event(
             url=cal["url"],

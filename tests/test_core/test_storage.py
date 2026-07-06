@@ -65,8 +65,11 @@ class TestAttachmentStore:
         assert "/" not in result
 
     def test_store_creates_base_dir(self):
-        AttachmentStore()
+        store = AttachmentStore()
         from lighterbird.core.paths import data_dir
+        # Base dir is created lazily on first store()
+        assert not (data_dir() / "attachments").is_dir()
+        store.store("msg-uuid", "cid", b"data")
         assert (data_dir() / "attachments").is_dir()
 
     def test_retrieve_nonexistent_raises(self):

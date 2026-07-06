@@ -22,8 +22,8 @@ def mock_sieve_svc(monkeypatch):
     svc.sieve = MagicMock()
     # _resolve_account_identifier uses get_account + db.execute
     svc.get_account = MagicMock(return_value=None)
-    svc.db = MagicMock()
-    svc.db.execute.return_value = []
+    svc._db = MagicMock()
+    svc._db.execute.return_value = []
     deps._services["email"] = svc
     return svc
 

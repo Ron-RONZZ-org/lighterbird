@@ -235,6 +235,5 @@ class EmailService:
     def db(self):
         return self._db
 
-    @db.setter
-    def db(self, value):
-        self._db = value
+    # NOTE: no db setter — changing _db after construction would orphan
+    # the sub-service instances (self.accounts, self.messages, etc.)

@@ -227,9 +227,6 @@ def email_read(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "email", "title": msg.get("subject", "(no subject)"), "data": dict(msg)}
 
 
-
-
-
 @command("email.reply", interactive=True, form_type="email-send")
 def email_reply(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email reply <uuid> [--all]

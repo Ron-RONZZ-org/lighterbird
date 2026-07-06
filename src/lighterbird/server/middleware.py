@@ -69,7 +69,18 @@ def add_middleware(app: FastAPI) -> None:
         logger.exception("Unhandled exception processing %s %s", request.method, request.url.path)
         if os.environ.get("LIGHTERBIRD_DEBUG"):
             raise  # Re-raise in dev so the traceback is visible
-        return _error_response(500, exc)
+        # Return a generic message to avoid leaking internal details
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "An internal error occurred.",
+                "code": "INTERNAL_ERROR",
+                "suggestion": (
+                    "Enable LIGHTERBIRD_DEBUG=1 and check the server logs "
+                    "for details."
+                ),
+            },
+        )
 
     # CORS: allow all origins during development.
     # When deploying, set `LIGHTERBIRD_ORIGINS` env var to a comma-separated

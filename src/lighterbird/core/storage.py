@@ -32,7 +32,7 @@ class AttachmentStore:
 
     def __init__(self) -> None:
         self._base = data_dir() / "attachments"
-        self._base.mkdir(parents=True, exist_ok=True)
+        # Directory created lazily on first store() call.
 
     # ── Public API ─────────────────────────────────────────────────────────
 
@@ -54,6 +54,7 @@ class AttachmentStore:
         Returns:
             Absolute path to the stored file.
         """
+        self._base.mkdir(parents=True, exist_ok=True)
         msg_dir = self._message_dir(message_uuid)
         dest = msg_dir / self._safe_filename(content_id)
         dest.write_bytes(data)

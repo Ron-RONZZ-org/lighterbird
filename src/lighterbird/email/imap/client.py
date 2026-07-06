@@ -39,49 +39,48 @@ _SPECIAL_USE_MAP = {
 }
 
 
+# Regex for RFC 3501 LIST response: (flags) SP delimiter SP mailbox-name
+# Matches:  (flags) "delimiter" "mailbox"  or  (flags) delimiter mailbox
+_LIST_RE = re.compile(
+    rb'\(([^)]*)\)\s+'
+    rb'(?:"([^"]*)"|(\S+))\s+'
+    rb'(?:"([^"]*)"|(\S+))',
+)
+
+# Regex to extract UID from FETCH response
+_IMAP_UID_RE = re.compile(rb"UID (\d+)")
+
+
 def _parse_list_response(line: bytes) -> dict[str, Any] | None:
     """Parse a single IMAP LIST response line.
 
-    Handles both quoted and unquoted folder names.
-    Returns dict with ``name``, ``delimiter``, ``flags``, or None.
+    Handles both quoted and unquoted folder names, using a regex
+    that follows RFC 3501 ``mailbox-list`` grammar.  Returns dict
+    with ``name``, ``delimiter``, ``flags``, or None.
     """
     if not line:
         return None
-    # RFC 3501: (flags) "/" "name"  or  (flags) "/" name
-    parts = line.split(b'"')
-    flags_str = b""
-    delimiter = "/"
-    name = ""
 
-    if len(parts) >= 1:
-        # Flags are before the first quoted delimiter, in parentheses
-        raw = parts[0]
-        paren_idx = raw.find(b"(")
-        if paren_idx >= 0:
-            end_idx = raw.find(b")", paren_idx)
-            if end_idx >= 0:
-                flags_str = raw[paren_idx + 1 : end_idx]
+    match = _LIST_RE.search(line)
+    if not match:
+        logger.warning("Failed to parse LIST response: %r", line[:200])
+        return None
 
-    # Determine delimiter and name from split parts:
-    # len(parts) == 3: (flags) "/" name  → parts[1]=/, parts[2]=name
-    # len(parts) == 5: (flags) "/" "name"  → parts[1]=/, parts[3]=name
-    if len(parts) >= 3:
-        delimiter = parts[1].decode("utf-8", errors="replace")
-        if len(parts) == 5:
-            # Quoted name
-            name = parts[3].strip()
-        else:
-            # Unquoted name
-            name = parts[2].strip()
-        if isinstance(name, bytes):
-            name = name.decode("utf-8", errors="replace")
+    raw_flags = match.group(1)
+    # Delimiter: quoted (group 2) or unquoted (group 3)
+    raw_delim = match.group(2) if match.group(2) is not None else match.group(3)
+    # Mailbox name: quoted (group 4) or unquoted (group 5)
+    raw_name = match.group(4) if match.group(4) is not None else match.group(5)
+
+    delimiter = raw_delim.decode("utf-8", errors="replace")
+    name = raw_name.decode("utf-8", errors="replace")
 
     if not name:
         return None
 
     flags = [
         f.decode("utf-8", errors="replace")
-        for f in flags_str.split() if f
+        for f in raw_flags.split() if f
     ]
 
     # Detect SPECIAL-USE (case-insensitive matching)
@@ -335,7 +334,6 @@ class IMAPClient:
                 return result
 
             new_uids.sort(reverse=True)
-            _IMAP_UID_RE = re.compile(rb"UID (\d+)")
 
             for start in range(0, len(new_uids), 100):
                 chunk = new_uids[start:start + 100]

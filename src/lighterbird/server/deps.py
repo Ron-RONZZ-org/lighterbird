@@ -101,7 +101,14 @@ def get_attachment_store() -> AttachmentStore:
 
 
 def reset_services() -> None:
-    """Reset all service singletons (useful for testing)."""
+    """Reset all service singletons (useful for testing).
+
+    .. warning::
+
+       Background workers (``tasks.py``) that obtained service references
+       **before** this call will hold stale instances.  Callers should
+       ensure workers are also restarted after a reset.
+    """
     global _services
     with _lock:
         _services = {}
