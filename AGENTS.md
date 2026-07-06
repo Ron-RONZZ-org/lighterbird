@@ -228,7 +228,7 @@ Playwright E2E tests are integrated into pytest via the ``--e2e`` flag:
 
 | Command | Behavior |
 |---------|----------|
-| `uv run pytest tests/` | Unit tests only (225 tests, E2E skipped) |
+| `uv run pytest tests/` | Unit tests only (1379 tests, E2E skipped) |
 | `uv run pytest --e2e tests/test_e2e.py` | E2E tests only (auto-starts seeded server) |
 | `uv run pytest --e2e --keep-e2e-data` | E2E + preserve temp data for debugging |
 

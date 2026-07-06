@@ -33,7 +33,7 @@ def _mock_svc(**attrs) -> MagicMock:
 
 @pytest.fixture
 def mock_email_svc(monkeypatch):
-    """Set the global _email_service in deps to a pre-configured MagicMock."""
+    """Inject a mock into the deps._services registry."""
     from lighterbird.server import deps
     svc = _mock_svc(
         list_accounts=[],
@@ -45,72 +45,72 @@ def mock_email_svc(monkeypatch):
         import_eml=None,
         send_email={"status": "sent"},
     )
-    deps._email_service = svc
+    deps._services["email"] = svc
     return svc
 
 
 @pytest.fixture
 def mock_calendar_svc(monkeypatch):
-    """Set the global _calendar_service in deps to a pre-configured MagicMock."""
+    """Inject a mock into the deps._services registry."""
     from lighterbird.server import deps
     svc = _mock_svc(
         list_calendars=[],
         list_events=[],
         get_event=None,
     )
-    deps._calendar_service = svc
+    deps._services["calendar"] = svc
     return svc
 
 
 @pytest.fixture
 def mock_contact_svc(monkeypatch):
-    """Set the global _contact_service in deps to a pre-configured MagicMock."""
+    """Inject a mock into the deps._services registry."""
     from lighterbird.server import deps
     svc = _mock_svc(
         list_contacts=[],
         search_contacts=[],
         get_contact=None,
     )
-    deps._contact_service = svc
+    deps._services["contact"] = svc
     return svc
 
 
 @pytest.fixture
 def mock_todo_svc(monkeypatch):
-    """Set the global _todo_service in deps to a pre-configured MagicMock."""
+    """Inject a mock into the deps._services registry."""
     from lighterbird.server import deps
     svc = _mock_svc(
         list_todos=[],
         search_todos=[],
         get_todo=None,
     )
-    deps._todo_service = svc
+    deps._services["todo"] = svc
     return svc
 
 
 @pytest.fixture
 def mock_journal_svc(monkeypatch):
-    """Set the global _journal_service in deps to a pre-configured MagicMock."""
+    """Inject a mock into the deps._services registry."""
     from lighterbird.server import deps
     svc = _mock_svc(
         list_entries=[],
         search_entries=[],
         get_entry=None,
     )
-    deps._journal_service = svc
+    deps._services["journal"] = svc
     return svc
 
 
 @pytest.fixture
 def mock_letter_svc(monkeypatch):
-    """Set the global _letter_service in deps to a pre-configured MagicMock."""
+    """Inject a mock into the deps._services registry."""
     from lighterbird.server import deps
     svc = _mock_svc(
         list_letters=[],
         search_letters=[],
         get_letter=None,
     )
-    deps._letter_service = svc
+    deps._services["letter"] = svc
     return svc
 
 
