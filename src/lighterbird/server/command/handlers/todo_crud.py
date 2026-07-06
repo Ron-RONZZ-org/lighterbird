@@ -115,25 +115,6 @@ def todo_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 pass  # label already exists — expected, no action needed
         data["_tags"] = tag_names
 
-    # ── LLM co-writing ─────────────────────────────────────────────────
-    cowrite_instr = flags.get("cowrite", "")
-    if cowrite_instr:
-        from lighterbird.core.async_utils import run_async_sync
-        from lighterbird.server.cowrite.engine import cowrite as _cowrite_call
-
-        fields = {"title": data["title"], "description": data.get("description", "")}
-        try:
-            result = run_async_sync(lambda: _cowrite_call(
-                form_type="todo-add",
-                fields=fields,
-                instruction=cowrite_instr,
-            ))
-            data["title"] = result["revised"].get("title", data["title"])
-            if "description" in result["revised"]:
-                data["description"] = result["revised"]["description"]
-        except (RuntimeError, ValueError) as exc:
-            raise CommandValidationError(f"Co-writing failed: {exc}")
-
     todo = svc.create(data)
 
     # File attachment (comma-separated list)

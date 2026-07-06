@@ -334,21 +334,6 @@ class TestEmailHandlers:
         assert result["data"]["form"] == "email-send"
         assert "Fwd: Original" in result["data"]["initialData"]["subject"]
 
-    def test_email_send_cowrite(self, mock_email_svc, monkeypatch):
-        """email send with --cowrite processes cowrite instruction."""
-        mock_email_svc.list_accounts.return_value = [{"email": "me@b.com"}]
-        # Mock the cowrite engine — it's async so we return a coroutine
-        async def mock_cowrite(**kwargs):
-            return {
-                "revised": {"subject": "Revised Subject", "body": "Revised body"},
-                "edits": {},
-            }
-        monkeypatch.setattr("lighterbird.server.cowrite.engine.cowrite", mock_cowrite)
-        result = dispatch(["email", "send", "to@b.com", "Subject"], {"cowrite": "make it formal"})
-        assert result["type"] == "status"
-        assert result["title"] == "Sent"
-
-
 # ── Calendar handlers ────────────────────────────────────────────────────────
 
 

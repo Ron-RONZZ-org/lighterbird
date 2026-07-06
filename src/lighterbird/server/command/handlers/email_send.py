@@ -41,9 +41,6 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     in_reply_to = flags.get("in-reply-to", "")
     body_format = flags.get("body-format", "markdown")
     file_flags = flags.get("file", "")
-    cowrite_instr = flags.get("cowrite", "")
-    cowrite_diff = "cowrite-diff" in flags
-
     svc: EmailService = get_email_service()
 
     # If no account specified, pick the first one
@@ -84,37 +81,6 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 attachments.append({"name": name, "data": data})
             else:
                 attachments.append({"name": item, "data": ""})
-
-    # ── LLM co-writing ─────────────────────────────────────────────────
-    if cowrite_instr:
-        import asyncio
-
-        from lighterbird.server.cowrite.engine import cowrite as _cowrite_call
-
-        fields = {"subject": subject, "body": body}
-        try:
-            result = asyncio.run(_cowrite_call(
-                form_type="email-send",
-                fields=fields,
-                instruction=cowrite_instr,
-            ))
-            subject = result["revised"].get("subject", subject)
-            body = result["revised"].get("body", body)
-            if cowrite_diff:
-                diff_lines = []
-                for field, ops in result["edits"].items():
-                    for op in ops:
-                        if op["tag"] == "replace":
-                            diff_lines.append(f"- {field}: {op['deleted']!r}")
-                            diff_lines.append(f"+ {field}: {op['inserted']!r}")
-                        elif op["tag"] == "delete":
-                            diff_lines.append(f"- {field}: {op['deleted']!r}")
-                        elif op["tag"] == "insert":
-                            diff_lines.append(f"+ {field}: {op['inserted']!r}")
-                if diff_lines:
-                    body = body + "\n\n-- Cowrite diff:\n" + "\n".join(diff_lines)
-        except (RuntimeError, ValueError) as exc:
-            raise CommandValidationError(f"Co-writing failed: {exc}")
 
     result = svc.send_email(account_email, to_list, subject, body,
                             cc=cc_list, bcc=bcc_list, priority=priority,

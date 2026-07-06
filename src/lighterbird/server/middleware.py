@@ -5,11 +5,15 @@ from __future__ import annotations
 import os
 import sqlite3
 
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
 from lighterbird.core.exceptions import LighterbirdError
+
+logger = logging.getLogger(__name__)
 
 
 def _error_response(status: int, exc: Exception) -> JSONResponse:
@@ -62,6 +66,7 @@ def add_middleware(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
+        logger.exception("Unhandled exception processing %s %s", request.method, request.url.path)
         if os.environ.get("LIGHTERBIRD_DEBUG"):
             raise  # Re-raise in dev so the traceback is visible
         return _error_response(500, exc)

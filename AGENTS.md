@@ -149,14 +149,23 @@ lighterbird/
 
 ---
 
-## GUI + CLI Parity Requirement
+## GUI + CLI Parity (Aspirational)
 
-**All functionalities MUST be accessible via BOTH GUI and CLI.** No feature may be CLI-only or GUI-only. This means:
+**Full parity is the design goal**, but some features are inherently GUI-only or CLI-only. Exceptions are documented explicitly in this section. When adding a feature, implement both paths unless a documented exception applies.
 
-- Every `!command` must have a corresponding GUI panel (form, tab, or overlay) accessible through the command bar or a toolbar button.
-- Every GUI form/panel must have a corresponding `!command` accessible via the centralized command box.
-- When adding a new feature, implement both the CLI handler (backend) and the GUI component (Svelte) simultaneously.
+### Core rule
+
+- Every `!command` should have a corresponding GUI panel (form, tab, or overlay) accessible through the command bar or a toolbar button.
+- Every GUI form/panel should have a corresponding `!command` accessible via the centralized command box.
+- When adding a new feature, implement both the CLI handler (backend) and the GUI component (Svelte) simultaneously unless a documented exception applies.
 - The authoritative command metadata lives in `src/lighterbird/server/command/tree.py` (backend). The frontend fetches it on startup via `GET /api/v1/command/tree`. There is no hardcoded frontend tree — `commandTree.js` starts empty and is populated dynamically.
+
+### Documented exceptions
+
+| Feature | Path | Reasoning |
+|---------|------|-----------|
+| **LLM Co-writing** (`--cowrite`) | GUI only (`CowritePanel` + `POST /api/v1/cowrite`) | Cowriting requires diff visualization + per-field Accept/Reject workflow, which is impractical in CLI. The user must see LLM-proposed changes before applying them. |
+| *(add new exceptions here)* | | |
 
 ## Testing Requirements
 
@@ -179,7 +188,7 @@ lighterbird/
    - If any of these mappings are missing, the form shows "Unknown form type" instead of the correct form.
 
 3. **The authoritative list of mappings to check** — when adding a new interactive command, update ALL of these:
-   - `_INTERACTIVE_FORMS` in `server/routes/command.py` (backend)
+   - `_INTERACTIVE_FORMS` in `server/command/handlers/__init__.py` (backend)
    - `resolveAddFormType()` in `web/src/lib/commandRouter.js`
    - `resolveListIdKey()` in `web/src/lib/commandRouter.js`
    - `resolveAddTitle()` in `web/src/lib/commandRouter.js`
@@ -249,7 +258,7 @@ Existing ``.mjs`` scripts (``tests/playwright_e2e.mjs``, ``tests/e2e_comprehensi
 7. **Async where it matters.** FastAPI routes are async; IMAP/SMTP sync can be sync workers.
 8. **Error messages include actionable suggestions.** "Set it with: `!account modify <uuid> --password <pw>`"
 9. **Use `tr()` or `tr_multi()` for i18n** — but only once i18n infrastructure is in place. For initial development, plain English strings are acceptable.
-10. **Missing CLI args → GUI redirect (default behaviour).** When a CLI command is invoked with missing required options and the command has an interactive form registered, the system shall redirect the user to the GUI with any already-specified options pre-filled. This is handled by the `_INTERACTIVE_FORMS` dict in `command.py` and the `form-required` response type. All interactive commands must be registered in `tree.py` (backend) with `interactive: true` — the frontend fetches this metadata dynamically.
+10. **Missing CLI args → GUI redirect (default behaviour).** When a CLI command is invoked with missing required options and the command has an interactive form registered, the system shall redirect the user to the GUI with any already-specified options pre-filled. This is handled by the `_INTERACTIVE_FORMS` dict in `server/command/handlers/__init__.py` and the `form-required` response type. All interactive commands must be registered in `tree.py` (backend) with `interactive: true` — the frontend fetches this metadata dynamically.
 
 ## List Tab Standard Feature Set
 
