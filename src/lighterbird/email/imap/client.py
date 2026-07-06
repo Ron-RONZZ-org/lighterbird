@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import email as email_lib
 import imaplib
+import logging
 import re
 import socket
 import ssl
@@ -17,6 +18,8 @@ from typing import Any
 from lighterbird.core.storage import AttachmentStore
 from lighterbird.email.imap.parser import parse_email_message
 from lighterbird.email.imap.storage import store_message, _insert_message
+
+logger = logging.getLogger(__name__)
 
 # Chunk sizes that suggest the IMAP server truncated results.
 # If a UID SEARCH returns exactly this many UIDs, we assume there
@@ -121,8 +124,6 @@ class IMAPClient:
             raise ConnectionError(f"IMAP authentication failed for {username} at {self.host}:{self.port} — {e}") from e
         except (socket.gaierror, ConnectionRefusedError, TimeoutError, ssl.SSLError, OSError) as e:
             raise ConnectionError(f"IMAP connection failed: {username} at {self.host}:{self.port} — {e}") from e
-        except Exception as e:
-            raise ConnectionError(f"IMAP connection failed: {username} at {self.host}:{self.port} — {e}") from e
 
     @property
     def conn(self) -> imaplib.IMAP4:
@@ -170,7 +171,6 @@ class IMAPClient:
                 (account_email, folder_name, now, now),
             )
         except Exception as exc:
-            logger = __import__("logging").getLogger(__name__)
             logger.warning(
                 "Failed to ensure folder %r for %s: %s",
                 folder_name, account_email, exc,
@@ -407,5 +407,7 @@ class IMAPClient:
             result["errors"].append(f"Sync error: {e}")
         return result
 
+
+logger = logging.getLogger(__name__)
 
 # store_message and _insert_message moved to storage.py

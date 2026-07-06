@@ -24,10 +24,4 @@ def normalize_todo(todo: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def normalize_todo_for_db(todo: dict[str, Any]) -> dict[str, Any]:
-    """Convert frontend-facing keys back to DB column names (legacy).
 
-    Used only by command handlers that construct raw INSERT dicts.
-    Will be removed once handlers are updated.
-    """
-    return todo

@@ -80,6 +80,15 @@ def add_middleware(app: FastAPI) -> None:
     origins = [o.strip() for o in origins_str.split(",") if o.strip()]
     has_credentials = origins != ["*"]
 
+    # Warn loudly if wildcard CORS is used outside of debug mode — this is
+    # a security risk if the server is exposed beyond localhost.
+    if origins == ["*"] and not os.environ.get("LIGHTERBIRD_DEBUG"):
+        logger.warning(
+            "CORS is wide-open (allow_origins=*). "
+            "Set LIGHTERBIRD_ORIGINS to a comma-separated list of allowed origins "
+            "and LIGHTERBIRD_DEBUG=1 during development to suppress this warning."
+        )
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,

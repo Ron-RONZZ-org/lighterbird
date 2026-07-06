@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from lighterbird.server.command.response import normalize_todo, normalize_todo_for_db
+from lighterbird.server.command.response import normalize_todo
 
 
 class TestNormalizeTodo:
@@ -32,9 +32,3 @@ class TestNormalizeTodo:
         assert "_computed_priority" not in result["children"][0]
         assert result["children"][0]["title"] == "child1"
 
-
-class TestNormalizeTodoForDb:
-    def test_returns_same_dict(self):
-        todo = {"title": "test", "priority": 3}
-        result = normalize_todo_for_db(todo)
-        assert result is todo  # same object, no transformation

@@ -222,8 +222,6 @@
     }
   }
 
-  // Expose handleCommand globally so HomeTab can bypass it
-  // (HomeTab calls shouldIntercept + execute directly for conversation display)
 </script>
 
 <svelte:window onkeydown={handleGlobalKeydown} onbeforeunload={(e) => {
