@@ -1,6 +1,13 @@
-"""FastAPI dependency injection for service singletons."""
+"""FastAPI dependency injection for thread-safe service singletons.
+
+Uses a registry dict with a threading lock to ensure each service is
+initialised exactly once, even under concurrent requests.
+"""
 
 from __future__ import annotations
+
+import threading
+from typing import Any, Callable
 
 from lighterbird.calendar.service import CalendarService
 from lighterbird.contacts.db import get_db as get_contacts_db
@@ -17,114 +24,83 @@ from lighterbird.todo.db import get_db as get_todo_db
 from lighterbird.todo.services import TodoService
 from lighterbird.user_commands.service import UserCommandsService
 
-_email_service: EmailService | None = None
-_calendar_service: CalendarService | None = None
-_contact_service: ContactService | None = None
-_todo_service: TodoService | None = None
-_journal_service: JournalService | None = None
-_attachment_store: AttachmentStore | None = None
-_profiles_service: ProfileService | None = None
-_user_commands_service: UserCommandsService | None = None
-_letter_service: LetterService | None = None
-_tag_service: TagService | None = None
+_lock = threading.Lock()
+_services: dict[str, Any] = {}
+
+
+def _get_or_create(name: str, factory: Callable[[], Any]) -> Any:
+    """Return a named singleton, creating it once under a lock."""
+    if name in _services:
+        return _services[name]
+    with _lock:
+        if name not in _services:
+            _services[name] = factory()
+        return _services[name]
 
 
 def get_email_service() -> EmailService:
     """Get the singleton EmailService."""
-    global _email_service
-    if _email_service is None:
-        _email_service = EmailService()
-    return _email_service
+    return _get_or_create("email", EmailService)
 
 
 def get_calendar_service() -> CalendarService:
     """Get the singleton CalendarService."""
-    global _calendar_service
-    if _calendar_service is None:
-        _calendar_service = CalendarService()
-    return _calendar_service
+    return _get_or_create("calendar", CalendarService)
 
 
 def get_contact_service() -> ContactService:
     """Get the singleton ContactService."""
-    global _contact_service
-    if _contact_service is None:
+    def _factory() -> ContactService:
         db = get_contacts_db()
-        _contact_service = ContactService(db)
-    return _contact_service
+        return ContactService(db)
+    return _get_or_create("contact", _factory)
 
 
 def get_todo_service() -> TodoService:
     """Get the singleton TodoService."""
-    global _todo_service
-    if _todo_service is None:
+    def _factory() -> TodoService:
         db = get_todo_db()
-        _todo_service = TodoService(db)
-    return _todo_service
+        return TodoService(db)
+    return _get_or_create("todo", _factory)
 
 
 def get_journal_service() -> JournalService:
     """Get the singleton JournalService."""
-    global _journal_service
-    if _journal_service is None:
+    def _factory() -> JournalService:
         db = get_journal_db()
-        _journal_service = JournalService(db)
-    return _journal_service
+        return JournalService(db)
+    return _get_or_create("journal", _factory)
 
 
 def get_profiles_service() -> ProfileService:
     """Get the singleton ProfileService."""
-    global _profiles_service
-    if _profiles_service is None:
-        _profiles_service = ProfileService()
-    return _profiles_service
+    return _get_or_create("profiles", ProfileService)
 
 
 def get_user_commands_service() -> UserCommandsService:
     """Get the singleton UserCommandsService."""
-    global _user_commands_service
-    if _user_commands_service is None:
-        _user_commands_service = UserCommandsService()
-    return _user_commands_service
+    return _get_or_create("user_commands", UserCommandsService)
 
 
 def get_letter_service() -> LetterService:
     """Get the singleton LetterService."""
-    global _letter_service
-    if _letter_service is None:
+    def _factory() -> LetterService:
         db = get_letter_db()
-        _letter_service = LetterService(db)
-    return _letter_service
+        return LetterService(db)
+    return _get_or_create("letter", _factory)
 
 
 def get_tag_service() -> TagService:
     """Get the singleton TagService."""
-    global _tag_service
-    if _tag_service is None:
-        _tag_service = TagService()
-    return _tag_service
+    return _get_or_create("tag", TagService)
 
 
 def get_attachment_store() -> AttachmentStore:
     """Get the singleton AttachmentStore."""
-    global _attachment_store
-    if _attachment_store is None:
-        _attachment_store = AttachmentStore()
-    return _attachment_store
+    return _get_or_create("attachment", AttachmentStore)
 
 
 def reset_services() -> None:
     """Reset all service singletons (useful for testing)."""
-    global _email_service, _calendar_service
-    global _contact_service, _todo_service, _journal_service
-    global _attachment_store, _profiles_service, _user_commands_service, _letter_service, _tag_service
-    _email_service = None
-    _calendar_service = None
-    _contact_service = None
-    _todo_service = None
-    _journal_service = None
-    _attachment_store = None
-    _profiles_service = None
-    _user_commands_service = None
-    _letter_service = None
-    _tag_service = None
+    global _services
+    _services = {}

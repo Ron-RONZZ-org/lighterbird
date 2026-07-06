@@ -38,8 +38,16 @@ class EmailService:
         return self.accounts.list_accounts()
 
     def delete_account(self, email: str):
-        self.accounts.delete_password(email)
-        return self.accounts.delete(email)
+        """Delete an account and its keyring password.
+
+        DB deletion first (cascades to messages, attachments), then
+        keyring — prevents password orphan if DB fails.
+        Follows pattern from A-lien's ``RetpostoAccountsMixin.delete_account``.
+        """
+        result = self.accounts.delete(email)
+        if result:
+            self.accounts.delete_password(email)
+        return result
 
     def get_account(self, email: str):
         return self.accounts.get_account_with_password(email)

@@ -473,15 +473,39 @@ def _insert_message(
     db: Any, data: dict[str, Any],
     msg_uuid: str, account_email: str | None, folder_name: str | None,
 ) -> None:
-    """Insert a message row."""
+    """Insert or update a message row.
+
+    Uses ON CONFLICT DO UPDATE instead of INSERT OR REPLACE to avoid
+    cascading deletes of email_attachments (which FK REFERENCES messages
+    with ON DELETE CASCADE).
+    """
     db.execute(
-        """INSERT OR REPLACE INTO messages
+        """INSERT INTO messages
            (uuid, account_email, folder_name, message_id, in_reply_to,
             imap_uid, from_addr, to_recipients, cc_recipients,
             subject, body, html_body,
             priority, is_read, is_starred, is_deleted,
             received_at, created_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+           ON CONFLICT(uuid) DO UPDATE SET
+               account_email  = excluded.account_email,
+               folder_name    = excluded.folder_name,
+               message_id     = excluded.message_id,
+               in_reply_to    = excluded.in_reply_to,
+               imap_uid       = excluded.imap_uid,
+               from_addr      = excluded.from_addr,
+               to_recipients  = excluded.to_recipients,
+               cc_recipients  = excluded.cc_recipients,
+               subject        = excluded.subject,
+               body           = excluded.body,
+               html_body      = excluded.html_body,
+               priority       = excluded.priority,
+               is_read        = excluded.is_read,
+               is_starred     = excluded.is_starred,
+               is_deleted     = excluded.is_deleted,
+               received_at    = excluded.received_at,
+               created_at     = excluded.created_at,
+               updated_at     = excluded.updated_at""",
         (msg_uuid, account_email or data.get("account_email", ""),
          folder_name or data.get("folder_name"),
          data.get("message_id", ""), data.get("in_reply_to", ""),

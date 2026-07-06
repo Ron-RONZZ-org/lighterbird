@@ -13,7 +13,7 @@ def _fresh_provider():
     """Return a fresh LLMProviderWrapper (bypassing the singleton)."""
     from lighterbird.server import deps
 
-    deps._email_service = None  # not needed but cleans state
+    deps.reset_services()  # clean state for a fresh singleton
     return LLMProviderWrapper()
 
 
