@@ -91,6 +91,7 @@ class MessageOpsService(MsgSendQueueMixin):
                     f"Failed to set flags for UID {imap_uid} in folder {folder_name}"
                 )
         except Exception:
+            logger.warning("Flag sync failed for msg %s, queued for retry", msg.get("uuid", "")[:8])
             self._enqueue_sync(msg)
         finally:
             client.disconnect()
@@ -198,13 +199,22 @@ class MessageOpsService(MsgSendQueueMixin):
                         )
                         synced += 1
                     except Exception:
+                        logger.warning(
+                            "Sync backlog item %s (msg %s, folder %s) failed, incremented retries",
+                            item.get("id", "?"),
+                            item.get("msg_uuid", "")[:8],
+                            item.get("folder_name", "?"),
+                        )
                         self.db.execute(
                             "UPDATE _sync_backlog SET retries = retries + 1, "
                             "last_attempt = ? WHERE id = ?",
                             (datetime.now(UTC).isoformat(), item["id"]),
                         )
             except Exception:
-                pass
+                logger.warning(
+                    "Account-wide sync backlog processing failure for %s",
+                    account_email,
+                )
             finally:
                 client.disconnect()
         return synced
@@ -260,7 +270,8 @@ class MessageOpsService(MsgSendQueueMixin):
                     finally:
                         client.disconnect()
             except Exception:
-                pass  # Fall through to queue for background retry
+                logger.warning("IMAP trash move failed for %s, queued for background retry", msg_uuid[:8])
+                # Fall through to queue for background retry
 
         # Queue for background IMAP trash retry
         self._enqueue_trash(msg)
@@ -416,13 +427,21 @@ class MessageOpsService(MsgSendQueueMixin):
                                 (now, item["id"]),
                             )
                     except Exception:
+                        logger.warning(
+                            "Trash backlog item %s (msg %s) failed, incremented retries",
+                            item.get("id", "?"),
+                            item.get("msg_uuid", "")[:8],
+                        )
                         self.db.execute(
                             "UPDATE _sync_backlog SET retries = retries + 1, "
                             "last_attempt = ? WHERE id = ?",
                             (now, item["id"]),
                         )
             except Exception:
-                pass  # Account-wide failure — all items stay queued
+                logger.warning(
+                    "Account-wide trash backlog processing failure for %s",
+                    account_email,
+                )
             finally:
                 client.disconnect()
         return moved

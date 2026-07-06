@@ -143,9 +143,10 @@
   }
 
   async function refreshList() {
+    const tabId = tabStore.active.id;
     try {
       const result = await todoApi.list(buildListParams());
-      tabStore.update(tabStore.active.id, result);
+      tabStore.safeUpdate(tabId, result);
     } catch { /* silent */ }
   }
 
@@ -156,12 +157,13 @@
   }
 
   function performSearch(query) {
+    const tabId = tabStore.active.id;
     if (abortController) abortController.abort();
     abortController = new AbortController();
     const params = buildListParams();
     if (query && query.length >= 2) params.query = query;
     todoApi.list(params)
-      .then((result) => { tabStore.update(tabStore.active.id, result); })
+      .then((result) => { tabStore.safeUpdate(tabId, result); })
       .catch((err) => { if (err?.name === "AbortError") return; });
   }
 

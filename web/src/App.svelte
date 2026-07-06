@@ -21,15 +21,32 @@
   // ── Notice banner (fetched on page load, dismissible per session) ────
   let noticeMessage = $state("");
   let noticeDismissed = $state(false);
+  let noticeOffline = $state(false);
 
   async function fetchNotice() {
     try {
       const resp = await fetch("/api/v1/chat/notice");
+      if (!resp.ok) return;
       const data = await resp.json();
       if (data?.notice?.message) {
         noticeMessage = data.notice.message;
+        noticeOffline = false;
       }
-    } catch { /* best-effort */ }
+    } catch {
+      noticeOffline = true;
+      // Retry once after 5s in case the server was still starting up
+      setTimeout(async () => {
+        try {
+          const resp = await fetch("/api/v1/chat/notice");
+          if (!resp.ok) return;
+          const data = await resp.json();
+          if (data?.notice?.message) {
+            noticeMessage = data.notice.message;
+          }
+          noticeOffline = false;
+        } catch { /* still offline — no banner is better than a stale error */ }
+      }, 5000);
+    }
   }
   fetchNotice();
 
@@ -232,7 +249,12 @@
   }} />
 
 <main>
-  {#if noticeMessage && !noticeDismissed}
+  {#if noticeOffline && !noticeDismissed}
+    <div class="notice-banner notice-warning" role="alert">
+      <span class="notice-text">⚠ Server appears offline — some features may be unavailable</span>
+      <button class="notice-close" onclick={() => { noticeDismissed = true; }} aria-label="Dismiss notice">✕</button>
+    </div>
+  {:else if noticeMessage && !noticeDismissed}
     <div class="notice-banner" role="alert">
       <span class="notice-text">{noticeMessage}</span>
       <button class="notice-close" onclick={() => { noticeDismissed = true; }} aria-label="Dismiss notice">✕</button>
@@ -336,6 +358,10 @@
   .notice-close:hover {
     color: #e0e0e0;
     background: #3a3a4e;
+  }
+  .notice-warning {
+    background: #3a2a1a;
+    border-bottom-color: #6a4a2a;
   }
   .loading-bar {
     position: fixed;

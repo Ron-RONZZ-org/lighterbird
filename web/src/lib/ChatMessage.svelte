@@ -1,4 +1,5 @@
 <script>
+  import DOMPurify from "dompurify";
   import { tabStore } from "./tabStore.svelte.js";
   import { execute } from "./commandExecutor.js";
 
@@ -87,7 +88,7 @@
     </button>
   </div>
   {#if msg.html}
-    <div class="msg-body">{@html msg.html}</div>
+    <div class="msg-body">{@html DOMPurify.sanitize(msg.html)}</div>
   {:else if msg.text}
     <div class="msg-body">{msg.text}</div>
   {:else if msg._streaming}

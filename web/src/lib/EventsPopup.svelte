@@ -33,6 +33,7 @@
   }
 
   async function saveEdit() {
+    const tabId = tabStore.active.id;
     if (!singleEvent) return;
     saving = true;
     try {
@@ -46,7 +47,7 @@
         await calendarApi.updateEvent(singleEvent.uuid, updates);
         const refreshed = await calendarApi.getEvent(singleEvent.uuid);
         // Update the tab data
-        tabStore.update(tabStore.active.id, { events: [refreshed] });
+        tabStore.safeUpdate(tabId, { events: [refreshed] });
       }
       editing = false;
     } catch (err) {

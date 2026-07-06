@@ -12,6 +12,7 @@ from fastapi.responses import Response
 
 from lighterbird.email.service import EmailService
 from lighterbird.server.deps import get_email_service
+from lighterbird.core.paths import safe_resolve_path
 from lighterbird.server.schemas import (
     BatchDeleteRequest,
     BatchMoveRequest,
@@ -172,6 +173,10 @@ def import_eml(data: dict, email_svc: EmailService = Depends(get_email_service))
     path = data.get("path", "")
     if not path:
         raise HTTPException(status_code=400, detail="Path is required.")
+    try:
+        safe_resolve_path(path)
+    except (ValueError, FileNotFoundError, IsADirectoryError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
     try:
         draft = email_svc.import_eml(path)
     except FileNotFoundError as e:

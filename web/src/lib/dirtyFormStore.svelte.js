@@ -19,20 +19,19 @@ export const dirtyFormStore = {
 
   /** Update dirty state for a tab. */
   setDirty(tabId, dirty) {
-    const next = new Map(_dirtyForms);
     if (dirty) {
-      next.set(tabId, true);
+      _dirtyForms.set(tabId, true);
     } else {
-      next.delete(tabId);
+      _dirtyForms.delete(tabId);
     }
-    _dirtyForms = next;
+    // Reassign to trigger Svelte 5 reactivity tracking
+    _dirtyForms = _dirtyForms;
   },
 
   /** Clear dirty state (on submit/destroy). */
   clear(tabId) {
-    const next = new Map(_dirtyForms);
-    next.delete(tabId);
-    _dirtyForms = next;
+    _dirtyForms.delete(tabId);
+    _dirtyForms = _dirtyForms;
   },
 
   /** Check if ANY form tab has unsaved changes. */

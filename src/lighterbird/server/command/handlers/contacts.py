@@ -14,14 +14,18 @@ Registered paths:
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from lightercore.permissions import PermissionLevel
 
 from lighterbird.contacts.services import ContactService
+from lighterbird.core.paths import safe_resolve_path
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_contact_service
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_custom_fields(raw: str) -> dict[str, str]:
@@ -225,7 +229,7 @@ def contact_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
             svc.delete(uuid)
             removed.append(uuid[:8])
         except Exception:
-            pass
+            logger.warning("Failed to delete contact %s", uuid[:8])
     return {"type": "status", "title": "Contact(s) Deleted", "data": {"removed": removed}}
 
 
@@ -308,6 +312,10 @@ def contact_import_vcf(remaining: list[str], flags: dict[str, str]) -> dict[str,
             "Missing VCF file path.",
             "Usage: !contact import vcf <path/to/file.vcf>",
         )
+    try:
+        safe_resolve_path(remaining[0])
+    except (ValueError, FileNotFoundError, IsADirectoryError) as e:
+        raise CommandValidationError(str(e))
     svc: ContactService = get_contact_service()
     count = svc.import_vcf(remaining[0])
     return {"type": "status", "title": "VCF Import", "data": {"imported": count}}

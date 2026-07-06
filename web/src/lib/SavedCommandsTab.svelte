@@ -25,13 +25,14 @@
   }
 
   async function handleDelete(cmdAlias) {
+    const tabId = tabStore.active.id;
     if (!confirm(`Delete saved command "${cmdAlias}"?`)) return;
     try {
       const result = await execute(`!user saved-commands remove ${cmdAlias}`);
       if (result.type === "status") {
         const refreshed = await execute("!user saved-commands list");
         if (refreshed.type === "saved-commands") {
-          tabStore.update(tabStore.active.id, refreshed);
+          tabStore.safeUpdate(tabId, refreshed);
         }
       }
     } catch (err) {
