@@ -145,6 +145,7 @@ def _build_email_list_filters(flags: dict[str, str], svc: EmailService) -> dict[
 def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email list [--limit N] [--folder NAME] [--not-folder NAME] [--all]
                   [--sort newest|oldest|sender] [--group conversation]
+                  [--cursor TOKEN]
 
     By default excludes Trash, Spam, and Junk folders.
     Use ``--all`` to include all folders (including trash).
@@ -154,6 +155,8 @@ def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     ``user@gmail.com/INBOX``.
     ``--sort`` controls display order: newest (default), oldest, sender.
     ``--group`` groups by conversation thread.
+    ``--cursor`` provides a pagination token (returned as ``next_cursor``
+    from a previous response) to fetch the next page.
     """
     svc: EmailService = get_email_service()
     limit = int(flags.get("limit", 20))
@@ -162,10 +165,23 @@ def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     include_all = "all" in flags
     sort_by = flags.get("sort", "newest")
     group_by = flags.get("group", "")
+    cursor = flags.get("cursor", "")
 
     filters = _build_email_list_filters(flags, svc)
+    if cursor:
+        filters["cursor"] = cursor
 
-    messages = [dict(m) for m in svc.search_messages(filters, limit=limit)]
+    # Fetch limit+1 to detect whether there is a next page
+    fetch_limit = limit + 1
+    messages = [dict(m) for m in svc.search_messages(filters, limit=fetch_limit)]
+    has_more = len(messages) > limit
+    if has_more:
+        messages = messages[:limit]
+        last = messages[-1]
+        next_cursor = f"{last.get('received_at', '')}|{last.get('uuid', '')}"
+    else:
+        next_cursor = ""
+
     title_suffix = f" ({folder_filter})" if folder_filter else ""
     if not_folder_filter:
         title_suffix += f" (excl. {not_folder_filter})"
@@ -182,6 +198,8 @@ def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         frontend_filters["sort"] = sort_by
     if group_by:
         frontend_filters["group"] = group_by
+    if cursor:
+        frontend_filters["cursor"] = cursor
 
     return {
         "type": "email-list",
@@ -189,6 +207,8 @@ def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         "data": {
             "messages": messages,
             "total": len(messages),
+            "has_more": has_more,
+            "next_cursor": next_cursor,
             "filters": frontend_filters,
         },
     }

@@ -23,14 +23,27 @@
     { key: "s", desc: "Change sort order", category: "Email List" },
     { key: "p", desc: "Toggle params dialog", category: "Email List" },
     { key: "r", desc: "Reply to selected message", category: "Email List" },
+    { key: "l", desc: "Load more messages", category: "Email List" },
     { key: "Ctrl+R", desc: "Sync emails", modifiers: "Ctrl", category: "Email List" },
     { key: "Ctrl+M", desc: "Move selected messages", modifiers: "Ctrl", category: "Email List" },
   ]);
 
   let { data = {} } = $props();
-  let messages = $derived(data?.messages || []);
-  let total = $derived(data?.total || 0);
+  let messages = $state([]);
+  let total = $derived(messages.length);
+  let hasMore = $state(false);
+  let nextCursor = $state("");
+  let loadingMore = $state(false);
   let syncing = $state(false);
+
+  // When data prop changes (new query / new tab data), reset pagination
+  $effect(() => {
+    if (data?.messages) {
+      messages = data.messages;
+      hasMore = !!data.has_more;
+      nextCursor = data.next_cursor || "";
+    }
+  });
 
   // ── Config store ─────────────────────────────────────────────────────
   let config = $state(createEmailConfigStore());
@@ -134,6 +147,10 @@
           case "p":
           case "P":
             if (plain) { showParamsDialog = !showParamsDialog; e.preventDefault(); }
+            return true;
+          case "l":
+          case "L":
+            if (plain && hasMore) { loadMore(); e.preventDefault(); }
             return true;
           case "Escape":
             if (showShortcutHelp) { showShortcutHelp = false; e.preventDefault(); return true; }
@@ -310,6 +327,19 @@
       const result = await emailApi.listMessages(params);
       tabStore.update(tabStore.active.id, result);
     } catch { /* silent */ }
+  }
+
+  async function loadMore() {
+    if (!nextCursor || loadingMore) return;
+    loadingMore = true;
+    try {
+      const params = { ...currentFilters, limit: 50, cursor: nextCursor };
+      const result = await emailApi.listMessages(params);
+      messages = [...messages, ...(result.messages || [])];
+      hasMore = !!result.has_more;
+      nextCursor = result.next_cursor || "";
+    } catch { /* silent */ }
+    finally { loadingMore = false; }
   }
 
   async function handleSync() {
@@ -527,6 +557,11 @@
     {:else}
       <p class="empty">No messages.</p>
     {/each}
+    {#if hasMore}
+      <button class="load-more" onclick={loadMore} disabled={loadingMore}>
+        {loadingMore ? "Loading…" : "Load more"}
+      </button>
+    {/if}
   </div>
 
   {#if sel.confirmDelete}
@@ -585,6 +620,27 @@
     color: var(--clr-muted);
     text-align: center;
     padding: 2rem;
+  }
+
+  .load-more {
+    display: block;
+    width: 100%;
+    padding: 0.6rem;
+    text-align: center;
+    background: var(--clr-surface, #2a2a3e);
+    border: 1px solid var(--clr-border, #4a4a6a);
+    border-radius: 0 0 4px 4px;
+    color: var(--clr-primary, #7c9bff);
+    cursor: pointer;
+    font: inherit;
+    transition: background 0.15s;
+  }
+  .load-more:hover:not(:disabled) {
+    background: var(--clr-hover, #3a3a52);
+  }
+  .load-more:disabled {
+    color: var(--clr-muted, #888);
+    cursor: default;
   }
 
   /* Dropdown overlay */

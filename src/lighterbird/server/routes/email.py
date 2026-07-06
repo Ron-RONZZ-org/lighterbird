@@ -214,6 +214,7 @@ def list_messages(
     group: str | None = None,
     limit: int = 50,
     offset: int = 0,
+    cursor: str = "",
     email_svc: EmailService = Depends(get_email_service),
 ):
     filters = {}
@@ -238,10 +239,21 @@ def list_messages(
         filters["sort"] = sort
     if group:
         filters["group"] = group
+    if cursor:
+        filters["cursor"] = cursor
+    # Fetch limit+1 to detect next page
+    fetch_limit = limit + 1
     if filters:
-        msgs = email_svc.search_messages(filters, limit=limit)
+        msgs = email_svc.search_messages(filters, limit=fetch_limit)
     else:
-        msgs = email_svc.list_messages(limit=limit, offset=offset, sort=sort)
+        msgs = email_svc.list_messages(limit=fetch_limit, offset=offset, sort=sort)
+    has_more = len(msgs) > limit
+    if has_more:
+        msgs = msgs[:limit]
+        last = msgs[-1]
+        next_cursor = f"{last.get('received_at', '')}|{last.get('uuid', '')}"
+    else:
+        next_cursor = ""
     # Enrich messages with attachment count
     uuids = [m["uuid"] for m in msgs if m.get("uuid")]
     att_counts: dict[str, int] = {}
@@ -258,7 +270,7 @@ def list_messages(
         d = dict(m)
         d["attachment_count"] = att_counts.get(m.get("uuid", ""), 0)
         enriched.append(d)
-    return {"messages": enriched, "total": len(msgs)}
+    return {"messages": enriched, "total": len(enriched), "has_more": has_more, "next_cursor": next_cursor}
 
 
 @router.get("/messages/{uuid}")

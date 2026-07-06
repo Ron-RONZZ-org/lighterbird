@@ -130,6 +130,7 @@ export const email = {
     if (params.offset) q.set("offset", String(params.offset));
     if (params.sort) q.set("sort", params.sort);
     if (params.group) q.set("group", params.group);
+    if (params.cursor) q.set("cursor", params.cursor);
     return request("GET", `/email/messages?${q}`);
   },
 

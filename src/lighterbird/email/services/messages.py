@@ -63,7 +63,12 @@ class MessageService:
     def search_messages(
         self, filters: dict[str, Any], limit: int = 50
     ) -> list[dict[str, Any]]:
-        """Search messages with filters."""
+        """Search messages with filters.
+
+        Supports cursor-based pagination via ``filters["cursor"]``.
+        The cursor is a pipe-separated string ``received_at|uuid`` of the
+        last message on the previous page.  Returns *limit* rows.
+        """
         conditions = ["m.is_deleted = 0"]
         params: list[Any] = []
         if filters.get("query"):
@@ -112,16 +117,34 @@ class MessageService:
                 f"(m.folder_name IS NULL OR m.folder_name NOT IN ({placeholders}))"
             )
             params.extend(exclude_folders)
+
+        # Cursor-based pagination (pipe-separated "received_at|uuid")
+        cursor = filters.get("cursor", "")
+        if cursor:
+            parts = cursor.split("|", 1)
+            if len(parts) == 2:
+                cursor_ts, cursor_uuid = parts
+                sort_dir = filters.get("sort", "newest")
+                if sort_dir == "oldest":
+                    conditions.append(
+                        "(m.received_at > ? OR (m.received_at = ? AND m.uuid > ?))"
+                    )
+                else:
+                    conditions.append(
+                        "(m.received_at < ? OR (m.received_at = ? AND m.uuid < ?))"
+                    )
+                params.extend([cursor_ts, cursor_ts, cursor_uuid])
+
         where = " AND ".join(conditions)
 
-        # Sorting
+        # Sorting — add uuid tiebreaker for stable pagination
         sort = filters.get("sort", "newest")
         if sort == "oldest":
-            order = "m.received_at ASC"
+            order = "m.received_at ASC, m.uuid ASC"
         else:
-            order = "m.received_at DESC"
+            order = "m.received_at DESC, m.uuid DESC"
 
-        # Group by sender (overrides received_at ordering for display grouping)
+        # Group by sender
         group = filters.get("group", "")
         if group == "sender":
             select_cols = "m.*, COALESCE(m.from_addr, '') AS sort_sender"
