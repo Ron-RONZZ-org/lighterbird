@@ -11,11 +11,33 @@ from typing import Any
 
 from lightercore.llm import BaseLLMProvider, ProviderConfig
 
-# ── Shared command-generation prompt for lighterbird ─────────────────────
+# ── Shared prompts for lighterbird ──────────────────────────────────────
+
+
+def _lighterbird_tool_prompt() -> str:
+    """Return the PIM-specific system prompt for the tool-calling path.
+
+    This is the **preferred** path used when command definitions are
+    available.  The LLM receives tool definitions separately via the
+    native function-calling API; this prompt provides context.
+    """
+    return (
+        "You are a command parser for the lighterbird PIM. "
+        "Translate the user's request into a command by "
+        "calling the appropriate tool. The tools available "
+        "correspond to PIM commands: email, contacts, calendar, "
+        "todo, journal, letters, and user profiles. "
+        "ALWAYS pick a tool when the user asks about their data "
+        "(list, search, show, etc.) — never refuse or say you "
+        "cannot do it."
+    )
 
 
 def _lighterbird_command_prompt(defs_text: str) -> str:
-    """Return the PIM-specific system prompt for command generation."""
+    """Return the PIM-specific system prompt for the JSON-in-prompt fallback.
+
+    This is only used when no tool definitions are available.
+    """
     return (
         "You are a command parser for the lighterbird PIM. Your job is to "
         "translate the user's natural language request into a structured command.\n\n"
@@ -47,7 +69,12 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         return "gpt-4o"
 
     def _command_system_prompt(self, defs_text: str) -> str:
+        """JSON-in-prompt fallback — used when no tool defs available."""
         return _lighterbird_command_prompt(defs_text)
+
+    def _command_tool_system_prompt(self) -> str:
+        """Native tool-calling path (preferred)."""
+        return _lighterbird_tool_prompt()
 
 
 class OllamaProvider(BaseLLMProvider):
@@ -67,7 +94,12 @@ class OllamaProvider(BaseLLMProvider):
         return "llama3.2"
 
     def _command_system_prompt(self, defs_text: str) -> str:
+        """JSON-in-prompt fallback — used when no tool defs available."""
         return _lighterbird_command_prompt(defs_text)
+
+    def _command_tool_system_prompt(self) -> str:
+        """Native tool-calling path (preferred)."""
+        return _lighterbird_tool_prompt()
 
     # ── Embedding (Ollama-native /api/embed endpoint) ────────────────────
 
