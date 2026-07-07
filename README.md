@@ -72,7 +72,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173 — the Vite dev server proxies API calls to the Python backend (default port 8000).
+Open http://localhost:6005 — the Vite dev server proxies API calls to the Python backend (default port 6006).
 
 **Custom backend port**: Set `LIGHTERBIRD_PORT` to run the backend on a different port:
 
@@ -84,7 +84,7 @@ LIGHTERBIRD_PORT=8764 uv run python -m lighterbird
 LIGHTERBIRD_PORT=8764 npm run dev
 ```
 
-The `lighterbird-dev` CLI also respects `LIGHTERBIRD_PORT`. The `--port` CLI flag takes precedence over the env var (CLI > env > 8000). In production (built SPA served by FastAPI), port configuration is automatic — everything runs on the same origin, no proxy needed.
+The `lighterbird-dev` CLI also respects `LIGHTERBIRD_PORT`. The `--port` CLI flag takes precedence over the env var (CLI > env > 6006). In production (built SPA served by FastAPI), port configuration is automatic — everything runs on the same origin, no proxy needed.
 
 ## Testing
 

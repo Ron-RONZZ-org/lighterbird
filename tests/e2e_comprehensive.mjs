@@ -3,7 +3,7 @@
 import { chromium } from "playwright";
 import { strict as assert } from "assert";
 
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://127.0.0.1:8000";
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://127.0.0.1:6006";
 const CHROME_PATH = process.env.CHROME_PATH || "chromium";
 
 let browser, page;

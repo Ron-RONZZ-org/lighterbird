@@ -57,7 +57,7 @@ def dev_main() -> None:
         "--port",
         type=int,
         default=None,
-        help="Port to bind the server (default: LIGHTERBIRD_PORT env var or 8000)",
+        help="Port to bind the server (default: LIGHTERBIRD_PORT env var or 6006)",
     )
     parser.add_argument(
         "--keep-data",
@@ -75,8 +75,8 @@ def dev_main() -> None:
         if not args.quiet:
             print(msg)
 
-    # Resolve port: CLI arg > LIGHTERBIRD_PORT env var > 8000
-    port = args.port or int(os.environ.get("LIGHTERBIRD_PORT", 8000))
+    # Resolve port: CLI arg > LIGHTERBIRD_PORT env var > 6006
+    port = args.port or int(os.environ.get("LIGHTERBIRD_PORT", 6006))
 
     # ── Create isolated data directory ───────────────────────────────────
     tmp_dir = Path(tempfile.mkdtemp(prefix="lighterbird-dev-"))

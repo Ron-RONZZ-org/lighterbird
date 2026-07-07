@@ -1,12 +1,12 @@
 import { defineConfig } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 
-const backendPort = process.env.LIGHTERBIRD_PORT || 8000;
+const backendPort = process.env.LIGHTERBIRD_PORT || 6006;
 
 export default defineConfig({
   plugins: [svelte()],
   server: {
-    port: 5173,
+    port: 6005,
     proxy: {
       "/api": {
         target: `http://localhost:${backendPort}`,

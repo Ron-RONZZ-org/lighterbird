@@ -92,11 +92,11 @@ When a result tab is active:
 ```bash
 cd web
 npm install
-npm run dev          # Vite dev server (port 5173)
+npm run dev          # Vite dev server (port 6005)
 npm run build        # Build to web/dist/
 ```
 
-The Vite dev server proxies `/api/` requests to the FastAPI backend. By default it connects to port 8000. To use a different backend port, set the `LIGHTERBIRD_PORT` environment variable:
+The Vite dev server proxies `/api/` requests to the FastAPI backend. By default it connects to port 6006. To use a different backend port, set the `LIGHTERBIRD_PORT` environment variable:
 
 ```bash
 LIGHTERBIRD_PORT=8764 npm run dev
