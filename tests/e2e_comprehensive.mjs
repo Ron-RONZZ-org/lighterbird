@@ -2,165 +2,20 @@
 
 import { chromium } from "playwright";
 import { strict as assert } from "assert";
+import {
+  test, typeCommand, pressEnter, getResultPanelText,
+  assertTabOpened,
+  runWithBrowser, sleep, getTabCount,
+} from "./e2e_helpers.mjs";
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://127.0.0.1:6006";
 const CHROME_PATH = process.env.CHROME_PATH || "chromium";
 
-let browser, page;
-let passed = 0, failed = 0;
+// ── Runner ─────────────────────────────────────────────────────────────────
 
-async function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-async function typeCommand(cmd) {
-  // Ensure we're on the home tab so the input is visible
-  const input = page.locator("[aria-label='Message input']");
-  const isVisible = await input.isVisible().catch(() => false);
-  if (!isVisible) {
-    // Try keyboard shortcut Alt+1 first, then click home tab
-    await page.keyboard.press("Alt+1");
-    await sleep(300);
-    const stillHidden = !(await input.isVisible().catch(() => false));
-    if (stillHidden) {
-      // Fall back to clicking the home tab button
-      const homeTab = page.locator('[role="tab"]', { hasText: "Home" });
-      if (await homeTab.isVisible().catch(() => false)) {
-        await homeTab.click();
-        await sleep(300);
-      }
-    }
-  }
-  await input.waitFor({ state: "visible", timeout: 5000 });
-  await input.click();
-  await input.fill("");
-  await sleep(50);
-  await input.pressSequentially(cmd, { delay: 5 });
-  await sleep(200);
-}
-
-async function pressEnter() {
-  await page.keyboard.press("Enter");
-  await sleep(400);
-}
-
-async function getPopupText() {
-  try {
-    await sleep(200);
-    const body = page.locator("body");
-    let text = ((await body.textContent()) || "").trim();
-    text = text.replace(/\s+/g, " ").trim();
-    return text;
-  } catch {
-    return "(no result)";
-  }
-}
-
-async function getResultPanelText() {
-  try {
-    // Quick poll for a visible tab panel — 3 attempts × 200ms.
-    for (let attempt = 0; attempt < 3; attempt++) {
-      await sleep(200);
-      const panels = page.locator('[role="tabpanel"]');
-      const count = await panels.count();
-      for (let i = 0; i < count; i++) {
-        if (await panels.nth(i).isVisible().catch(() => false)) {
-          return ((await panels.nth(i).textContent()) || "").trim().replace(/\s+/g, " ");
-        }
-      }
-    }
-    return await getPopupText();
-  } catch {
-    return await getPopupText();
-  }
-}
-
-async function dismissAllTabs() {
-  // Go home (Alt+1 is the reliable keyboard shortcut)
-  await page.keyboard.press("Alt+1");
-  await sleep(200);
-  // Also press Escape a few times to close any remaining result tabs
-  for (let i = 0; i < 5; i++) {
-    await page.keyboard.press("Escape");
-    await sleep(100);
-  }
-  try {
-    const dismissBtn = page.locator("button", { hasText: "Dismiss notice" });
-    if (await dismissBtn.isVisible({ timeout: 300 })) {
-      await dismissBtn.click();
-      await sleep(200);
-    }
-  } catch { /* no notice */ }
-}
-
-async function getTabCount() {
-  const tabs = page.locator('[role="tab"]');
-  return await tabs.count();
-}
-
-let screenshotCounter = 0;
-async function test(desc, fn) {
-  try {
-    await fn();
-    console.log(`  \u2713 ${desc}`);
-    passed++;
-  } catch (e) {
-    const ssPath = `/tmp/e2e-fail-${screenshotCounter++}.png`;
-    try {
-      await page.screenshot({ path: ssPath });
-      console.log(`    Screenshot saved to ${ssPath}`);
-    } catch {}
-    console.log(`  \u2717 ${desc}: ${e.message}`);
-    if (e.message.includes("Timeout")) {
-      try {
-        const body = await page.locator("main").textContent();
-        console.log(`    Page: ${(body || "").substring(0, 300)}`);
-      } catch {
-        const body = await page.locator("body").textContent();
-        console.log(`    Body: ${(body || "").substring(0, 300)}`);
-      }
-    }
-    failed++;
-  } finally {
-    await dismissAllTabs();
-  }
-}
-
-async function run() {
-  browser = await chromium.launch({
-    headless: true,
-    executablePath: CHROME_PATH,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"],
-  });
-  const context = await browser.newContext({ viewport: { width: 960, height: 720 } });
-  page = await context.newPage();
-  page.on("pageerror", (err) => console.log("  [BROWSER ERROR]", err.message));
-  page.on("console", (msg) => {
-    if (msg.type() === "error") console.log("  [CONSOLE ERROR]", msg.text());
-  });
-
-  console.log("=".repeat(70));
-  console.log("COMPREHENSIVE PLAYWRIGHT E2E TESTS");
-  console.log("=".repeat(70));
-  console.log();
-
-  await page.goto(FRONTEND_URL, { waitUntil: "networkidle" });
-  console.log("\u2713 Page loaded:", await page.title());
-  await sleep(500);
-
-  // Dismiss notice if present
-  try {
-    const dismissBtn = page.locator("button", { hasText: "Dismiss notice" });
-    if (await dismissBtn.isVisible({ timeout: 300 })) {
-      await dismissBtn.click();
-      await sleep(200);
-    }
-  } catch { /* no notice */ }
-  await sleep(300);
-
+async function runTests(page) {
   // ═══════════════════════════════════════════
-  console.log();
-  console.log("--- HELP ---");
+  console.log("\n--- HELP ---");
   await test("!help shows available commands", async () => {
     await typeCommand("!help");
     await pressEnter();
@@ -170,69 +25,53 @@ async function run() {
   });
 
   // ═══════════════════════════════════════════
-  console.log();
-  console.log("--- LISTS ---");
+  console.log("\n--- LISTS ---");
 
+  // Each list command is now tested with proper DOM assertions (tab opened + content)
   await test("!email account list shows account list", async () => {
     await typeCommand("!email account list");
     await pressEnter();
-    const text = await getResultPanelText();
-    assert(!text.includes("Unknown") && !text.includes("Error"),
-      `Got error: '${text.substring(0, 200)}'`);
+    await assertTabOpened("Account");
   });
 
   await test("!contact list shows contacts", async () => {
     await typeCommand("!contact list");
     await pressEnter();
-    const text = await getResultPanelText();
-    assert(!text.includes("Unknown") && !text.includes("Error"),
-      `Got error: '${text.substring(0, 200)}'`);
+    await assertTabOpened("Contact");
   });
 
   await test("!todo list shows todos", async () => {
     await typeCommand("!todo list");
     await pressEnter();
-    const text = await getResultPanelText();
-    assert(!text.includes("Unknown") && !text.includes("Error"),
-      `Got error: '${text.substring(0, 200)}'`);
+    await assertTabOpened("Todo");
   });
 
   await test("!journal list shows journal entries", async () => {
     await typeCommand("!journal list");
     await pressEnter();
-    const text = await getResultPanelText();
-    assert(!text.includes("Unknown") && !text.includes("Error"),
-      `Got error: '${text.substring(0, 200)}'`);
+    await assertTabOpened("Journal");
   });
 
   await test("!calendar account list shows calendars", async () => {
     await typeCommand("!calendar account list");
     await pressEnter();
-    const text = await getResultPanelText();
-    const lower = text.toLowerCase();
-    assert(!text.includes("Unknown") && !text.includes("Error"),
-      `Got error: '${text.substring(0, 200)}'`);
+    await assertTabOpened("Calendar");
   });
 
   await test("!letter list shows letters", async () => {
     await typeCommand("!letter list");
     await pressEnter();
-    const text = await getResultPanelText();
-    assert(!text.includes("Unknown") && !text.includes("Error"),
-      `Got error: '${text.substring(0, 200)}'`);
+    await assertTabOpened("Letter");
   });
 
   await test("!user info list shows profiles", async () => {
     await typeCommand("!user info list");
     await pressEnter();
-    const text = await getResultPanelText();
-    assert(!text.includes("Unknown") && !text.includes("Error"),
-      `Got error: '${text.substring(0, 200)}'`);
+    await assertTabOpened("User Info") || assertTabOpened("Profile");
   });
 
   // ═══════════════════════════════════════════
-  console.log();
-  console.log("--- CREATE (via API completion) ---");
+  console.log("\n--- CREATE (via API completion) ---");
 
   await test("!contact add --first-name Jane --last-name Doe --email jane@test.com", async () => {
     await typeCommand("!contact add --first-name Jane --last-name Doe --email jane@test.com");
@@ -259,8 +98,7 @@ async function run() {
   });
 
   // ═══════════════════════════════════════════
-  console.log();
-  console.log("--- INTERACTIVE FORM (missing required args) ---");
+  console.log("\n--- INTERACTIVE FORM (missing required args) ---");
 
   await test("!contact add (missing args → form popup)", async () => {
     await typeCommand("!contact add");
@@ -281,8 +119,7 @@ async function run() {
   });
 
   // ═══════════════════════════════════════════
-  console.log();
-  console.log("--- BACKUP ---");
+  console.log("\n--- BACKUP ---");
 
   await test("!backup now creates backup", async () => {
     await typeCommand("!backup now");
@@ -301,8 +138,7 @@ async function run() {
   });
 
   // ═══════════════════════════════════════════
-  console.log();
-  console.log("--- SYNC ---");
+  console.log("\n--- SYNC ---");
 
   await test("!sync runs sync", async () => {
     await typeCommand("!sync");
@@ -313,8 +149,7 @@ async function run() {
   });
 
   // ═══════════════════════════════════════════
-  console.log();
-  console.log("--- TAB NAVIGATION ---");
+  console.log("\n--- TAB NAVIGATION ---");
 
   await test("Can navigate home with Escape", async () => {
     await page.keyboard.press("Escape");
@@ -325,8 +160,7 @@ async function run() {
   });
 
   // ═══════════════════════════════════════════
-  console.log();
-  console.log("--- LLM ---");
+  console.log("\n--- LLM ---");
 
   await test("!llm prompt shows system prompt", async () => {
     await typeCommand("!llm prompt");
@@ -345,8 +179,7 @@ async function run() {
   });
 
   // ═══════════════════════════════════════════
-  console.log();
-  console.log("--- VERIFY LIST AFTER CREATES ---");
+  console.log("\n--- VERIFY LIST AFTER CREATES ---");
 
   await test("!contact list shows created contacts", async () => {
     await typeCommand("!contact list");
@@ -373,8 +206,7 @@ async function run() {
   });
 
   // ═══════════════════════════════════════════
-  console.log();
-  console.log("--- SEARCH ---");
+  console.log("\n--- SEARCH ---");
 
   await test("!contact search Jane finds contacts", async () => {
     await typeCommand("!contact search Jane");
@@ -393,8 +225,7 @@ async function run() {
   });
 
   // ═══════════════════════════════════════════
-  console.log();
-  console.log("--- USER SAVED COMMANDS ---");
+  console.log("\n--- USER SAVED COMMANDS ---");
 
   await test("!user saved-commands list", async () => {
     await typeCommand("!user saved-commands list");
@@ -405,8 +236,7 @@ async function run() {
   });
 
   // ═══════════════════════════════════════════
-  console.log();
-  console.log("--- TODO TREE ---");
+  console.log("\n--- TODO TREE ---");
 
   await test("!todo tree shows tree view", async () => {
     await typeCommand("!todo tree");
@@ -417,8 +247,7 @@ async function run() {
   });
 
   // ═══════════════════════════════════════════
-  console.log();
-  console.log("--- LETTER ADD ---");
+  console.log("\n--- LETTER ADD ---");
 
   await test("!letter add with object", async () => {
     await typeCommand("!letter add --object 'Test Letter' --body-text 'Hello World'");
@@ -429,8 +258,7 @@ async function run() {
   });
 
   // ═══════════════════════════════════════════
-  console.log();
-  console.log("--- BACKUP CONFIG ---");
+  console.log("\n--- BACKUP CONFIG ---");
 
   await test("!backup config list", async () => {
     await typeCommand("!backup config list");
@@ -445,15 +273,8 @@ async function run() {
 
   const tabCount = await getTabCount();
   console.log(`  Final tabs visible: ${tabCount}`);
-
-  console.log();
-  console.log(`RESULTS: ${passed} passed, ${failed} failed`);
-
-  await browser.close();
-  process.exit(failed > 0 ? 1 : 0);
 }
 
-run().catch((e) => {
-  console.error("FATAL:", e.message);
-  process.exit(1);
-});
+// ── Bootstrap ──────────────────────────────────────────────────────────────
+
+runWithBrowser(FRONTEND_URL, CHROME_PATH, "COMPREHENSIVE PLAYWRIGHT E2E TESTS", runTests);

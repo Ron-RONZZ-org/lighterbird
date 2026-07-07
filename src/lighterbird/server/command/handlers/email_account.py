@@ -21,7 +21,15 @@ def account_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "status", "title": "Email Accounts", "data": {"accounts": accounts}}
 
 
-@command("email.account.add", interactive=True)
+@command("email.account.add",
+         params=[{"name": "email", "type": "string", "help": "user@example.com", "required": True}],
+         flags=[
+             {"name": "imap", "type": "string", "help": "IMAP server hostname"},
+             {"name": "smtp", "type": "string", "help": "SMTP server hostname"},
+             {"name": "password", "type": "string", "help": "Account password"},
+             {"name": "name", "type": "string", "help": "Display name"},
+         ],
+         interactive=True)
 def account_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email account add <email> [--imap HOST] [--smtp HOST] [--password PW] [--name NAME]
 

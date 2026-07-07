@@ -13,15 +13,14 @@
 
 import { chromium } from "playwright";
 import { strict as assert } from "assert";
+import {
+  test, typeCommand, pressEnter, getResultPanelText, sleep,
+  runWithBrowser,
+} from "./e2e_helpers.mjs";
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://127.0.0.1:6006";
 const CHROME_PATH = process.env.CHROME_PATH || "chromium";
 const API = `${FRONTEND_URL}/api/v1/command`;
-
-let browser, page;
-let passed = 0, failed = 0;
-
-async function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 // ── Direct API call inside browser context (fast) ──────────────────────────
 
@@ -48,7 +47,6 @@ async function assertApiSuccess(tokens, flags = {}, desc) {
 
 async function assertApiFormRequired(tokens, flags = {}, desc) {
   const resp = await api(tokens, flags);
-  // form-required is returned either explicitly or via CommandValidationError
   const isForm = resp.type === "form-required";
   const isValidationError = resp.type === "error" && (
     JSON.stringify(resp.data).includes("Missing") ||
@@ -60,81 +58,7 @@ async function assertApiFormRequired(tokens, flags = {}, desc) {
   return resp;
 }
 
-// ── Browser UI interaction (slower, for UI-critical tests) ─────────────────
-
-async function typeCommand(cmd) {
-  const input = page.locator("[aria-label='Message input']");
-  const isVisible = await input.isVisible().catch(() => false);
-  if (!isVisible) {
-    await page.keyboard.press("Alt+1");
-    await sleep(200);
-    const stillHidden = !(await input.isVisible().catch(() => false));
-    if (stillHidden) {
-      const homeTab = page.locator('[role="tab"]', { hasText: "Home" });
-      if (await homeTab.isVisible().catch(() => false)) {
-        await homeTab.click();
-        await sleep(200);
-      }
-    }
-  }
-  await input.waitFor({ state: "visible", timeout: 5000 });
-  await input.click();
-  await input.fill("");
-  await sleep(30);
-  await input.pressSequentially(cmd, { delay: 5 });
-  await sleep(150);
-}
-
-async function pressEnter() {
-  await page.keyboard.press("Enter");
-  await sleep(300);
-}
-
-async function getResultPanelText() {
-  try {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      await sleep(150);
-      const panels = page.locator('[role="tabpanel"]');
-      const count = await panels.count();
-      for (let i = 0; i < count; i++) {
-        if (await panels.nth(i).isVisible().catch(() => false)) {
-          return ((await panels.nth(i).textContent()) || "").trim().replace(/\s+/g, " ");
-        }
-      }
-    }
-    const body = page.locator("body");
-    return ((await body.textContent()) || "").trim().replace(/\s+/g, " ");
-  } catch { return "(no result)"; }
-}
-
-async function dismissTabs() {
-  await page.keyboard.press("Alt+1");
-  await sleep(150);
-  for (let i = 0; i < 3; i++) {
-    await page.keyboard.press("Escape");
-    await sleep(80);
-  }
-}
-
-let screenshotCounter = 0;
-
-async function test(desc, fn) {
-  try {
-    await fn();
-    console.log(`  \u2713 ${desc}`);
-    passed++;
-  } catch (e) {
-    const ssPath = `/tmp/e2e-fail-${screenshotCounter++}.png`;
-    try { await page.screenshot({ path: ssPath }); console.log(`    Screenshot: ${ssPath}`); } catch {}
-    console.log(`  \u2717 ${desc}: ${e.message}`);
-    failed++;
-  } finally {
-    await dismissTabs();
-  }
-}
-
-// Shorter alias
-const T = (d, f) => test(d, f);
+// Shorter aliases
 const ok = (tokens, flags, desc) => test(desc, async () => { await assertApiSuccess(tokens, flags, desc); });
 const form = (tokens, flags, desc) => test(desc, async () => { await assertApiFormRequired(tokens, flags, desc); });
 const err = (tokens, flags, desc) => test(desc, async () => {
@@ -145,34 +69,7 @@ const err = (tokens, flags, desc) => test(desc, async () => {
 
 // ── Runner ─────────────────────────────────────────────────────────────────
 
-async function run() {
-  browser = await chromium.launch({
-    headless: true,
-    executablePath: CHROME_PATH,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"],
-  });
-  const context = await browser.newContext({ viewport: { width: 960, height: 720 } });
-  page = await context.newPage();
-  page.on("pageerror", (err) => console.log("  [BROWSER ERROR]", err.message));
-  page.on("console", (msg) => {
-    if (msg.type() === "error") console.log("  [CONSOLE ERROR]", msg.text());
-  });
-
-  console.log("=".repeat(70));
-  console.log("FULL COVERAGE E2E TESTS (API + Browser)");
-  console.log("=".repeat(70));
-  console.log();
-
-  await page.goto(FRONTEND_URL, { waitUntil: "networkidle" });
-  console.log("\u2713 Page loaded:", await page.title());
-  await sleep(300);
-
-  // Dismiss notice
-  try {
-    const btn = page.locator("button", { hasText: "Dismiss notice" });
-    if (await btn.isVisible({ timeout: 200 })) { await btn.click(); await sleep(150); }
-  } catch { /* no notice */ }
-
+async function runTests(page) {
   // Verify the API endpoint works
   const healthResp = await page.evaluate(async (url) => {
     const r = await fetch(url + "/api/v1/health");
@@ -354,11 +251,12 @@ async function run() {
     "!todo template add with flags");
 
   err(["todo", "template", "view"], {}, "!todo template view (no name)");
-  await test("!todo template view (created template) — may fail if DB persistence issue", async () => {
+  // Template view after creation: expect error if DB persistence issue, but
+  // we check that it returns *some* response (not a crash).
+  await test("!todo template view (created template) — should succeed or give DB-related error", async () => {
     const resp = await api(["todo", "template", "view", "E2ETemplate"]);
-    if (resp.type === "error") {
-      console.log(`    Template view failed (may be expected in test env): ${JSON.stringify(resp.data).substring(0, 100)}`);
-    }
+    assert(resp.type !== "error" || JSON.stringify(resp.data).includes("template") || JSON.stringify(resp.data).includes("not found"),
+      `!todo template view: unexpected error: ${JSON.stringify(resp.data).substring(0, 200)}`);
   });
 
   err(["todo", "template", "modify"], {}, "!todo template modify (no name)");
@@ -400,7 +298,6 @@ async function run() {
   err(["journal", "delete"], {}, "!journal delete (no uuid)");
   err(["journal", "export", "md"], {}, "!journal export md (no uuid)");
   err(["journal", "import", "md"], {}, "!journal import md (no path)");
-  // journal import expects tokens: ["journal", "import", "md", path]
   err(["journal", "import", "md", "/tmp/nonexistent.md"], {}, "!journal import md nonexistent");
 
   ok(["journal", "draft"], {}, "!journal draft");
@@ -448,13 +345,15 @@ async function run() {
   console.log("\n--- SYNC ---");
 
   ok(["sync"], {}, "!sync");
-  // --all flag triggers email + calendar + todo sync; may produce console errors
-  // but shouldn't crash the page
-  await test("!sync --all (may have network errors, but not crash)", async () => {
+  // --all flag triggers email + calendar + todo sync; may produce network errors
+  // but should not crash the page or return an unexpected error type.
+  await test("!sync --all (may have network errors, but returns valid response)", async () => {
     const resp = await api(["sync"], { all: "true" });
-    if (resp.type === "error") {
-      console.log(`    Sync --all returned error (expected if no network): ${JSON.stringify(resp.data).substring(0, 100)}`);
-    }
+    // Sync may fail due to network — that's OK. What matters is the response
+    // is a valid structured response, not an unhandled exception.
+    const validTypes = ["status", "error", "form-required"];
+    assert(validTypes.includes(resp.type),
+      `!sync --all: unexpected response type ${resp.type}: ${JSON.stringify(resp.data).substring(0, 200)}`);
   });
 
   // ═══════════════════════════════════════════════════════════════════
@@ -476,26 +375,23 @@ async function run() {
   ok(["llm", "profile", "list"], {}, "!llm profile list (verify saved)");
 
   err(["llm", "profile", "load"], {}, "!llm profile load (no name)");
-  await test("!llm profile load (saved profile) — may fail if keyring unavailable", async () => {
+  await test("!llm profile load (saved profile) — returns profile data or error if keyring unavailable", async () => {
     const resp = await api(["llm", "profile", "load", "e2e-test-profile"]);
-    // Profile loading may fail if keyring backend isn't available in test env
-    if (resp.type === "error") {
-      console.log(`    Profile load failed (may be keyring issue): ${JSON.stringify(resp.data).substring(0, 100)}`);
-    } else {
-      console.log(`    Profile loaded successfully`);
-    }
+    // Profile loading may fail if keyring is unavailable, but should not crash.
+    const validTypes = ["status", "error", "form-required"];
+    assert(validTypes.includes(resp.type),
+      `!llm profile load: unexpected response type ${resp.type}: ${JSON.stringify(resp.data).substring(0, 200)}`);
   });
 
   ok(["llm", "profile", "clear"], {}, "!llm profile clear");
 
   err(["llm", "profile", "delete"], {}, "!llm profile delete (no name)");
-  await test("!llm profile delete (saved profile) — graceful if keyring unavailable", async () => {
+  await test("!llm profile delete (saved profile) — should succeed or give graceful keyring error", async () => {
     const resp = await api(["llm", "profile", "delete", "e2e-test-profile"]);
-    if (resp.type !== "error") {
-      console.log(`    Profile deleted successfully`);
-    } else {
-      console.log(`    Profile delete info: ${JSON.stringify(resp.data).substring(0, 100)}`);
-    }
+    // Profile deletion may fail if keyring is unavailable, but should not crash.
+    const validTypes = ["status", "error", "form-required"];
+    assert(validTypes.includes(resp.type),
+      `!llm profile delete: unexpected response type ${resp.type}: ${JSON.stringify(resp.data).substring(0, 200)}`);
   });
 
   // ═══════════════════════════════════════════════════════════════════
@@ -554,8 +450,7 @@ async function run() {
   ok(["letter", "view", letterUuid], {}, "!letter view with uuid");
 
   err(["letter", "pdf"], {}, "!letter pdf (no uuid)");
-  // PDF may require fpdf2, but should not error with "Unknown"
-  await test("!letter pdf (may warn about fpdf2)", async () => {
+  await test("!letter pdf with uuid (may warn about fpdf2)", async () => {
     const resp = await api(["letter", "pdf", letterUuid], {});
     assert(resp.type !== "error" || JSON.stringify(resp.data).includes("fpdf2"),
       `!letter pdf: unexpected error: ${JSON.stringify(resp.data)}`);
@@ -623,18 +518,8 @@ async function run() {
     assert(text.includes("!email") || text.includes("!contact") || text.includes("!todo"),
       `Expected commands, got: '${text.substring(0, 200)}'`);
   });
-
-  // ═══════════════════════════════════════════════════════════════════
-  // RESULTS
-  // ═══════════════════════════════════════════════════════════════════
-  console.log("");
-  console.log(`RESULTS: ${passed} passed, ${failed} failed`);
-
-  await browser.close();
-  process.exit(failed > 0 ? 1 : 0);
 }
 
-run().catch((e) => {
-  console.error("FATAL:", e.message);
-  process.exit(1);
-});
+// ── Bootstrap ──────────────────────────────────────────────────────────────
+
+runWithBrowser(FRONTEND_URL, CHROME_PATH, "FULL COVERAGE E2E TESTS (API + Browser)", runTests);
