@@ -3,7 +3,7 @@
 import { chromium } from "playwright";
 import { strict as assert } from "assert";
 import {
-  test, typeCommand, pressEnter, getResultPanelText,
+  test, typeCommand, pressEnter, getResultPanelText, getPopupText,
   assertTabOpened,
   runWithBrowser, sleep, getTabCount,
 } from "./e2e_helpers.mjs";
@@ -67,7 +67,12 @@ async function runTests(page) {
   await test("!user info list shows profiles", async () => {
     await typeCommand("!user info list");
     await pressEnter();
-    await assertTabOpened("User Info") || assertTabOpened("Profile");
+    try {
+      await assertTabOpened("User Info");
+    } catch {
+      // Title might be "User Profiles" in some builds
+      await assertTabOpened("Profile");
+    }
   });
 
   // ═══════════════════════════════════════════

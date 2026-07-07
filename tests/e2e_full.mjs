@@ -15,7 +15,7 @@ import { chromium } from "playwright";
 import { strict as assert } from "assert";
 import {
   test, typeCommand, pressEnter, getResultPanelText, sleep,
-  runWithBrowser,
+  runWithBrowser, page,
 } from "./e2e_helpers.mjs";
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://127.0.0.1:6006";

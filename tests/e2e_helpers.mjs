@@ -3,14 +3,10 @@
  *
  * Provides common infrastructure: browser launch, typeCommand, assertTabOpened,
  * assertFormOpened, dismissAllTabs, getResultPanelText, screenshot-on-failure.
- *
- * Import as:
- *   import { chromium } from "playwright";
- *   import { strict as assert } from "assert";
- *   import { test, sleep, typeCommand, pressEnter, getResultPanelText,
- *            getPopupText, dismissAllTabs, assertTabOpened, assertFormOpened,
- *            assertHomeActive, assertPanelContains, runWithBrowser } from "../tests/e2e_helpers.mjs";
  */
+
+import { chromium } from "playwright";
+import { strict as assert } from "assert";
 
 // ── Shared state (set by runWithBrowser) ───────────────────────────────
 export let page = null;
