@@ -2,10 +2,9 @@
  * Re-exports from split modules for backwards compatibility.
  *
  * All list tabs import from this file — this barrel keeps those imports working.
- *
- * Selection + clipboard: uses Svelte 5 runes ($state, $derived), lives in .svelte.js
- * Formatting + print: pure JS, lives in .js
+ * Shared functions now resolve through @lightercore/ui.
  */
+
 export {
   createCopyState,
   createSelectionManager,
@@ -16,7 +15,7 @@ export {
   createDialogTrap,
   truncate,
   sanitizeFilename,
+  preview,
   openPrintWindow,
   openLetterPrintWindow,
-  preview,
 } from "./listTabFormat.js";

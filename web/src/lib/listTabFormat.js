@@ -1,90 +1,20 @@
 /**
- * Formatting utilities for list tabs.
- * Pure functions — no Svelte runes needed.
- */
-
-/**
- * Format an ISO date string for display in a list.
- * - Today: shows time only
- * - This year: shows month + day
- * - Older: shows full date
- */
-export function formatListItemDate(iso) {
-  if (!iso) return "";
-  try {
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return iso.slice(0, 10);
-    const now = new Date();
-    const opts = d.toDateString() === now.toDateString()
-      ? { hour: "2-digit", minute: "2-digit" }
-      : d.getFullYear() === now.getFullYear()
-        ? { month: "short", day: "numeric" }
-        : { year: "numeric", month: "short", day: "numeric" };
-    return d.toLocaleDateString([], opts);
-  } catch {
-    return iso.slice(0, 10);
-  }
-}
-
-/**
- * Focus trap for modal dialogs.
- * Wraps Tab/Shift+Tab within the container's focusable elements.
+ * Domain-specific formatting utilities for lighterbird.
+ * Shared utilities are re-exported from @lightercore/ui.
  *
- * @param {() => HTMLElement} getContainer — callback returning the dialog root
- * @param {(e: KeyboardEvent) => void} [onKeydown] — optional extra handler
- * @returns {(e: KeyboardEvent) => void} keydown handler to mount on the overlay
+ * Import shared utilities from here for backward compatibility;
+ * they resolve to the canonical lightercore implementation.
  */
-export function createDialogTrap(getContainer, onKeydown) {
-  const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-  return function trapKeydown(e) {
-    if (e.key === "Tab") {
-      const container = getContainer();
-      if (!container) return;
-      const focusable = container.querySelectorAll(FOCUSABLE);
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
+export {
+  formatListItemDate,
+  createDialogTrap,
+  truncate,
+  sanitizeFilename,
+  preview,
+} from "@lightercore/ui/listTabFormat.js";
 
-      if (e.shiftKey) {
-        if (document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        }
-      } else {
-        if (document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    }
-
-    if (onKeydown) onKeydown(e);
-  };
-}
-
-/**
- * Truncate a string with ellipsis if it exceeds max length.
- */
-export function truncate(s, max) {
-  if (!s) return "";
-  return s.length > max ? s.slice(0, max - 1) + "\u2026" : s;
-}
-
-/**
- * Sanitize a filename to only alphanumeric characters plus - and _.
- * Falls back to "export" if the result would be empty.
- *
- * @param {string} name — base name (without extension)
- * @param {string} [extension] — file extension including dot, e.g. ".md"
- * @param {number} [maxLen=64] — max length of the base part
- * @returns {string} sanitized filename with extension
- */
-export function sanitizeFilename(name, extension = "", maxLen = 64) {
-  if (!name) return `export${extension}`;
-  const base = name.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, maxLen);
-  return `${base || "export"}${extension}`;
-}
+// ── Domain-specific: print windows (email/letter) ─────────────────────
 
 function escHtml(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -192,28 +122,22 @@ export function openLetterPrintWindow(subject, senderText, recipientText, dateSt
       max-width: 19cm; margin: 0 auto;
     }
 
-    /* Sender block — top right */
     .sender { text-align: right; margin-bottom: 1.5cm; font-size: 11pt; }
     .sender .name { font-weight: 700; font-size: 12pt; }
     .sender .line { margin-top: 0.05cm; }
 
-    /* Recipient block — below, left */
     .recipient { margin-bottom: 1cm; font-size: 11pt; }
     .recipient .attn { font-weight: 700; font-size: 11pt; margin-bottom: 0.1cm; }
 
-    /* Date — below recipient, right */
     .date-row { text-align: right; margin-bottom: 0.8cm; font-size: 11pt; }
 
-    /* Subject line */
     .subject { margin-bottom: 0.8cm; font-size: 12pt; }
     .subject .label { font-weight: 700; }
 
-    /* Body */
     .body { font-size: 12pt; line-height: 1.8; text-align: justify; }
     .body p { margin-bottom: 0.3cm; text-indent: 0; }
     .body p:first-of-type { margin-top: 0; }
 
-    /* Signature block */
     .signature { margin-top: 1.5cm; text-align: right; font-size: 11pt; }
 
     @media print {
@@ -222,24 +146,19 @@ export function openLetterPrintWindow(subject, senderText, recipientText, dateSt
   </style>
 </head>
 <body>
-  <!-- Sender -->
   <div class="sender">
     ${senderLines.map((l, i) => i === 0 ? `<div class="name">${escHtml(l)}</div>` : `<div class="line">${escHtml(l)}</div>`).join("\n    ")}
   </div>
 
-  <!-- Recipient -->
   <div class="recipient">
     <div class="attn">A l'attention de</div>
     ${recipientLines.map((l) => `<div class="line">${escHtml(l)}</div>`).join("\n    ")}
   </div>
 
-  <!-- Date -->
   ${dateLine ? `<div class="date-row">${escHtml(dateLine)}</div>` : ""}
 
-  <!-- Subject -->
   ${subject ? `<div class="subject"><span class="label">Objet\u00a0: </span>${escHtml(subject)}</div>` : ""}
 
-  <!-- Body -->
   <div class="body">${bodyHtml}</div>
 
   <script>
@@ -248,13 +167,4 @@ export function openLetterPrintWindow(subject, senderText, recipientText, dateSt
 </body>
 </html>`);
   win.document.close();
-}
-
-/**
- * Preview text: first line, stripped of markdown, truncated.
- */
-export function preview(s, max = 60) {
-  if (!s) return "";
-  const firstLine = s.split("\n")[0].trim();
-  return truncate(firstLine.replace(/[#*_~`>]/g, ""), max);
 }
