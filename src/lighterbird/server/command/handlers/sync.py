@@ -13,19 +13,33 @@ from lighterbird.server.deps import (
 )
 
 
-@command("sync", interactive=True)
+@command("sync", interactive=False,
+         description="Sync email, calendar, and todo data",
+         flags=[
+             {"name": "email", "type": "string", "help": "Sync email (optionally specify account email)"},
+             {"name": "calendar", "type": "bool", "help": "Sync calendars"},
+             {"name": "todo-attachments", "type": "bool", "help": "Sync todo file attachments"},
+             {"name": "all", "type": "bool", "help": "Sync everything (email, calendar, todo)"},
+             {"name": "complete", "type": "bool", "help": "Force full sync including large files"},
+         ])
 def sync_cmd(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!sync [--email [account_email]] [--calendar] [--todo-attachments] [--all]
 
     Syncs email, calendar, and/or todo attachment data.
     Use ``--email`` to sync all email accounts, or specify an
     account email to sync a single account: ``--email user@example.com``.
+
+    When called without any flags, defaults to ``--all``.
     """
     email_flag = flags.get("email", "")
     calendar_flag = "calendar" in flags
     todo_attach_flag = "todo-attachments" in flags
     sync_all = "all" in flags
     force = "complete" in flags
+
+    # Default to --all when no flags specified
+    if not any([email_flag or sync_all, calendar_flag, todo_attach_flag, force]):
+        sync_all = True
 
     summary_parts: list[str] = []
 

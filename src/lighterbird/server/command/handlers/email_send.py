@@ -14,16 +14,30 @@ from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_email_service
 
 
-@command("email.send", interactive=True)
+@command("email.send", interactive=True,
+         flags=[
+             {"name": "account", "type": "string", "help": "Sender account email"},
+             {"name": "cc", "type": "string", "help": "CC recipients (comma-separated)"},
+             {"name": "bcc", "type": "string", "help": "BCC recipients (comma-separated)"},
+             {"name": "priority", "type": "string", "help": "Priority 1-5 (default 3)"},
+             {"name": "body-format", "type": "string", "help": "Body format: markdown, html, or plain"},
+             {"name": "signature", "type": "string", "help": "Override account signature"},
+             {"name": "no-signature", "type": "bool", "help": "Send without any signature"},
+             {"name": "file", "type": "string", "help": "Attachment (name:base64)"},
+             {"name": "no-save-sample", "type": "bool", "help": "Do not save as writing sample"},
+         ])
 def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email send <to> <subject> [body] [--account <email>] [--cc email]
                     [--bcc email] [--priority N] [--body-format fmt]
+                    [--signature <text>] [--no-signature]
                     [--file <name:base64>]
 
     Sends an email.  ``<to>`` and ``<subject>`` are required; ``<body>``
     is optional.  Use ``--cc`` / ``--bcc`` for additional recipients,
     ``--priority`` (1-5) to set importance, ``--body-format`` to choose
-    markdown (default), html, or plain, and ``--file`` for attachments
+    markdown (default), html, or plain, ``--signature`` to override the
+    account's stored signature, ``--no-signature`` to send without any
+    signature, and ``--file`` for attachments
     (repeatable, format: ``<filename>:<base64>``).
     """
     if len(remaining) < 2:
@@ -41,6 +55,8 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     in_reply_to = flags.get("in-reply-to", "")
     body_format = flags.get("body-format", "markdown")
     file_flags = flags.get("file", "")
+    signature_override = flags.get("signature", None)
+    no_signature = "no-signature" in flags
     save_as_sample = flags.get("no-save-sample", "").lower() not in ("1", "true", "yes")
     svc: EmailService = get_email_service()
 
@@ -83,10 +99,18 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
             else:
                 attachments.append({"name": item, "data": ""})
 
+    # Resolve signature override
+    signature_value: str | None = None
+    if no_signature:
+        signature_value = ""  # empty string = send without signature
+    elif signature_override is not None:
+        signature_value = signature_override
+
     result = svc.send_email(account_email, to_list, subject, body,
                             cc=cc_list, bcc=bcc_list, priority=priority,
                             body_format=body_format,
                             attachments=attachments,
+                            signature=signature_value,
                             in_reply_to=in_reply_to or None,
                             save_as_sample=save_as_sample)
     if result.get("status") == "queued":
