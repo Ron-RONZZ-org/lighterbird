@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from lighterbird.core.storage import AttachmentStore
+from lighterbird.email.imap.capabilities import IMAPCapabilities, detect_capabilities
 from lighterbird.email.imap.parser import parse_email_message
 from lighterbird.email.imap.storage import store_message, _insert_message
 
@@ -110,15 +111,20 @@ class IMAPClient:
         self.port = port
         self.use_ssl = use_ssl
         self._conn: imaplib.IMAP4 | None = None
+        self.capabilities: IMAPCapabilities = IMAPCapabilities()
 
     def connect(self, username: str, password: str) -> None:
-        """Connect and login to IMAP server."""
+        """Connect and login to IMAP server.
+
+        After successful login, detects server capabilities.
+        """
         try:
             if self.use_ssl:
                 self._conn = imaplib.IMAP4_SSL(self.host, self.port, timeout=30)
             else:
                 self._conn = imaplib.IMAP4(self.host, self.port, timeout=30)
             self._conn.login(username, password)
+            self.capabilities = detect_capabilities(self._conn)
         except imaplib.IMAP4.error as e:
             raise ConnectionError(f"IMAP authentication failed for {username} at {self.host}:{self.port} — {e}") from e
         except (socket.gaierror, ConnectionRefusedError, TimeoutError, ssl.SSLError, OSError) as e:
@@ -148,27 +154,41 @@ class IMAPClient:
             parsed = _parse_list_response(line)
             if parsed:
                 result.append(parsed)
-
-        # Assign canonical names for standard folders not already named
-        for folder in result:
-            if folder["special_use"] and folder["name"] != folder["special_use"]:
-                # Keep the server name but tag with special_use hint
-                pass
         return result
 
-    def ensure_folder(self, account_email: str, folder_name: str, db_store: Any) -> str:
+    def ensure_folder(self, account_email: str, folder_name: str,
+                      db_store: Any, special_use: str | None = None) -> str:
         """Ensure folder exists in local DB, return its name.
 
         Uses ``(account_email, name)`` as the natural key (INSERT OR IGNORE).
+        If ``special_use`` is provided, updates the ``special_use`` column
+        on INSERT OR IGNORE.
+
+        Args:
+            account_email: The account this folder belongs to.
+            folder_name: The server folder name.
+            db_store: Object with ``.db`` (LighterbirdDB) attribute.
+            special_use: Optional SPECIAL-USE flag (e.g. ``\\Trash``).
+
+        Returns:
+            The folder name.
         """
         now = datetime.now(UTC).isoformat()
         try:
-            db_store.db.execute(
-                "INSERT OR IGNORE INTO folders "
-                "(account_email, name, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?)",
-                (account_email, folder_name, now, now),
-            )
+            if special_use:
+                db_store.db.execute(
+                    "INSERT OR IGNORE INTO folders "
+                    "(account_email, name, special_use, created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (account_email, folder_name, special_use, now, now),
+                )
+            else:
+                db_store.db.execute(
+                    "INSERT OR IGNORE INTO folders "
+                    "(account_email, name, created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?)",
+                    (account_email, folder_name, now, now),
+                )
         except Exception as exc:
             logger.warning(
                 "Failed to ensure folder %r for %s: %s",
@@ -187,12 +207,71 @@ class IMAPClient:
         typ, _data = self.conn.create(folder_name)
         return typ == "OK"
 
-    # ── Write operations (move, copy, delete) ──────────────────────────
+    # ── Folder selection ───────────────────────────────────────────────
 
     def _select_folder(self, folder: str) -> bool:
         """Select a folder for write operations. Returns True on success."""
         typ, data = self.conn.select(folder, readonly=False)
         return typ == "OK"
+
+    def select_folder_ex(self, folder: str, readonly: bool = True,
+                         condstore: bool = False) -> tuple[bool, int | None, int | None]:
+        """Select a folder and return UIDVALIDITY and HIGHESTMODSEQ.
+
+        Parses the SELECT response for ``[UIDVALIDITY N]`` and
+        ``[HIGHESTMODSEQ M]`` response codes (RFC 3501, RFC 4551).
+
+        Args:
+            folder: Folder name to select.
+            readonly: If True, SELECT with readonly=True (no write lock).
+            condstore: If True, enables CONDSTORE on this SELECT
+                       (RFC 4551).  Server must advertise CONDSTORE.
+
+        Returns:
+            Tuple of (success, uidvalidity, highest_modseq).
+            Values may be None if not advertised by the server.
+        """
+        try:
+            # Build SELECT command with optional CONDSTORE parameter
+            if condstore and self.capabilities.has_condstore:
+                typ, data = self.conn._simple_command(
+                    "SELECT", folder, b"(CONDSTORE)"
+                )
+            else:
+                typ, data = self.conn.select(folder, readonly=readonly)
+
+            if typ != "OK":
+                return False, None, None
+
+            uidvalidity: int | None = None
+            highest_modseq: int | None = None
+
+            # Parse response for UIDVALIDITY and HIGHESTMODSEQ
+            untagged = data or []
+            for resp in untagged:
+                if isinstance(resp, bytes):
+                    resp_str = resp.decode("ascii", errors="replace")
+                else:
+                    continue
+
+                # Match UIDVALIDITY N
+                if "UIDVALIDITY" in resp_str:
+                    import re
+                    m = re.search(r"UIDVALIDITY\s+(\d+)", resp_str)
+                    if m:
+                        uidvalidity = int(m.group(1))
+
+                # Match HIGHESTMODSEQ N
+                if "HIGHESTMODSEQ" in resp_str:
+                    import re
+                    m = re.search(r"HIGHESTMODSEQ\s+(\d+)", resp_str)
+                    if m:
+                        highest_modseq = int(m.group(1))
+
+            return True, uidvalidity, highest_modseq
+        except Exception:
+            logger.warning("select_folder_ex failed for %r", folder, exc_info=True)
+            return False, None, None
 
     def copy_message(self, uid: int, from_folder: str, to_folder: str) -> bool:
         """Copy a message from *from_folder* to *to_folder* via IMAP UID COPY.

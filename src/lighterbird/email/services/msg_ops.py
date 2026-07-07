@@ -4,6 +4,10 @@ Message mutation operations extracted from A-lien's RetpostoMessageOpsMixin.
 
 Send-queue retry with exponential backoff lives in
 :mod:`lighterbird.email.services.msg_send`.
+
+Phase 0 of the IMAP sync overhaul: delegates immediate flag sync operations
+to :class:`BacklogService` instead of doing inline IMAP STORE calls,
+improving UI responsiveness (mark_read no longer blocks on IMAP).
 """
 
 from __future__ import annotations
@@ -13,218 +17,107 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Any
 
+from lighterbird.email.services.backlog import BacklogService
+from lighterbird.email.services.dead_letter import DeadLetterService
+from lighterbird.email.services.flag_sync import FlagSyncService
 from lighterbird.email.services.msg_send import MsgSendQueueMixin
 
 logger = logging.getLogger(__name__)
 
+
 class MessageOpsService(MsgSendQueueMixin):
-    """Message mutation operations (flag sync, trash, move, send)."""
+    """Message mutation operations (flag sync, trash, move, send).
+
+    Composes :class:`BacklogService` for deferred flag sync and
+    :class:`DeadLetterService` for handling entries that exceeded
+    retry limits.
+    """
 
     def __init__(self, db, account_service):
         self.db = db
         self._account_service = account_service
+        self.backlog = BacklogService(
+            db=db,
+            pool=None,  # Connection pool added in Phase 4
+            folder_mapper=None,  # FolderMapper added in Phase 2
+            dead_letter=DeadLetterService(db),
+            max_retries=10,
+            batch_size=200,
+        )
+        self.flag_sync = FlagSyncService(
+            db=db,
+            backlog=self.backlog,
+        )
 
     def mark_read(self, msg_uuid: str, is_read: bool = True) -> None:
-        """Mark a message as read or unread locally and sync to IMAP server."""
+        """Mark a message as read or unread locally and queue IMAP sync.
+
+        Local DB update is immediate.  IMAP sync is deferred to the
+        backlog for batch processing — no blocking IMAP call.
+        """
         now = datetime.now(UTC).isoformat()
         self.db.execute(
             "UPDATE messages SET is_read = ?, updated_at = ? WHERE uuid = ?",
             (1 if is_read else 0, now, msg_uuid),
         )
-        self._imap_sync_flags(msg_uuid)
+        self._enqueue_sync(msg_uuid)
 
-    def _imap_sync_flags(self, msg_uuid: str) -> None:
-        """Sync local message flags to the IMAP server, queuing on failure.
+    def _enqueue_sync(self, msg_uuid: str) -> None:
+        """Queue a message flag sync for background IMAP sync.
 
-        Reads the current message state from DB and sends STORE commands
-        to the IMAP server. Falls back to enqueuing a backlog entry
-        if the IMAP connection fails.
+        Reads the current message state from DB and enqueues it to the
+        backlog.  If the message has no IMAP UID (local-only/seed), it
+        is skipped — it will get a real UID when fetched from IMAP.
         """
         msg = self.db.execute_one(
             "SELECT * FROM messages WHERE uuid = ?", (msg_uuid,)
         )
         if not msg:
             return
-        account_email = msg.get("account_email", "")
         imap_uid = msg.get("imap_uid")
+        account_email = msg.get("account_email", "")
         if not account_email:
-            return  # No account — nothing to sync to
+            return
         if imap_uid is None:
-            # No IMAP UID (e.g., local-only seeded message or draft).
-            # The message will get a real UID when it's fetched from the
-            # IMAP server during sync. Until then, there's no point
-            # enqueuing — process_sync_backlog can't process a NULL UID.
+            # Local-only message — will get a real UID during fetch
             return
-        folder_name = msg.get("folder_name", "")
-        acct = self._account_service.get_account_with_password(account_email)
-        if not acct or not acct.get("password"):
-            self._enqueue_sync(msg)
-            return
-
-        from lighterbird.email.imap.client import IMAPClient
-        client = IMAPClient(
-            host=acct.get("imap_server", ""),
-            port=acct.get("imap_port", 993),
-            use_ssl=acct.get("imap_use_ssl", 1) == 1,
+        self.backlog.enqueue(
+            msg_uuid=msg_uuid,
+            account_email=account_email,
+            folder_name=msg.get("folder_name"),
+            imap_uid=imap_uid,
+            is_read=int(msg.get("is_read", 0)),
+            is_deleted=int(msg.get("is_deleted", 0)),
         )
-        try:
-            client.connect(
-                username=acct.get("imap_username", "") or account_email,
-                password=acct["password"],
-            )
-            add: list[str] = []
-            remove: list[str] = []
-            if msg.get("is_read"):
-                add.append("\\Seen")
-            else:
-                remove.append("\\Seen")
-            if msg.get("is_deleted"):
-                add.append("\\Deleted")
-            else:
-                remove.append("\\Deleted")
-            ok = client.set_flags(
-                int(imap_uid), folder_name or "INBOX",
-                add=add or None, remove=remove or None,
-            )
-            if not ok:
-                raise RuntimeError(
-                    f"Failed to set flags for UID {imap_uid} in folder {folder_name}"
-                )
-        except Exception:
-            logger.warning("Flag sync failed for msg %s, queued for retry", msg.get("uuid", "")[:8])
-            self._enqueue_sync(msg)
-        finally:
-            client.disconnect()
 
-    def _enqueue_sync(self, msg: dict) -> None:
-        """Queue a message flag sync request for later processing."""
-        now = datetime.now(UTC).isoformat()
-        msg_uuid = msg.get("uuid", "")
-        self.db.execute(
-            "INSERT OR REPLACE INTO _sync_backlog "
-            "(id, msg_uuid, account_email, folder_name, imap_uid, "
-            " is_read, is_deleted, created_at, last_attempt, retries) "
-            "VALUES ("
-            "  COALESCE((SELECT id FROM _sync_backlog WHERE msg_uuid = ?), NULL),"
-            "  ?, ?, ?, ?, ?, ?, ?, NULL, 0"
-            ")",
-            (msg_uuid, msg_uuid, msg.get("account_email", ""),
-             msg.get("folder_name", ""),
-             msg.get("imap_uid"),
-             int(msg.get("is_read", 0)),
-             int(msg.get("is_deleted", 0)), now),
-        )
+    # ── Backlog processing (delegated) ───────────────────────────────────
 
     def process_sync_backlog(self) -> int:
-        """Process all pending flag sync requests.
-
-        Connects to each account's IMAP server and sends STORE commands
-        for queued flag changes. Clears successfully synced entries.
+        """Process all pending flag sync requests from the backlog.
 
         Returns:
             Number of backlog entries successfully synced.
         """
-        import logging
-        logger = logging.getLogger(__name__)
+        return self.backlog.process_all()
 
-        entries = list(self.db.execute(
-            "SELECT * FROM _sync_backlog ORDER BY created_at ASC LIMIT 500"
-        ))
-        if not entries:
-            return 0
+    def process_trash_backlog(self, account_email: str | None = None) -> int:
+        """Process pending IMAP trash operations from the backlog.
 
-        # Clean up stale entries with NULL imap_uid (created by older code
-        # for seeded/local-only messages that can never be synced to IMAP).
-        stale = [e for e in entries if e.get("imap_uid") is None]
-        if stale:
-            logger.warning(
-                "Deleting %d stale backlog entries with NULL imap_uid",
-                len(stale),
-            )
-            for e in stale:
-                self.db.execute(
-                    "DELETE FROM _sync_backlog WHERE id = ?", (e["id"],)
-                )
-            entries = [e for e in entries if e.get("imap_uid") is not None]
+        Args:
+            account_email: If provided, only process for this account.
 
-        if not entries:
-            return 0
+        Returns:
+            Number of entries successfully moved to Trash.
+        """
+        return self.backlog.process_all(account_email=account_email)
 
-        by_account: dict[str, list[dict]] = defaultdict(list)
-        for e in entries:
-            by_account[e["account_email"]].append(e)
-        synced = 0
-        for account_email, items in by_account.items():
-            acct = self._account_service.get_account_with_password(account_email)
-            if not acct or not acct.get("password"):
-                continue
-            from lighterbird.email.imap.client import IMAPClient
-            client = IMAPClient(
-                host=acct.get("imap_server", ""),
-                port=acct.get("imap_port", 993),
-                use_ssl=acct.get("imap_use_ssl", 1) == 1,
-            )
-            try:
-                client.connect(
-                    username=acct.get("imap_username", "") or account_email,
-                    password=acct["password"],
-                )
-                for item in items:
-                    try:
-                        imap_uid = item.get("imap_uid")
-                        if imap_uid is None:
-                            continue
-                        folder = item.get("folder_name") or "INBOX"
-                        add: list[str] = []
-                        remove: list[str] = []
-                        if item.get("is_read"):
-                            add.append("\\Seen")
-                        else:
-                            remove.append("\\Seen")
-                        if item.get("is_deleted"):
-                            add.append("\\Deleted")
-                        else:
-                            remove.append("\\Deleted")
-                        ok = client.set_flags(
-                            int(imap_uid), folder,
-                            add=add or None, remove=remove or None,
-                        )
-                        if not ok:
-                            raise RuntimeError(
-                                f"Failed to set flags for UID {imap_uid} in folder {folder}"
-                            )
-                        self.db.execute(
-                            "DELETE FROM _sync_backlog WHERE id = ?",
-                            (item["id"],),
-                        )
-                        synced += 1
-                    except Exception:
-                        logger.warning(
-                            "Sync backlog item %s (msg %s, folder %s) failed, incremented retries",
-                            item.get("id", "?"),
-                            item.get("msg_uuid", "")[:8],
-                            item.get("folder_name", "?"),
-                        )
-                        self.db.execute(
-                            "UPDATE _sync_backlog SET retries = retries + 1, "
-                            "last_attempt = ? WHERE id = ?",
-                            (datetime.now(UTC).isoformat(), item["id"]),
-                        )
-            except Exception:
-                logger.warning(
-                    "Account-wide sync backlog processing failure for %s",
-                    account_email,
-                )
-            finally:
-                client.disconnect()
-        return synced
+    # ── Trash operations ──────────────────────────────────────────────────
 
     def trash_message(self, msg_uuid: str) -> None:
         """Move a message to the IMAP server's Trash folder.
-        
-        Updates the local DB immediately (soft-delete). Then attempts
-        an IMAP-level move; if that fails, the message is queued for
-        background retry during the next sync.
+
+        Updates the local DB immediately (soft-delete).  IMAP-level
+        move is deferred to the backlog for batch processing.
         """
         now = datetime.now(UTC).isoformat()
         msg = self.db.execute_one(
@@ -239,69 +132,36 @@ class MessageOpsService(MsgSendQueueMixin):
             (now, msg_uuid),
         )
 
-        # Attempt IMAP-level move to Trash (best-effort)
         imap_uid = msg.get("imap_uid")
         account_email = msg.get("account_email", "")
         folder_name = msg.get("folder_name", "")
 
         if imap_uid is not None and account_email and folder_name:
-            try:
-                from lighterbird.email.imap.client import IMAPClient
-                acct = self._account_service.get_account_with_password(account_email)
-                if acct and acct.get("password"):
-                    client = IMAPClient(
-                        host=acct.get("imap_server", ""),
-                        port=acct.get("imap_port", 993),
-                        use_ssl=acct.get("imap_use_ssl", 1) == 1,
-                    )
-                    client.connect(
-                        username=acct.get("imap_username", "") or account_email,
-                        password=acct["password"],
-                    )
-                    try:
-                        ok = client.move_message(imap_uid, folder_name, "Trash")
-                        if ok:
-                            self.db.execute(
-                                "UPDATE messages SET folder_name = 'Trash', "
-                                "is_deleted = 0, updated_at = ? WHERE uuid = ?",
-                                (now, msg_uuid),
-                            )
-                            return  # Success — no need to queue
-                    finally:
-                        client.disconnect()
-            except Exception:
-                logger.warning("IMAP trash move failed for %s, queued for background retry", msg_uuid[:8])
-                # Fall through to queue for background retry
-
-        # Queue for background IMAP trash retry
-        self._enqueue_trash(msg)
+            self.backlog.enqueue_trash(
+                msg_uuid=msg_uuid,
+                account_email=account_email,
+                folder_name=folder_name,
+                imap_uid=imap_uid,
+            )
 
     def _enqueue_trash(self, msg: dict) -> None:
-        """Queue a message for deferred IMAP trash move.
+        """Legacy method — queue a message for deferred IMAP trash move.
 
-        The trash_backlog table stores pending IMAP trash operations
-        that are processed in bulk per account by the background worker.
+        Provided for backward compatibility with any external callers.
+        Delegates to :meth:`BacklogService.enqueue_trash`.
         """
-        now = datetime.now(UTC).isoformat()
         msg_uuid = msg.get("uuid", "")
-        self.db.execute(
-            "INSERT OR REPLACE INTO _sync_backlog "
-            "(id, msg_uuid, account_email, folder_name, imap_uid, "
-            " is_read, is_deleted, created_at, last_attempt, retries) "
-            "VALUES ("
-            "  COALESCE((SELECT id FROM _sync_backlog WHERE msg_uuid = ?), NULL),"
-            "  ?, ?, ?, ?, ?, ?, ?, NULL, 0"
-            ")",
-            (msg_uuid, msg_uuid, msg.get("account_email", ""),
-             msg.get("folder_name", ""),
-             msg.get("imap_uid"),
-             1, 1, now),  # is_read=1, is_deleted=1 → Flags to sync: \\Seen + \\Deleted
+        self.backlog.enqueue_trash(
+            msg_uuid=msg_uuid,
+            account_email=msg.get("account_email", ""),
+            folder_name=msg.get("folder_name"),
+            imap_uid=msg.get("imap_uid"),
         )
 
     def batch_trash_messages(self, uuids: list[str]) -> dict[str, Any]:
         """Soft-delete multiple messages locally and queue IMAP trash.
 
-        All local DB updates happen in a single batch for speed. IMAP
+        All local DB updates happen in a single batch for speed.  IMAP
         trash operations are deferred to the background worker.
 
         Args:
@@ -335,116 +195,15 @@ class MessageOpsService(MsgSendQueueMixin):
             account_email = msg.get("account_email", "")
             folder_name = msg.get("folder_name", "")
             if imap_uid is not None and account_email and folder_name:
-                self.db.execute(
-                    "INSERT OR REPLACE INTO _sync_backlog "
-                    "(id, msg_uuid, account_email, folder_name, imap_uid, "
-                    " is_read, is_deleted, created_at, last_attempt, retries) "
-                    "VALUES ("
-                    "  COALESCE((SELECT id FROM _sync_backlog WHERE msg_uuid = ?), NULL),"
-                    "  ?, ?, ?, ?, ?, ?, ?, NULL, 0"
-                    ")",
-                    (msg_uuid, msg_uuid, account_email, folder_name,
-                     imap_uid, 1, 1, now),
+                self.backlog.enqueue_trash(
+                    msg_uuid=msg_uuid,
+                    account_email=account_email,
+                    folder_name=folder_name,
+                    imap_uid=imap_uid,
                 )
                 queued += 1
 
         return {"count": trashed, "queued": queued}
-
-    def process_trash_backlog(self, account_email: str | None = None) -> int:
-        """Process pending IMAP trash operations from the backlog.
-
-        Groups queued entries by account, opens one IMAP connection per
-        account, and attempts IMAP MOVE to Trash for each. Successfully
-        moved entries are updated in the local DB (folder='Trash',
-        is_deleted=0) and removed from the backlog.
-
-        Args:
-            account_email: If provided, only process trash backlog for
-                           this specific account. Otherwise process for all.
-
-        Returns:
-            Number of backlog entries successfully moved to Trash.
-        """
-        if account_email:
-            entries = list(self.db.execute(
-                "SELECT * FROM _sync_backlog WHERE is_deleted = 1 "
-                "AND account_email = ? ORDER BY created_at ASC LIMIT 500",
-                (account_email,),
-            ))
-        else:
-            entries = list(self.db.execute(
-                "SELECT * FROM _sync_backlog WHERE is_deleted = 1 "
-                "ORDER BY created_at ASC LIMIT 500"
-            ))
-        if not entries:
-            return 0
-
-        by_account: dict[str, list[dict]] = defaultdict(list)
-        for e in entries:
-            by_account[e["account_email"]].append(e)
-
-        moved = 0
-        now = datetime.now(UTC).isoformat()
-        for account_email, items in by_account.items():
-            acct = self._account_service.get_account_with_password(account_email)
-            if not acct or not acct.get("password"):
-                continue
-
-            from lighterbird.email.imap.client import IMAPClient
-            client = IMAPClient(
-                host=acct.get("imap_server", ""),
-                port=acct.get("imap_port", 993),
-                use_ssl=acct.get("imap_use_ssl", 1) == 1,
-            )
-            try:
-                client.connect(
-                    username=acct.get("imap_username", "") or account_email,
-                    password=acct["password"],
-                )
-                for item in items:
-                    try:
-                        imap_uid = item.get("imap_uid")
-                        folder = item.get("folder_name") or "INBOX"
-                        if imap_uid is None:
-                            continue
-                        ok = client.move_message(int(imap_uid), folder, "Trash")
-                        if ok:
-                            msg_uuid = item["msg_uuid"]
-                            self.db.execute(
-                                "UPDATE messages SET folder_name = 'Trash', "
-                                "is_deleted = 0, updated_at = ? WHERE uuid = ?",
-                                (now, msg_uuid),
-                            )
-                            self.db.execute(
-                                "DELETE FROM _sync_backlog WHERE id = ?",
-                                (item["id"],),
-                            )
-                            moved += 1
-                        else:
-                            self.db.execute(
-                                "UPDATE _sync_backlog SET retries = retries + 1, "
-                                "last_attempt = ? WHERE id = ?",
-                                (now, item["id"]),
-                            )
-                    except Exception:
-                        logger.warning(
-                            "Trash backlog item %s (msg %s) failed, incremented retries",
-                            item.get("id", "?"),
-                            item.get("msg_uuid", "")[:8],
-                        )
-                        self.db.execute(
-                            "UPDATE _sync_backlog SET retries = retries + 1, "
-                            "last_attempt = ? WHERE id = ?",
-                            (now, item["id"]),
-                        )
-            except Exception:
-                logger.warning(
-                    "Account-wide trash backlog processing failure for %s",
-                    account_email,
-                )
-            finally:
-                client.disconnect()
-        return moved
 
     def move_message(self, msg_uuid: str, destination_folder_name: str) -> None:
         """Move a message to a different folder (by folder name)."""
@@ -453,3 +212,10 @@ class MessageOpsService(MsgSendQueueMixin):
             "UPDATE messages SET folder_name = ?, updated_at = ? WHERE uuid = ?",
             (destination_folder_name, now, msg_uuid),
         )
+
+    # ── Dead-letter management ────────────────────────────────────────────
+
+    @property
+    def dead_letter(self) -> Any:
+        """Access the DeadLetterService for manual management."""
+        return self.backlog._dead_letter

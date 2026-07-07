@@ -21,15 +21,17 @@ Email module, forked from [A-lien](../../A-lien). Provides IMAP sync, SMTP send,
 - **Messages use IMAP UID for dedup** — `imap_uid` is the stable remote identifier
 - **HTML body is stored alongside plaintext** — both are preserved for the frontend to decide rendering
 - **Attachments are metadata-only in DB** — file blobs are extracted on demand via IMAP FETCH
-- **Flag changes sync back to IMAP server** — read/star/trash state is pushed via a backlog queue
+- **Flag changes sync back to IMAP server via backlog queue** — read/star/trash state is pushed via backlog
 - **Concurrent sync uses ThreadPoolExecutor** — one thread per account folder
+- **CONDSTORE (RFC 4551) for flag pull** — server-side flag changes (starred on phone) are pulled on sync
+- **UIDVALIDITY tracked per folder** — UID reassignment detected and handled gracefully
+- **Connection pool per account** — reused across backlog processing for efficiency
 
 ## Input/Output Expectations
 
 - `sync_all()` returns `dict[str, SyncResult]` keyed by account UUID
 - `search_messages(filters)` uses IMAP SEARCH (network) — local FTS5 may be added later
 - `send_email(...)` stores a copy of the sent message in the local DB
-- `import_vcf(path)` returns count of imported contacts (legacy — use `contacts/` module for new VCF imports)
 
 ## Documentation Reference
 
@@ -37,14 +39,38 @@ Email module, forked from [A-lien](../../A-lien). Provides IMAP sync, SMTP send,
 - [A-lien retposto_sync.py](../../A-lien/src/A_lien/service/retposto_sync.py) — sync mixin source
 - [A-lien imap/client.py](../../A-lien/src/A_lien/imap/client.py) — IMAPClient source
 
-## Sync Backlog (IMAP Flag Sync)
+## IMAP Sync Engine Overhaul (Phase 0-5)
+
+### Architecture
+
+The IMAP sync engine was overhauled in phases addressing 10 identified gaps:
+
+| Phase | Component | Description |
+|-------|-----------|-------------|
+| 0 | Schema + Services | Added modseq/uidvalidity/special_use columns, dead_letters table. Extracted BacklogService, DeadLetterService, FlagSyncService from msg_ops.py. |
+| 1 | UIDVALIDITY | `IMAPClient.select_folder_ex()` parses SELECT response for UIDVALIDITY and HIGHESTMODSEQ. On UIDVALIDITY mismatch, local messages for that folder are invalidated and re-fetched. |
+| 2 | Folder Mapping | `FolderMapper` resolves canonical folder names (Trash, Sent, Junk) to server-localized names using SPECIAL-USE flags from IMAP LIST. Falls back to known alias lists. |
+| 3 | CONDSTORE/QRESYNC | `detect_capabilities()` parses server capabilities at connect time. `FlagPuller` uses `FETCH (UID FLAGS MODSEQ) (CHANGEDSINCE N)` to pull server-side flag changes. Merge semantics: local backlog wins over server state. |
+| 4 | Connection Pool | `IMAPConnectionPool` maintains per-account connections with idle timeout. Reused by backlog processing to avoid per-operation connection overhead. |
+| 5 | IMAP IDLE | `IMAPIdleThread` runs a per-account IDLE loop with reconnection. `IMAPIdleManager` manages thread lifecycle. Callbacks trigger incremental sync on EXISTS/FLAGS events. |
+
+### Sync Backlog (IMAP Flag Sync)
 
 Flag changes (read/delete) are synced back to the IMAP server via a backlog queue:
 
-1. **`_imap_sync_flags()` in `MessageOpsService`** — Attempts an immediate IMAP `STORE` via `set_flags()`. Falls back to enqueuing if the connection fails.
-2. **`_sync_backlog` table** — Stores pending flag changes with account, folder, IMAP UID, and desired flag state.
-3. **`process_sync_backlog()`** — Called after each IMAP sync (`sync_account`) and exposed via `EmailService.process_sync_backlog()`. Connects per-account and flushes up to 500 entries.
-4. **IMAP `set_flags()`** in `client.py` — Sends `+FLAGS.SILENT` / `-FLAGS.SILENT` for add/remove operations.
+1. **`BacklogService.enqueue()`** — Queues a pending flag change with INSERT OR REPLACE
+2. **`_sync_backlog` table** — Stores pending flag changes with account, folder, IMAP UID, desired flag state, and retry count
+3. **`BacklogService.process_all()`** — Acquires threading lock, processes entries per account, connects via pool, sends STORE ±FLAGS.SILENT or UID MOVE. Escalates to dead-letter after `MAX_RETRIES` (10).
+4. **`DeadLetterService`** — Stores entries that exhausted retries for manual review. Supports list, clear, and retry-back-to-backlog operations.
+5. **`FlagSyncService`** — Orchestrates push (backlog drain) and pull (CONDSTORE flag sync)
+
+### Locking
+
+Backlog processing uses `threading.Lock` with a 5-second timeout. If the lock is held by another thread (e.g., manual sync triggering backlog drain while background worker is processing), the second caller returns 0 gracefully.
+
+### Dead-Letter Limits
+
+Entries exceeding `MAX_RETRIES` (default: 10) are automatically moved to the `_dead_letters` table. They can be retried via `DeadLetterService.retry_entry()` or cleared via `DeadLetterService.clear()`.
 
 ## Domain-Specific Rules for Agents
 
@@ -56,3 +82,5 @@ Flag changes (read/delete) are synced back to the IMAP server via a backlog queu
 6. **Strip keyring.py** — lighterbird already has one in `core/keyring.py`.
 7. **OAuth2 must be added** for modern email providers (Gmail, Outlook). Design the auth interface now even if only password auth is implemented initially.
 8. **Adapt error reporting.** A-lien uses `error()`, `info()` from A.core. lighterbird should use Python logging or raise structured exceptions for the server layer to handle.
+9. **New services added in Phase 0:** `BacklogService`, `DeadLetterService`, `FlagSyncService` are available via `EmailService.msg_ops.backlog`, `EmailService.msg_ops.dead_letter`, and `EmailService.msg_ops.flag_sync`.
+10. **File sizes:** `msg_ops.py` reduced from 455→221 lines after extraction. New files: `backlog.py` (377), `dead_letter.py` (169), `flag_sync.py` (89), `capabilities.py` (76), `folder_mapper.py` (141), `flag_pull.py` (338), `connpool.py` (220), `idle.py` (315). All under 500-line limit.

@@ -174,6 +174,43 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_message_id
     ON messages(account_email, message_id)
     WHERE message_id IS NOT NULL;
 """
+_IDX_MESSAGES_MODSEQ = """
+CREATE INDEX IF NOT EXISTS idx_messages_modseq
+    ON messages(account_email, folder_name, modseq);
+"""
+
+_DEAD_LETTERS_TABLE = """
+CREATE TABLE IF NOT EXISTS _dead_letters (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    msg_uuid        TEXT NOT NULL,
+    account_email   TEXT NOT NULL,
+    folder_name     TEXT,
+    imap_uid        INTEGER,
+    is_read         INTEGER NOT NULL DEFAULT 0,
+    is_deleted      INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT NOT NULL,
+    last_attempt    TEXT NOT NULL,
+    retries         INTEGER NOT NULL DEFAULT 0,
+    dead_at         TEXT NOT NULL,
+    reason          TEXT NOT NULL DEFAULT ''
+);
+"""
+_IDX_DEAD_LETTERS_ACCOUNT = "CREATE INDEX IF NOT EXISTS idx_dead_letters_account ON _dead_letters(account_email);"
+
+# ── CONDSTORE / UIDVALIDITY / SPECIAL-USE migrations ────────────────────
+# All new columns are nullable with sensible defaults, backward-compatible.
+_MIGRATE_MESSAGES_MODSEQ = """
+ALTER TABLE messages ADD COLUMN modseq INTEGER;
+"""
+_MIGRATE_FOLDERS_UIDVALIDITY = """
+ALTER TABLE folders ADD COLUMN uidvalidity INTEGER;
+"""
+_MIGRATE_FOLDERS_HIGHEST_MODSEQ = """
+ALTER TABLE folders ADD COLUMN highest_modseq INTEGER NOT NULL DEFAULT 0;
+"""
+_MIGRATE_FOLDERS_SPECIAL_USE = """
+ALTER TABLE folders ADD COLUMN special_use TEXT;
+"""
 _SEND_QUEUE_TABLE = """
 CREATE TABLE IF NOT EXISTS send_queue (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -213,15 +250,22 @@ _SCHEMA_STATEMENTS: list[str] = [
     _MIGRATE_ACCOUNTS_MANAGESIEVE_PORT,
     _MIGRATE_ACCOUNTS_MANAGESIEVE_TLS,
     _MIGRATE_SIEVE_ACTIVATIONS_PRIORITY,
+    # CONDSTORE / UIDVALIDITY / SPECIAL-USE (Phase 0 of IMAP sync overhaul)
+    _MIGRATE_MESSAGES_MODSEQ,
+    _MIGRATE_FOLDERS_UIDVALIDITY,
+    _MIGRATE_FOLDERS_HIGHEST_MODSEQ,
+    _MIGRATE_FOLDERS_SPECIAL_USE,
+    _DEAD_LETTERS_TABLE,
     _IDX_MESSAGES_ACCOUNT,
     _IDX_MESSAGES_FOLDER,
     _IDX_MESSAGES_IMAP_UID,
     _IDX_MESSAGES_MESSAGE_ID,
+    _IDX_MESSAGES_MODSEQ,
     _IDX_MESSAGES_DATE,
     _IDX_ATTACHMENTS_MESSAGE,
     _IDX_SYNC_BACKLOG_MSG,
+    _IDX_DEAD_LETTERS_ACCOUNT,
     _IDX_SIEVE_ACTIVATIONS_ACCOUNT,
-    _IDX_SEND_QUEUE_STATUS,
 ]
 
 

@@ -172,9 +172,23 @@ class EmailSyncWorker(BackgroundWorker):
         account_email = payload.get("account_email")
         if account_email:
             svc.sync_account(account_email)
+            # Pull server-side flag changes via CONDSTORE (if supported)
+            pull_result = svc.msg_ops.flag_sync.pull_changes(account_email)
+            if pull_result:
+                logger.info(
+                    "[tasks] Pulled %s flag changes for %s",
+                    sum(pull_result.values()), account_email,
+                )
         else:
             for account in svc.list_accounts():
-                svc.sync_account(account["email"])
+                acct_email = account["email"]
+                svc.sync_account(acct_email)
+                pull_result = svc.msg_ops.flag_sync.pull_changes(acct_email)
+                if pull_result:
+                    logger.info(
+                        "[tasks] Pulled %s flag changes for %s",
+                        sum(pull_result.values()), acct_email,
+                    )
         # Always drain the flag sync backlog after any sync pass,
         # ensuring \\Seen and \\Deleted flags queued by mark_read()
         # and trash_message() are pushed to the IMAP server even if
