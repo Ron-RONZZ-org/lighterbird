@@ -162,6 +162,20 @@ _IDX_SYNC_BACKLOG_MSG = "CREATE INDEX IF NOT EXISTS idx_sync_backlog_msg ON _syn
 
 _IDX_SIEVE_ACTIVATIONS_ACCOUNT = "CREATE INDEX IF NOT EXISTS idx_sieve_activations_account ON sieve_activations(account_email);"
 
+# ── Multi-signature support ────────────────────────────────────────────
+_EMAIL_SIGNATURES_TABLE = """
+CREATE TABLE IF NOT EXISTS email_signatures (
+    uuid            TEXT PRIMARY KEY,
+    account_email   TEXT NOT NULL REFERENCES accounts(email) ON DELETE CASCADE,
+    name            TEXT NOT NULL,
+    signature_text  TEXT NOT NULL DEFAULT '',
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL,
+    UNIQUE(account_email, name)
+);
+"""
+_IDX_EMAIL_SIGNATURES_ACCOUNT = "CREATE INDEX IF NOT EXISTS idx_email_signatures_account ON email_signatures(account_email);"
+
 _IDX_MESSAGES_ACCOUNT = "CREATE INDEX IF NOT EXISTS idx_messages_account ON messages(account_email);"
 _IDX_MESSAGES_FOLDER = "CREATE INDEX IF NOT EXISTS idx_messages_folder ON messages(account_email, folder_name);"
 _IDX_MESSAGES_IMAP_UID = """
@@ -266,6 +280,9 @@ _SCHEMA_STATEMENTS: list[str] = [
     _IDX_SYNC_BACKLOG_MSG,
     _IDX_DEAD_LETTERS_ACCOUNT,
     _IDX_SIEVE_ACTIVATIONS_ACCOUNT,
+    # Multi-signature (Phase 1)
+    _EMAIL_SIGNATURES_TABLE,
+    _IDX_EMAIL_SIGNATURES_ACCOUNT,
 ]
 
 
@@ -312,6 +329,32 @@ def ensure_vec_table(db: LighterbirdDB, dim: int = 1536) -> None:
         )
 
 
+def _migrate_existing_signatures(db: LighterbirdDB) -> None:
+    """Copy existing per-account signatures from accounts table to email_signatures.
+
+    Runs once; subsequent calls are no-ops because of INSERT OR IGNORE.
+    The existing signature on an account becomes the ``default`` named signature
+    for that account.
+    """
+    import uuid
+
+    rows = list(db.execute(
+        "SELECT email, signature, created_at, updated_at FROM accounts "
+        "WHERE signature != ''"
+    ))
+    for row in rows:
+        try:
+            db.execute(
+                "INSERT OR IGNORE INTO email_signatures "
+                "(uuid, account_email, name, signature_text, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (str(uuid.uuid4()), row["email"], "default",
+                 row["signature"], row.get("created_at", ""), row.get("updated_at", "")),
+            )
+        except Exception:
+            pass  # best-effort migration
+
+
 def get_db(path: Path | str | None = None) -> LighterbirdDB:
     """Get the email database connection with schema initialized."""
     from sqlite3 import OperationalError
@@ -325,4 +368,5 @@ def get_db(path: Path | str | None = None) -> LighterbirdDB:
             if not stmt.strip().upper().startswith("ALTER"):
                 raise
 
+    _migrate_existing_signatures(db)
     return db

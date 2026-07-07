@@ -163,18 +163,18 @@
     }, { idKey: "form-email-signature-add" })
   }
   onOpenSignatureModify={(sig) =>
-    tabStore.open("form", "Modify Signature: " + sig.email, {
+    tabStore.open("form", "Modify Signature: " + (sig.name || "default"), {
       form: "email-signature-modify",
-      initialData: { email: sig.email, text: sig.signature || "" },
+      initialData: { uuid: sig.uuid, name: sig.name || "default", signature_text: sig.signature_text || sig.signature || "" },
     }, { idKey: "form-email-signature-modify" })
   }
   onDeleteSignature={async (sig) => {
-    if (!confirm(`Delete signature for ${sig.email}?`)) return;
+    if (!confirm(`Delete signature "${sig.name || 'default'}" for ${sig.account_email || sig.email}?`)) return;
     try {
       const resp = await fetch("/api/v1/command", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tokens: ["email", "signature", "delete", sig.email], flags: {} }),
+        body: JSON.stringify({ tokens: ["email", "signature", "delete", sig.uuid], flags: {} }),
       });
       if (resp.ok) await refetchCurrentTab();
     } catch { /* ignore */ }

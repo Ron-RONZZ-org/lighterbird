@@ -16,6 +16,7 @@ from lighterbird.email.services import (
     MessageOpsService,
     MessageService,
     SieveService,
+    SignatureService,
 )
 
 
@@ -28,6 +29,7 @@ class EmailService:
         self.messages = MessageService(self._db)
         self.msg_ops = MessageOpsService(self._db, self.accounts)
         self.sieve = SieveService(self._db)
+        self.signatures = SignatureService(self._db)
 
     # ── Account operations ───────────────────────────────────────────────
 

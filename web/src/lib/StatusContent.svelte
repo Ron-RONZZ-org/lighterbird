@@ -109,11 +109,13 @@
     </div>
     {#each d.signatures as sig}
       <div class="row">
-        <span class="key">{sig.email || ""}</span>
-        <span class="val" title={sig.signature || ""}>
-          {sig.signature ? (sig.signature.length > 60 ? sig.signature.slice(0, 60) + "\u2026" : sig.signature) : "(no signature)"}
+        <span class="key">{sig.account_email || sig.email || ""}</span>
+        <span class="hint">{sig.name || "default"}</span>
+        <span class="val" title={sig.signature_text || sig.signature || ""}>
+          {(sig.signature_text || sig.signature || "").length > 60
+            ? (sig.signature_text || sig.signature || "").slice(0, 60) + "\u2026"
+            : (sig.signature_text || sig.signature || "(no signature)")}
         </span>
-        <span class="hint">{sig.has_signature ? "\u2713" : "\u2014"}</span>
         <div class="row-actions">
           <button class="btn-modify-sm" onclick={() => onOpenSignatureModify(sig)} title="Edit">&#x270E;</button>
           <button class="btn-remove-sm" onclick={() => onDeleteSignature(sig)} title="Remove">&#x2715;</button>

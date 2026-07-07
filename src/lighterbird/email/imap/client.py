@@ -400,7 +400,7 @@ class IMAPClient:
             known_uids: set[int] = set()
             if not force:
                 rows = db_store.db.execute(
-                    "SELECT imap_uid FROM messages WHERE account_email = ? AND folder_name = ? AND imap_uid IS NOT NULL AND is_deleted = 0",
+                    "SELECT imap_uid FROM messages WHERE account_email = ? AND folder_name = ? AND imap_uid IS NOT NULL",
                     (account_email, folder_name),
                 )
                 known_uids = {r["imap_uid"] for r in rows}

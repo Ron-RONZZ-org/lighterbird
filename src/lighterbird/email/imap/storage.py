@@ -112,11 +112,11 @@ def _insert_message(
                body           = excluded.body,
                html_body      = excluded.html_body,
                priority       = excluded.priority,
-               -- Preserve local is_read/is_starred — never overwrite
-               -- user's read/favourite state with IMAP data.
-               is_read        = COALESCE((SELECT is_read FROM messages WHERE uuid = excluded.uuid), excluded.is_read),
-               is_starred     = COALESCE((SELECT is_starred FROM messages WHERE uuid = excluded.uuid), excluded.is_starred),
-               is_deleted     = excluded.is_deleted,
+                -- Preserve local is_read/is_starred/is_deleted — never overwrite
+                -- user's read/favourite/trash state with IMAP data.
+                is_read        = COALESCE((SELECT is_read FROM messages WHERE uuid = excluded.uuid), excluded.is_read),
+                is_starred     = COALESCE((SELECT is_starred FROM messages WHERE uuid = excluded.uuid), excluded.is_starred),
+                is_deleted     = COALESCE((SELECT is_deleted FROM messages WHERE uuid = excluded.uuid), excluded.is_deleted),
                received_at    = excluded.received_at,
                created_at     = excluded.created_at,
                updated_at     = excluded.updated_at""",

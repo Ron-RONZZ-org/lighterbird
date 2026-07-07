@@ -1,6 +1,6 @@
 """Command handlers for the ``!email signature`` domain.
 
-Manages per-account email signatures stored in the accounts table.
+Manages named signatures per account in the ``email_signatures`` table.
 """
 
 from __future__ import annotations
@@ -20,50 +20,43 @@ def signature_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     List signatures for all accounts, or filter by a specific account.
     """
     svc: EmailService = get_email_service()
-    accounts = svc.list_accounts()
-
     account_filter = flags.get("account", "")
     if account_filter:
-        accounts = [a for a in accounts if a.get("email", "") == account_filter]
-        if not accounts:
-            raise CommandValidationError(
-                f"Account not found: {account_filter}",
-                "Use !email account list to see available accounts.",
-            )
-
-    signatures = []
-    for acct in accounts:
-        email = acct.get("email", "")
-        name = acct.get("name", "")
-        sig = acct.get("signature", "") or ""
-        signatures.append({
-            "email": email,
-            "name": name,
-            "signature": sig,
-            "has_signature": bool(sig.strip()),
-        })
+        sigs = svc.signatures.list_signatures(account_email=account_filter)
+    else:
+        sigs = svc.signatures.list_signatures()
 
     return {
         "type": "status",
         "title": "Email Signatures",
-        "data": {"signatures": signatures},
+        "data": {"signatures": sigs},
     }
 
 
-@command("email.signature.add", interactive=True)
+@command("email.signature.add",
+         params=[
+             {"name": "email", "type": "string", "help": "Account email", "required": True},
+             {"name": "name", "type": "string", "help": "Unique signature name (e.g. work, personal)", "required": True},
+             {"name": "text", "type": "string", "help": "Signature text (plain text or HTML)"},
+         ],
+         interactive=True)
 def signature_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email signature add <email> <text>
+    """!email signature add <email> <name> <text>
 
-    Set the signature for an account.
+    Add a new named signature for an account.
+    ``<name>`` is a unique label (e.g. "work", "personal", "default").
     ``<text>`` is the signature content (plain text or HTML).
+
+    Name must be unique per account.
     """
     if len(remaining) < 2:
         raise CommandValidationError(
-            "Missing required args: <email> <text>",
-            "Usage: !email signature add user@example.com \"Sent from my phone\"",
+            "Missing required args: <email> <name> <text>",
+            "Usage: !email signature add user@example.com work \"Best regards\\nJohn\"",
         )
     email_addr = remaining[0]
-    text = " ".join(remaining[1:])
+    name = remaining[1]
+    text = " ".join(remaining[2:]) if len(remaining) > 2 else ""
 
     svc: EmailService = get_email_service()
     acct = svc.get_account(email_addr)
@@ -73,54 +66,95 @@ def signature_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
             "Use !email account list to see available accounts.",
         )
 
-    svc.accounts.update(email_addr, {"signature": text})
+    try:
+        sig = svc.signatures.create(email_addr, name, text)
+    except ValueError as e:
+        raise CommandValidationError(str(e))
+
     return {
         "type": "status",
-        "title": "Signature Set",
-        "data": {"email": email_addr, "signature": text},
+        "title": "Signature Added",
+        "data": sig,
     }
 
 
-@command("email.signature.modify", interactive=True)
+@command("email.signature.modify",
+         params=[
+             {"name": "uuid", "type": "uuid", "help": "Signature UUID", "required": True},
+         ],
+         flags=[
+             {"name": "name", "type": "string", "help": "New signature name"},
+             {"name": "text", "type": "string", "help": "New signature text"},
+         ],
+         interactive=True)
 def signature_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email signature modify <email> <text>
+    """!email signature modify <uuid> [--name NAME] [--text TEXT]
 
-    Update the signature for an account.
+    Update a signature's name and/or text by UUID.
     """
-    if len(remaining) < 2:
+    if not remaining:
         raise CommandValidationError(
-            "Missing required args: <email> <text>",
-            "Usage: !email signature modify user@example.com \"New signature text\"",
+            "Missing signature UUID.",
+            "Usage: !email signature modify <uuid> [--name NAME] [--text TEXT]",
         )
-    email_addr = remaining[0]
-    text = " ".join(remaining[1:])
+    uuid_ = remaining[0]
+    name = flags.get("name", None)
+    text = flags.get("text", None)
+
+    if name is None and text is None:
+        raise CommandValidationError(
+            "Nothing to change. Provide --name and/or --text.",
+        )
 
     svc: EmailService = get_email_service()
-    acct = svc.get_account(email_addr)
-    if not acct:
-        raise CommandValidationError(
-            f"Account not found: {email_addr}",
-            "Use !email account list to see available accounts.",
-        )
+    try:
+        sig = svc.signatures.update(uuid_, name=name, signature_text=text)
+    except ValueError as e:
+        raise CommandValidationError(str(e))
 
-    svc.accounts.update(email_addr, {"signature": text})
+    if not sig:
+        raise CommandValidationError(f"Signature not found: {uuid_}")
+
     return {
         "type": "status",
         "title": "Signature Updated",
-        "data": {"email": email_addr, "signature": text},
+        "data": sig,
     }
 
 
 @command("email.signature.delete")
 def signature_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email signature delete <email>
+    """!email signature delete <uuid>
 
-    Clear the signature for an account.
+    Delete a signature by UUID.
+    """
+    if not remaining:
+        raise CommandValidationError(
+            "Missing signature UUID.",
+            "Usage: !email signature delete <uuid>",
+        )
+    uuid_ = remaining[0]
+
+    svc: EmailService = get_email_service()
+    if svc.signatures.delete(uuid_):
+        return {"type": "status", "title": "Signature Deleted", "data": {"uuid": uuid_}}
+    raise CommandValidationError(f"Signature not found: {uuid_}")
+
+
+@command("email.signature.default")
+def signature_default(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!email signature default <email> [--name NAME]
+
+    Show or set the default signature for an account.
+    Without ``--name``, shows the current default.
+
+    The default is identified by the name ``default``.  This command
+    renames an existing signature to ``default``.
     """
     if not remaining:
         raise CommandValidationError(
             "Missing account email.",
-            "Usage: !email signature delete user@example.com",
+            "Usage: !email signature default user@example.com [--name NAME]",
         )
     email_addr = remaining[0]
 
@@ -132,9 +166,33 @@ def signature_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, A
             "Use !email account list to see available accounts.",
         )
 
-    svc.accounts.update(email_addr, {"signature": ""})
+    name_override = flags.get("name", None)
+    if name_override:
+        # Rename the named signature to "default" (removes old default via UNIQUE)
+        target = svc.signatures.get_by_name(email_addr, name_override)
+        if not target:
+            raise CommandValidationError(
+                f"Signature '{name_override}' not found for {email_addr}.",
+            )
+        old_default = svc.signatures.get_default(email_addr)
+        if old_default:
+            svc.signatures.update(old_default["uuid"], name=name_override)
+        svc.signatures.update(target["uuid"], name="default")
+        return {
+            "type": "status",
+            "title": "Default Signature Set",
+            "data": {"email": email_addr, "name": "default"},
+        }
+
+    default = svc.signatures.get_default(email_addr)
+    if not default:
+        return {
+            "type": "status",
+            "title": "No Default Signature",
+            "data": {"email": email_addr, "signature": ""},
+        }
     return {
         "type": "status",
-        "title": "Signature Deleted",
-        "data": {"email": email_addr},
+        "title": "Default Signature",
+        "data": default,
     }

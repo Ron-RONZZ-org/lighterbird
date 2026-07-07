@@ -29,58 +29,58 @@
   let contactSuggestions = $state([]); // email addresses from contacts
 
   // ── Signature state ────────────────────────────────────────────────
-  let accountSignatures = $state({}); // { email: signatureText }
+  let signatureList = $state([]); // [{uuid, name, signature_text, ...}]
   let useSignature = $state(true);
-  let signatureText = $state("");
+  let selectedSignatureName = $state("default");
+  let signaturePreview = $state("");
 
-  /** Load the signature for the currently selected account */
-  function loadAccountSignature(email) {
+  /** Load all signatures for the currently selected account */
+  function loadAccountSignatures(email) {
     if (!email) return;
-    // If we already have it cached, use it; otherwise fetch from API
-    if (email in accountSignatures) {
-      signatureText = accountSignatures[email];
-      useSignature = !!signatureText.trim();
-      return;
-    }
-    // Fetch via !email signature list --account <email>
-    fetch("/api/v1/email/accounts")
-      .then((r) => r.json())
-      .then((data) => {
-        const accts = data.accounts || [];
-        const found = accts.find((a) => a.email === email);
-        // We need the signature from the account, but it's not in AccountResponse
-        // So fetch via the command system instead
-        return fetch("/api/v1/command", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tokens: ["email", "signature", "list"],
-            flags: { account: email },
-          }),
-        });
-      })
+    fetch("/api/v1/command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tokens: ["email", "signature", "list"],
+        flags: { account: email },
+      }),
+    })
       .then((r) => r.json())
       .then((cmdData) => {
         const sigs = cmdData.data?.signatures || cmdData.signatures || [];
-        const found = sigs.find((s) => s.email === email);
-        const sig = found ? (found.signature || "") : "";
-        accountSignatures[email] = sig;
-        signatureText = sig;
-        useSignature = !!sig.trim();
+        signatureList = sigs;
+        if (sigs.length > 0) {
+          // Find default or first
+          const def = sigs.find((s) => s.name === "default") || sigs[0];
+          selectedSignatureName = def.name;
+          signaturePreview = def.signature_text || "";
+          useSignature = true;
+        } else {
+          signaturePreview = "";
+          useSignature = false;
+        }
       })
       .catch(() => {
-        // Silently fail - no signature available
-        signatureText = "";
+        // Silently fail — no signatures available
+        signatureList = [];
+        signaturePreview = "";
         useSignature = false;
       });
   }
 
-  // When account changes, load its signature
+  // When account changes, load its signatures
   $effect(() => {
     if (accountEmail) {
-      loadAccountSignature(accountEmail);
+      loadAccountSignatures(accountEmail);
     }
   });
+
+  // When the selected signature changes, update the preview
+  function onSignatureSelect(name) {
+    selectedSignatureName = name;
+    const found = signatureList.find((s) => s.name === name);
+    signaturePreview = found ? (found.signature_text || "") : "";
+  }
 
   // ── Load contacts for recipient suggestions ──────────────────────────
   $effect(() => {
@@ -242,8 +242,7 @@
     sending = true;
     try {
       if (accountEmail) saveLastUsedAccount(accountEmail);
-      // Resolve signature: if user unchecked, send --no-signature; if user edited, send override
-      const sigOverride = !useSignature ? "true" : (signatureText ? signatureText : "");
+      // Resolve signature: pass --signature-name, or --no-signature if disabled
       const flags = {
         ...(accountEmail ? { account: accountEmail } : {}),
         ...(ccList.length > 0 ? { cc: ccList.join(",") } : {}),
@@ -251,9 +250,9 @@
         priority,
         ...(bodyFormat !== "markdown" ? { [`body-format`]: bodyFormat } : {}),
         ...(saveAsSample === false ? { "no-save-sample": "true" } : {}),
-        // Signature: pass override text, or --no-signature if disabled
+        // Signature: pass --signature-name, or --no-signature if disabled
         ...(!useSignature ? { "no-signature": "true" } : {}),
-        ...(useSignature && signatureText ? { signature: signatureText } : {}),
+        ...(useSignature && selectedSignatureName ? { "signature-name": selectedSignatureName } : {}),
         // File attachments as proper --file flag (never in remaining/body)
         ...(attachmentFiles.length > 0 ? { file: attachmentFiles.map((att) => `${att.name}:${att.data}`).join(",") } : {}),
       };
@@ -377,9 +376,18 @@
           Attach signature
         </label>
         {#if useSignature}
-          <textarea class="ff-textarea sig-textarea" bind:value={signatureText}
-            rows="2" placeholder="Signature text (loaded from account)"></textarea>
-          <span class="toggle-hint">Leave as-is to use account's stored signature, or edit to override</span>
+          {#if signatureList.length > 0}
+            <select class="ff-input sig-select"
+              value={selectedSignatureName}
+              onchange={(e) => onSignatureSelect(e.target.value)}>
+              {#each signatureList as sig}
+                <option value={sig.name}>{sig.name}</option>
+              {/each}
+            </select>
+            <div class="sig-preview">{signaturePreview}</div>
+          {:else}
+            <p class="sig-empty">No signatures configured. Use <code>!email signature add</code> to create one.</p>
+          {/if}
         {/if}
       </div>
     {/snippet}
@@ -515,7 +523,18 @@
     display: flex; flex-direction: column; gap: 0.35rem;
   }
   .sig-toggle { font-size: 0.82rem; }
-  .sig-textarea { min-height: 3rem; font-size: 0.82rem; }
+  .sig-select { font-size: 0.82rem; max-width: 20rem; }
+  .sig-preview {
+    font-family: monospace; font-size: 0.78rem; color: #909090;
+    background: #1a1a2e; border: 1px solid #333; border-radius: 4px;
+    padding: 0.4rem 0.6rem; white-space: pre-wrap; max-height: 4rem;
+    overflow-y: auto;
+  }
+  .sig-empty {
+    font-family: monospace; font-size: 0.78rem; color: #707080;
+    font-style: italic;
+  }
+  .sig-empty code { background: #2a2a3e; padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.75rem; }
   .form-actions { display: flex; align-items: center; gap: 0.5rem; }
   .btn-draft {
     background: #2a2a3e;
