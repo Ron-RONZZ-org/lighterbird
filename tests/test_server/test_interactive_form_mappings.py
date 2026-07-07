@@ -135,6 +135,66 @@ def _extract_persistent_types(js: str) -> set[str]:
     return types
 
 
+def _extract_persistent_entries(js: str) -> list[tuple[str, str]]:
+    """Extract (regex_pattern, dataType) pairs from PERSISTENT_ENTRIES.
+
+    Matches lines like:
+        [/^!(email\\s+)?account\\s+list\\s*$/i, "accounts"],   (ends with $/i)
+        [/^!contacts?\\s+(list|search)\\b/i, "contacts-list"],  (ends with \\b/i)
+    Returns the regex source (between /^ and $/i or \\b/i) and the data type.
+    """
+    entries: list[tuple[str, str]] = []
+    start = js.find("const PERSISTENT_ENTRIES")
+    if start < 0:
+        return entries
+    brace_start = js.find("[", start)
+    if brace_start < 0:
+        return entries
+    brace_end = js.find("];", brace_start)
+    if brace_end < 0:
+        return entries
+    body = js[brace_start + 1 : brace_end]
+    for line in body.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        # Try patterns ending with $/i (plain dollar sign, not backslash-dollar)
+        m = re.search(r'/\^(.+?)\$/i', line)
+        if not m:
+            # Try patterns ending with \\b/i (backslash-b, word boundary)
+            m = re.search(r'/\^(.+?)\\b/i', line)
+        if m:
+            raw_pattern = m.group(1)
+            # Extract data type from the rest of the line
+            type_m = re.search(r'"([a-z][a-z0-9-]+)"', line)
+            data_type = type_m.group(1) if type_m else "unknown"
+            entries.append((raw_pattern, data_type))
+    return entries
+
+
+def _search_pattern_matches_command(pattern_src: str, cmd_input: str) -> bool:
+    """Check if a JS regex pattern source matches a command input.
+
+    The JS pattern source is between /^ and $/i (or \\b/i) anchors.
+    It uses JS regex syntax: \\s+ for whitespace, \\b for word boundary,
+    ? for optional groups, etc.
+    """
+    # The pattern source comes from the JS file where \\s+ is literal
+    # backslash-s-plus. Python reads it as \s+ (which is what we want
+    # in Python regex too).
+    # However, we need to be careful: JavaScript regex \\b becomes
+    # Python regex \\b which is different! In JS, \\b is word boundary.
+    # In Python, \\b is also word boundary (in the pattern string).
+    # But the JavaScript logical OR pipes | for alternation should work
+    # the same in Python.
+    try:
+        # Add anchors ^ and $ (the JS source was between them)
+        regex = re.compile(pattern_src, re.IGNORECASE)
+        return bool(regex.search(cmd_input))
+    except re.error:
+        return False
+
+
 def _dot_to_space(path: str) -> str:
     return path.replace(".", " ")
 
@@ -229,6 +289,9 @@ class TestInteractiveFormMappings:
         self.persistent_types = _extract_persistent_types(
             _read_js("web/src/lib/persistentTypes.js"),
         )
+        self.persistent_entries = _extract_persistent_entries(
+            _read_js("web/src/lib/persistentTypes.js"),
+        )
 
     def test_all_backend_interactive_known(self) -> None:
         """Every backend interactive command is in our known sets."""
@@ -306,6 +369,52 @@ class TestInteractiveFormMappings:
         if mismatches:
             pytest.fail(
                 "Mismatches in _inferCommandPath():\n" + "\n".join(mismatches),
+            )
+
+    def test_list_commands_in_persistent_entries(self) -> None:
+        """Every list command has a matching pattern in PERSISTENT_ENTRIES.
+
+        This ensures ``detectPersistentType()`` returns a valid type for
+        every ``!_LIST_COMMANDS`` input.
+        """
+        missing = []
+        for cmd in sorted(_LIST_COMMANDS):
+            space_path = _dot_to_space(cmd)
+            cmd_input = f"!{space_path}"
+            matched = any(
+                _search_pattern_matches_command(pattern, cmd_input)
+                for pattern, _ in self.persistent_entries
+            )
+            if not matched:
+                missing.append(f"{cmd_input} ({cmd})")
+        if missing:
+            pytest.fail(
+                f"List commands missing from PERSISTENT_ENTRIES in "
+                f"detectPersistentType(): {missing}\n"
+                f"Add entries to web/src/lib/persistentTypes.js",
+            )
+
+    def test_persistent_entry_types_have_token_map(self) -> None:
+        """Every list-related dataType in PERSISTENT_ENTRIES has a
+        TOKEN_TYPE_MAP entry."""
+        # Collect the dataTypes from PERSISTENT_ENTRIES that match list commands
+        persistent_list_types: set[str] = set()
+        for cmd in _LIST_COMMANDS:
+            space_path = _dot_to_space(cmd)
+            cmd_input = f"!{space_path}"
+            for pattern, data_type in self.persistent_entries:
+                if _search_pattern_matches_command(pattern, cmd_input):
+                    persistent_list_types.add(data_type)
+        # Check these types have a TOKEN_TYPE_MAP entry somewhere
+        map_lookup = {v: k for k, v in self.token_type_map.items()}
+        missing = []
+        for dt in sorted(persistent_list_types):
+            if dt not in map_lookup:
+                missing.append(dt)
+        if missing:
+            pytest.fail(
+                f"List-related PERSISTENT_ENTRIES types not in TOKEN_TYPE_MAP: {missing}\n"
+                f"Add entries to web/src/lib/persistentTypes.js",
             )
 
     def test_list_commands_in_token_type_map(self) -> None:
