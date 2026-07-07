@@ -1,18 +1,15 @@
-"""Local embedding via fastembed — offline fallback for style RAG.
+"""Local embedding via fastembed.
 
-Resolution order:
-1. If the configured LLM provider supports ``/embeddings`` → use it
-   (no extra deps, any language the API supports).
-2. Else if ``fastembed`` is installed → use the configured local model.
-3. Else → embedding is unavailable (cowrite uses style guide only).
+Resolution order (in ``embed()``):
+1. LLM provider ``/embeddings`` endpoint (if available).
+2. fastembed local model (always bundled in desktop builds; model
+   weights downloaded on demand from HuggingFace Hub).
+3. ``None`` if the model weights haven't been downloaded yet.
 
-Usage::
-
-    from lighterbird.core.embedding import embed, get_status, install
-
-    status = get_status()
-    if status["status"] == "ready":
-        vectors = await embed(["text to embed"])
+Status states:
+- ``api-available`` — LLM provider supports embeddings.
+- ``local-ready`` — fastembed model weights cached and ready.
+- ``model-needed`` — fastembed is installed but no weights downloaded.
 """
 
 from __future__ import annotations
@@ -20,10 +17,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import shutil
-import subprocess
-import sys
 from typing import Any
+
+import fastembed  # noqa: F401  # always available in desktop builds
+from fastembed import TextEmbedding
 
 from lightercore.exceptions import AIError
 
@@ -54,40 +51,33 @@ LOCAL_MODELS: dict[str, dict[str, Any]] = {
     },
 }
 
-_FASTEMBED_AVAILABLE: bool | None = None
 _MODEL_INSTANCE: Any = None
 
 
 # ── Status ────────────────────────────────────────────────────────────────
 
 
-def _check_fastembed() -> bool:
-    """Check if ``fastembed`` is importable (cached)."""
-    global _FASTEMBED_AVAILABLE
-    if _FASTEMBED_AVAILABLE is None:
-        try:
-            import fastembed  # noqa: F401
-            _FASTEMBED_AVAILABLE = True
-        except ImportError:
-            _FASTEMBED_AVAILABLE = False
-    return _FASTEMBED_AVAILABLE
+def _model_is_downloaded() -> bool:
+    """Check if the configured model's weights are cached locally."""
+    try:
+        model = TextEmbedding(model_name=_resolve_model_name(), max_length=512)
+        # fastembed raises if model not cached; if it succeeds, weights exist
+        list(model.embed(["ping"]))
+        return True
+    except Exception:
+        return False
 
 
 def get_status() -> dict[str, Any]:
     """Return the current embedding status.
 
     Returns:
-        Dict with keys:
-        - ``status``: ``"api-available"``, ``"local-ready"``, or
-          ``"not-installed"``
-        - ``model``: Current model name / HF ID (if ready).
-        - ``dim``: Embedding dimension (if known).
-        - ``models``: List of installable local models.
+        Dict with keys ``status``, ``model``, ``dim``, ``models``.
     """
-    # 1. Check if the provider has a working embed()
     from lighterbird.core.ai import get_provider as get_core_provider
     from lighterbird.server.llm.provider import get_provider as get_wrapper
 
+    # 1. Check if the LLM provider supports embeddings
     try:
         wrapper = get_wrapper()
         if wrapper.is_available():
@@ -101,31 +91,29 @@ def get_status() -> dict[str, Any]:
     except Exception:
         pass
 
-    # 2. Check local fastembed
-    if _check_fastembed():
-        model_name = _current_local_model()
-        info = LOCAL_MODELS.get(model_name) or LOCAL_MODELS.get(
-            os.environ.get("LIGHTERBIRD_EMBED_MODEL", "bge-small-en-v1.5")
-        )
+    # 2. Check if local model weights are cached
+    if _model_is_downloaded():
+        info = _current_model_info()
         return {
             "status": "local-ready",
-            "model": (info or {}).get("hf_id", model_name),
+            "model": (info or {}).get("hf_id", "unknown"),
             "dim": (info or {}).get("dim"),
             "models": list(LOCAL_MODELS.values()),
         }
 
+    # 3. Model not downloaded yet
     return {
-        "status": "not-installed",
+        "status": "model-needed",
         "model": None,
         "dim": None,
         "models": list(LOCAL_MODELS.values()),
     }
 
 
-def _current_local_model() -> str | None:
-    if _MODEL_INSTANCE is not None:
-        return getattr(_MODEL_INSTANCE, "model_name", None)
-    return None
+def _current_model_info() -> dict[str, Any] | None:
+    """Return info dict for the currently configured model."""
+    name = os.environ.get("LIGHTERBIRD_EMBED_MODEL", "bge-small-en-v1.5")
+    return LOCAL_MODELS.get(name)
 
 
 # ── Embed ─────────────────────────────────────────────────────────────────
@@ -135,19 +123,19 @@ async def embed(texts: list[str]) -> list[list[float]] | None:
     """Embed texts using the best available method.
 
     1. LLM provider ``/embeddings`` endpoint.
-    2. fastembed local model.
+    2. fastembed local model (weights must be cached).
     3. ``None`` if neither is available.
 
     Args:
         texts: Text strings to embed.
 
     Returns:
-        Float vectors, one per input, or ``None``.
+        Float vectors or ``None``.
     """
-    # 1. Try API provider
     from lighterbird.core.ai import get_provider as get_core_provider
     from lighterbird.server.llm.provider import get_provider as get_wrapper
 
+    # 1. Try API provider
     try:
         wrapper = get_wrapper()
         if wrapper.is_available():
@@ -162,11 +150,10 @@ async def embed(texts: list[str]) -> list[list[float]] | None:
         pass
 
     # 2. Try local fastembed
-    if _check_fastembed():
-        try:
-            return await _local_embed(texts)
-        except Exception:
-            logger.warning("Local embed failed", exc_info=True)
+    try:
+        return await _local_embed(texts)
+    except Exception:
+        logger.debug("Local embed failed (model not downloaded?)")
 
     return None
 
@@ -176,11 +163,8 @@ async def _local_embed(texts: list[str]) -> list[list[float]]:
     global _MODEL_INSTANCE
 
     if _MODEL_INSTANCE is None:
-        from fastembed import TextEmbedding
-
-        model_name = _resolve_model_name()
         _MODEL_INSTANCE = TextEmbedding(
-            model_name=model_name,
+            model_name=_resolve_model_name(),
             max_length=512,
         )
 
@@ -191,11 +175,14 @@ async def _local_embed(texts: list[str]) -> list[list[float]]:
     return docs  # type: ignore[return-value]
 
 
-# ── Install ───────────────────────────────────────────────────────────────
+# ── Install (download model weights; no pip needed) ─────────────────────
 
 
 def install(model_name: str) -> dict[str, Any]:
-    """Install fastembed and download the specified model.
+    """Download the specified model weights from HuggingFace Hub.
+
+    In desktop builds, fastembed is already bundled; only the model
+    weights need to be fetched on first use.
 
     Args:
         model_name: Key in :data:`LOCAL_MODELS`.
@@ -213,50 +200,22 @@ def install(model_name: str) -> dict[str, Any]:
         )
 
     info = LOCAL_MODELS[model_name]
-
-    # Step 1: pip install fastembed
-    logger.info("Installing fastembed package...")
-    _run_pip_install("fastembed")
-    logger.info("fastembed installed.")
-
-    # Step 2: pre-download the model
     logger.info("Downloading model %s (%s)...", info["hf_id"], info["label"])
-    _pre_download_model(info["hf_id"])
+    _download_model(info["hf_id"])
     logger.info("Model %s ready.", info["hf_id"])
 
-    # Reset cached availability so subsequent calls detect the new install
-    global _FASTEMBED_AVAILABLE, _MODEL_INSTANCE
-    _FASTEMBED_AVAILABLE = None
+    # Reset cached instance so next embed uses the new model
+    global _MODEL_INSTANCE
     _MODEL_INSTANCE = None
 
     return {
         "success": True,
-        "message": f"Installed {info['hf_id']} ({info['size_mb']} MB, {info['dim']} dim)",
+        "message": f"Downloaded {info['hf_id']} ({info['size_mb']} MB, {info['dim']} dim)",
     }
 
 
-def _run_pip_install(package: str) -> None:
-    """Run pip install, trying uv first then pip."""
-    uv = shutil.which("uv")
-    if uv:
-        try:
-            subprocess.run(
-                [uv, "pip", "install", package],
-                check=True, capture_output=True, timeout=120,
-            )
-            return
-        except subprocess.CalledProcessError:
-            logger.warning("uv pip install failed, falling back to pip")
-    subprocess.run(
-        [sys.executable, "-m", "pip", "install", package],
-        check=True, capture_output=True, timeout=120,
-    )
-
-
-def _pre_download_model(hf_id: str) -> None:
-    """Pre-download model so first embed is instant."""
-    from fastembed import TextEmbedding
-
+def _download_model(hf_id: str) -> None:
+    """Pre-download model weights so first embed call is instant."""
     model = TextEmbedding(model_name=hf_id, max_length=512)
     list(model.embed(["warmup"]))
 
