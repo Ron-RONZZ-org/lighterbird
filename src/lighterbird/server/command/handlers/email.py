@@ -64,9 +64,10 @@ def email_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "  !email account modify    — Modify an email account\n"
                 "  !email account delete    — Delete an email account\n"
                 "  !email signature list    — List account signatures\n"
-                "  !email signature add     — Set a signature for an account\n"
-                "  !email signature modify  — Modify an account signature\n"
-                "  !email signature delete  — Delete an account signature\n"
+                "  !email signature add     — Add a named signature for an account\n"
+                "  !email signature modify  — Modify a signature by UUID\n"
+                "  !email signature delete  — Delete a signature by UUID\n"
+                "  !email signature default — Show/set default signature\n"
                 "  !email sieve list        — List Sieve scripts\n"
                 "  !email sieve add         — Add a Sieve script\n"
                 "  !email sieve modify      — Modify a Sieve script\n"
@@ -203,7 +204,7 @@ def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
     return {
         "type": "email-list",
-        "title": f"Inbox{title_suffix}",
+        "title": f"Email{title_suffix}",
         "data": {
             "messages": messages,
             "total": len(messages),

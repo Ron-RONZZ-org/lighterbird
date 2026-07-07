@@ -98,9 +98,11 @@ class MsgSendComposeMixin:
         att_list = attachments or []
         smtp_port = acct.get("smtp_port", 587)
 
-        # Use account's stored signature if no override provided
+        # Use account's default named signature if no override provided
         if signature is None:
-            signature = acct.get("signature", "") or ""
+            from lighterbird.email.services.signatures import SignatureService
+            sig_svc = SignatureService(self.db)
+            signature = sig_svc.resolve_text(account_email)
 
         msg_uuid = str(uuid_mod.uuid4())
         message_id = str(uuid_mod.uuid4())

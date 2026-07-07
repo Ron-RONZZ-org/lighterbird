@@ -21,7 +21,8 @@ from lighterbird.server.deps import get_email_service
              {"name": "bcc", "type": "string", "help": "BCC recipients (comma-separated)"},
              {"name": "priority", "type": "string", "help": "Priority 1-5 (default 3)"},
              {"name": "body-format", "type": "string", "help": "Body format: markdown, html, or plain"},
-             {"name": "signature", "type": "string", "help": "Override account signature"},
+             {"name": "signature", "type": "string", "help": "Override account signature text"},
+             {"name": "signature-name", "type": "string", "help": "Use a named signature from the account"},
              {"name": "no-signature", "type": "bool", "help": "Send without any signature"},
              {"name": "file", "type": "string", "help": "Attachment (name:base64)"},
              {"name": "no-save-sample", "type": "bool", "help": "Do not save as writing sample"},
@@ -29,16 +30,18 @@ from lighterbird.server.deps import get_email_service
 def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email send <to> <subject> [body] [--account <email>] [--cc email]
                     [--bcc email] [--priority N] [--body-format fmt]
-                    [--signature <text>] [--no-signature]
+                    [--signature <text>] [--signature-name <name>]
+                    [--no-signature]
                     [--file <name:base64>]
 
     Sends an email.  ``<to>`` and ``<subject>`` are required; ``<body>``
     is optional.  Use ``--cc`` / ``--bcc`` for additional recipients,
     ``--priority`` (1-5) to set importance, ``--body-format`` to choose
     markdown (default), html, or plain, ``--signature`` to override the
-    account's stored signature, ``--no-signature`` to send without any
-    signature, and ``--file`` for attachments
-    (repeatable, format: ``<filename>:<base64>``).
+    account's stored signature with inline text, ``--signature-name`` to
+    use a named signature from the account's signature library,
+    ``--no-signature`` to send without any signature, and ``--file`` for
+    attachments (repeatable, format: ``<filename>:<base64>``).
     """
     if len(remaining) < 2:
         raise CommandValidationError(
@@ -56,6 +59,7 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     body_format = flags.get("body-format", "markdown")
     file_flags = flags.get("file", "")
     signature_override = flags.get("signature", None)
+    signature_name = flags.get("signature-name", None)
     no_signature = "no-signature" in flags
     save_as_sample = flags.get("no-save-sample", "").lower() not in ("1", "true", "yes")
     svc: EmailService = get_email_service()
@@ -103,6 +107,10 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     signature_value: str | None = None
     if no_signature:
         signature_value = ""  # empty string = send without signature
+    elif signature_name is not None:
+        # Look up named signature from the account
+        sig_text = svc.signatures.resolve_text(account_email, name=signature_name)
+        signature_value = sig_text
     elif signature_override is not None:
         signature_value = signature_override
 
