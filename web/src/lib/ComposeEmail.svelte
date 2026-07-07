@@ -28,6 +28,60 @@
   let accounts = $state([]);
   let contactSuggestions = $state([]); // email addresses from contacts
 
+  // ── Signature state ────────────────────────────────────────────────
+  let accountSignatures = $state({}); // { email: signatureText }
+  let useSignature = $state(true);
+  let signatureText = $state("");
+
+  /** Load the signature for the currently selected account */
+  function loadAccountSignature(email) {
+    if (!email) return;
+    // If we already have it cached, use it; otherwise fetch from API
+    if (email in accountSignatures) {
+      signatureText = accountSignatures[email];
+      useSignature = !!signatureText.trim();
+      return;
+    }
+    // Fetch via !email signature list --account <email>
+    fetch("/api/v1/email/accounts")
+      .then((r) => r.json())
+      .then((data) => {
+        const accts = data.accounts || [];
+        const found = accts.find((a) => a.email === email);
+        // We need the signature from the account, but it's not in AccountResponse
+        // So fetch via the command system instead
+        return fetch("/api/v1/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tokens: ["email", "signature", "list"],
+            flags: { account: email },
+          }),
+        });
+      })
+      .then((r) => r.json())
+      .then((cmdData) => {
+        const sigs = cmdData.data?.signatures || cmdData.signatures || [];
+        const found = sigs.find((s) => s.email === email);
+        const sig = found ? (found.signature || "") : "";
+        accountSignatures[email] = sig;
+        signatureText = sig;
+        useSignature = !!sig.trim();
+      })
+      .catch(() => {
+        // Silently fail - no signature available
+        signatureText = "";
+        useSignature = false;
+      });
+  }
+
+  // When account changes, load its signature
+  $effect(() => {
+    if (accountEmail) {
+      loadAccountSignature(accountEmail);
+    }
+  });
+
   // ── Load contacts for recipient suggestions ──────────────────────────
   $effect(() => {
     contactsApi.list({ limit: 100 }).then((data) => {
@@ -188,6 +242,8 @@
     sending = true;
     try {
       if (accountEmail) saveLastUsedAccount(accountEmail);
+      // Resolve signature: if user unchecked, send --no-signature; if user edited, send override
+      const sigOverride = !useSignature ? "true" : (signatureText ? signatureText : "");
       const flags = {
         ...(accountEmail ? { account: accountEmail } : {}),
         ...(ccList.length > 0 ? { cc: ccList.join(",") } : {}),
@@ -195,6 +251,9 @@
         priority,
         ...(bodyFormat !== "markdown" ? { [`body-format`]: bodyFormat } : {}),
         ...(saveAsSample === false ? { "no-save-sample": "true" } : {}),
+        // Signature: pass override text, or --no-signature if disabled
+        ...(!useSignature ? { "no-signature": "true" } : {}),
+        ...(useSignature && signatureText ? { signature: signatureText } : {}),
         // File attachments as proper --file flag (never in remaining/body)
         ...(attachmentFiles.length > 0 ? { file: attachmentFiles.map((att) => `${att.name}:${att.data}`).join(",") } : {}),
       };
@@ -308,6 +367,23 @@
     </label>
     <span class="toggle-hint">Your writing style will be used to improve LLM suggestions</span>
   </div>
+
+  <!-- Signature -->
+  <FormField label="Signature">
+    {#snippet children()}
+      <div class="signature-area">
+        <label class="toggle-label sig-toggle">
+          <input type="checkbox" bind:checked={useSignature} />
+          Attach signature
+        </label>
+        {#if useSignature}
+          <textarea class="ff-textarea sig-textarea" bind:value={signatureText}
+            rows="2" placeholder="Signature text (loaded from account)"></textarea>
+          <span class="toggle-hint">Leave as-is to use account's stored signature, or edit to override</span>
+        {/if}
+      </div>
+    {/snippet}
+  </FormField>
 
   <!-- File attachments -->
   <FormField label="Attachments">
@@ -434,6 +510,12 @@
     font-family: monospace; font-size: 0.72rem; color: #707080;
     margin-left: 1.2rem;
   }
+
+  .signature-area {
+    display: flex; flex-direction: column; gap: 0.35rem;
+  }
+  .sig-toggle { font-size: 0.82rem; }
+  .sig-textarea { min-height: 3rem; font-size: 0.82rem; }
   .form-actions { display: flex; align-items: center; gap: 0.5rem; }
   .btn-draft {
     background: #2a2a3e;

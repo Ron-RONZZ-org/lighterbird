@@ -96,6 +96,7 @@ class SendRequest(BaseModel):
     priority: int = 3
     body_format: str = "markdown"  # "markdown" | "html" | "plain"
     attachments: list[str] = []  # base64-encoded file content strings
+    signature: str | None = None  # override signature; None = use account default
     save_as_sample: bool = True  # save as writing sample for LLM style learning
 
     model_config = {"extra": "forbid"}

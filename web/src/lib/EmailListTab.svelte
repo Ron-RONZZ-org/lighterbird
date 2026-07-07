@@ -414,7 +414,7 @@
   {#if sel.confirmDelete}
     <ConfirmDialog
       message="Delete {sel.numSelected} message{sel.numSelected !== 1 ? 's' : ''}?"
-      onConfirm={async () => { sel.confirmDelete = false; await deleteSelected([...sel.selectedKeys], refreshList); }}
+      onConfirm={async () => { await sel.deleteSelected(); sel.confirmDelete = false; }}
       onDismiss={() => { sel.confirmDelete = false; }}
     />
   {/if}

@@ -50,9 +50,15 @@
     {emailCopy.copiedKey === msg.from_addr ? "Copied!" : truncate(msg.from_addr || "", 24)}
   </span>
   {#if msg.priority === 1}
-    <span class="priority high" title="Highest priority">‼</span>
+    <span class="priority high" title="Priority 1 — Highest">‼</span>
   {:else if msg.priority === 2}
-    <span class="priority" title="High priority">❗</span>
+    <span class="priority high" title="Priority 2 — High">❗</span>
+  {:else if msg.priority === 5}
+    <span class="priority low" title="Priority 5 — Lowest">⬇</span>
+  {:else if msg.priority === 4}
+    <span class="priority low" title="Priority 4 — Low">↓</span>
+  {:else}
+    <span class="priority normal" title="Priority 3 — Normal">–</span>
   {/if}
   <span class="subject" class:unread={!msg.is_read}>{truncate(msg.subject || "(no subject)", 40)}</span>
   <span class="date">{formatListItemDate(msg.received_at)}</span>
@@ -123,8 +129,10 @@
     white-space: nowrap;
   }
   .subject.unread { font-weight: 600; color: #e0e0e0; }
-  .priority { font-size: 0.75rem; flex-shrink: 0; margin-right: 0.15rem; opacity: 0.85; }
+  .priority { font-size: 0.75rem; flex-shrink: 0; margin-right: 0.2rem; opacity: 0.85; min-width: 0.8rem; text-align: center; }
   .priority.high { color: #e06060; opacity: 1; }
+  .priority.low { color: #707090; opacity: 0.7; }
+  .priority.normal { color: #5a5a7a; opacity: 0.5; }
   .date {
     color: var(--clr-muted);
     min-width: 6rem;
