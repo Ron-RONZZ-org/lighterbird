@@ -20,6 +20,7 @@ from lighterbird.server.routes.command import router as command_router
 from lighterbird.server.routes.contacts import router as contacts_router
 from lighterbird.server.routes.cowrite import router as cowrite_router
 from lighterbird.server.routes.drafts import router as drafts_router
+from lighterbird.server.routes.embed import router as embed_router
 from lighterbird.server.routes.email import router as email_router
 from lighterbird.server.routes.email_actions import router as email_actions_router
 from lighterbird.server.routes.email_sieve import router as email_sieve_router
@@ -79,6 +80,7 @@ def create_app(static_dir: str | Path | None = None) -> FastAPI:
     app.include_router(profiles_router)
     app.include_router(prompt_commands_router)
     app.include_router(cowrite_router)
+    app.include_router(embed_router)
     app.include_router(tags_router)
 
     # ── Static files (Svelte SPA) ────────────────────────────────────────

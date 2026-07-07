@@ -251,6 +251,9 @@ async def cowrite(
             - ``revised``: ``{field: revised_text}``
             - ``original``: ``{field: original_text}``
             - ``session_id``: str
+        Or, if embedding is unavailable and no writing samples exist:
+            - ``_embed_required``: ``True``
+            - ``models``: ``list`` of installable embedding models
 
     Raises:
         RuntimeError: If LLM is not configured or call fails.
@@ -262,6 +265,13 @@ async def cowrite(
 
     # Gather context
     context = gather_context(form_type, fields) if context_mode == "auto" else {}
+
+    # If embedding is unavailable and no samples exist, tell the frontend
+    if context.get("_embed_required"):
+        return {
+            "_embed_required": True,
+            "models": context.get("models", []),
+        }
 
     # Build system prompt: protocol + optional style
     style_prompt = load_cowrite_style()

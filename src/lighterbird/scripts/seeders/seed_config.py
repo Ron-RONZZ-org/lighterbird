@@ -24,7 +24,8 @@ def _seed_llm_config(creds: dict[str, str]) -> None:
         "provider_type": "openai",
         "api_key": api_key,
         "base_url": "https://api.deepseek.com",
-        "model": "deepseek-chat",
+        "model": "deepseek-v4-flash",
+        "embedding_model": "",
         "temperature": 0.7,
         "max_tokens": 4096,
     }

@@ -67,6 +67,8 @@ export function createCowrite(opts) {
   let fieldEdits = $state([]);
   /** @type {string} */
   let sessionId = $state("");
+  /** @type {Object|null} */
+  let embedRequired = $state(null);  // {models: [...]} when embed needed
 
   /**
    * Open the co-writing panel (even without an instruction yet).
@@ -113,6 +115,14 @@ export function createCowrite(opts) {
 
       /** @type {CowriteResult} */
       const result = await resp.json();
+
+      // Embedding not available — signal parent to show install dialog
+      if (result._embed_required) {
+        embedRequired = { models: result.models || [] };
+        isLoading = false;
+        return;
+      }
+
       sessionId = result.session_id;
 
       /** @type {FieldEdit[]} */
@@ -195,6 +205,7 @@ export function createCowrite(opts) {
     get fieldEdits() { return fieldEdits; },
     get sessionId() { return sessionId; },
     get hasUnprocessed() { return hasUnprocessed; },
+    get embedRequired() { return embedRequired; },
     startCowrite,
     openPanel,
     acceptAll,
