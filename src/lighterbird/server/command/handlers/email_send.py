@@ -41,6 +41,7 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     in_reply_to = flags.get("in-reply-to", "")
     body_format = flags.get("body-format", "markdown")
     file_flags = flags.get("file", "")
+    save_as_sample = flags.get("no-save-sample", "").lower() not in ("1", "true", "yes")
     svc: EmailService = get_email_service()
 
     # If no account specified, pick the first one
@@ -86,7 +87,8 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                             cc=cc_list, bcc=bcc_list, priority=priority,
                             body_format=body_format,
                             attachments=attachments,
-                            in_reply_to=in_reply_to or None)
+                            in_reply_to=in_reply_to or None,
+                            save_as_sample=save_as_sample)
     if result.get("status") == "queued":
         return {"type": "status", "title": "Queued for Delivery",
                 "data": {"to": to_str, "subject": subject, "folder": "Outbox",

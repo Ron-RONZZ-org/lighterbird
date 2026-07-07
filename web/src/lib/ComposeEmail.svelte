@@ -19,6 +19,7 @@
   let priority = $state(_initial.priority || "3");
   let bodyFormat = $state("markdown"); // "markdown" | "html" | "plain"
   let attachmentFiles = $state([]); // Array of {name, data} (base64)
+  let saveAsSample = $state(true); // save as writing sample for LLM style learning
   let sending = $state(false);
   let savingDraft = $state(false);
   let draftSaved = $state(false);
@@ -130,6 +131,7 @@
     || priority !== (_initial.priority || "3")
     || bodyFormat !== "markdown"
     || attachmentFiles.length > 0
+    || saveAsSample !== true
   );
   $effect(() => { onDirtyChange(dirty); });
 
@@ -191,6 +193,7 @@
         ...(bccList.length > 0 ? { bcc: bccList.join(",") } : {}),
         priority,
         ...(bodyFormat !== "markdown" ? { [`body-format`]: bodyFormat } : {}),
+        ...(saveAsSample === false ? { "no-save-sample": "true" } : {}),
         // File attachments as proper --file flag (never in remaining/body)
         ...(attachmentFiles.length > 0 ? { file: attachmentFiles.map((att) => `${att.name}:${att.data}`).join(",") } : {}),
       };
@@ -296,6 +299,15 @@
     {/snippet}
   </FormField>
 
+  <!-- Writing sample opt-out -->
+  <div class="writing-sample-toggle">
+    <label class="toggle-label">
+      <input type="checkbox" bind:checked={saveAsSample} />
+      Save as writing sample for style learning
+    </label>
+    <span class="toggle-hint">Your writing style will be used to improve LLM suggestions</span>
+  </div>
+
   <!-- File attachments -->
   <FormField label="Attachments">
     {#snippet children()}
@@ -395,6 +407,20 @@
   .att-remove:hover { color: #cc6a6a; }
   .multi-row { align-items: flex-start; }
   .multi-field-wrapper { position: relative; }
+  .writing-sample-toggle {
+    display: flex; flex-direction: column; gap: 0.15rem;
+    padding: 0.4rem 0;
+  }
+  .toggle-label {
+    display: flex; align-items: center; gap: 0.4rem;
+    font-family: monospace; font-size: 0.82rem; color: #b0b0c0;
+    cursor: pointer;
+  }
+  .toggle-label input { accent-color: #5a5a8a; cursor: pointer; }
+  .toggle-hint {
+    font-family: monospace; font-size: 0.72rem; color: #707080;
+    margin-left: 1.2rem;
+  }
   .form-actions { display: flex; align-items: center; gap: 0.5rem; }
   .btn-draft {
     background: #2a2a3e;

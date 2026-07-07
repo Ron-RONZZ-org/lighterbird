@@ -34,6 +34,7 @@ def send_email(
             req.account_email, req.to, req.subject, req.body,
             cc=req.cc, bcc=req.bcc, priority=req.priority,
             body_format=req.body_format, attachments=req.attachments,
+            save_as_sample=req.save_as_sample,
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))

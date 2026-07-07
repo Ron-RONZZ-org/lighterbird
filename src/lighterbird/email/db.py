@@ -127,6 +127,21 @@ _MIGRATE_ACCOUNTS_MANAGESIEVE_TLS = """
 ALTER TABLE accounts ADD COLUMN managesieve_use_tls INTEGER NOT NULL DEFAULT 1;
 """
 
+_WRITING_SAMPLES_TABLE = """
+CREATE TABLE IF NOT EXISTS writing_samples (
+    uuid            TEXT PRIMARY KEY,
+    source_uuid     TEXT NOT NULL,
+    source_domain   TEXT NOT NULL DEFAULT 'email',
+    title           TEXT,
+    body            TEXT NOT NULL,
+    body_format     TEXT DEFAULT 'markdown',
+    language        TEXT DEFAULT 'en',
+    word_count      INTEGER DEFAULT 0,
+    embedding_dim   INTEGER,
+    registered_at   TEXT NOT NULL
+);
+"""
+
 _DROP_LEGACY_ALDONAJXOJ = "DROP TABLE IF EXISTS aldonajxoj;"
 
 _SYNC_BACKLOG_TABLE = """
@@ -187,6 +202,7 @@ _SCHEMA_STATEMENTS: list[str] = [
     _CREATE_FOLDERS,
     _CREATE_MESSAGES,
     _CREATE_ATTACHMENTS,
+    _WRITING_SAMPLES_TABLE,
     _DROP_LEGACY_ALDONAJXOJ,
     _SYNC_BACKLOG_TABLE,
     _SEND_QUEUE_TABLE,
@@ -213,12 +229,51 @@ def _email_db_path() -> Path:
     return data_dir() / "email.db"
 
 
+def _load_sqlite_vec(conn: sqlite3.Connection) -> None:
+    """Load the sqlite-vec extension on a connection (best-effort)."""
+    try:
+        import sqlite_vec  # type: ignore[import-untyped]
+
+        conn.enable_load_extension(True)
+        sqlite_vec.load(conn)
+        conn.enable_load_extension(False)
+    except Exception:
+        pass  # sqlite-vec not installed — writing samples work without vectors
+
+
+def ensure_vec_table(db: LighterbirdDB, dim: int = 1536) -> None:
+    """Create the ``vec_samples`` virtual table if it does not exist.
+
+    Safe to call multiple times — the ``IF NOT EXISTS`` check is done
+    at the SQL level.  The dimension is fixed at table creation time;
+    changing it requires dropping and recreating the table.
+
+    Args:
+        db: Database connection.
+        dim: Embedding dimensionality (default 1536 for OpenAI
+            ``text-embedding-3-small``).
+    """
+    # Try vec0 first; fall back to a stub table if sqlite-vec not loaded
+    try:
+        db.execute(
+            f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_samples "
+            f"USING vec0(embedding float[{dim}])"
+        )
+    except Exception:
+        # sqlite-vec not loaded — create a stub so code doesn't crash
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS vec_samples ("
+            "  rowid INTEGER PRIMARY KEY"
+            ")"
+        )
+
+
 def get_db(path: Path | str | None = None) -> LighterbirdDB:
     """Get the email database connection with schema initialized."""
     from sqlite3 import OperationalError
 
     resolved = Path(path) if path else _email_db_path()
-    db = LighterbirdDB(resolved)
+    db = LighterbirdDB(resolved, after_connect=_load_sqlite_vec)
     for stmt in _SCHEMA_STATEMENTS:
         try:
             db.execute(stmt)

@@ -7,6 +7,8 @@ domain-specific system prompt and default model differ.
 
 from __future__ import annotations
 
+from typing import Any
+
 from lightercore.llm import BaseLLMProvider, ProviderConfig
 
 # ── Shared command-generation prompt for lighterbird ─────────────────────
@@ -51,8 +53,9 @@ class OpenAICompatibleProvider(BaseLLMProvider):
 class OllamaProvider(BaseLLMProvider):
     """Provider for local Ollama instances.
 
-    Ollama speaks the same API format as OpenAI, just at a different
-    base URL (default: ``http://localhost:11434``).
+    Chat uses the same API format as OpenAI (at ``/v1/chat/completions``).
+    Embedding uses the native Ollama ``/api/embed`` endpoint because
+    Ollama's ``/v1/embeddings`` may not be available in older versions.
     """
 
     def __init__(self, config: ProviderConfig) -> None:
@@ -65,6 +68,20 @@ class OllamaProvider(BaseLLMProvider):
 
     def _command_system_prompt(self, defs_text: str) -> str:
         return _lighterbird_command_prompt(defs_text)
+
+    # ── Embedding (Ollama-native /api/embed endpoint) ────────────────────
+
+    def _embed_url(self) -> str:
+        return f"{self.base_url}/api/embed"
+
+    def _build_embed_payload(self, texts: list[str]) -> dict[str, Any]:
+        return {
+            "model": self.config.model or "nomic-embed-text",
+            "input": texts,
+        }
+
+    def _parse_embed_response(self, data: dict[str, Any]) -> list[list[float]]:
+        return data.get("embeddings", [])
 
 
 __all__ = [

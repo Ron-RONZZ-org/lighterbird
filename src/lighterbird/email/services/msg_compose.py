@@ -11,9 +11,11 @@ Methods defined here expect to be mixed into a class that sets::
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json as json_mod
 import logging
+import threading
 import uuid as uuid_mod
 from datetime import UTC, datetime
 from typing import Any
@@ -42,6 +44,8 @@ class MsgSendComposeMixin:
         attachments: list[dict[str, Any]] | None = None,
         signature: str | None = None,
         in_reply_to: str | None = None,
+        *,
+        save_as_sample: bool = True,
     ) -> dict[str, Any]:
         """Send an email via SMTP with outbox fallback on connection failure.
 
@@ -67,6 +71,8 @@ class MsgSendComposeMixin:
                 stored signature from the database.
             in_reply_to: Message-ID of the message being replied to, for
                 conversation threading (In-Reply-To / References headers).
+            save_as_sample: If True (default), save as a writing sample
+                for LLM cowrite style learning (RAG).
 
         Returns:
             Dict with ``status`` ("sent" or "queued"), ``uuid`` (message UUID),
@@ -161,7 +167,7 @@ class MsgSendComposeMixin:
         finally:
             client.disconnect()
 
-        # Step 3: On success → Sent; on failure → queue for retry
+        # Step 3: On success → Sent + save writing sample; on failure → queue
         now = datetime.now(UTC).isoformat()
         if send_error is None:
             self.db.execute(
@@ -170,6 +176,14 @@ class MsgSendComposeMixin:
                 (now, msg_uuid),
             )
             logger.info("Email %s sent successfully to %s", msg_uuid[:8], to)
+            if save_as_sample:
+                self._save_writing_sample(
+                    sample_uuid=str(uuid_mod.uuid4()),
+                    source_uuid=msg_uuid,
+                    title=subject,
+                    body=body,
+                    body_format=body_format,
+                )
             return {"status": "sent", "uuid": msg_uuid, "message_id": message_id}
         else:
             self._enqueue_send(msg_uuid, account_email, body_format, signature,
@@ -179,6 +193,117 @@ class MsgSendComposeMixin:
             )
             return {"status": "queued", "uuid": msg_uuid, "message_id": message_id,
                     "error": send_error}
+
+    # ── Writing sample registration (RAG) ────────────────────────────────
+
+    def _save_writing_sample(
+        self,
+        sample_uuid: str,
+        source_uuid: str,
+        title: str,
+        body: str,
+        body_format: str = "markdown",
+    ) -> None:
+        """Save a sent email as a writing sample for LLM style learning.
+
+        The embedding is computed asynchronously in a background thread
+        (best-effort — failures are logged but do not affect the send flow).
+
+        Args:
+            sample_uuid: Unique identifier for the sample.
+            source_uuid: UUID of the original message.
+            title: Email subject.
+            body: Email body text.
+            body_format: Body format (``"markdown"``, ``"html"``, ``"plain"``).
+        """
+        from lighterbird.email.db import ensure_vec_table
+
+        now = datetime.now(UTC).isoformat()
+        word_count = len(body.split())
+
+        self.db.execute(
+            """INSERT INTO writing_samples
+               (uuid, source_uuid, source_domain, title, body,
+                body_format, language, word_count, registered_at)
+               VALUES (?, ?, 'email', ?, ?, ?, 'en', ?, ?)""",
+            (sample_uuid, source_uuid, title, body, body_format, word_count, now),
+        )
+
+        # Fire background thread to compute and store the embedding
+        thread = threading.Thread(
+            target=self._store_writing_sample_embedding,
+            args=(sample_uuid, body),
+            daemon=True,
+        )
+        thread.start()
+
+    @staticmethod
+    def _store_writing_sample_embedding(sample_uuid: str, body: str) -> None:
+        """Compute embedding and store in vec_samples (runs in background thread).
+
+        This is a static method because it creates its own DB connection
+        and event loop for the async LLM provider call.
+
+        Args:
+            sample_uuid: Writing sample UUID.
+            body: Email body text to embed.
+        """
+        import json as _json
+
+        from lighterbird.core.ai import get_provider as _get_core_provider
+        from lighterbird.email.db import ensure_vec_table as _ensure_vec
+        from lighterbird.email.db import get_db as _get_db
+        from lighterbird.server.llm.provider import get_provider as _get_wrapper
+
+        try:
+            db = _get_db()
+
+            # Get the LLM provider
+            wrapper = _get_wrapper()
+            if not wrapper.is_available():
+                return  # No LLM configured — skip embedding
+            core = _get_core_provider(wrapper.config)
+
+            # Compute embedding (async → sync via new event loop)
+            dim: int = 1536
+            embedding: list[float] | None = None
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                result = loop.run_until_complete(core.embed([body]))
+                loop.close()
+                if result:
+                    embedding = result[0]
+                    dim = len(embedding)
+            except Exception:
+                logger.debug("Embedding not available for sample %s", sample_uuid[:8])
+                return
+
+            if embedding is None:
+                return
+
+            # Ensure vec0 table exists with the detected dimension
+            _ensure_vec(db, dim)
+            rowid = db.execute_one(
+                "SELECT rowid FROM writing_samples WHERE uuid = ?",
+                (sample_uuid,),
+            )
+            if rowid is None:
+                return
+            rowid_val = rowid["rowid"]
+
+            # Store vector and update dimension
+            db.execute(
+                "INSERT INTO vec_samples(rowid, embedding) VALUES (?, ?)",
+                (rowid_val, _json.dumps(embedding)),
+            )
+            db.execute(
+                "UPDATE writing_samples SET embedding_dim = ? WHERE uuid = ?",
+                (dim, sample_uuid),
+            )
+            logger.debug("Stored embedding for sample %s (dim=%d)", sample_uuid[:8], dim)
+        except Exception:
+            logger.debug("Failed to store writing sample embedding for %s", sample_uuid[:8])
 
     # ── Outbox / send-queue helpers ───────────────────────────────────────
 
