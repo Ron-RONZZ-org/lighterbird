@@ -722,7 +722,7 @@ name = "importlib-metadata"
 version = "9.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "zipp", marker = "python_full_version < '3.13'" },
+    { name = "zipp", marker = "python_full_version < '3.12'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a9/01/15bb152d77b21318514a96f43af312635eb2500c96b55398d020c93d86ea/importlib_metadata-9.0.0.tar.gz", hash = "sha256:a4f57ab599e6a2e3016d7595cfd72eb4661a5106e787a95bcc90c7105b831efc", size = 56405, upload-time = "2026-03-20T06:42:56.999Z" }
 wheels = [
@@ -957,6 +957,7 @@ dependencies = [
     { name = "cryptography" },
     { name = "dnspython" },
     { name = "fastapi" },
+    { name = "fastembed" },
     { name = "httpx" },
     { name = "keyring" },
     { name = "lightercore" },
@@ -979,9 +980,6 @@ dev = [
     { name = "ruff" },
     { name = "vobject" },
 ]
-embed = [
-    { name = "fastembed" },
-]
 pdf = [
     { name = "fpdf2" },
 ]
@@ -991,7 +989,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=42.0.0" },
     { name = "dnspython", specifier = ">=2.6.0" },
     { name = "fastapi", specifier = ">=0.110.0" },
-    { name = "fastembed", marker = "extra == 'embed'", specifier = ">=0.8.0" },
+    { name = "fastembed", specifier = ">=0.8.0" },
     { name = "fpdf2", marker = "extra == 'pdf'", specifier = ">=2.7.0" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "keyring", specifier = ">=25.0.0" },
@@ -1011,7 +1009,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.27.0" },
     { name = "vobject", marker = "extra == 'dev'", specifier = ">=0.9.0" },
 ]
-provides-extras = ["dev", "pdf", "embed"]
+provides-extras = ["dev", "pdf"]
 
 [[package]]
 name = "lightercore"

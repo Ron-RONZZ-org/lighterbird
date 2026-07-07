@@ -25,6 +25,7 @@ dependencies = [
     "pyyaml>=6.0",
     "python-dateutil>=2.8.0",
     "sqlite-vec>=0.1.0",
+    "fastembed>=0.8.0",
 ]
 
 [project.optional-dependencies]
@@ -38,9 +39,6 @@ dev = [
 ]
 pdf = [
     "fpdf2>=2.7.0",
-]
-embed = [
-    "fastembed>=0.8.0",
 ]
 
 [project.scripts]

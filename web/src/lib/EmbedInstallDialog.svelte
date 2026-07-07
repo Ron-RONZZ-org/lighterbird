@@ -1,33 +1,27 @@
 <script>
   /**
-   * EmbedInstallDialog — model picker for installing a local embedding model.
+   * EmbedInstallDialog — download model weights for local style RAG.
    *
    * Props:
    *   models: Array of {label, hf_id, dim, size_mb, languages}
-   *   oninstall(model_key): called after successful install
+   *   oninstall(model_key): called after successful download
    *   onskip(): called when user dismisses
    */
 
   let { models = [], oninstall = () => {}, onskip = () => {} } = $props();
 
-  /** Selected model key (default: bge-small-en-v1.5) */
   let selectedModel = $state("bge-small-en-v1.5");
-  let installing = $state(false);
+  let downloading = $state(false);
   let statusMsg = $state("");
 
-  function getModel(key) {
-    return models.find((m) => m.hf_id?.includes(key) || m.hf_id === key) || {};
-  }
-
-  /** Model key from human-readable label */
-  function modelKeyForLabel(label) {
+  function modelKey(label) {
     if (label.includes("Multilingual")) return "paraphrase-multilingual-MiniLM-L12-v2";
     return "bge-small-en-v1.5";
   }
 
-  async function handleInstall() {
-    installing = true;
-    statusMsg = "Installing embedding model…";
+  async function handleDownload() {
+    downloading = true;
+    statusMsg = "Downloading model…";
     try {
       const resp = await fetch("/api/v1/embed/install", {
         method: "POST",
@@ -35,52 +29,46 @@
         body: JSON.stringify({ model: selectedModel }),
       });
       if (!resp.ok) {
-        const err = await resp.json().catch(() => ({ detail: "Install failed" }));
-        statusMsg = err.detail || "Install failed";
-        installing = false;
+        const err = await resp.json().catch(() => ({ detail: "Download failed" }));
+        statusMsg = err.detail || "Download failed";
+        downloading = false;
         return;
       }
       const result = await resp.json();
-      statusMsg = result.message || "Install complete";
-      setTimeout(() => oninstall(selectedModel), 800);
+      statusMsg = result.message || "Ready";
+      setTimeout(() => oninstall(selectedModel), 600);
     } catch (err) {
       statusMsg = err.message || "Network error";
-      installing = false;
+      downloading = false;
     }
   }
 
-  function handleSkip() {
-    onskip();
-  }
-
-  function selectModel(label) {
-    selectedModel = modelKeyForLabel(label);
-  }
+  function handleSkip() { onskip(); }
 </script>
 
 <div class="embed-overlay">
   <div class="embed-dialog">
     <h3 class="dialog-title">Style-Aware Suggestions</h3>
     <p class="dialog-desc">
-      Improve LLM writing suggestions by installing a local embedding model.
-      Your writing stays on your machine — no data is sent externally.
+      Download a local model to enable style-aware writing suggestions.
+      Your writing stays on your machine — no data leaves your computer.
     </p>
 
     <div class="model-options">
       {#each models as m}
-        {@const key = modelKeyForLabel(m.label)}
+        {@const key = modelKey(m.label)}
         <label class="model-card" class:selected={selectedModel === key}>
           <input
             type="radio"
             name="embed-model"
             value={key}
             checked={selectedModel === key}
-            onchange={() => selectModel(m.label)}
-            disabled={installing}
+            onchange={() => { selectedModel = key; }}
+            disabled={downloading}
           />
           <div class="model-info">
             <span class="model-name">{m.label}</span>
-            <span class="model-meta">{m.size_mb} MB &middot; {m.dim} dim</span>
+            <span class="model-meta">{m.size_mb} MB &middot; {m.dim} dim &middot; one-time download</span>
           </div>
         </label>
       {/each}
@@ -91,11 +79,9 @@
     {/if}
 
     <div class="dialog-actions">
-      <button class="btn-skip" onclick={handleSkip} disabled={installing}>
-        Skip
-      </button>
-      <button class="btn-install" onclick={handleInstall} disabled={installing}>
-        {installing ? "Installing…" : "Install"}
+      <button class="btn-skip" onclick={handleSkip} disabled={downloading}>Skip</button>
+      <button class="btn-install" onclick={handleDownload} disabled={downloading}>
+        {downloading ? "Downloading…" : "Download"}
       </button>
     </div>
   </div>

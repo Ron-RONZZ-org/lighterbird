@@ -68,15 +68,13 @@ def gather_context(form_type: str, fields: dict[str, str]) -> dict[str, Any]:
     if recent:
         return recent
 
-    # ── 3. No samples at all — check if local embedding could be installed.
-    #     If the user has no LLM provider configured at all, offer local
-    #     install.  If a provider IS configured (even if it doesn't
-    #     support embeddings), the user already has a workflow — don't
-    #     nag them about local models.
+    # ── 3. No samples at all — check if local model weights can be
+    #     downloaded.  If no API embed is available and the local model
+    #     hasn't been cached yet, signal the frontend to offer download.
     from lighterbird.core.embedding import get_status as _embed_status
 
     status = _embed_status()
-    if status["status"] == "not-installed":
+    if status["status"] == "model-needed":
         return {"_embed_required": True, "models": status["models"]}
 
     return {}
