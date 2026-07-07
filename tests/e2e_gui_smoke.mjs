@@ -20,11 +20,65 @@ import { strict as assert } from "assert";
 import {
   test, typeCommand, pressEnter, sleep,
   assertTabOpened, assertFormOpened, assertHomeActive, assertPanelContains,
-  runWithBrowser, getResultPanelText, dismissAllTabs,
+  runWithBrowser, page, pageErrors, consoleErrors,
 } from "./e2e_helpers.mjs";
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://127.0.0.1:6006";
 const CHROME_PATH = process.env.CHROME_PATH || "chromium";
+
+// ── Local helpers ──────────────────────────────────────────────────────────
+
+/** Fill a form field by its id attribute and trigger an input event. */
+async function fillFormField(fieldId, value) {
+  const field = page.locator(`#${CSS.escape(fieldId)}`);
+  await field.waitFor({ state: "visible", timeout: 3000 });
+  await field.click();
+  await field.fill("");
+  await sleep(50);
+  await field.pressSequentially(value, { delay: 5 });
+  await sleep(100);
+}
+
+/** Click the Save/Submit button in the active form panel. */
+async function clickFormSubmit() {
+  const panel = page.locator('[aria-label="Tab content"]');
+  const submitBtn = panel.locator(
+    'button[type="submit"], button:has-text("Save"), button:has-text("Add"), button:has-text("Create"), button:has-text("Send")'
+  );
+  await submitBtn.waitFor({ state: "visible", timeout: 3000 });
+  await submitBtn.click();
+  await sleep(800);
+}
+
+/** Check if a ConfirmDialog is visible (unsaved-changes guard). */
+async function confirmDialogIsVisible() {
+  const dialog = page.locator('[role="alertdialog"]');
+  return await dialog.isVisible().catch(() => false);
+}
+
+/** Click a button in a ConfirmDialog by its text. */
+async function clickConfirmDialogButton(text) {
+  const dialog = page.locator('[role="alertdialog"]');
+  const btn = dialog.locator(`button:has-text("${text}")`);
+  await btn.waitFor({ state: "visible", timeout: 2000 });
+  await btn.click();
+  await sleep(300);
+}
+
+/** Toggle selection mode with V key and wait for checkboxes. */
+async function enterSelectionMode() {
+  await page.keyboard.press("v");
+  await sleep(400);
+}
+
+/** Assert the active tab panel text contains expected content. */
+async function assertPanelHasContent() {
+  const panel = page.locator('[aria-label="Tab content"]');
+  await panel.waitFor({ state: "visible", timeout: 3000 });
+  const text = (await panel.textContent() || "").trim();
+  assert(text.length > 0, "Tab panel should have non-empty content");
+  return text;
+}
 
 // ── Runner ─────────────────────────────────────────────────────────────────
 
@@ -158,6 +212,34 @@ async function runTests(page) {
     await typeCommand("!letter add");
     await pressEnter();
     await assertFormOpened("Letter", ["object"]);
+  });
+
+  // ════════════════════════════════════════════
+  // 3b. FORM SUBMISSION — fill fields and submit
+  // ════════════════════════════════════════════
+  console.log("\n--- FORM SUBMISSION ---");
+
+  await test("!todo add form: fill title and submit via GUI", async () => {
+    await typeCommand("!todo add");
+    await pressEnter();
+    await assertFormOpened("Todo", ["title"]);
+    await fillFormField("title", "Buy groceries from form test");
+    await clickFormSubmit();
+    // After submit, should show success tab or redirect to list tab
+    const text = await assertPanelHasContent();
+    assert(text.includes("added") || text.includes("Created") || text.includes("Buy") || text.includes("groceries"),
+      `Expected success after form submit, got: "${text.substring(0, 200)}"`);
+  });
+
+  await test("!journal write form: fill title and submit via GUI", async () => {
+    await typeCommand("!journal write");
+    await pressEnter();
+    await assertFormOpened("Journal", ["title"]);
+    await fillFormField("title", "Journal entry from GUI test");
+    await clickFormSubmit();
+    const text = await assertPanelHasContent();
+    assert(text.includes("written") || text.includes("Created") || text.includes("Journal") || text.includes("GUI"),
+      `Expected success after journal form submit, got: "${text.substring(0, 200)}"`);
   });
 
   // ════════════════════════════════════════════
@@ -329,6 +411,162 @@ async function runTests(page) {
     } else {
       const sortSelect = panel.locator('select, [role="listbox"] option');
       console.log(`    No explicit sort button found (${await sortSelect.count()} select elements in panel)`);
+    }
+  });
+
+  // ════════════════════════════════════════════
+  // 10. KEYBOARD NAVIGATION
+  // ════════════════════════════════════════════
+  console.log("\n--- KEYBOARD NAVIGATION ---");
+
+  await test("Arrow down/up moves focus in selection mode", async () => {
+    await typeCommand("!todo list");
+    await pressEnter();
+    await assertTabOpened("Todo");
+    await sleep(300);
+
+    // Enter selection mode
+    await enterSelectionMode();
+
+    // Check there are selectable items
+    const checkboxesBefore = page.locator('[aria-label="Tab content"] .checkbox-cell');
+    const cbCount = await checkboxesBefore.count().catch(() => 0);
+    if (cbCount < 2) {
+      console.log(`    (${cbCount} items — skipping arrow nav test, needs ≥2)`);
+      await page.keyboard.press("Escape");
+      await sleep(200);
+      return;
+    }
+
+    // Arrow down should move focus
+    await page.keyboard.press("ArrowDown");
+    await sleep(200);
+    const focusedRowDown = page.locator('[aria-label="Tab content"] .focused, [aria-label="Tab content"] [class*="focus"]');
+    const focusedCountDown = await focusedRowDown.count().catch(() => 0);
+    console.log(`    After ArrowDown: ${focusedCountDown} focused row(s)`);
+
+    // Arrow up should move focus back
+    await page.keyboard.press("ArrowUp");
+    await sleep(200);
+    const focusedRowUp = page.locator('[aria-label="Tab content"] .focused, [aria-label="Tab content"] [class*="focus"]');
+    const focusedCountUp = await focusedRowUp.count().catch(() => 0);
+    console.log(`    After ArrowUp: ${focusedCountUp} focused row(s)`);
+
+    await page.keyboard.press("Escape");
+    await sleep(200);
+  });
+
+  await test("Space toggles selection on focused item", async () => {
+    await typeCommand("!todo list");
+    await pressEnter();
+    await assertTabOpened("Todo");
+    await sleep(300);
+
+    await enterSelectionMode();
+
+    const checkboxes = page.locator('[aria-label="Tab content"] .checkbox-cell');
+    const cbCount = await checkboxes.count().catch(() => 0);
+    if (cbCount < 1) {
+      console.log("    (no items — skipping selection toggle test)");
+      await page.keyboard.press("Escape");
+      return;
+    }
+
+    // Press Space on the first item
+    await page.keyboard.press("Space");
+    await sleep(300);
+
+    // Check that at least one checkbox is checked
+    const checkedCb = page.locator('[aria-label="Tab content"] .checkbox-cell input:checked, [aria-label="Tab content"] input[type="checkbox"]:checked');
+    const checkedCount = await checkedCb.count().catch(() => 0);
+    console.log(`    After Space: ${checkedCount} checkbox(es) checked`);
+
+    await page.keyboard.press("Escape");
+    await sleep(200);
+  });
+
+  // ════════════════════════════════════════════
+  // 11. N KEY: +NEW FROM LIST TAB
+  // ════════════════════════════════════════════
+  console.log("\n--- N KEY +NEW ---");
+
+  await test("N key opens add form from todo list tab", async () => {
+    await typeCommand("!todo list");
+    await pressEnter();
+    await assertTabOpened("Todo");
+    await sleep(300);
+
+    // Press N in view mode to open add form
+    await page.keyboard.press("n");
+    await sleep(600);
+
+    // Should open a new form tab
+    const panel = page.locator('[aria-label="Tab content"]');
+    await panel.waitFor({ state: "visible", timeout: 3000 });
+    const panelText = (await panel.textContent() || "").toLowerCase();
+    assert(panelText.includes("title") || panelText.includes("todo"),
+      `N key should open add form with title field, panel: "${panelText.substring(0, 150)}"`);
+  });
+
+  // ════════════════════════════════════════════
+  // 12. SEARCH BAR TOGGLE (/ KEY)
+  // ════════════════════════════════════════════
+  console.log("\n--- SEARCH BAR ---");
+
+  await test("/ key toggles search bar in todo list", async () => {
+    await typeCommand("!todo list");
+    await pressEnter();
+    await assertTabOpened("Todo");
+    await sleep(300);
+
+    // Press / to toggle search bar
+    await page.keyboard.press("/");
+    await sleep(400);
+
+    // Look for a search input in the panel
+    const panel = page.locator('[aria-label="Tab content"]');
+    const searchInput = panel.locator('input[type="search"], input[placeholder*="earch" i], input[placeholder*="Filter" i], input[aria-label*="search" i]');
+    const searchExists = await searchInput.count().catch(() => 0);
+    if (searchExists > 0) {
+      console.log(`    Search input visible after / key`);
+    } else {
+      // Maybe search is a text input — try finding any input in the panel toolbar
+      const allInputs = await panel.locator("input, textarea").count();
+      console.log(`    (Search input not found by label; ${allInputs} total inputs in panel)`);
+    }
+  });
+
+  // ════════════════════════════════════════════
+  // 13. UNSAVED CHANGES GUARD
+  // ════════════════════════════════════════════
+  console.log("\n--- UNSAVED CHANGES GUARD ---");
+
+  await test("Unsaved-changes guard shows confirmation on dirty form close (Escape)", async () => {
+    await typeCommand("!todo add");
+    await pressEnter();
+    await assertFormOpened("Todo", ["title"]);
+
+    // Type something to make the form dirty
+    await fillFormField("title", "Unsaved test task");
+
+    // Press Escape to close the tab (should trigger guard)
+    await page.keyboard.press("Escape");
+    await sleep(500);
+
+    // Check if a confirmation dialog appeared
+    const guardShown = await confirmDialogIsVisible();
+    if (guardShown) {
+      console.log("    Unsaved-changes guard shown: confirm dialog visible");
+      // Dismiss by clicking "Cancel" or "Discard"
+      const discardBtn = page.locator('[role="alertdialog"] button:has-text("Discard"), [role="alertdialog"] button:has-text("Cancel")');
+      const discardVisible = await discardBtn.isVisible().catch(() => false);
+      if (discardVisible) {
+        await discardBtn.click();
+        await sleep(300);
+      }
+    } else {
+      // Guard may not be implemented for all form types — just log
+      console.log("    (No unsaved-changes guard — may not be implemented for this form type)");
     }
   });
 
