@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from types import ModuleType
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -133,22 +134,28 @@ class TestSieveManagerConnect:
             manager.connect("user", "pass")
 
     def test_connect_import_error(self, manager):
-        """When managesieve library is not installed, raise helpful error."""
-        # Temporarily remove managesieve mock so import fails
-        if "managesieve" in sys.modules:
-            del sys.modules["managesieve"]
+        """When managesieve library is not installed, raise helpful error.
+
+        The ``_mock_managesieve`` autouse fixture injects a mock module,
+        but ``managesieve`` may also be installed in the venv.  We use
+        an empty ``ModuleType`` to block the import at the attribute
+        level (``from managesieve import MANAGESIEVE`` fails because
+        the empty module has no ``MANAGESIEVE`` attribute → Python
+        raises ``ImportError``).
+        """
         import importlib
 
         import lighterbird.email.filters.sieve as sieve_mod
-        importlib.reload(sieve_mod)
 
-        m = sieve_mod.SieveManager("host.com", 4190, use_tls=True)
-        with pytest.raises(ConnectionError, match="managesieve library not installed"):
-            m.connect("user", "pass")
-        # Restore the mock for other tests
-        _mock_managesieve = MagicMock()
-        _mock_managesieve.MANAGESIEVE = MagicMock()
-        sys.modules["managesieve"] = _mock_managesieve
+        empty_mod = ModuleType("managesieve")
+        with patch.dict("sys.modules", {"managesieve": empty_mod}):
+            importlib.reload(sieve_mod)
+
+            m = sieve_mod.SieveManager("host.com", 4190, use_tls=True)
+            with pytest.raises(ConnectionError, match="managesieve library not installed"):
+                m.connect("user", "pass")
+
+        # Restore the autouse fixture's mock for other tests
         importlib.reload(sieve_mod)
 
 
