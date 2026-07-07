@@ -16,6 +16,7 @@ from typing import Any
 from lighterbird.core.paths import safe_resolve_path
 from lighterbird.journal.services import JournalService
 from lighterbird.server.command.errors import CommandValidationError
+from lighterbird.server.command.helpers import require_found, require_uuid
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_journal_service
 
