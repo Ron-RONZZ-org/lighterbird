@@ -39,6 +39,9 @@ dev = [
 pdf = [
     "fpdf2>=2.7.0",
 ]
+embed = [
+    "fastembed>=0.8.0",
+]
 
 [project.scripts]
 lighterbird-dev = "lighterbird.scripts.dev_cli:dev_main"

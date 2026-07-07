@@ -2,6 +2,7 @@
   /** Email compose form — used when !email send is typed interactively. */
 
   import { email as emailApi, contacts as contactsApi, drafts as draftsApi } from "./api.js";
+  import EmbedInstallDialog from "./EmbedInstallDialog.svelte";
   import FormField from "./FormField.svelte";
   import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
   import MultiEntryField from "./MultiEntryField.svelte";
@@ -344,6 +345,18 @@
 
   {#if cowrite.isActive}
     <CowritePanel {cowrite} />
+  {/if}
+
+  {#if cowrite.embedRequired}
+    <EmbedInstallDialog
+      models={cowrite.embedRequired.models}
+      oninstall={(modelKey) => {
+        cowrite.embedRequired = null;
+        // Re-invoke cowrite with the same instruction
+        cowrite.startCowrite(cowrite.instruction);
+      }}
+      onskip={() => { cowrite.embedRequired = null; }}
+    />
   {/if}
 </form>
 

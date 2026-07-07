@@ -130,7 +130,8 @@ class LLMProviderWrapper:
 
         Args:
             provider_type: ``"openai"``, ``"deepseek"``, ``"ollama"``, etc.
-            **kwargs: Additional config fields (api_key, base_url, model, etc.).
+            **kwargs: Additional config fields (api_key, base_url, model,
+                      embedding_model, etc.).
 
         Returns:
             The active :class:`ProviderConfig`.
@@ -140,6 +141,7 @@ class LLMProviderWrapper:
             api_key=kwargs.get("api_key", ""),
             base_url=kwargs.get("base_url", ""),
             model=kwargs.get("model", ""),
+            embedding_model=kwargs.get("embedding_model", ""),
             temperature=float(kwargs.get("temperature", 0.7)),
             max_tokens=int(kwargs.get("max_tokens", 2048)),
         )
@@ -164,6 +166,7 @@ class LLMProviderWrapper:
             api_key=kwargs.get("api_key", ""),
             base_url=kwargs.get("base_url", ""),
             model=kwargs.get("model", ""),
+            embedding_model=kwargs.get("embedding_model", ""),
             temperature=float(kwargs.get("temperature", 0.7)),
             max_tokens=int(kwargs.get("max_tokens", 2048)),
         )
