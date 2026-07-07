@@ -46,6 +46,13 @@ RESPONSE FORMAT (JSON only):
   "field_name_1": "Complete revised text for field 1",
   "field_name_2": "Complete revised text for field 2"
 }
+
+WRITING SAMPLES — You may receive ``writing_samples`` in the ``context``
+section of the request.  These are real examples of the user's past
+writing.  Use them to match the user's personal style: tone, sentence
+structure, vocabulary, formality level, paragraph length, and typical
+sign-offs.  Do NOT copy content from the samples — draw style
+inspiration only.
 """
 
 
