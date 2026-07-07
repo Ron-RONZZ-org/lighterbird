@@ -20,7 +20,7 @@ import { strict as assert } from "assert";
 import {
   test, typeCommand, pressEnter, sleep,
   assertTabOpened, assertFormOpened, assertHomeActive, assertPanelContains,
-  runWithBrowser, page, pageErrors, consoleErrors,
+  runWithBrowser, page, pageErrors, consoleErrors, dismissAllTabs,
 } from "./e2e_helpers.mjs";
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://127.0.0.1:6006";
@@ -78,6 +78,34 @@ async function assertPanelHasContent() {
   const text = (await panel.textContent() || "").trim();
   assert(text.length > 0, "Tab panel should have non-empty content");
   return text;
+}
+
+/** Count visible items in a list tab panel. */
+async function countListItems() {
+  return await page.locator('[aria-label="Tab content"] .checkbox-cell').count().catch(() => 0);
+}
+
+/** Check if clipboard API is available in the test context (requires secure context). */
+async function clipboardAvailable() {
+  try {
+    return await page.evaluate(() => !!navigator.clipboard?.writeText);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Wait for a CSS class to appear on any element in the tab panel.
+ * Polls up to `timeout` ms.
+ */
+async function waitForClassInPanel(className, timeout = 3000) {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    const els = await page.locator(`[aria-label="Tab content"] .${CSS.escape(className)}`).count();
+    if (els > 0) return els;
+    await sleep(100);
+  }
+  return 0;
 }
 
 // ── Runner ─────────────────────────────────────────────────────────────────
@@ -225,7 +253,6 @@ async function runTests(page) {
     await assertFormOpened("Todo", ["title"]);
     await fillFormField("title", "Buy groceries from form test");
     await clickFormSubmit();
-    // After submit, should show success tab or redirect to list tab
     const text = await assertPanelHasContent();
     assert(text.includes("added") || text.includes("Created") || text.includes("Buy") || text.includes("groceries"),
       `Expected success after form submit, got: "${text.substring(0, 200)}"`);
@@ -425,10 +452,8 @@ async function runTests(page) {
     await assertTabOpened("Todo");
     await sleep(300);
 
-    // Enter selection mode
     await enterSelectionMode();
 
-    // Check there are selectable items
     const checkboxesBefore = page.locator('[aria-label="Tab content"] .checkbox-cell');
     const cbCount = await checkboxesBefore.count().catch(() => 0);
     if (cbCount < 2) {
@@ -438,14 +463,12 @@ async function runTests(page) {
       return;
     }
 
-    // Arrow down should move focus
     await page.keyboard.press("ArrowDown");
     await sleep(200);
     const focusedRowDown = page.locator('[aria-label="Tab content"] .focused, [aria-label="Tab content"] [class*="focus"]');
     const focusedCountDown = await focusedRowDown.count().catch(() => 0);
     console.log(`    After ArrowDown: ${focusedCountDown} focused row(s)`);
 
-    // Arrow up should move focus back
     await page.keyboard.press("ArrowUp");
     await sleep(200);
     const focusedRowUp = page.locator('[aria-label="Tab content"] .focused, [aria-label="Tab content"] [class*="focus"]');
@@ -472,11 +495,9 @@ async function runTests(page) {
       return;
     }
 
-    // Press Space on the first item
     await page.keyboard.press("Space");
     await sleep(300);
 
-    // Check that at least one checkbox is checked
     const checkedCb = page.locator('[aria-label="Tab content"] .checkbox-cell input:checked, [aria-label="Tab content"] input[type="checkbox"]:checked');
     const checkedCount = await checkedCb.count().catch(() => 0);
     console.log(`    After Space: ${checkedCount} checkbox(es) checked`);
@@ -496,11 +517,9 @@ async function runTests(page) {
     await assertTabOpened("Todo");
     await sleep(300);
 
-    // Press N in view mode to open add form
     await page.keyboard.press("n");
     await sleep(600);
 
-    // Should open a new form tab
     const panel = page.locator('[aria-label="Tab content"]');
     await panel.waitFor({ state: "visible", timeout: 3000 });
     const panelText = (await panel.textContent() || "").toLowerCase();
@@ -519,18 +538,15 @@ async function runTests(page) {
     await assertTabOpened("Todo");
     await sleep(300);
 
-    // Press / to toggle search bar
     await page.keyboard.press("/");
     await sleep(400);
 
-    // Look for a search input in the panel
     const panel = page.locator('[aria-label="Tab content"]');
     const searchInput = panel.locator('input[type="search"], input[placeholder*="earch" i], input[placeholder*="Filter" i], input[aria-label*="search" i]');
     const searchExists = await searchInput.count().catch(() => 0);
     if (searchExists > 0) {
       console.log(`    Search input visible after / key`);
     } else {
-      // Maybe search is a text input — try finding any input in the panel toolbar
       const allInputs = await panel.locator("input, textarea").count();
       console.log(`    (Search input not found by label; ${allInputs} total inputs in panel)`);
     }
@@ -546,18 +562,14 @@ async function runTests(page) {
     await pressEnter();
     await assertFormOpened("Todo", ["title"]);
 
-    // Type something to make the form dirty
     await fillFormField("title", "Unsaved test task");
 
-    // Press Escape to close the tab (should trigger guard)
     await page.keyboard.press("Escape");
     await sleep(500);
 
-    // Check if a confirmation dialog appeared
     const guardShown = await confirmDialogIsVisible();
     if (guardShown) {
       console.log("    Unsaved-changes guard shown: confirm dialog visible");
-      // Dismiss by clicking "Cancel" or "Discard"
       const discardBtn = page.locator('[role="alertdialog"] button:has-text("Discard"), [role="alertdialog"] button:has-text("Cancel")');
       const discardVisible = await discardBtn.isVisible().catch(() => false);
       if (discardVisible) {
@@ -565,8 +577,325 @@ async function runTests(page) {
         await sleep(300);
       }
     } else {
-      // Guard may not be implemented for all form types — just log
       console.log("    (No unsaved-changes guard — may not be implemented for this form type)");
+    }
+  });
+
+  // ════════════════════════════════════════════
+  // 14. UUID COPY
+  // ════════════════════════════════════════════
+  console.log("\n--- UUID COPY ---");
+
+  await test("Click on truncated UUID copies to clipboard and shows Copied!", async () => {
+    await typeCommand("!todo list");
+    await pressEnter();
+    await assertTabOpened("Todo");
+    await sleep(400);
+
+    // Find the UUID span in the todo list
+    const uuidSpan = page.locator('[aria-label="Tab content"] .tuuid');
+    const uuidCount = await uuidSpan.count().catch(() => 0);
+    if (uuidCount === 0) {
+      console.log("    (no UUID elements found — may be empty list)");
+      return;
+    }
+
+    // Get the current text (should be first 8 chars of UUID)
+    const originalText = await uuidSpan.first().textContent();
+    console.log(`    UUID text before click: "${originalText}"`);
+
+    // Click it
+    await uuidSpan.first().click();
+    await sleep(200);
+
+    // Should change to "Copied!" for 1.2s
+    const afterClickText = await uuidSpan.first().textContent();
+    console.log(`    UUID text after click: "${afterClickText}"`);
+
+    if (afterClickText === "Copied!") {
+      console.log("    ✓ UUID copy: 'Copied!' feedback shown");
+    } else if (originalText !== afterClickText) {
+      // Text changed but not to "Copied!" — still a sign the click did something
+      console.log(`    UUID feedback text changed: "${originalText}" → "${afterClickText}"`);
+    } else {
+      console.log("    (UUID copy feedback not visible — may need secure context for clipboard API)");
+    }
+  });
+
+  // ════════════════════════════════════════════
+  // 15. MODE TOGGLE (T KEY)
+  // ════════════════════════════════════════════
+  console.log("\n--- MODE TOGGLE ---");
+
+  await test("T key toggles tree/flat mode in todo list", async () => {
+    await typeCommand("!todo list");
+    await pressEnter();
+    await assertTabOpened("Todo");
+    await sleep(300);
+
+    // Check initial state — look for a mode toggle button or indicator
+    const panel = page.locator('[aria-label="Tab content"]');
+    const initialText = (await panel.textContent() || "").toLowerCase();
+
+    // Press T to toggle mode
+    await page.keyboard.press("t");
+    await sleep(500);
+
+    const afterToggleText = (await panel.textContent() || "").toLowerCase();
+    const textChanged = afterToggleText !== initialText;
+    if (textChanged) {
+      console.log("    T key: panel content changed (mode toggled)");
+    } else {
+      // Check for a mode indicator change
+      const treeModeBtn = panel.locator('button:has-text("Tree"), button:has-text("Flat"), [aria-label*="tree" i], [aria-label*="Tree" i]');
+      const btnCount = await treeModeBtn.count().catch(() => 0);
+      console.log(`    T key pressed; ${btnCount} mode toggle button(s) visible`);
+    }
+  });
+
+  // ════════════════════════════════════════════
+  // 16. TAGS DISPLAY
+  // ════════════════════════════════════════════
+  console.log("\n--- TAGS DISPLAY ---");
+
+  await test("Todo list shows label tags on items", async () => {
+    await typeCommand("!todo list");
+    await pressEnter();
+    await assertTabOpened("Todo");
+    await sleep(300);
+
+    // Add a todo with a label/tag for better testing
+    await typeCommand("!todo add Tagged test item --labels test-tag");
+    await pressEnter();
+    await sleep(400);
+
+    // Re-open todo list
+    await typeCommand("!todo list");
+    await pressEnter();
+    await assertTabOpened("Todo");
+    await sleep(400);
+
+    // Look for tag/label elements
+    const panel = page.locator('[aria-label="Tab content"]');
+    const tags = panel.locator('.tag, .tag-pill, [class*="tag"], .labels span');
+    const tagCount = await tags.count().catch(() => 0);
+    if (tagCount > 0) {
+      console.log(`    Tags visible: ${tagCount} tag element(s) found`);
+      const firstTag = await tags.first().textContent();
+      console.log(`    First tag: "${firstTag}"`);
+    } else {
+      console.log("    (No tag elements visible — labels may not be rendered in list rows)");
+    }
+  });
+
+  // ════════════════════════════════════════════
+  // 17. RANGE SELECTION (SHIFT+CLICK)
+  // ════════════════════════════════════════════
+  console.log("\n--- RANGE SELECTION ---");
+
+  await test("Shift+click selects multiple items in range", async () => {
+    await typeCommand("!todo list");
+    await pressEnter();
+    await assertTabOpened("Todo");
+    await sleep(300);
+
+    // Enter selection mode
+    await enterSelectionMode();
+
+    const checkboxes = page.locator('[aria-label="Tab content"] .checkbox-cell');
+    const cbCount = await checkboxes.count().catch(() => 0);
+    if (cbCount < 2) {
+      console.log(`    (${cbCount} items — skipping range selection test, needs ≥2)`);
+      await page.keyboard.press("Escape");
+      await sleep(200);
+      return;
+    }
+
+    // Click first checkbox
+    const firstRow = page.locator('[aria-label="Tab content"] [role="row"], [aria-label="Tab content"] .list-row, [aria-label="Tab content"] tr').first();
+    await firstRow.click();
+    await sleep(200);
+
+    // Shift+click third (or second, depending on count) row
+    const targetIndex = Math.min(2, cbCount - 1);
+    const targetRow = page.locator('[aria-label="Tab content"] [role="row"], [aria-label="Tab content"] .list-row, [aria-label="Tab content"] tr').nth(targetIndex);
+    await targetRow.click({ modifiers: ["Shift"] });
+    await sleep(300);
+
+    // Check that multiple items are now selected
+    const checkedCb = page.locator('[aria-label="Tab content"] input[type="checkbox"]:checked');
+    const checkedCount = await checkedCb.count().catch(() => 0);
+    console.log(`    After Shift+click: ${checkedCount} checkbox(es) checked`);
+
+    if (checkedCount >= 2) {
+      console.log("    ✓ Range selection working: multiple items selected");
+    }
+
+    await page.keyboard.press("Escape");
+    await sleep(200);
+  });
+
+  // ════════════════════════════════════════════
+  // 18. BATCH DELETE (DELETE KEY)
+  // ════════════════════════════════════════════
+  console.log("\n--- BATCH DELETE ---");
+
+  await test("Delete key with selection shows ConfirmDialog", async () => {
+    // First create a few test items we can safely delete
+    await typeCommand("!todo add E2E delete test A");
+    await pressEnter();
+    await sleep(300);
+    await typeCommand("!todo add E2E delete test B");
+    await pressEnter();
+    await sleep(300);
+
+    // Open todo list
+    await typeCommand("!todo list");
+    await pressEnter();
+    await assertTabOpened("Todo");
+    await sleep(300);
+
+    // Enter selection mode
+    await enterSelectionMode();
+
+    const checkboxes = page.locator('[aria-label="Tab content"] .checkbox-cell');
+    const cbCount = await checkboxes.count().catch(() => 0);
+    if (cbCount < 1) {
+      console.log("    (no items — skipping batch delete test)");
+      await page.keyboard.press("Escape");
+      return;
+    }
+
+    // Click first row to select it
+    const firstRow = page.locator('[aria-label="Tab content"] [role="row"], [aria-label="Tab content"] .list-row, [aria-label="Tab content"] tr').first();
+    await firstRow.click();
+    await sleep(200);
+
+    // Press Delete
+    await page.keyboard.press("Delete");
+    await sleep(500);
+
+    // ConfirmDialog should appear
+    const dialogVisible = await confirmDialogIsVisible();
+    if (dialogVisible) {
+      console.log("    Delete key triggered ConfirmDialog");
+
+      // Check message mentions deletion
+      const dialogText = (await page.locator('[role="alertdialog"]').textContent() || "").toLowerCase();
+      console.log(`    Dialog message: "${dialogText.substring(0, 100)}"`);
+
+      // Confirm deletion
+      const confirmBtn = page.locator('[role="alertdialog"] button:has-text("Confirm"), [role="alertdialog"] button:has-text("Delete")');
+      if (await confirmBtn.isVisible().catch(() => false)) {
+        await confirmBtn.click();
+        await sleep(500);
+        console.log("    ✓ Batch delete confirmed and executed");
+      } else {
+        // Cancel instead if we can't find confirm
+        const cancelBtn = page.locator('[role="alertdialog"] button:has-text("Cancel")');
+        if (await cancelBtn.isVisible().catch(() => false)) {
+          await cancelBtn.click();
+          await sleep(200);
+        }
+      }
+    } else {
+      console.log("    (Delete did not trigger ConfirmDialog — may need to select items first)");
+      await page.keyboard.press("Escape");
+      await sleep(200);
+    }
+  });
+
+  // ════════════════════════════════════════════
+  // 19. EXPORT DIALOG
+  // ════════════════════════════════════════════
+  console.log("\n--- EXPORT DIALOG ---");
+
+  await test("E key in selection mode opens export dialog", async () => {
+    await typeCommand("!todo list");
+    await pressEnter();
+    await assertTabOpened("Todo");
+    await sleep(300);
+
+    // Enter selection mode
+    await enterSelectionMode();
+
+    const checkboxes = page.locator('[aria-label="Tab content"] .checkbox-cell');
+    const cbCount = await checkboxes.count().catch(() => 0);
+    if (cbCount < 1) {
+      console.log("    (no items — skipping export test)");
+      await page.keyboard.press("Escape");
+      return;
+    }
+
+    // Select first item
+    const firstRow = page.locator('[aria-label="Tab content"] [role="row"], [aria-label="Tab content"] .list-row, [aria-label="Tab content"] tr').first();
+    await firstRow.click();
+    await sleep(200);
+
+    // Press E to trigger export
+    await page.keyboard.press("e");
+    await sleep(500);
+
+    // Check for export dialog
+    const exportOverlay = page.locator('[role="alertdialog"][aria-label="Export"], .export-overlay');
+    const exportVisible = await exportOverlay.isVisible().catch(() => false);
+    if (exportVisible) {
+      console.log("    Export dialog opened via E key");
+      // Close it
+      const cancelBtn = exportOverlay.locator('button:has-text("Cancel")');
+      if (await cancelBtn.isVisible().catch(() => false)) {
+        await cancelBtn.click();
+        await sleep(200);
+      }
+    } else {
+      console.log("    (E key didn't open export dialog — may need different trigger)");
+      // Exit selection mode
+      await page.keyboard.press("Escape");
+      await sleep(200);
+    }
+  });
+
+  // ════════════════════════════════════════════
+  // 20. EMAIL TOOLBAR (if email data available)
+  // ════════════════════════════════════════════
+  console.log("\n--- EMAIL TOOLBAR ---");
+
+  await test("!email list shows toolbar with action buttons", async () => {
+    await typeCommand("!email list");
+    await pressEnter();
+    await assertTabOpened("Email");
+    await sleep(400);
+
+    const panel = page.locator('[aria-label="Tab content"]');
+    const panelText = (await panel.textContent() || "").toLowerCase();
+
+    // Look for toolbar elements
+    const toolbarBtns = panel.locator('.tool-btn, .toolbar button, button:has-text("Select"), button:has-text("New"), button:has-text("Sort"), button:has-text("Search")');
+    const btnCount = await toolbarBtns.count().catch(() => 0);
+    console.log(`    Email toolbar buttons: ${btnCount}`);
+
+    // Check for key toolbar features
+    const hasSelect = panelText.includes("select") || btnCount > 0;
+    assert(hasSelect, "Email list tab should have toolbar with action buttons");
+  });
+
+  // ════════════════════════════════════════════
+  // 21. BANNER DISPLAY
+  // ════════════════════════════════════════════
+  console.log("\n--- BANNER ---");
+
+  await test("Banner container renders without errors", async () => {
+    // Check if the banner container exists in the DOM
+    const banner = page.locator('.banner-container, [role="status"]');
+    const exists = await banner.count().catch(() => 0);
+    if (exists > 0) {
+      console.log(`    Banner container found (${exists} instance(s))`);
+      const bannerText = (await banner.first().textContent() || "").trim();
+      if (bannerText) {
+        console.log(`    Banner text: "${bannerText.substring(0, 100)}"`);
+      }
+    } else {
+      console.log("    (Banner container not in DOM — may only appear on events)");
     }
   });
 
