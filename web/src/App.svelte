@@ -4,6 +4,7 @@
   import { popup } from "./lib/popupStore.svelte.js";
   import { tabStore } from "./lib/tabStore.svelte.js";
   import { dirtyFormStore } from "./lib/dirtyFormStore.svelte.js";
+  import { banner } from "./lib/bannerStore.svelte.js";
   import { execute } from "./lib/commandExecutor.js";
   import { shouldIntercept } from "./lib/commandRouter.js";
   import { findNode } from "./lib/commandTree.js";
@@ -221,6 +222,25 @@
           isLoading = false;
           return;
         }
+      }
+
+      // ── Email sent: redirect to email list with success banner ──────
+      // When ``!email send <to> <subject> ...`` succeeds (all required args
+      // provided), the backend returns a "Sent" status.  Instead of showing
+      // a brief transient popup, redirect to the email list tab and display
+      // a "Message sent." banner for 3s.
+      if (result.type === "status" && result.title === "Sent" && /^!email\s+send\b/i.test(trimmed)) {
+        const listInput = "!email list";
+        try {
+          const listResult = await execute(listInput);
+          popup.showPersistent(listResult.type, listResult.title, listResult.data || {}, "email-list");
+          banner.show("Message sent.", "success");
+        } catch {
+          // Fallback to normal status display if list refresh fails
+          popup.show(result.type, result.title, result.data);
+        }
+        isLoading = false;
+        return;
       }
 
       const dataType = detectPersistentType(input);

@@ -399,7 +399,7 @@
         selectionMode={sel.selectionMode}
         {uuidCopy}
         {emailCopy}
-        onRowClick={handleRowClick}
+        onRowClick={(e, msg) => handleRowClick(e, msg, sel)}
       />
     {:else}
       <p class="empty">No messages.</p>

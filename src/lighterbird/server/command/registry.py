@@ -259,6 +259,17 @@ def get_command_tree() -> list[dict[str, Any]]:
     if _tree_cache is not None:
         return _tree_cache
 
+    # ── Helper: ensure an intermediate node has a children dict and
+    #    set ``current`` to point to it for sub-command navigation. ──
+    def _descend(current: dict, part: str) -> dict:
+        """Navigate to the ``children`` sub-dict of a node, creating
+        ``children`` on the fly if the node was created as a leaf
+        (e.g. ``@command("email")`` before ``@command("email.list")``)."""
+        node = current[part]
+        if "children" not in node:
+            node["children"] = {}
+        return node["children"]
+
     root: dict[str, Any] = {}
 
     # 1. Build tree structure from registered leaf commands
@@ -290,7 +301,12 @@ def get_command_tree() -> list[dict[str, Any]]:
                         entry["default_action"] = gmeta["default_action"]
                     entry["children"] = {}
                 current[part] = entry
-            current = current[part]
+            if not is_last:
+                # Descend into children so the next part is added as
+                # a child key, NOT as a direct key of the parent node.
+                current = _descend(current, part)
+            else:
+                current = current[part]
 
     # 2. Ensure all @group()-registered groups appear even if they have
     #    no leaf commands yet (edge case: empty group stubs)
@@ -311,7 +327,10 @@ def get_command_tree() -> list[dict[str, Any]]:
                     current[part]["default_action"] = gmeta["default_action"]
                 if "children" not in current[part]:
                     current[part]["children"] = {}
-            current = current[part]
+            if not is_last:
+                current = _descend(current, part)
+            else:
+                current = current[part]
 
     # 3. Convert nested dict to sorted list-of-dicts
     def _to_list(node: dict) -> dict[str, Any]:
