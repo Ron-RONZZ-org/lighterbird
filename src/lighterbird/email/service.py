@@ -201,13 +201,15 @@ class EmailService:
                    body_format: str = "markdown",
                    attachments: list[str] | None = None,
                    signature: str | None = None,
-                   in_reply_to: str | None = None) -> dict:
+                   in_reply_to: str | None = None,
+                   save_as_sample: bool = True) -> dict:
         return self.msg_ops.send_email(account_email, to, subject, body, cc=cc,
                                        bcc=bcc, priority=priority,
                                        body_format=body_format,
                                        attachments=attachments,
                                        signature=signature,
-                                       in_reply_to=in_reply_to)
+                                       in_reply_to=in_reply_to,
+                                       save_as_sample=save_as_sample)
 
     def process_send_queue(self, limit: int = 50) -> dict:
         """Process pending send-queue entries with exponential backoff.

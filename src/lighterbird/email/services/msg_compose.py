@@ -229,6 +229,10 @@ class MsgSendComposeMixin:
             (sample_uuid, source_uuid, title, body, body_format, word_count, now),
         )
 
+        # Ensure vec0 table exists so retrieval queries don't fail even if
+        # the background embedding thread hasn't run yet (or fails).
+        ensure_vec_table(self.db)
+
         # Fire background thread to compute and store the embedding
         thread = threading.Thread(
             target=self._store_writing_sample_embedding,
