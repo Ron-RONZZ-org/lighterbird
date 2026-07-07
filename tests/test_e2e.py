@@ -35,6 +35,11 @@ SCRIPTS: list[tuple[str, str, int]] = [
         "Full coverage: every registered command, CRUD, search, export/import, navigation",
         420,
     ),
+    (
+        "e2e_gui_smoke.mjs",
+        "GUI smoke tests: DOM rendering, tab navigation, form popups, console-error tracking",
+        180,
+    ),
 ]
 
 # ── Tests ───────────────────────────────────────────────────────────────────

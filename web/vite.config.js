@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 
 const backendPort = process.env.LIGHTERBIRD_PORT || 6006;
@@ -18,5 +18,24 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
     sourcemap: false,
+  },
+  resolve: {
+    conditions: ["browser", "module", "import", "default"],
+  },
+  ssr: {
+    noExternal: ["svelte", "@sveltejs/vite-plugin-svelte"],
+    resolve: {
+      conditions: ["browser", "module", "import", "default"],
+    },
+  },
+  test: {
+    include: ["src/**/*.test.js"],
+    environment: "jsdom",
+    globals: true,
+    server: {
+      deps: {
+        inline: ["svelte"],
+      },
+    },
   },
 });

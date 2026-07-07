@@ -20,6 +20,8 @@ const API = `${FRONTEND_URL}/api/v1/command`;
 
 let browser, page;
 let passed = 0, failed = 0;
+let pageErrors = [];
+let consoleErrors = [];
 
 async function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
@@ -153,9 +155,9 @@ async function run() {
   });
   const context = await browser.newContext({ viewport: { width: 960, height: 720 } });
   page = await context.newPage();
-  page.on("pageerror", (err) => console.log("  [BROWSER ERROR]", err.message));
+  page.on("pageerror", (err) => { pageErrors.push(err.message); console.log("  [BROWSER ERROR]", err.message); });
   page.on("console", (msg) => {
-    if (msg.type() === "error") console.log("  [CONSOLE ERROR]", msg.text());
+    if (msg.type() === "error") { consoleErrors.push(msg.text()); console.log("  [CONSOLE ERROR]", msg.text()); }
   });
 
   console.log("=".repeat(70));
@@ -628,6 +630,12 @@ async function run() {
   // RESULTS
   // ═══════════════════════════════════════════════════════════════════
   console.log("");
+  if (pageErrors.length > 0) {
+    console.log(`  [ERROR] ${pageErrors.length} unhandled page error(s) during session`);
+  }
+  if (consoleErrors.length > 0) {
+    console.log(`  [ERROR] ${consoleErrors.length} console error(s) during session`);
+  }
   console.log(`RESULTS: ${passed} passed, ${failed} failed`);
 
   await browser.close();
