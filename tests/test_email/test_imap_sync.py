@@ -24,10 +24,19 @@ class TestSyncResult:
         assert d == {"total": 10, "new": 3, "errors": ["err1"]}
 
 
+def _make_mock_client():
+    """Create a mock IMAPClient with select_folder_ex configured."""
+    client = MagicMock()
+    client.select_folder_ex.return_value = (True, 12345, 0)  # (ok, UIDVALIDITY, MODSEQ)
+    client.capabilities = MagicMock()
+    client.capabilities.has_condstore = False
+    return client
+
+
 class TestSyncAccount:
     @patch("lighterbird.email.imap.sync.IMAPClient")
     def test_sync_all_folders(self, mock_client_class):
-        mock_client = MagicMock()
+        mock_client = _make_mock_client()
         mock_client_class.return_value = mock_client
 
         mock_client.list_folders.return_value = [
@@ -51,7 +60,7 @@ class TestSyncAccount:
 
     @patch("lighterbird.email.imap.sync.IMAPClient")
     def test_sync_specific_folders(self, mock_client_class):
-        mock_client = MagicMock()
+        mock_client = _make_mock_client()
         mock_client_class.return_value = mock_client
         mock_client.sync_folder.return_value = {"total": 3, "new": 1, "errors": []}
 
@@ -64,12 +73,10 @@ class TestSyncAccount:
         )
         assert result.total == 3
         assert result.new == 1
-        # list_folders may still be called internally by the code
-        # The important thing is specific folders are passed through
 
     @patch("lighterbird.email.imap.sync.IMAPClient")
     def test_sync_force_flag(self, mock_client_class):
-        mock_client = MagicMock()
+        mock_client = _make_mock_client()
         mock_client_class.return_value = mock_client
         mock_client.list_folders.return_value = [{"name": "INBOX", "delimiter": "/", "flags": [], "special_use": None}]
         mock_client.sync_folder.return_value = {"total": 2, "new": 2, "errors": []}
@@ -82,13 +89,12 @@ class TestSyncAccount:
             db_store=mock_db,
             force=True,
         )
-        # force=True should be passed to sync_folder
         call_kwargs = mock_client.sync_folder.call_args[1]
         assert call_kwargs.get("force") is True
 
     @patch("lighterbird.email.imap.sync.IMAPClient")
     def test_sync_error_recording(self, mock_client_class):
-        mock_client = MagicMock()
+        mock_client = _make_mock_client()
         mock_client_class.return_value = mock_client
         mock_client.list_folders.return_value = [{"name": "INBOX", "delimiter": "/", "flags": [], "special_use": None}]
         mock_client.sync_folder.return_value = {"total": 10, "new": 0, "errors": ["Connection lost"]}
@@ -103,7 +109,7 @@ class TestSyncAccount:
 
     @patch("lighterbird.email.imap.sync.IMAPClient")
     def test_sync_disconnect_on_error(self, mock_client_class):
-        mock_client = MagicMock()
+        mock_client = _make_mock_client()
         mock_client_class.return_value = mock_client
         mock_client.connect.side_effect = RuntimeError("IMAP down")
 

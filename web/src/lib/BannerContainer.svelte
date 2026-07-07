@@ -1,7 +1,5 @@
 <script>
-  /** Banner notification container — must be mounted once in App.svelte. */
-
-  import { banner } from "./bannerStore.svelte.js";
+  import { banner } from "@lightercore/ui/bannerStore.svelte.js";
 
   let msg = $derived(banner.message);
   let type = $derived(banner.type);

@@ -184,6 +184,16 @@ class EmailService:
         """Process pending IMAP flag syncs."""
         return self.msg_ops.process_sync_backlog()
 
+    @property
+    def backlog_service(self) -> Any:
+        """Access the BacklogService for manual operations."""
+        return self.msg_ops.backlog
+
+    @property
+    def dead_letter_service(self) -> Any:
+        """Access the DeadLetterService for management."""
+        return self.msg_ops.dead_letter
+
     # ── Message operations ───────────────────────────────────────────────
 
     def mark_read(self, msg_uuid: str, is_read: bool = True):
