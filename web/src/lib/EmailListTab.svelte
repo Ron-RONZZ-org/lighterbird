@@ -382,6 +382,7 @@
     onImport={openImportDialog}
     onExport={openExportDialog}
     onSync={handleSync}
+    onToggleAdvancedSearch={() => showAdvancedSearch = true}
     {syncing}
   />
 

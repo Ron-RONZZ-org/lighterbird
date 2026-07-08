@@ -135,3 +135,75 @@ The HTML/plain text toggle in `EmailViewTab.svelte` is persisted across emails v
 15. **Preview buttons show key hints.** All preview buttons (`DynamicForm`, `JournalWrite`, `ComposeEmail`) display a visible `<kbd>Ctrl+Shift+P</kbd>` badge in the button label, matching the existing `<kbd>` pattern used for `Ctrl+S` and `Ctrl+Enter` hints.
 16. **Form error preservation.** `FormTab.handleFormSubmit()` keeps the form tab open on submission failure (HTTP error or network error). An inline red error banner is shown above the form content, and a temporary `banner.show(msg, "error")` notification also fires. The user can correct their input and retry without losing data. On success, the form closes and navigates to the appropriate list tab (existing behavior).
 17. **Signature format dropdown.** Email signatures support `--format` (plain/html/markdown). `DynamicForm.svelte` renders a `<select>` for flags that include a `values` array in their tree metadata (e.g., `{"values": ["plain", "html", "markdown"]}`).
+
+## GUI Style Conventions
+
+All new UI components must follow these established conventions:
+
+### Color Palette
+
+| Role | Hex | Usage |
+|------|-----|-------|
+| Background | `#1a1a2e` | Main page/dialog background |
+| Surface | `#16162a` | Toolbar, sidebar, card backgrounds |
+| Surface hover | `#1e1e32` | Dialog backgrounds |
+| Border | `#333` / `#444` | Default borders |
+| Border accent | `#4a4a6a` / `#6a6a9a` | Focus/active borders |
+| Text primary | `#e0e0e0` | Body text |
+| Text muted | `#7c7c9a` / `#5a5a7a` / `#555` | Labels, hints, disabled |
+| Primary action | `#7fdb7f` green tint (`#3a6a3a` border) | +New, Save, Confirm buttons |
+| Danger action | `#d06` / red tint (`#6b2020` bg, `#8b3030` border) | Delete buttons |
+| Accent blue | `#7c9bff` / `#3a5a8a` bg | Action buttons, links |
+| Input bg | `#12122a` | Text inputs, search fields |
+| Hover | `#2a2a3e` / `#2a2a4e` / `#3a3a5e` | Button hover states |
+| Active | `#2a2a50` | Active/toggled buttons |
+
+### Toolbar / Navbar Pattern
+
+All list tab toolbars follow a **flex layout with three zones**: `[left (buttons)] [center (hints)] [right (actions)]`
+
+- Background: `#16162a`, bottom border: `1px solid #333`
+- Min-height: `2.2rem`, padding: `0.3rem 0.5rem`
+- Font: `monospace`, size: `0.82rem`
+
+### Tool Buttons (`.tool-btn`)
+
+```css
+.tool-btn {
+  padding: 0.25rem 0.6rem; border: 1px solid #444;
+  border-radius: 4px; background: #2a2a3e; color: #e0e0e0;
+  cursor: pointer; font-family: monospace; font-size: 0.78rem;
+  transition: background 0.1s, border-color 0.1s; white-space: nowrap;
+}
+```
+
+**Variants:** Active: `border-color: #6a6a9a; background: #2a2a50;`
+Primary: `border-color: #3a6a3a; color: #7fdb7f;`
+Danger hover: `background: #6b2020; border-color: #8b3030;`
+
+### Keyboard Shortcut Badges (`<kbd>`)
+
+Every visible toolbar button shows its shortcut: `<kbd>` with `font-size: 0.68rem; background: #222; border: 1px solid #555; border-radius: 3px; color: #999;`
+
+### Dialog / Overlay Pattern
+
+```html
+<div class="overlay" onclick={onClose} role="dialog" aria-modal="true">
+  <div class="dialog" onclick={(e) => e.stopPropagation()} role="document">...</div>
+</div>
+```
+
+Overlay: `position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 300;`
+Dialog: `background: #1e1e32; border: 1px solid #444; border-radius: 10px; padding: 1.5rem;`
+
+### Search / Filter Tile Bar
+
+Tile: `background: #2a2a50; border: 1px solid #4a4a7a; border-radius: 4px; padding: 0.15rem 0.4rem;`
+Bar: `background: #1e1e32; border-bottom: 1px solid #333; padding: 0.25rem 0.75rem; flex-wrap: wrap;`
+
+### General Rules
+
+- **Monospace everywhere** on structural elements
+- **Consistent border-radius**: `4px` for buttons/inputs, `10px` for dialogs
+- **Keyboard-first**: every interactive element must be keyboard-reachable
+- **Animations under 150ms**; no keyframe animations on structural elements
