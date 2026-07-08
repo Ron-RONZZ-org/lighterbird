@@ -11,7 +11,7 @@
   } = $props();
 
   let dialogEl;
-  let importBtn;
+  let importBtn = $state(null);
 
   let serverPath = $state("");
   let status = $state("");

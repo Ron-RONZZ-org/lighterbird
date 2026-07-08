@@ -47,10 +47,12 @@
   // This ensures the browser beforeunload handler (App.svelte) and the tab
   // close confirmation (TabView.svelte) work for ALL form types.
   // Store entry is cleaned up by TabView.handleCloseTab or form submit.
+  // Using setTimeout to break reactive chains that can trigger
+  // Svelte 5's effect_update_depth_exceeded detection.
   $effect(() => {
     const tabId = tabStore.active?.id;
     if (tabId) {
-      dirtyFormStore.setDirty(tabId, formDirty);
+      setTimeout(() => dirtyFormStore.setDirty(tabId, formDirty), 0);
     }
   });
 

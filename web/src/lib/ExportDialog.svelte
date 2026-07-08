@@ -10,7 +10,7 @@
   } = $props();
 
   let dialogEl;
-  let downloadBtn;
+  let downloadBtn = $state(null);
 
   let status = $state("");
   let statusMessage = $state("");

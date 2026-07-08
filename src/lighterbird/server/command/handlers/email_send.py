@@ -15,6 +15,11 @@ from lighterbird.server.deps import get_email_service
 
 
 @command("email.send", interactive=True,
+         params=[
+             {"name": "to", "type": "string", "help": "Recipient email address(es), comma-separated", "required": True},
+             {"name": "subject", "type": "string", "help": "Email subject", "required": True},
+             {"name": "body", "type": "string", "help": "Email body text", "required": False},
+         ],
          flags=[
              {"name": "account", "type": "string", "help": "Sender account email"},
              {"name": "cc", "type": "string", "help": "CC recipients (comma-separated)"},

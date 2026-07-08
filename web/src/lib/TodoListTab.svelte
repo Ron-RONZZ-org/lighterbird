@@ -27,6 +27,7 @@
 
   // Display mode: can be toggled between "flat" and "tree"
   // NOTE: initialized from data.tree to avoid circular dependency with isTree
+  // svelte-ignore state_referenced_locally — intentionally captured at mount
   let displayMode = $state(data?.tree ? "tree" : "flat");
   let isTree = $derived(displayMode === "tree");
 

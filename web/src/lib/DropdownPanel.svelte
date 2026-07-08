@@ -5,15 +5,16 @@
    * Props:
    *   show     — whether the overlay is visible
    *   onClose  — callback when backdrop is clicked
+   *   children — snippet for panel content (Svelte 5 runes mode)
    */
-  let { show = false, onClose = () => {} } = $props();
+  let { show = false, onClose = () => {}, children } = $props();
 </script>
 
 {#if show}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div class="dropdown-backdrop" onclick={onClose} role="presentation"></div>
   <div class="dropdown-panel">
-    <slot />
+    {@render children()}
   </div>
 {/if}
 
