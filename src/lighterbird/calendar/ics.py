@@ -5,9 +5,12 @@ Forked from A-organizi's utils/ics.py.
 
 from __future__ import annotations
 
+import logging
 import uuid as uuid_mod
 from datetime import UTC, datetime
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def iter_ics_events(text: str) -> list[dict[str, str]]:
@@ -127,8 +130,18 @@ def insert_ics_events(
     ts = now or datetime.now(UTC).replace(microsecond=0).isoformat()
     added: list[str] = []
     for event in iter_ics_events(text):
-        start = _to_iso(ics_dt(str(event.get("DTSTART", ts))))
-        end = _to_iso(ics_dt(str(event.get("DTEND", event.get("DTSTART", ts)))))
+        try:
+            start = _to_iso(ics_dt(str(event.get("DTSTART", ts))))
+            end = _to_iso(ics_dt(str(event.get("DTEND", event.get("DTSTART", ts)))))
+        except (ValueError, TypeError) as exc:
+            logger.warning(
+                "insert_ics_events: bad date in event uid=%r start=%r end=%r: %s",
+                event.get("UID", ""),
+                event.get("DTSTART", ""),
+                event.get("DTEND", ""),
+                exc,
+            )
+            continue
         title = str(event.get("SUMMARY", ""))
         uid = str(event.get("UID", ""))
         if not uid:

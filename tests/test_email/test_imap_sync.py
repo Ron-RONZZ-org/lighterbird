@@ -123,6 +123,61 @@ class TestSyncAccount:
         # Disconnect should be called in finally block
         mock_client.disconnect.assert_called_once()
 
+    @patch("lighterbird.email.imap.sync.IMAPClient")
+    def test_sync_list_folders_failure_returns_partial_result(self, mock_client_class):
+        """When list_folders() raises, sync_account should return a result
+        with the error recorded, not crash."""
+        mock_client = _make_mock_client()
+        mock_client_class.return_value = mock_client
+        mock_client.list_folders.side_effect = ConnectionError("IMAP connection lost")
+
+        result = sync_account(
+            host="imap.example.com", port=993, use_ssl=True,
+            username="user", password="pass",
+            account_email="user@example.com",
+            db_store=MagicMock(),
+        )
+        # Should return a SyncResult with an error, not crash
+        assert len(result.errors) >= 1
+        assert any("IMAP" in e for e in result.errors)
+        assert result.total == 0
+
+    @patch("lighterbird.email.imap.sync._check_uidvalidity")
+    @patch("lighterbird.email.imap.sync.IMAPClient")
+    def test_sync_uidvalidity_failure_does_not_abort_loop(
+        self, mock_client_class, mock_check_uv,
+    ):
+        """If _check_uidvalidity raises for one folder, the loop continues
+        to process remaining folders."""
+        mock_client = _make_mock_client()
+        mock_client_class.return_value = mock_client
+
+        mock_client.list_folders.return_value = [
+            {"name": "INBOX", "delimiter": "/", "flags": [], "special_use": None},
+            {"name": "Sent", "delimiter": "/", "flags": [], "special_use": None},
+            {"name": "Custom", "delimiter": "/", "flags": [], "special_use": None},
+        ]
+        mock_client.sync_folder.return_value = {"total": 1, "new": 1, "errors": []}
+
+        # Make _check_uidvalidity raise for the second folder (Sent)
+        def raise_on_sent(db, email, folder, uv):
+            if folder == "Sent":
+                raise RuntimeError("UIDVALIDITY check failed")
+        mock_check_uv.side_effect = raise_on_sent
+
+        mock_db = MagicMock()
+        result = sync_account(
+            host="imap.example.com", port=993, use_ssl=True,
+            username="user", password="pass",
+            account_email="user@example.com",
+            db_store=mock_db,
+        )
+        # All 3 folders should have been synced (errors for uidvalidity don't stop loop)
+        assert result.total == 3  # 1 per folder × 3 folders
+        # The second folder had a _check_uidvalidity error, but it was caught,
+        # so sync_folder was still called for Sent
+        assert mock_client.sync_folder.call_count == 3
+
 
 class TestRetryPendingTrash:
     def test_no_pending(self):

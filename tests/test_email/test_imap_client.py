@@ -84,6 +84,92 @@ class TestParseListResponse:
         assert result is not None
         assert result["name"] == "My Folder"
 
+    def test_parse_extended_response_with_extra(self):
+        """Some servers include extra response codes after the mailbox name."""
+        line = b'(\\HasNoChildren) "/" INBOX (MYRIGHTS "acdelrx")'
+        result = _parse_list_response(line)
+        assert result is not None
+        assert result["name"] == "INBOX"
+        assert result["delimiter"] == "/"
+
+    def test_parse_non_ascii_utf8_name(self):
+        """Non-ASCII UTF-8 folder names (quoted)."""
+        line = b'(\\HasNoChildren) "/" "NON-ASCII/\xe3\x83\x95\xe3\x82\xa9\xe3\x83\xab\xe3\x83\x80"'
+        result = _parse_list_response(line)
+        assert result is not None
+        # Decoded: NON-ASCII/フォルダ
+        assert "NON-ASCII/" in result["name"]
+
+    def test_parse_fallback_quoted_name_no_regex(self):
+        """Fallback parser should handle a line where the regex does not match
+        but the name is still extractable by splitting on quotes.
+        Simulates a non-standard IMAP server."""
+        # Line without the standard * LIST prefix (already stripped by imaplib)
+        # but with extra data after the name that confuses the regex
+        line = b'(\\HasNoChildren) "/" "My Custom Folder" extra data'
+        result = _parse_list_response(line)
+        # Should still parse via fallback
+        assert result is not None
+        assert result["name"] == "My Custom Folder"
+        assert result["delimiter"] == "/"
+
+    def test_parse_fallback_unquoted_name_with_spaces_noregex(self):
+        """Fallback when regex does not match and server sends unquoted name with spaces."""
+        # Line format: flags delimiter name (all unquoted, name with spaces)
+        # The regex cannot match this because it expects \S+ for unquoted.
+        # But the fallback split-on-quotes won't capture this either (no quotes).
+        # This should still return something sensible (the first word via regex).
+        line = b'(\\HasNoChildren) "/" My Folder With Spaces'
+        result = _parse_list_response(line)
+        # The regex matches partially and returns "My"
+        # This is expected behavior — the server is non-compliant for not quoting
+        assert result is not None
+        assert result["name"] == "My"
+
+    def test_parse_extended_list_with_trailing_parens(self):
+        """Extended LIST responses with trailing parenthesized data."""
+        line = b'(\\HasNoChildren) "/" INBOX (SOMEEXTENSION ("data"))'
+        result = _parse_list_response(line)
+        assert result is not None
+        assert result["name"] == "INBOX"
+
+    def test_parse_quoted_name_with_trailing_extra(self):
+        """Quoted name followed by extra data (server may add response codes)."""
+        line = b'(\\HasNoChildren) "/" "My Folder" (extra)'
+        result = _parse_list_response(line)
+        assert result is not None
+        assert result["name"] == "My Folder"
+
+    def test_parse_fallback_deeply_nested(self):
+        """Deeply nested folder path with spaces (quoted)."""
+        line = b'(\\HasNoChildren) "." "Parent Folder/Child Folder/Sub Folder"'
+        result = _parse_list_response(line)
+        assert result is not None
+        assert result["name"] == "Parent Folder/Child Folder/Sub Folder"
+        assert result["delimiter"] == "."
+
+    def test_parse_with_childinfo(self):
+        """LIST response with CHILDINFO extension (RFC 5258)."""
+        line = b'(\\HasChildren) "/" INBOX (CHILDINFO ("SUBSCRIBED"))'
+        result = _parse_list_response(line)
+        assert result is not None
+        assert result["name"] == "INBOX"
+
+    def test_parse_empty_flags(self):
+        """Empty flags parenthesized list."""
+        line = b'() "/" INBOX'
+        result = _parse_list_response(line)
+        assert result is not None
+        assert result["name"] == "INBOX"
+        assert result["flags"] == []
+
+    def test_parse_nil_delimiter(self):
+        """NIL delimiter (server-side root)."""
+        line = b'(\\Noselect) NIL "" '
+        result = _parse_list_response(line)
+        # Empty name after decode → returns None
+        assert result is None
+
 
 # ── IMAPClient ───────────────────────────────────────────────────────────────
 
@@ -194,6 +280,48 @@ class TestIMAPClientListFolders:
         assert result[0]["name"] == "INBOX"
         assert result[1]["name"] == "Sent"
         assert result[1]["special_use"] == "Sent"
+
+    def test_list_folders_skips_unparseable(self):
+        """list_folders should skip unparseable lines and log a warning."""
+        client = IMAPClient("imap.example.com")
+        mock_conn = MagicMock()
+        client._conn = mock_conn
+        # Mix parseable and unparseable lines
+        mock_conn.list.return_value = (
+            "OK",
+            [
+                b'(\\HasNoChildren) "/" INBOX',
+                b'garbage that cannot be parsed',
+                b'(\\Sent) "/" Sent',
+            ],
+        )
+        result = client.list_folders()
+        # Should skip the garbage line, keep the two valid ones
+        assert len(result) == 2
+        names = [r["name"] for r in result]
+        assert "INBOX" in names
+        assert "Sent" in names
+
+    def test_list_folders_handles_extended_format(self):
+        """list_folders should handle extended LIST formats regardless of
+        whether they use the regex or fallback path."""
+        client = IMAPClient("imap.example.com")
+        mock_conn = MagicMock()
+        client._conn = mock_conn
+        mock_conn.list.return_value = (
+            "OK",
+            [
+                b'(\\HasNoChildren) "/" INBOX (MYRIGHTS "acdelrx")',
+                b'(\\HasNoChildren) "/" "My Folder" extra data at end',
+            ],
+        )
+        result = client.list_folders()
+        assert len(result) == 2
+        names = [r["name"] for r in result]
+        assert "INBOX" in names
+        # The fallback should extract the folder name even with extra data
+        folder_names = [r["name"] for r in result]
+        assert any("My Folder" in n for n in folder_names)
 
 
 class TestIMAPClientEnsureFolder:

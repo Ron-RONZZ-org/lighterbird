@@ -177,6 +177,8 @@ lighterbird/
 
 ## Testing Requirements
 
+**Full test suite timeout**: Running `uv run pytest tests/` takes ~5+ minutes (427 email tests, plus calendar, contacts, todo, journal, server, core, and more). In practice it's been observed to exceed 7 minutes, so set a shell timeout of at least 600000ms (10 minutes). Unless you have specific reason to suspect wide-ranging breakage, run only tests relevant to your changes.
+
 ### GUI + Incomplete CLI → GUI Form Testing
 
 **All interactive commands MUST be tested via BOTH the API and the browser GUI.** Incomplete CLI commands that trigger a form popup (`form-required` response) are the primary UX pattern and must be explicitly verified end-to-end:

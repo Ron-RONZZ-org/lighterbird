@@ -215,6 +215,10 @@ class FlagPuller:
 
         for item in data:
             if not isinstance(item, tuple):
+                logger.debug(
+                    "[flag_pull] Non-tuple item in FETCH response: %r",
+                    item[:200] if isinstance(item, bytes) else type(item).__name__,
+                )
                 continue
             raw_data = item[0] if item[0] else b""
 
@@ -305,7 +309,13 @@ def _extract_uid(raw_data: bytes) -> int | None:
     """
     import re
     m = re.search(rb"UID\s+(\d+)", raw_data)
-    return int(m.group(1)) if m else None
+    if m:
+        return int(m.group(1))
+    logger.warning(
+        "[flag_pull] Could not extract UID from FETCH response: %r",
+        raw_data[:200],
+    )
+    return None
 
 
 def _extract_flags(raw_data: bytes) -> list[str] | None:
@@ -317,6 +327,10 @@ def _extract_flags(raw_data: bytes) -> list[str] | None:
     import re
     m = re.search(rb"FLAGS\s*\(([^)]*)\)", raw_data)
     if not m:
+        logger.warning(
+            "[flag_pull] Could not extract FLAGS from FETCH response: %r",
+            raw_data[:200],
+        )
         return None
     flag_str = m.group(1).decode("ascii", errors="replace")
     return [f.strip() for f in flag_str.split() if f.strip()]
@@ -331,7 +345,9 @@ def _extract_modseq(raw_data: bytes) -> int | None:
     m = re.search(rb"MODSEQ\s*\((\d+)\)", raw_data)
     if not m:
         m = re.search(rb"MODSEQ\s+(\d+)", raw_data)
-    return int(m.group(1)) if m else None
+    if m:
+        return int(m.group(1))
+    return None
 
 
 __all__ = ["FlagPuller", "_flags_to_state", "_merge", "_extract_uid",
