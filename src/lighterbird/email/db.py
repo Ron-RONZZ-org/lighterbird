@@ -165,16 +165,24 @@ _IDX_SIEVE_ACTIVATIONS_ACCOUNT = "CREATE INDEX IF NOT EXISTS idx_sieve_activatio
 # ── Multi-signature support (v2: decoupled from accounts) ─────────────
 _EMAIL_SIGNATURES_TABLE = """
 CREATE TABLE IF NOT EXISTS email_signatures (
-    uuid            TEXT PRIMARY KEY,
-    name            TEXT NOT NULL,
-    signature_text  TEXT NOT NULL DEFAULT '',
-    created_at      TEXT NOT NULL,
-    updated_at      TEXT NOT NULL,
+    uuid              TEXT PRIMARY KEY,
+    name              TEXT NOT NULL,
+    signature_text    TEXT NOT NULL DEFAULT '',
+    signature_format  TEXT NOT NULL DEFAULT 'plain'
+                      CHECK(signature_format IN ('plain', 'html', 'markdown')),
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
     UNIQUE(name)
 );
 """
 _MIGRATE_ACCOUNTS_DEFAULT_SIGNATURE = """
 ALTER TABLE accounts ADD COLUMN default_signature_uuid TEXT REFERENCES email_signatures(uuid) ON DELETE SET NULL;
+"""
+_MIGRATE_SIGNATURE_FORMAT = """
+ALTER TABLE email_signatures ADD COLUMN signature_format TEXT NOT NULL DEFAULT 'plain';
+"""
+_MIGRATE_SEND_QUEUE_SIGNATURE_FORMAT = """
+ALTER TABLE send_queue ADD COLUMN signature_format TEXT NOT NULL DEFAULT 'plain';
 """
 
 _IDX_MESSAGES_ACCOUNT = "CREATE INDEX IF NOT EXISTS idx_messages_account ON messages(account_email);"
@@ -233,6 +241,7 @@ CREATE TABLE IF NOT EXISTS send_queue (
     account_email   TEXT NOT NULL,
     body_format     TEXT NOT NULL DEFAULT 'markdown',
     signature       TEXT NOT NULL DEFAULT '',
+    signature_format TEXT NOT NULL DEFAULT 'plain',
     priority        INTEGER NOT NULL DEFAULT 3,
     status          TEXT NOT NULL DEFAULT 'pending'
                     CHECK(status IN ('pending', 'running', 'completed', 'failed')),
@@ -283,6 +292,8 @@ _SCHEMA_STATEMENTS: list[str] = [
     _IDX_SIEVE_ACTIVATIONS_ACCOUNT,
     # Multi-signature (Phase 2: decoupled from accounts)
     _MIGRATE_ACCOUNTS_DEFAULT_SIGNATURE,
+    _MIGRATE_SIGNATURE_FORMAT,
+    _MIGRATE_SEND_QUEUE_SIGNATURE_FORMAT,
     _EMAIL_SIGNATURES_TABLE,
 ]
 

@@ -43,6 +43,7 @@ class MsgSendComposeMixin:
         body_format: str = "markdown",
         attachments: list[dict[str, Any]] | None = None,
         signature: str | None = None,
+        signature_format: str = "plain",
         in_reply_to: str | None = None,
         *,
         save_as_sample: bool = True,
@@ -98,11 +99,13 @@ class MsgSendComposeMixin:
         att_list = attachments or []
         smtp_port = acct.get("smtp_port", 587)
 
-        # Use account's default named signature if no override provided
+        # Resolve signature — use stored default if no override provided
         if signature is None:
             from lighterbird.email.services.signatures import SignatureService
             sig_svc = SignatureService(self.db)
-            signature = sig_svc.resolve_text(account_email)
+            resolved = sig_svc.resolve(account_email)
+            signature = (resolved or {}).get("signature_text", "")
+            signature_format = (resolved or {}).get("signature_format", "plain")
 
         msg_uuid = str(uuid_mod.uuid4())
         message_id = str(uuid_mod.uuid4())
@@ -159,6 +162,7 @@ class MsgSendComposeMixin:
                 html_body=html_body,
                 attachments=att_list,
                 signature=signature,
+                signature_format=signature_format,
                 message_id=message_id,
                 in_reply_to=in_reply_to,
             )
@@ -189,7 +193,7 @@ class MsgSendComposeMixin:
             return {"status": "sent", "uuid": msg_uuid, "message_id": message_id}
         else:
             self._enqueue_send(msg_uuid, account_email, body_format, signature,
-                               priority, send_error)
+                               priority, send_error, signature_format)
             logger.warning(
                 "Email %s queued for retry (SMTP failed: %s)", msg_uuid[:8], send_error,
             )

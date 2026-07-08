@@ -4,6 +4,7 @@
   import { email as emailApi, contacts as contactsApi, drafts as draftsApi } from "./api.js";
   import EmbedInstallDialog from "./EmbedInstallDialog.svelte";
   import FormField from "./FormField.svelte";
+  import PreviewDialog from "./PreviewDialog.svelte";
   import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
   import MultiEntryField from "./MultiEntryField.svelte";
 
@@ -31,10 +32,11 @@
   let contactSuggestions = $state([]); // email addresses from contacts
 
   // ── Signature state ────────────────────────────────────────────────
-  let signatureList = $state([]); // [{uuid, name, signature_text, ...}]
+  let signatureList = $state([]); // [{uuid, name, signature_text, signature_format, ...}]
   let useSignature = $state(true);
   let selectedSignatureName = $state("default");
   let signaturePreview = $state("");
+  let signatureFormat = $state("plain");
 
   /** Load all signatures (global — not per-account) */
   function loadAllSignatures() {
@@ -54,9 +56,11 @@
           const def = sigs[0];
           selectedSignatureName = def.name;
           signaturePreview = def.signature_text || "";
+          signatureFormat = def.signature_format || "plain";
           useSignature = true;
         } else {
           signaturePreview = "";
+          signatureFormat = "plain";
           useSignature = false;
         }
       })
@@ -64,6 +68,7 @@
         // Silently fail — no signatures available
         signatureList = [];
         signaturePreview = "";
+        signatureFormat = "plain";
         useSignature = false;
       });
   }
@@ -78,6 +83,26 @@
     selectedSignatureName = name;
     const found = signatureList.find((s) => s.name === name);
     signaturePreview = found ? (found.signature_text || "") : "";
+    signatureFormat = found ? (found.signature_format || "plain") : "plain";
+  }
+
+  /** Preview state for body and signature */
+  let preview = $state(null);
+  function previewSignature() {
+    if (!signaturePreview) return;
+    import("./preview.svelte.js").then((mod) => {
+      const state = mod.createPreviewState();
+      preview = state;
+      state.show(signaturePreview, signatureFormat, "Signature Preview");
+    });
+  }
+  function previewBody() {
+    if (!body) return;
+    import("./preview.svelte.js").then((mod) => {
+      const state = mod.createPreviewState();
+      preview = state;
+      state.show(body, bodyFormat, "Body Preview");
+    });
   }
 
   // ── Load contacts for recipient suggestions ──────────────────────────
@@ -163,6 +188,11 @@
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
       handleSubmit(e);
+    }
+    // Ctrl+Shift+P — preview body
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "p" || e.key === "P")) {
+      e.preventDefault();
+      if (body.trim()) previewBody();
     }
     // q — close tab; prompt save draft if dirty
     if (e.key === "q" && !e.ctrlKey && !e.metaKey && dirty) {
@@ -349,6 +379,10 @@
             <option value="html">HTML</option>
             <option value="plain">Plain Text</option>
           </select>
+          <button type="button" class="preview-btn" onclick={previewBody}
+            disabled={!body.trim()} title="Preview body (Ctrl+Shift+P)">
+            Preview
+          </button>
         </div>
         <textarea id="body" class="ff-textarea" bind:value={body} rows="8"
           placeholder="Message body (Markdown supported)"></textarea>
@@ -375,13 +409,20 @@
         </label>
         {#if useSignature}
           {#if signatureList.length > 0}
-            <select class="ff-input sig-select"
-              value={selectedSignatureName}
-              onchange={(e) => onSignatureSelect(e.target.value)}>
-              {#each signatureList as sig}
-                <option value={sig.name}>{sig.name}</option>
-              {/each}
-            </select>
+            <div class="sig-select-row">
+              <select class="ff-input sig-select"
+                value={selectedSignatureName}
+                onchange={(e) => onSignatureSelect(e.target.value)}>
+                {#each signatureList as sig}
+                  <option value={sig.name}>{sig.name}</option>
+                {/each}
+              </select>
+              <span class="sig-format-badge">{signatureFormat}</span>
+              <button type="button" class="sig-preview-btn" onclick={previewSignature}
+                title="Preview signature" disabled={!signaturePreview}>
+                Preview
+              </button>
+            </div>
             <div class="sig-preview">{signaturePreview}</div>
           {:else}
             <p class="sig-empty">No signatures configured. Use <code>!email signature add</code> to create one.</p>
@@ -390,6 +431,15 @@
       </div>
     {/snippet}
   </FormField>
+
+  {#if preview}
+    <PreviewDialog
+      showing={preview.showing}
+      htmlContent={preview.htmlContent}
+      title={preview.title}
+      onclose={() => preview.close()}
+    />
+  {/if}
 
   <!-- File attachments -->
   <FormField label="Attachments">
@@ -478,6 +528,14 @@
     color: #e0e0e0; border-radius: 4px; font-family: monospace; font-size: 0.78rem;
     cursor: pointer;
   }
+  .preview-btn {
+    padding: 0.25rem 0.5rem; border: 1px solid #444; border-radius: 4px;
+    background: transparent; color: #b0b0c0; font-family: monospace;
+    font-size: 0.72rem; cursor: pointer; transition: background 0.1s, color 0.1s;
+    white-space: nowrap;
+  }
+  .preview-btn:hover:not(:disabled) { background: #2a2a44; color: #e0e0e0; }
+  .preview-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .attachment-area { display: flex; flex-direction: column; gap: 0.4rem; }
   .file-input {
     font-family: monospace; font-size: 0.8rem; color: #ccc;
@@ -521,7 +579,27 @@
     display: flex; flex-direction: column; gap: 0.35rem;
   }
   .sig-toggle { font-size: 0.82rem; }
-  .sig-select { font-size: 0.82rem; max-width: 20rem; }
+  .sig-select { font-size: 0.82rem; max-width: 16rem; }
+  .sig-select-row {
+    display: flex; align-items: center; gap: 0.4rem;
+  }
+  .sig-format-badge {
+    font-family: monospace; font-size: 0.7rem;
+    padding: 0.15rem 0.4rem;
+    background: #2a2a3e; border: 1px solid #444; border-radius: 3px;
+    color: #9090b0; text-transform: uppercase;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .sig-preview-btn {
+    padding: 0.15rem 0.5rem;
+    border: 1px solid #444; border-radius: 4px;
+    background: transparent; color: #b0b0c0;
+    font-family: monospace; font-size: 0.72rem;
+    cursor: pointer; white-space: nowrap;
+    transition: background 0.1s, color 0.1s;
+  }
+  .sig-preview-btn:hover:not(:disabled) { background: #2a2a44; color: #e0e0e0; }
+  .sig-preview-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .sig-preview {
     font-family: monospace; font-size: 0.78rem; color: #909090;
     background: #1a1a2e; border: 1px solid #333; border-radius: 4px;

@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from lighterbird.letter.services.letters import LetterService
+from lighterbird.server.render_utils import convert_to_html
 from lighterbird.server.deps import get_letter_service
 
 router = APIRouter(prefix="/api/v1/letters", tags=["letters"])
@@ -86,11 +87,11 @@ class RenderPreviewRequest(BaseModel):
 
 
 @router.post("/render-preview")
-def render_preview(req: RenderPreviewRequest, svc: LetterService = Depends(get_letter_service)):
-    """Convert body content to HTML for preview rendering."""
+def render_preview(req: RenderPreviewRequest):
+    """Convert body content to HTML for preview rendering (uses shared utility)."""
     if not req.content.strip():
         return {"html": ""}
-    html = svc.convert_to_html(req.content, req.format)
+    html = convert_to_html(req.content, req.format)
     return {"html": html}
 
 

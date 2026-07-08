@@ -110,20 +110,25 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
     # Resolve signature override
     signature_value: str | None = None
+    signature_format: str = "plain"
     if no_signature:
         signature_value = ""  # empty string = send without signature
     elif signature_name is not None:
-        # Look up named signature globally
-        sig_text = svc.signatures.resolve_text(account_email, name=signature_name)
-        signature_value = sig_text
+        # Look up named signature globally — preserve its format
+        sig = svc.signatures.resolve(account_email, name=signature_name)
+        signature_value = (sig or {}).get("signature_text", "")
+        signature_format = (sig or {}).get("signature_format", "plain")
     elif signature_override is not None:
         signature_value = signature_override
+        # Inline override defaults to plain
+        signature_format = flags.get("signature-format", "plain")
 
     result = svc.send_email(account_email, to_list, subject, body,
                             cc=cc_list, bcc=bcc_list, priority=priority,
                             body_format=body_format,
                             attachments=attachments,
                             signature=signature_value,
+                            signature_format=signature_format,
                             in_reply_to=in_reply_to or None,
                             save_as_sample=save_as_sample)
     if result.get("status") == "queued":

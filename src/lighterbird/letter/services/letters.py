@@ -386,45 +386,7 @@ class LetterService(CRUDService):
         return clean.strip()
 
     def convert_to_html(self, content: str, fmt: str) -> str:
-        """Convert markdown or plain text to HTML."""
-        if fmt == "html":
-            return content
-        if fmt == "markdown":
-            try:
-                import markdown as md_lib
-                return md_lib.markdown(content)
-            except ImportError:
-                pass
-            lines = []
-            in_para = False
-            for raw_line in content.split("\n"):
-                stripped = raw_line.strip()
-                if not stripped:
-                    if in_para:
-                        lines.append("</p>")
-                        in_para = False
-                    continue
-                if stripped.startswith("# "):
-                    if in_para:
-                        lines.append("</p>")
-                        in_para = False
-                    lines.append(f"<h1>{self._inline_markdown(stripped[2:])}</h1>")
-                elif stripped.startswith("## "):
-                    if in_para:
-                        lines.append("</p>")
-                        in_para = False
-                    lines.append(f"<h2>{self._inline_markdown(stripped[3:])}</h2>")
-                elif stripped.startswith("### "):
-                    if in_para:
-                        lines.append("</p>")
-                        in_para = False
-                    lines.append(f"<h3>{self._inline_markdown(stripped[4:])}</h3>")
-                else:
-                    if not in_para:
-                        lines.append("<p>")
-                        in_para = True
-                    lines.append(self._inline_markdown(stripped))
-            if in_para:
-                lines.append("</p>")
-            return "\n".join(lines)
-        return f"<pre>{content}</pre>"
+        """Convert markdown or plain text to HTML (delegates to shared utility)."""
+        from lighterbird.server.render_utils import convert_to_html as _convert
+
+        return _convert(content, fmt)

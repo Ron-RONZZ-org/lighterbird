@@ -3,6 +3,8 @@
 
   import { drafts as draftsApi } from "./api.js";
   import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
+  import PreviewDialog from "./PreviewDialog.svelte";
+  import { createPreviewState } from "./preview.svelte.js";
 
   let { initialData = {}, onsubmit, onDirtyChange = () => {} } = $props();
   // svelte-ignore state_referenced_locally
@@ -10,11 +12,15 @@
 
   let title = $state(_initial.title || "");
   let text = $state(_initial.text || "");
+  let bodyFormat = $state("markdown");
   let date = $state(_initial.date || new Date().toISOString().slice(0, 10));
   let writing = $state(false);
   let savingDraft = $state(false);
   let draftSaved = $state(false);
   let draftUuid = $state(_initial._draft_uuid || null);
+
+  // ── Preview state ─────────────────────────────────────────────────
+  let preview = $state(createPreviewState());
 
   // ── LLM co-writing ─────────────────────────────────────────────────
   let cowrite = $state(createCowrite({
@@ -53,6 +59,11 @@
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
       handleSubmit(e);
+    }
+    // Ctrl+Shift+P — preview content
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "p" || e.key === "P")) {
+      e.preventDefault();
+      preview.show(text, bodyFormat, "Journal Preview");
     }
   }
 
@@ -101,7 +112,20 @@
     <input id="date" type="date" bind:value={date} />
   </div>
   <div class="field">
-    <label for="text">Content</label>
+    <div class="field-header">
+      <label for="text">Content</label>
+      <div class="field-controls">
+        <select class="format-select" bind:value={bodyFormat}>
+          <option value="markdown">Markdown</option>
+          <option value="html">HTML</option>
+          <option value="plain">Plain Text</option>
+        </select>
+        <button type="button" class="preview-btn" onclick={() => preview.show(text, bodyFormat, "Journal Preview")}
+          disabled={!text.trim()}>
+          Preview
+        </button>
+      </div>
+    </div>
     <textarea id="text" bind:value={text} rows="12" placeholder="Write your journal entry here..."></textarea>
   </div>
   <div class="actions">
@@ -122,6 +146,15 @@
   {#if cowrite.isActive}
     <CowritePanel {cowrite} />
   {/if}
+
+  {#if preview.showing}
+    <PreviewDialog
+      showing={preview.showing}
+      htmlContent={preview.htmlContent}
+      title={preview.title}
+      onclose={() => preview.close()}
+    />
+  {/if}
 </form>
 
 <svelte:window onkeydown={handleFormKeydown} />
@@ -139,6 +172,26 @@
   .toolbar-title { color: #b0b0c0; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; }
   .field { display: flex; flex-direction: column; gap: 0.25rem; }
   .field label { font-size: 0.8rem; color: #7c7c9a; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  .field-header {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .field-controls {
+    display: flex; gap: 0.4rem; align-items: center;
+  }
+  .format-select {
+    padding: 0.25rem 0.4rem; border: 1px solid #444; border-radius: 4px;
+    background: #12122a; color: #e0e0e0; font-family: monospace;
+    font-size: 0.78rem; outline: none; cursor: pointer;
+  }
+  .format-select:focus { border-color: #6a6a9a; }
+  .preview-btn {
+    padding: 0.25rem 0.5rem; border: 1px solid #444; border-radius: 4px;
+    background: transparent; color: #b0b0c0; font-family: monospace;
+    font-size: 0.72rem; cursor: pointer; transition: background 0.1s, color 0.1s;
+    white-space: nowrap;
+  }
+  .preview-btn:hover:not(:disabled) { background: #2a2a44; color: #e0e0e0; }
+  .preview-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .field input, .field textarea {
     background: #16213e; border: 1px solid #333; color: #e0e0e0;
     padding: 0.5rem; border-radius: 4px; font-family: inherit; font-size: 0.9rem;

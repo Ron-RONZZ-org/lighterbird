@@ -44,7 +44,7 @@ class _ComposeTestHost(MsgSendComposeMixin):
         self._account_service = MagicMock()
 
     def _enqueue_send(self, msg_uuid, account_email, body_format, signature,
-                      priority, send_error):
+                      priority, send_error, signature_format="plain"):
         """Stub: the real implementation lives in another mixin."""
         pass
 

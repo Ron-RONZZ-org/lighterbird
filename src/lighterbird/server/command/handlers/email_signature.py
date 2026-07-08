@@ -51,26 +51,37 @@ def signature_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
              {"name": "name", "type": "string", "help": "Unique signature name (e.g. work, personal)", "required": True},
              {"name": "text", "type": "string", "help": "Signature text (plain text or HTML)"},
          ],
+         flags=[
+             {"name": "format", "type": "string", "help": "Signature format: plain, html, or markdown",
+              "values": ["plain", "html", "markdown"]},
+         ],
          interactive=True)
 def signature_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email signature add <name> <text>
+    """!email signature add <name> <text> [--format plain|html|markdown]
 
     Add a new global named signature.
     ``<name>`` is a unique label (e.g. "work", "personal").
-    ``<text>`` is the signature content (plain text or HTML).
+    ``<text>`` is the signature content.
+    ``--format`` specifies the format: ``plain`` (default), ``html``, or ``markdown``.
     """
     if len(remaining) < 1:
         raise CommandValidationError(
             "Missing required args: <name> <text>",
-            "Usage: !email signature add work \"Best regards\\nJohn\"",
+            "Usage: !email signature add work \"Best regards\\nJohn\" [--format markdown]",
         )
     name = remaining[0]
     text = " ".join(remaining[1:]) if len(remaining) > 1 else ""
+    sig_format = flags.get("format", "plain")
+
+    if sig_format not in ("plain", "html", "markdown"):
+        raise CommandValidationError(
+            f"Invalid format: {sig_format}. Must be 'plain', 'html', or 'markdown'."
+        )
 
     svc: EmailService = get_email_service()
 
     try:
-        sig = svc.signatures.create(name, text)
+        sig = svc.signatures.create(name, text, signature_format=sig_format)
     except ValueError as e:
         raise CommandValidationError(str(e))
 
@@ -88,30 +99,39 @@ def signature_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
          flags=[
              {"name": "name", "type": "string", "help": "New signature name"},
              {"name": "text", "type": "string", "help": "New signature text"},
+             {"name": "format", "type": "string", "help": "Signature format: plain, html, or markdown",
+              "values": ["plain", "html", "markdown"]},
          ],
          interactive=True)
 def signature_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email signature modify <uuid> [--name NAME] [--text TEXT]
+    """!email signature modify <uuid> [--name NAME] [--text TEXT] [--format plain|html|markdown]
 
-    Update a signature's name and/or text by UUID.
+    Update a signature's name, text, and/or format by UUID.
     """
     if not remaining:
         raise CommandValidationError(
             "Missing signature UUID.",
-            "Usage: !email signature modify <uuid> [--name NAME] [--text TEXT]",
+            "Usage: !email signature modify <uuid> [--name NAME] [--text TEXT] [--format plain|html|markdown]",
         )
     uuid_ = remaining[0]
     name = flags.get("name", None)
     text = flags.get("text", None)
+    sig_format = flags.get("format", None)
 
-    if name is None and text is None:
+    if sig_format is not None and sig_format not in ("plain", "html", "markdown"):
         raise CommandValidationError(
-            "Nothing to change. Provide --name and/or --text.",
+            f"Invalid format: {sig_format}. Must be 'plain', 'html', or 'markdown'."
+        )
+
+    if name is None and text is None and sig_format is None:
+        raise CommandValidationError(
+            "Nothing to change. Provide --name, --text, and/or --format.",
         )
 
     svc: EmailService = get_email_service()
     try:
-        sig = svc.signatures.update(uuid_, name=name, signature_text=text)
+        sig = svc.signatures.update(uuid_, name=name, signature_text=text,
+                                     signature_format=sig_format)
     except ValueError as e:
         raise CommandValidationError(str(e))
 
