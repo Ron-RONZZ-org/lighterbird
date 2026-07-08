@@ -44,35 +44,10 @@
     onbodypathchange?.(bodyPath);
   }
 
+  import { showPreviewInTab } from "./preview.svelte.js";
+
   async function openPreviewInTab() {
-    // Send body to backend for rendering, then open in new tab
-    try {
-      const resp = await fetch("/api/v1/letters/render-preview", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: body, format: bodyFormat }),
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        const html = data.html || "<p>(empty)</p>";
-        const win = window.open("", "_blank");
-        if (win) {
-          win.document.write(
-            '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
-            + '<title>Body Preview</title>'
-            + '<style>body{font-family:Georgia,"Times New Roman",serif;padding:2em;line-height:1.6;color:#000;background:#fff;max-width:21cm;margin:0 auto;}</style>'
-            + '</head><body>'
-            + html
-            + '</body></html>'
-          );
-          win.document.close();
-        }
-      } else {
-        alert("Preview unavailable");
-      }
-    } catch {
-      alert("Preview unavailable");
-    }
+    await showPreviewInTab(body, bodyFormat);
   }
 </script>
 

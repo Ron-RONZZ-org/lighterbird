@@ -10,7 +10,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-_COLS = ("uuid", "name", "signature_text",
+_COLS = ("uuid", "name", "signature_text", "signature_format",
          "created_at", "updated_at")
 
 
@@ -69,20 +69,34 @@ class SignatureService:
     # ── Mutations ───────────────────────────────────────────────────────
 
     def create(self, name: str,
-               signature_text: str = "") -> dict:
+               signature_text: str = "",
+               signature_format: str = "plain") -> dict:
         """Create a new named signature.
 
+        Args:
+            name: Unique signature name.
+            signature_text: The signature content.
+            signature_format: One of ``"plain"``, ``"html"``, ``"markdown"``.
+                Defaults to ``"plain"`` for backward compatibility.
+
         Raises:
-            ValueError: If a signature with the same name already exists.
+            ValueError: If a signature with the same name already exists,
+                or *signature_format* is invalid.
         """
+        if signature_format not in ("plain", "html", "markdown"):
+            raise ValueError(
+                f"Invalid signature format '{signature_format}'. "
+                "Must be 'plain', 'html', or 'markdown'."
+            )
         now = datetime.now(UTC).isoformat()
         uid = str(uuid.uuid4())
         try:
             self.db.execute(
                 "INSERT INTO email_signatures "
-                "(uuid, name, signature_text, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (uid, name, signature_text, now, now),
+                "(uuid, name, signature_text, signature_format, "
+                " created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (uid, name, signature_text, signature_format, now, now),
             )
         except Exception as e:
             if "UNIQUE" in str(e):
@@ -91,25 +105,40 @@ class SignatureService:
                 )
             raise
         return {"uuid": uid,
-                "name": name, "signature_text": signature_text}
+                "name": name, "signature_text": signature_text,
+                "signature_format": signature_format}
 
     def update(self, uuid_: str, name: str | None = None,
-               signature_text: str | None = None) -> dict | None:
-        """Update a signature's name and/or text.
+               signature_text: str | None = None,
+               signature_format: str | None = None) -> dict | None:
+        """Update a signature's name, text, and/or format.
 
         Returns the updated signature, or None if not found.
+
+        Args:
+            uuid_: Signature UUID.
+            name: New name (or None to keep current).
+            signature_text: New text (or None to keep current).
+            signature_format: New format (or None to keep current).
+                Must be ``"plain"``, ``"html"``, or ``"markdown"``.
         """
         existing = self.get(uuid_)
         if not existing:
             return None
+        if signature_format and signature_format not in ("plain", "html", "markdown"):
+            raise ValueError(
+                f"Invalid signature format '{signature_format}'. "
+                "Must be 'plain', 'html', or 'markdown'."
+            )
         now = datetime.now(UTC).isoformat()
         new_name = name if name is not None else existing["name"]
         new_text = signature_text if signature_text is not None else existing["signature_text"]
+        new_fmt = signature_format if signature_format is not None else existing.get("signature_format", "plain")
         try:
             self.db.execute(
                 "UPDATE email_signatures SET name = ?, signature_text = ?, "
-                "updated_at = ? WHERE uuid = ?",
-                (new_name, new_text, now, uuid_),
+                "signature_format = ?, updated_at = ? WHERE uuid = ?",
+                (new_name, new_text, new_fmt, now, uuid_),
             )
         except Exception as e:
             if "UNIQUE" in str(e):
@@ -118,7 +147,7 @@ class SignatureService:
                 )
             raise
         return {**existing, "name": new_name, "signature_text": new_text,
-                "updated_at": now}
+                "signature_format": new_fmt, "updated_at": now}
 
     def delete(self, uuid_: str) -> bool:
         """Delete a signature by UUID. Returns True if deleted."""
@@ -164,6 +193,22 @@ class SignatureService:
         Returns:
             Signature text string, or empty string if not found.
         """
+        sig = self.resolve(account_email, name=name)
+        return (sig or {}).get("signature_text", "")
+
+    def resolve(self, account_email: str,
+                name: str | None = None) -> dict | None:
+        """Resolve the full signature dict (text + format) for an account.
+
+        Args:
+            account_email: The account email (used for per-account default).
+            name: Signature name for explicit lookup. If None, uses
+                  the account's default signature.
+
+        Returns:
+            Signature dict with ``signature_text`` and ``signature_format``,
+            or None if no signature is configured.
+        """
         if name is not None:
             sig = self.get_by_name(name)
         else:
@@ -171,7 +216,9 @@ class SignatureService:
         if not sig:
             # Fall back to the first available signature
             sig = self.get_first()
-        return (sig or {}).get("signature_text", "")
+        if sig:
+            sig.setdefault("signature_format", "plain")
+        return sig
 
 
 __all__ = ["SignatureService"]

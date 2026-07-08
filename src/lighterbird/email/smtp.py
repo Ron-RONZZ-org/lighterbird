@@ -79,6 +79,7 @@ class SMTPClient:
         html_body: str = "",
         attachments: list[str | Path | dict[str, Any]] | None = None,
         signature: str = "",
+        signature_format: str = "plain",
         message_id: str | None = None,
         in_reply_to: str | None = None,
     ) -> str:
@@ -93,7 +94,12 @@ class SMTPClient:
             html_body: Optional HTML body (alters MIME structure to
                 ``multipart/alternative``).
             attachments: List of file paths to attach.
-            signature: Optional signature appended to the plain text body.
+            signature: Optional signature appended to the body.
+            signature_format: Signature format — ``"plain"``, ``"html"``,
+                or ``"markdown"``. When the signature is HTML/markdown and
+                an ``html_body`` exists, the rendered signature is appended
+                to ``html_body`` instead of ``full_body``. Defaults to
+                ``"plain"``.
             message_id: Optional Message-ID header value (without angle brackets).
                 If not provided, one is auto-generated.
             in_reply_to: Optional Message-ID of the message being replied
@@ -114,15 +120,30 @@ class SMTPClient:
         else:
             msg_id = str(uuid_mod.uuid4())
 
-        # Append signature to body
+        # Append signature — format-aware
+        _sig = signature or ""
         full_body = body
-        if signature and full_body:
-            full_body += f"\n\n--\n{signature}"
-        elif signature:
-            full_body = signature
+        _html_body = html_body or ""
+
+        if signature_format in ("html", "markdown") and _html_body:
+            # Render signature and append to html_body
+            rendered_sig = self._render_signature(_sig, signature_format)
+            if rendered_sig:
+                _html_body += f"\n\n{rendered_sig}"
+            # Also append plain version to plain body if there is one
+            if _sig and full_body:
+                full_body += f"\n\n--\n{_sig}"
+            elif _sig:
+                full_body = _sig
+        else:
+            # Plain signature — append to plain body (original behaviour)
+            if _sig and full_body:
+                full_body += f"\n\n--\n{_sig}"
+            elif _sig:
+                full_body = _sig
 
         has_attachments = bool(attachments)
-        has_html = bool(html_body) or bool(attachments)
+        has_html = bool(_html_body) or bool(attachments)
         use_multipart = has_attachments or (has_html and full_body)
 
         if use_multipart:
@@ -149,14 +170,14 @@ class SMTPClient:
                 alt_part = MIMEMultipart("alternative")
                 if full_body:
                     alt_part.attach(MIMEText(full_body, "plain", "utf-8"))
-                if html_body:
-                    alt_part.attach(MIMEText(html_body, "html", "utf-8"))
+                if _html_body:
+                    alt_part.attach(MIMEText(_html_body, "html", "utf-8"))
                 msg.attach(alt_part)
             else:
                 if full_body:
                     msg.attach(MIMEText(full_body, "plain", "utf-8"))
-                if html_body:
-                    msg.attach(MIMEText(html_body, "html", "utf-8"))
+                if _html_body:
+                    msg.attach(MIMEText(_html_body, "html", "utf-8"))
 
             for path in attachments:
                 self._attach_file(msg, path)
@@ -181,6 +202,33 @@ class SMTPClient:
         except Exception as e:
             raise ConnectionError(f"SMTP send failed: {e}") from e
         return msg_id
+
+    @staticmethod
+    def _render_signature(sig_text: str, sig_format: str) -> str:
+        """Render a signature to HTML based on its format.
+
+        Args:
+            sig_text: The raw signature text.
+            sig_format: ``"plain"``, ``"html"``, or ``"markdown"``.
+
+        Returns:
+            HTML string suitable for appending to ``html_body``.
+        """
+        if not sig_text:
+            return ""
+        if sig_format == "html":
+            return sig_text
+        if sig_format == "markdown":
+            from lighterbird.server.render_utils import convert_to_html
+
+            return convert_to_html(sig_text, "markdown")
+        # plain → escape and wrap
+        escaped = (
+            sig_text.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
+        return f"<pre style='font-family:monospace;white-space:pre-wrap;'>{escaped}</pre>"
 
     @staticmethod
     def _attach_file(msg: MIMEMultipart, item: str | Path | dict[str, Any]) -> None:

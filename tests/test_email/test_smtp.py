@@ -344,6 +344,174 @@ class TestSMTPClientAttachFile:
         SMTPClient._attach_file(msg, str(tmp_path / "nonexistent.txt"))
         assert len(msg.get_payload()) == 0
 
+class TestSMTPClientSendEmailSignatureFormat:
+    """Tests for format-aware signature appending in send_email."""
+
+    @pytest.fixture
+    def connected(self, mock_smtplib):
+        client = SMTPClient("smtp.example.com")
+        instance = MagicMock()
+        instance.sendmail.return_value = {}
+        mock_smtplib.SMTP.return_value = instance
+        client.connect("user", "pass")
+        return client
+
+    def _decode_body(self, msg_str):
+        import base64
+        import re
+
+        match = re.search(
+            r"\n\n([A-Za-z0-9+/=]+)\n?$", msg_str.replace("\r\n", "\n")
+        )
+        if match:
+            try:
+                return base64.b64decode(match.group(1)).decode("utf-8")
+            except Exception:
+                pass
+        return msg_str
+
+    def _decode_plain_part(self, msg_str):
+        """Extract and decode the first base64 body (plain text part)."""
+        import base64
+        import re
+
+        # Find first base64 blob after text/plain + base64 headers
+        # Actual format uses \n not \r\n
+        match = re.search(
+            r"Content-Type: text/plain; charset=\"utf-8\"\n"
+            r".*?"
+            r"Content-Transfer-Encoding: base64\n\n"
+            r"([A-Za-z0-9+/=]+?)\n",
+            msg_str,
+            re.DOTALL,
+        )
+        if match:
+            try:
+                return base64.b64decode(match.group(1)).decode("utf-8")
+            except Exception:
+                pass
+        return ""
+
+    def _get_html_body(self, msg_str):
+        """Extract the HTML part from a multipart message."""
+        import re
+
+        # Look for HTML content between Content-Type: text/html and the next boundary
+        match = re.search(
+            r"Content-Type: text/html; charset=\"utf-8\"\n"
+            r".*?"
+            r"Content-Transfer-Encoding: base64\n\n"
+            r"([A-Za-z0-9+/=]+?)\n",
+            msg_str,
+            re.DOTALL,
+        )
+        if match:
+            raw = match.group(1)
+            import base64
+
+            try:
+                return base64.b64decode(raw).decode("utf-8")
+            except Exception:
+                return raw
+        return ""
+
+    def test_plain_signature_with_html_body(self, connected):
+        """Plain signature with html_body appends to plain body, not rendered."""
+        msg_id = connected.send_email(
+            from_addr="a@b.com",
+            to=["b@b.com"],
+            subject="Test",
+            body="Hello",
+            html_body="<p>World</p>",
+            signature="--\nJohn",
+            signature_format="plain",
+        )
+        call_args = connected.conn.sendmail.call_args
+        msg_str = call_args[0][2]
+        html_part = self._get_html_body(msg_str)
+        plain_part = self._decode_plain_part(msg_str)
+        # Plain signature appears in the decoded plain text part
+        assert "John" in plain_part
+        # HTML body does NOT contain plain signature (it was not rendered)
+        assert "John" not in html_part
+
+    def test_html_signature_appends_to_html_body(self, connected):
+        """HTML signature with html_body appends rendered sig to html_body."""
+        msg_id = connected.send_email(
+            from_addr="a@b.com",
+            to=["b@b.com"],
+            subject="HTML Sig",
+            body="Text body",
+            html_body="<p>World</p>",
+            signature="<p>-- John</p>",
+            signature_format="html",
+        )
+        call_args = connected.conn.sendmail.call_args
+        msg_str = call_args[0][2]
+        html_part = self._get_html_body(msg_str)
+        assert "<p>-- John</p>" in html_part
+
+    def test_markdown_signature_with_html_body(self, connected):
+        """Markdown signature rendered to HTML in html_body."""
+        msg_id = connected.send_email(
+            from_addr="a@b.com",
+            to=["b@b.com"],
+            subject="MD Sig",
+            body="Text body",
+            html_body="<p>World</p>",
+            signature="**John Smith**",
+            signature_format="markdown",
+        )
+        call_args = connected.conn.sendmail.call_args
+        msg_str = call_args[0][2]
+        html_part = self._get_html_body(msg_str)
+        # Markdown **bold** should be rendered to <strong>
+        assert "John Smith" in html_part
+
+    def test_html_signature_without_html_body(self, connected):
+        """HTML signature without html_body appends to plain body."""
+        import base64
+
+        msg_id = connected.send_email(
+            from_addr="a@b.com",
+            to=["b@b.com"],
+            subject="HTML Sig No HTML",
+            body="Hello",
+            signature="<p>John</p>",
+            signature_format="html",
+        )
+        call_args = connected.conn.sendmail.call_args
+        msg_str = call_args[0][2]
+        # Decode the base64 body and verify signature is present
+        # The body is after the last \n\n in the non-multipart message
+        payload_b64 = msg_str.split("\n\n", 1)[1].strip()
+        decoded = base64.b64decode(payload_b64).decode("utf-8")
+        assert "John" in decoded
+        assert "<p>John</p>" in decoded
+
+    def test_render_signature_plain(self):
+        """_render_signature with plain format escapes HTML."""
+        result = SMTPClient._render_signature("<b>John</b>", "plain")
+        assert "&lt;b&gt;" in result
+
+    def test_render_signature_html(self):
+        """_render_signature with html format passes through."""
+        result = SMTPClient._render_signature("<b>John</b>", "html")
+        assert result == "<b>John</b>"
+
+    def test_render_signature_markdown(self):
+        """_render_signature with markdown format renders to HTML."""
+        result = SMTPClient._render_signature("**John**", "markdown")
+        assert "<strong>" in result
+
+    def test_render_signature_empty(self):
+        """_render_signature with empty text returns empty string."""
+        assert SMTPClient._render_signature("", "html") == ""
+        assert SMTPClient._render_signature("", "markdown") == ""
+        assert SMTPClient._render_signature("", "plain") == ""
+
+
+class TestSMTPClientAttachFile:
     def test_attach_dict_with_bytes_data(self):
         """Dict attachment with bytes data."""
         from email.mime.multipart import MIMEMultipart

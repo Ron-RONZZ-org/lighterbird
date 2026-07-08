@@ -29,6 +29,7 @@ from lighterbird.server.routes.letters import router as letters_router
 from lighterbird.server.routes.llm import router as llm_router
 from lighterbird.server.routes.profiles import router as profiles_router
 from lighterbird.server.routes.prompt_commands import router as prompt_commands_router
+from lighterbird.server.routes.render import router as render_router
 from lighterbird.server.routes.tags import router as tags_router
 from lighterbird.server.routes.todo import router as todo_router
 from lighterbird.server.tasks import init_workers, shutdown_workers
@@ -81,6 +82,7 @@ def create_app(static_dir: str | Path | None = None) -> FastAPI:
     app.include_router(prompt_commands_router)
     app.include_router(cowrite_router)
     app.include_router(embed_router)
+    app.include_router(render_router)
     app.include_router(tags_router)
 
     # ── Static files (Svelte SPA) ────────────────────────────────────────

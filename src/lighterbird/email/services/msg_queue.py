@@ -38,17 +38,19 @@ class MsgQueueMixin:
         signature: str,
         priority: int,
         error: str,
+        signature_format: str = "plain",
     ) -> None:
         """Insert a send-queue entry for deferred retry."""
         now = datetime.now(UTC).isoformat()
         self.db.execute(
             """INSERT OR REPLACE INTO send_queue
-               (id, msg_uuid, account_email, body_format, signature, priority,
+               (id, msg_uuid, account_email, body_format, signature,
+                signature_format, priority,
                 status, retries, max_retries, next_attempt, last_error,
                 created_at, updated_at)
                VALUES (
                  COALESCE((SELECT id FROM send_queue WHERE msg_uuid = ?), NULL),
-                 ?, ?, ?, ?, ?, 'pending', 0, 10, ?, ?, ?, ?
+                 ?, ?, ?, ?, ?, ?, 'pending', 0, 10, ?, ?, ?, ?
                )""",
             (
                 msg_uuid,
@@ -56,6 +58,7 @@ class MsgQueueMixin:
                 account_email,
                 body_format,
                 signature,
+                signature_format,
                 priority,
                 None,  # next_attempt = immediate (NULL = retry ASAP)
                 error,
@@ -141,6 +144,7 @@ class MsgQueueMixin:
             account_email = entry["account_email"]
             body_format = entry.get("body_format", "markdown")
             signature = entry.get("signature", "") or ""
+            signature_format = entry.get("signature_format", "plain")
             entry.get("priority", 3)
             retries = entry.get("retries", 0)
             max_retries = entry.get("max_retries", 10)
@@ -215,6 +219,7 @@ class MsgQueueMixin:
                     html_body=html_body,
                     attachments=attachments,
                     signature=signature,
+                    signature_format=signature_format,
                 )
             except ConnectionError as e:
                 smtp_error = str(e)

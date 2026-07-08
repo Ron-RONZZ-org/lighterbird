@@ -325,6 +325,23 @@
           />
         {/snippet}
       </FormField>
+    {:else if flag.values && flag.values.length > 0}
+      <FormField label={flag.name} hint={flag.help || ""} required={flag.required}
+        error={formErrors[flag.name] || ""} width={flag.width || ""}>
+        {#snippet children()}
+          <select
+            id={flag.name}
+            class="df-input"
+            value={val || ""}
+            onchange={(e) => setField(flag.name, e.target.value)}
+          >
+            <option value="">— Select {flag.name} —</option>
+            {#each flag.values as opt}
+              <option value={opt}>{opt}</option>
+            {/each}
+          </select>
+        {/snippet}
+      </FormField>
     {:else}
       <FormField label={flag.name} hint={flag.help || ""} required={flag.required}
         error={formErrors[flag.name] || ""} width={flag.width || ""}>

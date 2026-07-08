@@ -165,7 +165,7 @@
   onOpenSignatureModify={(sig) =>
     tabStore.open("form", "Modify Signature: " + (sig.name || "default"), {
       form: "email-signature-modify",
-      initialData: { uuid: sig.uuid, name: sig.name || "default", signature_text: sig.signature_text || sig.signature || "" },
+      initialData: { uuid: sig.uuid, name: sig.name || "default", signature_text: sig.signature_text || sig.signature || "", format: sig.signature_format || "plain" },
     }, { idKey: "form-email-signature-modify" })
   }
   onDeleteSignature={async (sig) => {
