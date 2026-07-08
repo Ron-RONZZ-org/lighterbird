@@ -10,11 +10,13 @@ The system prompt is loaded from a user-editable file via
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
 from lightercore.exceptions import AIError
 from lightercore.llm import ProviderConfig
+from lightercore.llm.base import ChatResult
 from lightercore.llm.config import (
     clear_active_config,
     load_active_config,
@@ -25,6 +27,8 @@ from lightercore.llm.utils import build_messages
 
 from lighterbird.core.ai import get_provider as _create_core_provider
 from lighterbird.core.system_prompt import load_system_prompt, reload_system_prompt
+
+logger = logging.getLogger(__name__)
 
 _SERVICE_NAME = "lighterbird-llm"
 
@@ -98,6 +102,28 @@ class LLMProviderWrapper:
 
                 return _err_placeholder()
             return "LLM request failed. Check your provider configuration."
+
+    async def chat_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        *,
+        tool_choice: str | None = None,
+    ) -> ChatResult:
+        """Send a chat completion with tool-calling support.
+
+        Delegates to the core provider's :meth:`~lightercore.llm.base.BaseLLMProvider.chat_with_tools`.
+        The system prompt is automatically prepended.
+        """
+        core = _create_core_provider(self.config)
+        try:
+            return await core.chat_with_tools(messages, tools, tool_choice=tool_choice)
+        except AIError:
+            # Return an empty ChatResult so the tool loop can handle it
+            return ChatResult(content="LLM request failed. Check your provider configuration.")
+        except Exception:
+            logger.exception("Unexpected error in chat_with_tools")
+            return ChatResult(content="LLM request failed.")
 
     def reload_prompt(self) -> str:
         """Reload the system prompt from disk (for when the user edits it)."""
