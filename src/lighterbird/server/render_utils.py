@@ -113,4 +113,103 @@ def escape_html(text: str) -> str:
     )
 
 
-__all__ = ["convert_to_html", "escape_html"]
+# ── Email composition ──────────────────────────────────────────────────
+
+_PREVIEW_CSS = """
+body{font-family:Georgia,"Times New Roman",serif;padding:2em;line-height:1.6;color:#000;background:#fff;max-width:21cm;margin:0 auto;}
+img{max-width:100%;}
+pre{background:#f5f5f5;padding:1em;overflow-x:auto;}
+code{background:#f0f0f0;padding:0.15em 0.3em;border-radius:3px;}
+pre code{background:none;padding:0;}
+table{border-collapse:collapse;width:100%;}
+td,th{border:1px solid #ccc;padding:0.4em;}
+th{background:#f0f0f0;}
+blockquote{border-left:3px solid #ccc;margin-left:0;padding-left:1em;color:#555;}
+.signature-separator{border:none;border-top:1px solid #ccc;margin:1em 0;}
+.signature{color:#555;font-size:0.9em;}
+.attachment-link{display:inline-block;margin:0.25em 0;padding:0.3em 0.6em;background:#f0f0f0;border:1px solid #ccc;border-radius:4px;text-decoration:none;color:#333;}
+.attachment-link:hover{background:#e0e0e0;}
+.subject-title{font-size:1.3em;font-weight:bold;margin-bottom:0.5em;color:#000;}
+"""
+
+
+def compose_email_html(
+    subject: str,
+    body: str,
+    body_format: str,
+    signature_text: str | None = None,
+    signature_format: str | None = None,
+    attachments: list[dict[str, Any]] | None = None,
+    attachment_base_url: str = "",
+    full_document: bool = False,
+) -> str:
+    """Compose an HTML email document from its parts.
+
+    Converts body and signature (if markdown/plain) to HTML via
+    :func:`convert_to_html`, then assembles them into an HTML
+    string suitable for preview or SMTP send.
+
+    Args:
+        subject: Email subject line (rendered as heading).
+        body: Email body text.
+        body_format: One of ``"markdown"``, ``"html"``, or ``"plain"``.
+        signature_text: Optional signature text.
+        signature_format: Signature format.  Ignored if ``signature_text``
+            is falsy.  Defaults to ``"plain"``.
+        attachments: Optional list of attachment dicts with ``"uuid"``
+            and ``"filename"`` keys.
+        attachment_base_url: Base URL for attachment download links
+            (e.g. ``/api/v1/email/attachments/``).
+        full_document: If True, returns a complete HTML document with
+            DOCTYPE, head, style, and body tags.  If False (default),
+            returns only the inner HTML content (for embedding in
+            PreviewDialog or new-tab wrapper).
+
+    Returns:
+        HTML string (full document or inner content).
+    """
+    # Convert body
+    body_html = convert_to_html(body, body_format)
+
+    # Convert signature
+    sig_html = ""
+    if signature_text:
+        fmt = signature_format or "plain"
+        sig_html = convert_to_html(signature_text, fmt)
+        sig_html = f'<div class="signature">{sig_html}</div>'
+
+    # Attachment links
+    att_html = ""
+    if attachments:
+        items = []
+        for att in attachments:
+            att_uuid = att.get("uuid", "")
+            filename = att.get("filename", "attachment")
+            href = f"{attachment_base_url}{att_uuid}/download" if attachment_base_url else "#"
+            items.append(
+                f'<a href="{escape_html(href)}" class="attachment-link" '
+                f'target="_blank">{escape_html(filename)}</a>'
+            )
+        if items:
+            att_html = '<div class="attachments">\n' + "\n".join(items) + "\n</div>"
+
+    inner_parts = [
+        f'<div class="subject-title">{escape_html(subject)}</div>'
+        if subject else "",
+        '<div class="body">',
+        body_html,
+        "</div>",
+        f'<hr class="signature-separator">\n{sig_html}' if sig_html else "",
+        att_html if att_html else "",
+    ]
+    inner_html = "\n".join(p for p in inner_parts if p)
+
+    if full_document:
+        return (
+            "<!DOCTYPE html>\n<html lang='en'>\n<head><meta charset='utf-8'>\n"
+            f"<style>{_PREVIEW_CSS}</style>\n</head><body>\n{inner_html}\n</body></html>"
+        )
+    return inner_html
+
+
+__all__ = ["convert_to_html", "escape_html", "compose_email_html"]

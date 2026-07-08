@@ -336,3 +336,20 @@ class SieveValidateRequest(BaseModel):
 class SieveValidateResponse(BaseModel):
     is_valid: bool
     error: str = ""
+
+
+# ── Email Preview ──────────────────────────────────────────────────────
+
+class EmailPreviewRequest(BaseModel):
+    subject: str = ""
+    body: str = ""
+    body_format: str = "markdown"
+    signature_text: str | None = None
+    signature_format: str | None = None
+    attachments: list[dict] = []
+
+    model_config = {"extra": "forbid"}
+
+
+class EmailPreviewResponse(BaseModel):
+    html: str = ""

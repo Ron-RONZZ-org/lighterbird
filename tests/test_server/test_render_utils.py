@@ -57,3 +57,63 @@ class TestConvertToHtml:
     def test_markdown_strikethrough(self):
         result = convert_to_html("~~struck~~", "markdown")
         assert "struck" in result
+
+
+class TestComposeEmailHtml:
+    """Tests for the compose_email_html utility function."""
+
+    def test_empty_body(self):
+        from lighterbird.server.render_utils import compose_email_html
+        result = compose_email_html("Subject", "", "markdown")
+        assert "Subject" in result
+        assert "<div class=" in result or "Subject" in result
+
+    def test_full_document_wrapper(self):
+        from lighterbird.server.render_utils import compose_email_html
+        result = compose_email_html("Test", "Hello", "plain", full_document=True)
+        assert "<!DOCTYPE html>" in result
+        assert "<html" in result
+        assert "</body>" in result
+        assert "Hello" in result
+
+    def test_inner_html_only(self):
+        from lighterbird.server.render_utils import compose_email_html
+        result = compose_email_html("Test", "Hello", "plain", full_document=False)
+        assert "<!DOCTYPE html>" not in result
+        assert "<html" not in result
+        assert "Test" in result
+        assert "Hello" in result
+
+    def test_with_signature(self):
+        from lighterbird.server.render_utils import compose_email_html
+        result = compose_email_html("Subj", "Body", "markdown",
+                                     signature_text="-- John", signature_format="plain")
+        assert "Subject" in result or "Subj" in result
+        assert "Body" in result
+        assert "John" in result
+        assert "signature" in result.lower() or "signature-separator" in result
+
+    def test_with_attachments(self):
+        from lighterbird.server.render_utils import compose_email_html
+        attachments = [{"uuid": "abc-123", "filename": "report.pdf"}]
+        result = compose_email_html("Subj", "Body", "plain",
+                                     attachments=attachments,
+                                     attachment_base_url="/api/v1/email/attachments/")
+        assert "report.pdf" in result
+        assert "/api/v1/email/attachments/abc-123/download" in result
+
+    def test_markdown_body_converted(self):
+        from lighterbird.server.render_utils import compose_email_html
+        result = compose_email_html("Subj", "**bold**", "markdown")
+        assert "<strong>bold</strong>" in result
+
+    def test_html_body_passthrough(self):
+        from lighterbird.server.render_utils import compose_email_html
+        result = compose_email_html("Subj", "<p>Hello</p>", "html")
+        assert "<p>Hello</p>" in result
+
+    def test_subject_escaped(self):
+        from lighterbird.server.render_utils import compose_email_html
+        result = compose_email_html("<script>alert(1)</script>", "Body", "plain")
+        assert "<script>" not in result
+        assert "&lt;script&gt;" in result

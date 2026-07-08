@@ -87,23 +87,34 @@
     signatureFormat = found ? (found.signature_format || "plain") : "plain";
   }
 
-  /** Preview state for body and signature */
-  let preview = $state(null);
-  function previewSignature() {
-    if (!signaturePreview) return;
-    import("./preview.svelte.js").then((mod) => {
-      const state = mod.createPreviewState();
-      preview = state;
-      state.show(signaturePreview, signatureFormat, "Signature Preview");
-    });
-  }
-  function previewBody() {
-    if (!body) return;
-    import("./preview.svelte.js").then((mod) => {
-      const state = mod.createPreviewState();
-      preview = state;
-      state.show(body, bodyFormat, "Body Preview");
-    });
+  /** Preview state for unified email preview */
+  let preview = $state({ showing: false, htmlContent: "", title: "Preview" });
+  async function previewEmail() {
+    const sigText = useSignature && signaturePreview ? signaturePreview : "";
+    const sigFmt = useSignature && signaturePreview ? signatureFormat : "";
+    preview = { showing: false, htmlContent: "", title: "Email Preview" };
+    try {
+      const resp = await fetch("/api/v1/email/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subject,
+          body,
+          body_format: bodyFormat,
+          signature_text: sigText,
+          signature_format: sigFmt,
+          attachments: attachmentFiles.map((a) => ({
+            filename: a.name,
+          })),
+        }),
+      });
+      const html = resp.ok
+        ? ((await resp.json()).html || "<p>(empty)</p>")
+        : `<p class="error">Preview unavailable (${resp.status})</p>`;
+      preview = { showing: true, htmlContent: html, title: "Email Preview" };
+    } catch (e) {
+      preview = { showing: true, htmlContent: `<p class="error">Preview unavailable: ${e.message}</p>`, title: "Email Preview" };
+    }
   }
 
   // ── Load contacts for recipient suggestions ──────────────────────────
@@ -190,10 +201,10 @@
       e.preventDefault();
       handleSubmit(e);
     }
-    // Ctrl+Shift+P — preview body
+    // Ctrl+Shift+P — unified email preview
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "p" || e.key === "P")) {
       e.preventDefault();
-      if (body.trim()) previewBody();
+      if (body.trim()) previewEmail();
     }
     // q — close tab; prompt save draft if dirty
     if (e.key === "q" && !e.ctrlKey && !e.metaKey && dirty) {
@@ -380,10 +391,7 @@
             <option value="html">HTML</option>
             <option value="plain">Plain Text</option>
           </select>
-          <button type="button" class="preview-btn" onclick={previewBody}
-            disabled={!body.trim()} title="Preview body (Ctrl+Shift+P)">
-            Preview
-          </button>
+          <!-- Preview now handled by unified "Preview Email" button below -->
         </div>
         <textarea id="body" class="ff-textarea" bind:value={body} rows="8"
           placeholder="Message body (Markdown supported)"></textarea>
@@ -419,10 +427,7 @@
                 {/each}
               </select>
               <span class="sig-format-badge">{signatureFormat}</span>
-              <button type="button" class="sig-preview-btn" onclick={previewSignature}
-                title="Preview signature" disabled={!signaturePreview}>
-                Preview
-              </button>
+              <!-- Signature preview now part of unified Preview Email -->
             </div>
             <div class="sig-preview">{signaturePreview}</div>
           {:else}
@@ -433,12 +438,12 @@
     {/snippet}
   </FormField>
 
-  {#if preview}
+  {#if preview.showing}
     <PreviewDialog
       showing={preview.showing}
       htmlContent={preview.htmlContent}
       title={preview.title}
-      onclose={() => preview.close()}
+      onclose={() => { preview = { showing: false, htmlContent: "", title: "Preview" }; }}
     />
   {/if}
 
@@ -462,6 +467,10 @@
   </FormField>
 
   <div class="form-actions">
+    <button type="button" class="btn-preview-email" onclick={previewEmail}
+      disabled={!body.trim() && !subject} title="Preview email (Ctrl+Shift+P)">
+      Preview Email <kbd>Ctrl+Shift+P</kbd>
+    </button>
     <button type="button" class="btn-draft" onclick={saveDraft} disabled={savingDraft || toList.length === 0 && !subject && !body}>
       {#if savingDraft}
         Saving…
@@ -591,16 +600,6 @@
     color: #9090b0; text-transform: uppercase;
     white-space: nowrap; flex-shrink: 0;
   }
-  .sig-preview-btn {
-    padding: 0.15rem 0.5rem;
-    border: 1px solid #444; border-radius: 4px;
-    background: transparent; color: #b0b0c0;
-    font-family: monospace; font-size: 0.72rem;
-    cursor: pointer; white-space: nowrap;
-    transition: background 0.1s, color 0.1s;
-  }
-  .sig-preview-btn:hover:not(:disabled) { background: #2a2a44; color: #e0e0e0; }
-  .sig-preview-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .sig-preview {
     font-family: monospace; font-size: 0.78rem; color: #909090;
     background: #1a1a2e; border: 1px solid #333; border-radius: 4px;
@@ -627,7 +626,7 @@
   }
   .btn-draft:hover:not(:disabled) { background: #3a3a5a; }
   .btn-draft:disabled { opacity: 0.4; cursor: not-allowed; }
-  .btn-draft kbd {
+  .btn-draft kbd, .btn-preview-email kbd {
     display: inline-block;
     padding: 1px 4px;
     background: #222;
@@ -636,4 +635,18 @@
     font-size: 0.7rem;
     margin-left: 0.2rem;
   }
+  .btn-preview-email {
+    background: #2a3a4e;
+    border: 1px solid #4a5a7a;
+    color: #b0d0f0;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 0.82rem;
+    transition: background 0.15s;
+    white-space: nowrap;
+  }
+  .btn-preview-email:hover:not(:disabled) { background: #3a4a6e; }
+  .btn-preview-email:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>

@@ -110,22 +110,21 @@ class MsgSendComposeMixin:
         msg_uuid = str(uuid_mod.uuid4())
         message_id = str(uuid_mod.uuid4())
 
-        # Parse body per body_format
+        # Parse body per body_format using the same rendering utility
+        # used by the preview endpoint for consistency.
+        from lighterbird.server.render_utils import convert_to_html
+
         html_body = ""
         final_body = body
         if body_format == "markdown" and body:
-            try:
-                import mistune
-
-                html_body = mistune.html(body)
-                final_body = body
-            except ImportError:
-                html_body = ""
-                final_body = body
+            html_body = convert_to_html(body, "markdown")
+            final_body = body
         elif body_format == "html":
             html_body = body
             final_body = ""
-        # "plain" — final_body stays as-is, no html_body
+        elif body_format == "plain" and body:
+            html_body = convert_to_html(body, "plain")
+        # "plain" with no body — no html_body, final_body stays as-is
 
         # Step 1: Save to Outbox folder first (never lose the message)
         self._ensure_folder(account_email, "Outbox")

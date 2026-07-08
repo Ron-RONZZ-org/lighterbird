@@ -17,6 +17,8 @@ from lighterbird.server.schemas import (
     BatchDeleteRequest,
     BatchMoveRequest,
     BatchResultResponse,
+    EmailPreviewRequest,
+    EmailPreviewResponse,
     MarkReadRequest,
     SendRequest,
 )
@@ -188,4 +190,33 @@ def import_eml(data: dict, email_svc: EmailService = Depends(get_email_service))
     return {"imported": 1, "uuid": draft["uuid"]}
 
 
+@router.post("/preview", response_model=EmailPreviewResponse)
+def email_preview(req: EmailPreviewRequest):
+    """Compose a full email preview HTML document from its parts.
+
+    Accepts subject, body, body_format, optional signature, and optional
+    attachments.  Returns a complete HTML document suitable for rendering
+    in the PreviewDialog or in a new browser tab.
+    """
+    from lighterbird.server.render_utils import compose_email_html
+
+    # Build attachment info for links — extract uuid+filename from each
+    att_info = []
+    for att in req.attachments or []:
+        if isinstance(att, dict):
+            att_info.append({
+                "uuid": att.get("uuid", ""),
+                "filename": att.get("filename", "attachment"),
+            })
+
+    html = compose_email_html(
+        subject=req.subject,
+        body=req.body,
+        body_format=req.body_format,
+        signature_text=req.signature_text,
+        signature_format=req.signature_format,
+        attachments=att_info or None,
+        attachment_base_url="/api/v1/email/attachments/",
+    )
+    return EmailPreviewResponse(html=html)
 

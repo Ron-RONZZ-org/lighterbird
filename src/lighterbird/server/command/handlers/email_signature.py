@@ -94,9 +94,27 @@ def signature_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     }
 
 
+def _resolve_signature(svc: EmailService, identifier: str) -> dict | None:
+    """Resolve a signature by name (first) or UUID (fallback).
+
+    Args:
+        svc: EmailService instance.
+        identifier: Signature name or UUID.
+
+    Returns:
+        Signature dict or None if not found.
+    """
+    # Try name first (named signatures are user-facing)
+    sig = svc.signatures.get_by_name(identifier)
+    if sig:
+        return sig
+    # Fallback: treat as UUID
+    return svc.signatures.get(identifier)
+
+
 @command("email.signature.modify",
          params=[
-             {"name": "uuid", "type": "uuid", "help": "Signature UUID", "required": True},
+             {"name": "name", "type": "string", "help": "Signature name (or UUID)", "required": True},
          ],
          flags=[
              {"name": "name", "type": "string", "help": "New signature name"},
@@ -107,16 +125,26 @@ def signature_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
          ],
          interactive=True)
 def signature_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email signature modify <uuid> [--name NAME] [--text TEXT] [--format plain|html|markdown]
+    """!email signature modify <name-or-uuid> [--name NAME] [--text TEXT] [--format plain|html|markdown]
 
-    Update a signature's name, text, and/or format by UUID.
+    Update a signature by name (or UUID). When invoked interactively without
+    modification flags, returns a ``form-required`` response with existing
+    data pre-filled for editing.
     """
+    svc: EmailService = get_email_service()
+
     if not remaining:
-        raise CommandValidationError(
-            "Missing signature UUID.",
-            "Usage: !email signature modify <uuid> [--name NAME] [--text TEXT] [--format plain|html|markdown]",
-        )
-    uuid_ = remaining[0]
+        # Interactive form open — no identifier yet; return blank form
+        return {
+            "type": "form-required",
+            "title": "Modify Signature",
+            "data": {
+                "form": "email-signature-modify",
+                "initialData": {},
+            },
+        }
+
+    identifier = remaining[0]
     name = flags.get("name", None)
     text = flags.get("text", None)
     sig_format = flags.get("format", None)
@@ -126,25 +154,44 @@ def signature_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, A
             f"Invalid format: {sig_format}. Must be 'plain', 'html', or 'markdown'."
         )
 
+    # If only identifier provided (no modification flags), fetch existing
+    # data and return form-required with autofill for the interactive form.
     if name is None and text is None and sig_format is None:
-        raise CommandValidationError(
-            "Nothing to change. Provide --name, --text, and/or --format.",
-        )
+        sig = _resolve_signature(svc, identifier)
+        if not sig:
+            raise CommandValidationError(f"Signature not found: {identifier}")
+        return {
+            "type": "form-required",
+            "title": "Modify Signature",
+            "data": {
+                "form": "email-signature-modify",
+                "initialData": {
+                    "name": sig.get("name", identifier),
+                    "text": sig.get("signature_text", ""),
+                    "format": sig.get("signature_format", "plain"),
+                },
+            },
+        }
 
-    svc: EmailService = get_email_service()
+    # Modification with flags — apply changes
+    sig = _resolve_signature(svc, identifier)
+    if not sig:
+        raise CommandValidationError(f"Signature not found: {identifier}")
+    sig_uuid = sig["uuid"]
+
     try:
-        sig = svc.signatures.update(uuid_, name=name, signature_text=text,
-                                     signature_format=sig_format)
+        updated = svc.signatures.update(sig_uuid, name=name, signature_text=text,
+                                         signature_format=sig_format)
     except ValueError as e:
         raise CommandValidationError(str(e))
 
-    if not sig:
-        raise CommandValidationError(f"Signature not found: {uuid_}")
+    if not updated:
+        raise CommandValidationError(f"Signature not found: {identifier}")
 
     return {
         "type": "status",
         "title": "Signature Updated",
-        "data": sig,
+        "data": updated,
     }
 
 

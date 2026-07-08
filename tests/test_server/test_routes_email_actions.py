@@ -60,3 +60,90 @@ class TestEmailActionsAPI:
         """POST /api/v1/email/import-eml without path returns 400."""
         resp = self._client().post("/api/v1/email/import-eml", json={})
         assert resp.status_code == 400
+
+
+class TestEmailPreviewAPI:
+    """Test POST /api/v1/email/preview endpoint."""
+
+    def _client(self):
+        return TestClient(create_app())
+
+    def test_preview_basic(self):
+        """POST /api/v1/email/preview returns HTML with subject and body."""
+        resp = self._client().post("/api/v1/email/preview", json={
+            "subject": "Hello",
+            "body": "World",
+            "body_format": "plain",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "html" in data
+        assert "Hello" in data["html"]
+        assert "World" in data["html"]
+
+    def test_preview_with_sig(self):
+        """Preview with signature includes signature text."""
+        resp = self._client().post("/api/v1/email/preview", json={
+            "subject": "Test",
+            "body": "Body text",
+            "body_format": "markdown",
+            "signature_text": "-- John",
+            "signature_format": "plain",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "John" in data["html"]
+
+    def test_preview_markdown_conversion(self):
+        """Markdown body is converted to HTML in preview."""
+        resp = self._client().post("/api/v1/email/preview", json={
+            "subject": "Test",
+            "body": "**bold** and *italic*",
+            "body_format": "markdown",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "<strong>" in data["html"]
+        assert "<em>" in data["html"]
+
+    def test_preview_html_passthrough(self):
+        """HTML body is passed through as-is."""
+        resp = self._client().post("/api/v1/email/preview", json={
+            "subject": "Test",
+            "body": "<p>Paragraph</p>",
+            "body_format": "html",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "<p>Paragraph</p>" in data["html"]
+
+    def test_preview_empty_body(self):
+        """Empty body returns HTML with just subject."""
+        resp = self._client().post("/api/v1/email/preview", json={
+            "subject": "Just Subject",
+            "body": "",
+            "body_format": "markdown",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "Just Subject" in data["html"]
+
+    def test_preview_extra_fields_rejected(self):
+        """Unknown fields return 422."""
+        resp = self._client().post("/api/v1/email/preview", json={
+            "subject": "Test",
+            "body": "Body",
+            "body_format": "plain",
+            "unknown": "rejected",
+        })
+        assert resp.status_code == 422
+
+    def test_preview_with_empty_signature(self):
+        """signature_text=None does not crash."""
+        resp = self._client().post("/api/v1/email/preview", json={
+            "subject": "Test",
+            "body": "Body",
+            "body_format": "plain",
+            "signature_text": None,
+        })
+        assert resp.status_code == 200

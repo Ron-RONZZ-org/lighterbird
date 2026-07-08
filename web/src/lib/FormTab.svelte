@@ -89,11 +89,13 @@
   }
 
   let submitting = $state(false);
+  let formError = $state(""); // non-field-level error message displayed as banner
 
   /** Submit form data to the command endpoint. */
   async function handleFormSubmit(payload) {
     if (submitting) return;
     submitting = true;
+    formError = "";
     try {
       // Include remaining positional args in the tokens array
       const allTokens = [...(payload.tokens || []), ...(payload.remaining || [])];
@@ -113,9 +115,15 @@
         const detail = result.detail || {};
         const msg = typeof detail === "string" ? detail : detail.error || `HTTP ${resp.status}`;
         const suggestion = detail.suggestion || "";
-        tabStore.open("error", "Command Failed", { message: msg, suggestion });
+        // Keep form open, show error banner — preserve user input
+        formError = suggestion ? `${msg} — ${suggestion}` : msg;
+        banner.show(formError, "error", 5000);
         return;
       }
+
+      // Clear any previous error and dirty state
+      formError = "";
+      onDirtyChange(false);
 
       // Read return-to-list values BEFORE closing (component may unmount)
       const returnIdKey = initialData?._returnIdKey;
@@ -153,7 +161,9 @@
       const msg = err.cause?.code === "ECONNREFUSED"
         ? "Cannot connect to the backend."
         : `Error: ${err.message}`;
-      tabStore.open("error", "Submission Failed", { message: msg });
+      // Keep form open, show error banner
+      formError = msg;
+      banner.show(formError, "error", 5000);
     } finally {
       submitting = false;
     }
@@ -187,6 +197,14 @@
     <span class="form-title">{displayTitle}</span>
     <button class="cancel-btn" onclick={handleCancel} aria-label="Cancel">✕</button>
   </div>
+
+  {#if formError}
+    <div class="form-error-banner" role="alert">
+      <span class="form-error-icon">✗</span>
+      <span class="form-error-text">{formError}</span>
+      <button class="form-error-dismiss" onclick={() => { formError = ''; }} aria-label="Dismiss">✕</button>
+    </div>
+  {/if}
 
   {#if formType === "email-send"}
     <ComposeEmail {initialData} onsubmit={handleFormSubmit} onDirtyChange={handleDirtyChange} />
@@ -242,6 +260,26 @@
     background: #2a2a44;
     color: #e0e0e0;
   }
+  .form-error-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: #3a1e1e;
+    border-bottom: 1px solid #7a3a3a;
+    color: #db8f8f;
+    font-family: monospace;
+    font-size: 0.82rem;
+    flex-shrink: 0;
+  }
+  .form-error-icon { font-size: 0.9rem; flex-shrink: 0; }
+  .form-error-text { flex: 1; min-width: 0; }
+  .form-error-dismiss {
+    background: none; border: none; color: #db8f8f;
+    opacity: 0.6; cursor: pointer; font-size: 0.85rem;
+    padding: 0.1rem 0.3rem; flex-shrink: 0;
+  }
+  .form-error-dismiss:hover { opacity: 1; }
   .unknown-form {
     color: #c44;
     text-align: center;
