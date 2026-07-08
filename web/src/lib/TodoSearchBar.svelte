@@ -1,4 +1,6 @@
 <script>
+  import ListSearchBar from "./ListSearchBar.svelte";
+
   let {
     showSearch = false,
     searchQuery = "",
@@ -9,9 +11,9 @@
     tagFilter = "",
     onToggleSelectionMode = () => {},
     onSearchInput = () => {},
-    onSearchKeydown = () => {},
+    onSearchEnter = () => {},
+    onSearchEscape = () => {},
     onClearSearch = () => {},
-    onCloseSearch = () => {},
     onNew = () => {},
     onImport = () => {},
     onExport = () => {},
@@ -24,21 +26,37 @@
 
 <div class="toolbar" class:active={selectionMode || numSelected > 0}>
   {#if showSearch}
-    <div class="search-bar">
-      <span class="search-icon">&#x1F50D;</span>
-      <input
-        type="text"
-        class="tl-search-input"
-        placeholder="Search todos\u2026 (min 2 chars)"
-        value={searchQuery}
-        oninput={onSearchInput}
-        onkeydown={onSearchKeydown}
-        aria-label="Search todos"
-      />
-      {#if searchQuery}
-        <button class="search-clear" onclick={onClearSearch} aria-label="Clear search">&#x2715;</button>
-      {/if}
-    </div>
+    <ListSearchBar
+      {showSearch}
+      {searchQuery}
+      placeholder="Search todos\u2026 (min 2 chars)"
+      ariaLabel="Search todos"
+      onSearchInput={onSearchInput}
+      onSearchEnter={onSearchEnter}
+      onSearchEscape={onSearchEscape}
+      onSearchClear={onClearSearch}
+    >
+      <svelte:fragment slot="actions">
+        <div class="left">
+          <button class="tool-btn" title="Toggle selection mode (V)" onclick={onToggleSelectionMode}>Select <kbd>V</kbd></button>
+          <button class="tool-btn" title="Toggle tree/flat view" onclick={onToggleMode}>
+            {displayMode === "tree" ? "Flat" : "Tree"}
+          </button>
+          <label class="sort-label" title="Sort order">
+            <select class="sort-select" value={sortOrder} onchange={onSortChange}>
+              <option value="created">Newest</option>
+              <option value="priority">Priority</option>
+              <option value="due">Due date</option>
+              <option value="title">Title</option>
+            </select>
+          </label>
+        </div>
+        <div class="right">
+          <button class="tool-btn primary" onclick={onNew} title="Add new todo">+ New <kbd>N</kbd></button>
+          <button class="tool-btn" onclick={onImport} title="Import todos">Import</button>
+        </div>
+      </svelte:fragment>
+    </ListSearchBar>
   {:else if selectionMode}
     <div class="left">
       <button class="tool-btn" title="Exit selection mode (V)" onclick={onToggleSelectionMode}>
@@ -123,14 +141,4 @@
   }
   .count { color: #7c7c9a; font-size: 0.82rem; }
   .count.muted { color: #555; }
-  .search-bar { display: flex; align-items: center; gap: 0.4rem; flex: 1; }
-  .search-icon { font-size: 0.75rem; opacity: 0.6; }
-  .tl-search-input {
-    flex: 1; padding: 0.3rem 0.4rem; border: 1px solid #444; border-radius: 4px;
-    background: #12122a; color: #e0e0e0; font-family: monospace; font-size: 0.82rem; outline: none;
-  }
-  .tl-search-input:focus { border-color: #6a6a9a; }
-  .tl-search-input::placeholder { color: #555; }
-  .search-clear { background: none; border: none; color: #7c7c9a; cursor: pointer; font-size: 0.8rem; padding: 0.2rem; }
-  .search-clear:hover { color: #e0e0e0; }
 </style>

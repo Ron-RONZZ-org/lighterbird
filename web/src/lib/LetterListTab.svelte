@@ -186,7 +186,7 @@
       case "/":
         if (plain) {
           showSearch = !showSearch;
-          if (showSearch) requestAnimationFrame(() => document.querySelector(".letter-search-input")?.focus());
+          if (showSearch) requestAnimationFrame(() => document.querySelector(".search-input")?.focus());
           else closeSearch();
           e.preventDefault();
         }
@@ -233,10 +233,8 @@
     numSelected={sel.numSelected}
     onToggleSelectionMode={() => sel.toggleSelectionMode()}
     onSearchInput={handleSearchInput}
-    onSearchKeydown={(e) => {
-      if (e.key === "Enter") { e.preventDefault(); performSearch(searchQuery); }
-      if (e.key === "Escape") { e.stopPropagation(); closeSearch(); }
-    }}
+    onSearchEnter={() => performSearch(searchQuery)}
+    onSearchEscape={closeSearch}
     onClearSearch={() => { searchQuery = ""; performSearch(""); }}
     onCloseSearch={closeSearch}
     onNew={handleNew}
