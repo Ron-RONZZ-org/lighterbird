@@ -4,11 +4,13 @@
   import { tabStore } from "./tabStore.svelte.js";
   import { calendar as calendarApi } from "./api.js";
   import ConfirmDialog from "./ConfirmDialog.svelte";
+  import ListSearchBar from "./ListSearchBar.svelte";
   import {
     createSelectionManager,
     createCopyState,
     formatListItemDate,
     truncate,
+    sanitizeFilename,
   } from "./listTabShared.svelte.js";
 
   let { data = {} } = $props();
@@ -160,7 +162,7 @@
       case "/":
         if (plain) {
           showSearch = !showSearch;
-          if (showSearch) requestAnimationFrame(() => document.querySelector(".cel-search-input")?.focus());
+          if (showSearch) requestAnimationFrame(() => document.querySelector(".search-input")?.focus());
           else closeSearch();
           e.preventDefault();
         }
@@ -182,24 +184,26 @@
   <!-- Toolbar -->
   <div class="toolbar" class:active={sel.selectionMode || sel.numSelected > 0}>
     {#if showSearch}
-      <div class="search-bar">
-        <span class="search-icon">🔍</span>
-        <input
-          type="text"
-          class="cel-search-input"
-          placeholder="Search events… (min 2 chars)"
-          value={searchQuery}
-          oninput={handleSearchInput}
-          onkeydown={(e) => {
-            if (e.key === "Enter") { e.preventDefault(); performSearch(searchQuery); }
-            if (e.key === "Escape") { e.stopPropagation(); closeSearch(); }
-          }}
-          aria-label="Search events"
-        />
-        {#if searchQuery}
-          <button class="search-clear" onclick={() => { searchQuery = ""; performSearch(""); }} aria-label="Clear search">✕</button>
-        {/if}
-      </div>
+      <ListSearchBar
+        {showSearch}
+        {searchQuery}
+        placeholder="Search events… (min 2 chars)"
+        ariaLabel="Search events"
+        onSearchInput={handleSearchInput}
+        onSearchEnter={() => performSearch(searchQuery)}
+        onSearchEscape={closeSearch}
+        onSearchClear={() => { searchQuery = ""; performSearch(""); }}
+      >
+        <svelte:fragment slot="actions">
+          <div class="left">
+            <button class="tool-btn" title="Toggle selection mode (V)" onclick={() => sel.toggleSelectionMode()}>Select <kbd>V</kbd></button>
+            <button class="tool-btn primary" onclick={handleNew} title="Add new event">+ New <kbd>N</kbd></button>
+          </div>
+          <div class="right">
+            <button class="tool-btn" onclick={openImportDialog} title="Import events">Import</button>
+          </div>
+        </svelte:fragment>
+      </ListSearchBar>
     {:else if sel.selectionMode}
       <div class="left">
         <button class="tool-btn" title="Exit selection mode (V)" onclick={() => sel.toggleSelectionMode()}>
@@ -333,16 +337,7 @@
   }
   .count { color: #7c7c9a; font-size: 0.82rem; }
   .count.muted { color: #555; }
-  .search-bar { display: flex; align-items: center; gap: 0.4rem; flex: 1; }
-  .search-icon { font-size: 0.75rem; opacity: 0.6; }
-  .cel-search-input {
-    flex: 1; padding: 0.3rem 0.4rem; border: 1px solid #444; border-radius: 4px;
-    background: #12122a; color: #e0e0e0; font-family: monospace; font-size: 0.82rem; outline: none;
-  }
-  .cel-search-input:focus { border-color: #6a6a9a; }
-  .cel-search-input::placeholder { color: #555; }
-  .search-clear { background: none; border: none; color: #7c7c9a; cursor: pointer; font-size: 0.8rem; padding: 0.2rem; }
-  .search-clear:hover { color: #e0e0e0; }
+
   .list { flex: 1; overflow-y: auto; padding: 0; }
   .row {
     display: flex; align-items: center; gap: 0.5rem;
