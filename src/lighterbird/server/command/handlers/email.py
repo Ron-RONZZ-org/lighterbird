@@ -408,9 +408,12 @@ def _build_search_filters(flags: dict[str, str],
                           remaining: list[str]) -> tuple[dict[str, str], int, str]:
     """Build search filter dict and extract limit/query from flags."""
     filters: dict[str, str] = {}
-    for key in ("from", "subject", "body", "after", "before"):
+    for key in ("from", "sender", "subject", "body", "to", "cc", "bcc",
+                "participant", "priority", "after", "before"):
         if val := flags.get(key):
             filters[key] = val
+    if "sender" in flags and "from" not in flags:
+        filters["from"] = flags["sender"]
     limit = int(flags.get("limit", 50))
     query = " ".join(remaining) if remaining else ""
     if query:
@@ -421,17 +424,26 @@ def _build_search_filters(flags: dict[str, str],
 @command("email.search", permission_level=PermissionLevel.READ,
          flags=[
              {"name": "from", "type": "string", "help": "Search by sender"},
+             {"name": "sender", "type": "string", "help": "Search by sender (alias for --from)"},
              {"name": "subject", "type": "string", "help": "Search by subject (local headers)"},
-             {"name": "body", "type": "bool", "help": "Search message body via IMAP SEARCH (slow, but finds text in header-only messages)"},
+             {"name": "to", "type": "string", "help": "Search by recipient (To field)"},
+             {"name": "cc", "type": "string", "help": "Search by CC field"},
+             {"name": "bcc", "type": "string", "help": "Search by BCC field (sent messages only)"},
+             {"name": "participant", "type": "string", "help": "Search in From, To, and CC"},
+             {"name": "priority", "type": "int", "help": "Filter by priority (1-10)"},
+             {"name": "body", "type": "bool", "help": "Search message body via IMAP (slow, but finds text in header-only msgs)"},
              {"name": "header", "type": "bool", "help": "Search headers only (fast, local SQL)"},
              {"name": "after", "type": "string", "help": "Messages after date (YYYY-MM-DD)"},
              {"name": "before", "type": "string", "help": "Messages before date (YYYY-MM-DD)"},
              {"name": "limit", "type": "int", "help": "Max results (default 50)"},
              {"name": "account", "type": "string", "help": "Account email to search"},
+             {"name": "folder", "type": "string", "help": "Folder name to search in"},
          ])
 def email_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email search [query] [--from] [--subject] [--body] [--header]
-                   [--after DATE] [--before DATE] [--limit N] [--account EMAIL]
+    """!email search [query] [--from|--sender] [--subject] [--to] [--cc] [--bcc]
+                   [--participant] [--priority N] [--body] [--header]
+                   [--after DATE] [--before DATE] [--limit N]
+                   [--account EMAIL] [--folder NAME]
 
     By default, a free-text query searches both headers and body via IMAP
     server-side SEARCH.  Use ``--header`` to restrict to local headers only
@@ -439,10 +451,13 @@ def email_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
     Examples::
 
-      !email search meeting              # search headers + body via IMAP
-      !email search --header meeting     # search headers only (local)
-      !email search --body "project X"   # force body search via IMAP
-      !email search --from alice         # local header search
+      !email search meeting                  # search headers + body via IMAP
+      !email search --header meeting         # search headers only (local)
+      !email search --body "project X"       # force body search via IMAP
+      !email search --from alice             # local header search
+      !email search --to bob --cc carol      # recipients
+      !email search --participant dave       # anywhere in From/To/CC
+      !email search --priority 1             # urgent only
     """
     svc: EmailService = get_email_service()
     filters, limit, query = _build_search_filters(flags, remaining)
@@ -456,16 +471,19 @@ def email_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     if needs_body and account_email:
         # IMAP server-side SEARCH
         criteria = {}
-        if from_val := flags.get("from"):
-            criteria["from_"] = from_val
-        if subj_val := flags.get("subject"):
-            criteria["subject"] = subj_val
+        for key, imap_key in [("from", "from_"), ("sender", "from_"),
+                              ("subject", "subject"), ("to", "to"),
+                              ("cc", "cc"), ("participant", "participant")]:
+            if val := flags.get(key):
+                criteria[imap_key] = val
         if after_val := flags.get("after"):
             criteria["after"] = after_val
         if before_val := flags.get("before"):
             criteria["before"] = before_val
         messages = [dict(m) for m in svc.search_remote(
-            account_email, query, criteria=criteria,
+            account_email, query,
+            folder=flags.get("folder"),
+            criteria=criteria,
         )]
         messages = messages[:limit]
     elif filters:

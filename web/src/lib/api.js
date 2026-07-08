@@ -125,7 +125,15 @@ export const email = {
     if (params.folder) q.set("folder", params.folder);
     if (params.query) q.set("query", params.query);
     if (params.from) q.set("from", params.from);
+    if (params.sender) q.set("sender", params.sender);
     if (params.subject) q.set("subject", params.subject);
+    if (params.to) q.set("to", params.to);
+    if (params.cc) q.set("cc", params.cc);
+    if (params.bcc) q.set("bcc", params.bcc);
+    if (params.participant) q.set("participant", params.participant);
+    if (params.priority) q.set("priority", String(params.priority));
+    if (params.body) q.set("body", "true");
+    if (params.header) q.set("header", "true");
     if (params.limit) q.set("limit", String(params.limit));
     if (params.offset) q.set("offset", String(params.offset));
     if (params.sort) q.set("sort", params.sort);

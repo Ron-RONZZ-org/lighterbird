@@ -206,9 +206,15 @@ def list_messages(
     folder: str | None = None,
     query: str | None = None,
     from_: str | None = Query(default=None, alias="from"),
+    sender: str | None = None,
     subject: str | None = None,
     body_search: bool = Query(default=False, alias="body"),
     header_only: bool = Query(default=False, alias="header"),
+    to: str | None = None,
+    cc: str | None = None,
+    bcc: str | None = None,
+    participant: str | None = None,
+    priority: int | None = None,
     after: str | None = None,
     before: str | None = None,
     read: bool | None = None,
@@ -231,10 +237,20 @@ def list_messages(
     filters = {}
     if query:
         filters["query"] = query
-    if from_:
-        filters["from"] = from_
+    if from_ or sender:
+        filters["from"] = from_ or sender
     if subject:
         filters["subject"] = subject
+    if to:
+        filters["to"] = to
+    if cc:
+        filters["cc"] = cc
+    if bcc:
+        filters["bcc"] = bcc
+    if participant:
+        filters["participant"] = participant
+    if priority is not None:
+        filters["priority"] = str(priority)
     if after:
         filters["after"] = after
     if before:
@@ -260,7 +276,8 @@ def list_messages(
         msgs = email_svc.search_remote(
             account_email, query or "",
             folder=folder,
-            criteria={"from_": from_, "subject": subject,
+            criteria={"from_": from_ or sender, "subject": subject,
+                       "to": to, "cc": cc, "participant": participant,
                        "after": after, "before": before},
         )
         msgs = msgs[:fetch_limit]
