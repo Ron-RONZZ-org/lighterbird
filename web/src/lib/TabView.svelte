@@ -179,8 +179,46 @@
     <div class="tab-content" class:active={true} role="region" aria-label="Tab content">
       {#if tabStore.active.type === "loading"}
         <LoadingPopup message={tabStore.active.title} />
-      {:else if TAB_COMPONENTS[tabStore.active.type]}
-        <svelte:component this={TAB_COMPONENTS[tabStore.active.type]} data={tabStore.active.data} tabId={tabStore.active.id} />
+      {:else if tabStore.active.type === "status"}
+        <StatusPopup data={tabStore.active.data} />
+      {:else if tabStore.active.type === "email"}
+        <EmailViewTab data={tabStore.active.data} tabId={tabStore.active.id} />
+      {:else if tabStore.active.type === "events"}
+        <EventsPopup data={tabStore.active.data} />
+      {:else if tabStore.active.type === "error"}
+        <ErrorPopup data={tabStore.active.data} />
+      {:else if tabStore.active.type === "email-list"}
+        <EmailListTab data={tabStore.active.data} tabId={tabStore.active.id} />
+      {:else if tabStore.active.type === "journal-list"}
+        <JournalListTab data={tabStore.active.data} tabId={tabStore.active.id} />
+      {:else if tabStore.active.type === "journal-view"}
+        <JournalViewTab data={tabStore.active.data} tabId={tabStore.active.id} />
+      {:else if tabStore.active.type === "contacts-list"}
+        <ContactsListTab data={tabStore.active.data} tabId={tabStore.active.id} />
+      {:else if tabStore.active.type === "contact-view"}
+        <ContactViewTab data={tabStore.active.data} tabId={tabStore.active.id} />
+      {:else if tabStore.active.type === "todo-list"}
+        <TodoListTab data={tabStore.active.data} tabId={tabStore.active.id} />
+      {:else if tabStore.active.type === "todo-view"}
+        <TodoViewTab data={tabStore.active.data} tabId={tabStore.active.id} />
+      {:else if tabStore.active.type === "calendar-events"}
+        <CalendarEventsListTab data={tabStore.active.data} tabId={tabStore.active.id} />
+      {:else if tabStore.active.type === "sieve-list"}
+        <SieveListTab data={tabStore.active.data} tabId={tabStore.active.id} />
+      {:else if tabStore.active.type === "sieve-editor"}
+        <SieveEditorForm data={tabStore.active.data} />
+      {:else if tabStore.active.type === "letter-list"}
+        <LetterListTab data={tabStore.active.data} tabId={tabStore.active.id} />
+      {:else if tabStore.active.type === "letter-view"}
+        <LetterViewTab data={tabStore.active.data} tabId={tabStore.active.id} />
+      {:else if tabStore.active.type === "saved-commands"}
+        <SavedCommandsTab data={tabStore.active.data} />
+      {:else if tabStore.active.type === "help"}
+        <HelpPopup data={tabStore.active.data} />
+      {:else if tabStore.active.type === "templates"}
+        <StatusPopup data={tabStore.active.data} />
+      {:else if tabStore.active.type === "form"}
+        <FormTab data={tabStore.active.data} tabId={tabStore.active.id} />
       {:else}
         <StatusPopup data={tabStore.active.data} />
       {/if}

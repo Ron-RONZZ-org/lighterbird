@@ -36,15 +36,15 @@
 
   // ── Build reactive form values from initial data ──────────────────────
   let fieldValues = $state({});
+  let dirty = $state(false);
 
+  // Initialize form fields from initialData + tree metadata
   $effect(() => {
-    // Initialize from initialData
     const vals = { ...initialData };
-    // Also seed params and flags with defaults
-    for (const p of params) {
+    for (const p of (node?.params || [])) {
       if (!(p.name in vals)) vals[p.name] = "";
     }
-    for (const f of flags) {
+    for (const f of (node?.flags || [])) {
       if (f.type === "flag") {
         vals[f.name] = initialData[f.name] || false;
       } else if (!(f.name in vals)) {
@@ -54,16 +54,13 @@
     fieldValues = vals;
   });
 
-  // ── Dirty tracking — compare current field values against initial data ──
-  let dirty = $state(false);
-
+  // Dirty tracking — derived synchronously from current values
   $effect(() => {
-    const keys = Object.keys(fieldValues);
-    if (keys.length === 0) { dirty = false; return; }
-
+    const vals = fieldValues;
+    if (Object.keys(vals).length === 0) { dirty = false; return; }
     let isDirty = false;
-    for (const key of keys) {
-      const cur = fieldValues[key];
+    for (const key of Object.keys(vals)) {
+      const cur = vals[key];
       const init = initialData[key];
       const curStr = typeof cur === "boolean" ? String(cur) : cur ?? "";
       const initStr = typeof init === "boolean" ? String(init) : init ?? "";
@@ -72,8 +69,13 @@
     dirty = isDirty;
   });
 
+  // Notify parent — de-aliased via setTimeout to prevent reactive cascading
+  let _lastDirty = $state(false);
   $effect(() => {
-    onDirtyChange(dirty);
+    if (dirty !== _lastDirty) {
+      _lastDirty = dirty;
+      setTimeout(() => onDirtyChange(dirty), 0);
+    }
   });
 
   function setField(name, val) {

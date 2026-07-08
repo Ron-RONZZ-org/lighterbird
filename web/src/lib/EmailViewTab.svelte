@@ -17,6 +17,7 @@
   ]);
 
   let { data = {}, tabId } = $props();
+  // svelte-ignore state_referenced_locally
   let msg = $state(data || {});
   let synced = $state(false);
   $effect(() => {

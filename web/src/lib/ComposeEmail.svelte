@@ -8,8 +8,10 @@
   import MultiEntryField from "./MultiEntryField.svelte";
 
   let { initialData = {}, onsubmit, onDirtyChange = () => {} } = $props();
-  // svelte-ignore state_referenced_locally
-  const _initial = initialData;
+  // Snapshot of initial props for dirty-state comparison.
+  // $state ensures Svelte treats this as a reactive binding without tracking
+  // updates — intentionally a one-time capture, not a live $derived.
+  let _initial = $state(initialData);
 
   let accountEmail = $state(_initial.account || "");
   let toList = $state(_initial.to ? _initial.to.split(",").map((s) => s.trim()).filter(Boolean) : []);
@@ -18,7 +20,7 @@
   let ccList = $state(_initial.cc ? _initial.cc.split(",").map((s) => s.trim()).filter(Boolean) : []);
   let bccList = $state(_initial.bcc ? _initial.bcc.split(",").map((s) => s.trim()).filter(Boolean) : []);
   let priority = $state(_initial.priority || "3");
-  let bodyFormat = $state("markdown"); // "markdown" | "html" | "plain"
+  let bodyFormat = $state(_initial["body-format"] || _initial.body_format || "markdown"); // "markdown" | "html" | "plain"
   let attachmentFiles = $state([]); // Array of {name, data} (base64)
   let saveAsSample = $state(true); // save as writing sample for LLM style learning
   let sending = $state(false);
