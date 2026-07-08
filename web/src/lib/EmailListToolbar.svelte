@@ -25,10 +25,36 @@
     syncing = false,
   } = $props();
 
+  /**
+   * Tracks whether the search input has focus.
+   * When true (user is typing): full-width search bar, buttons hidden.
+   * When false (user confirmed search via Enter or blurred): compact search + actions buttons.
+   */
+  let searchFocused = $state(false);
+
+  // When search opens, mark as focused immediately (before DOM update).
+  // The onfocus event fires asynchronously; without this, the toolbar would
+  // briefly show compact+buttons mode before onfocus sets searchFocused=true.
+  $effect(() => {
+    if (showSearch) {
+      searchFocused = true;
+    }
+  });
+
+  function handleSearchFocus() {
+    searchFocused = true;
+  }
+
+  function handleSearchBlur() {
+    searchFocused = false;
+  }
+
   function handleSearchKeydown(e) {
     if (e.key === "Enter") {
       e.preventDefault();
       onSearchEnter();
+      // Blur the input to show action buttons alongside the search bar
+      e.target.blur();
     }
     if (e.key === "Escape") {
       e.stopPropagation();
@@ -39,8 +65,9 @@
 
 <div class="toolbar" class:active={selectionMode || numSelected > 0}>
   {#if showSearch}
-    <!-- Search mode: full-width input -->
-    <div class="search-bar">
+    <!-- Search mode: single always-present input (never swapped, keeps focus).
+         CSS class toggles full-width vs compact; buttons shown only when !searchFocused. -->
+    <div class="search-bar" class:full={searchFocused} class:compact={!searchFocused}>
       <span class="search-icon">🔍</span>
       <input
         type="text"
@@ -49,12 +76,35 @@
         value={searchQuery}
         oninput={onSearchInput}
         onkeydown={handleSearchKeydown}
+        onfocus={handleSearchFocus}
+        onblur={handleSearchBlur}
         aria-label="Search messages"
       />
       {#if searchQuery}
         <button class="search-clear" onclick={onSearchClear} aria-label="Clear search">✕</button>
       {/if}
     </div>
+    {#if !searchFocused}
+      <!-- Confirmed search: action buttons alongside compact search bar -->
+      <div class="left">
+        <button class="tool-btn" title="Toggle selection mode (V)" onclick={onToggleMode}>Select <kbd>V</kbd></button>
+        <button class="tool-btn" title="Folders (F)" onclick={onToggleFolderTree}
+          class:active={showFolderTree}>Fldrs <kbd>F</kbd></button>
+        <button class="tool-btn" title="Sort (S)" onclick={onToggleSortDropdown}
+          class:active={showSortDropdown}>Sort <kbd>S</kbd></button>
+        <button class="tool-btn" title="Parameters (P)" onclick={onToggleParamsDialog}
+          class:active={showParamsDialog}>Params <kbd>P</kbd></button>
+      </div>
+      <div class="right">
+        {#if onNew}
+          <button class="tool-btn primary" onclick={onNew} title="New message">+ New <kbd>N</kbd></button>
+        {/if}
+        <button class="tool-btn" onclick={onImport} title="Import messages">Import</button>
+        <button class="tool-btn" onclick={onSync} disabled={syncing} title="Sync (Ctrl+R)">
+          {syncing ? "Syncing…" : "Sync"} <kbd>Ctrl+R</kbd>
+        </button>
+      </div>
+    {/if}
   {:else if selectionMode}
     <!-- Selection mode: action toolbar -->
     <div class="left">
@@ -177,14 +227,24 @@
   .count { color: #7c7c9a; font-size: 0.82rem; }
   .count.muted { color: #555; }
 
-  /* Search bar fills entire toolbar */
+  /* Search bar base — flex, always present when search is open */
   .search-bar {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    flex: 1;
+    gap: 0.3rem;
   }
-  .search-icon { font-size: 0.75rem; opacity: 0.6; }
+  /* Search bar — full width (typing mode: input focused) */
+  .search-bar.full {
+    flex: 1;
+    gap: 0.4rem;
+  }
+  /* Search bar — compact (results mode: input blurred, alongside buttons) */
+  .search-bar.compact {
+    flex: 0 0 auto;
+    max-width: 300px;
+    min-width: 140px;
+  }
+  .search-icon { font-size: 0.75rem; opacity: 0.6; flex-shrink: 0; }
   .search-input {
     flex: 1;
     padding: 0.3rem 0.4rem;
@@ -195,6 +255,7 @@
     font-family: monospace;
     font-size: 0.82rem;
     outline: none;
+    min-width: 80px;
   }
   .search-input:focus { border-color: #6a6a9a; }
   .search-input::placeholder { color: #555; }
@@ -205,6 +266,7 @@
     cursor: pointer;
     font-size: 0.8rem;
     padding: 0.2rem;
+    flex-shrink: 0;
   }
   .search-clear:hover { color: #e0e0e0; }
 </style>
