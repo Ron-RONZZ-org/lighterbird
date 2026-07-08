@@ -19,10 +19,11 @@
     onToggleFolderTree = () => {},
     onToggleSortDropdown = () => {},
     onToggleParamsDialog = () => {},
-    onImport = () => {},
-    onExport = () => {},
-    onSync = () => {},
-    syncing = false,
+  onImport = () => {},
+  onExport = () => {},
+  onSync = () => {},
+  onToggleAdvancedSearch = () => {},
+  syncing = false,
   } = $props();
 
   /**
@@ -96,6 +97,7 @@
           class:active={showParamsDialog}>Params <kbd>P</kbd></button>
       </div>
       <div class="right">
+        <button class="tool-btn" title="Advanced search" onclick={onToggleAdvancedSearch}>Adv <kbd>A</kbd></button>
         {#if onNew}
           <button class="tool-btn primary" onclick={onNew} title="New message">+ New <kbd>N</kbd></button>
         {/if}
@@ -134,6 +136,7 @@
         class:active={showSortDropdown}>Sort <kbd>S</kbd></button>
       <button class="tool-btn" title="Parameters (P)" onclick={onToggleParamsDialog}
         class:active={showParamsDialog}>Params <kbd>P</kbd></button>
+      <button class="tool-btn" title="Advanced search" onclick={onToggleAdvancedSearch}>Adv <kbd>A</kbd></button>
     </div>
     <div class="center">
       <span class="search-hint"><kbd>/</kbd> search</span>

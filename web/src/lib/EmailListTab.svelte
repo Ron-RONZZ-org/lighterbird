@@ -382,16 +382,9 @@
     onImport={openImportDialog}
     onExport={openExportDialog}
     onSync={handleSync}
+    onToggleAdvancedSearch={() => showAdvancedSearch = true}
     {syncing}
   />
-
-  <!-- Advanced search button -->
-  <div class="adv-search-row">
-    <button class="adv-search-btn" onclick={() => showAdvancedSearch = true}
-            title="Advanced search (all fields)">
-      <span class="adv-icon">[a]</span> Advanced
-    </button>
-  </div>
 
   <!-- Folder tree panel -->
   <EmailFolderPanel
@@ -540,34 +533,6 @@
   .load-more:disabled {
     color: var(--clr-muted, #888);
     cursor: default;
-  }
-
-  .adv-search-row {
-    display: flex;
-    align-items: center;
-    padding: 0.25rem 0.75rem;
-    gap: 0.5rem;
-    border-bottom: 1px solid #2a2a3e;
-    background: #1a1a2e;
-  }
-  .adv-search-btn {
-    background: transparent;
-    border: 1px solid #4a4a6a;
-    border-radius: 4px;
-    color: #7c9bff;
-    cursor: pointer;
-    font-family: monospace;
-    font-size: 0.78rem;
-    padding: 0.2rem 0.5rem;
-    transition: background 0.1s, border-color 0.1s;
-  }
-  .adv-search-btn:hover {
-    background: #2a2a4e;
-    border-color: #6a6a9a;
-  }
-  .adv-icon {
-    color: #7fdb7f;
-    font-weight: bold;
   }
 
 </style>
