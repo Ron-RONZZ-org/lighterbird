@@ -118,8 +118,8 @@ class LLMProviderWrapper:
         core = _create_core_provider(self.config)
         try:
             return await core.chat_with_tools(messages, tools, tool_choice=tool_choice)
-        except AIError:
-            # Return an empty ChatResult so the tool loop can handle it
+        except AIError as exc:
+            logger.warning("AIError in chat_with_tools: %s", exc)
             return ChatResult(content="LLM request failed. Check your provider configuration.")
         except Exception:
             logger.exception("Unexpected error in chat_with_tools")
