@@ -1,4 +1,4 @@
-"""Tests for email REST API routes — messages, folders, views."""
+"""Tests for email REST API routes — messages, folders, views, advanced search params."""
 
 from __future__ import annotations
 
@@ -43,3 +43,33 @@ class TestEmailMessagesAPI:
         assert resp.status_code == 200
         data = resp.json()
         assert "messages" in data
+
+
+class TestEmailSearchAPI:
+    """Test advanced search query parameters in list_messages endpoint."""
+
+    def _client(self):
+        return TestClient(create_app())
+
+    def test_header_param(self):
+        resp = self._client().get("/api/v1/email/messages?header=true")
+        assert resp.status_code == 200
+
+    def test_body_param(self):
+        resp = self._client().get("/api/v1/email/messages?body=true")
+        assert resp.status_code == 200
+
+    def test_combined_params(self):
+        params = ("from=alice&to=bob&subject=report"
+                  "&participant=dave&priority=1&folder=INBOX"
+                  "&after=2024-01-01&before=2024-12-31")
+        resp = self._client().get(f"/api/v1/email/messages?{params}")
+        assert resp.status_code == 200
+
+    def test_sender_alias(self):
+        resp = self._client().get("/api/v1/email/messages?sender=alice")
+        assert resp.status_code == 200
+
+    def test_cc_bcc_params(self):
+        resp = self._client().get("/api/v1/email/messages?cc=carol&bcc=bob")
+        assert resp.status_code == 200

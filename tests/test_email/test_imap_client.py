@@ -9,6 +9,7 @@ import pytest
 from lighterbird.email.imap.client import (
     IMAPClient,
     _parse_list_response,
+    _to_imap_date,
 )
 from lighterbird.email.imap.storage import store_message
 
@@ -631,3 +632,123 @@ class TestIMAPClientSyncFolder:
         result = client.sync_folder("INBOX", "user@example.com", "INBOX", MagicMock())
         assert len(result["errors"]) == 1
         assert "Sync error" in result["errors"][0]
+
+
+# ── _to_imap_date ──────────────────────────────────────────────────────────
+
+
+class TestToImapDate:
+    def test_iso_to_imap(self):
+        assert _to_imap_date("2024-01-01") == "01-Jan-2024"
+
+    def test_iso_to_imap_june(self):
+        assert _to_imap_date("2024-06-15") == "15-Jun-2024"
+
+    def test_iso_to_imap_december(self):
+        assert _to_imap_date("2023-12-25") == "25-Dec-2023"
+
+    def test_invalid_format_returns_original(self):
+        assert _to_imap_date("not-a-date") == "not-a-date"
+
+    def test_empty_string_returns_original(self):
+        assert _to_imap_date("") == ""
+
+    def test_none_returns_none(self):
+        assert _to_imap_date(None) is None
+
+
+# ── IMAPClient.search_remote ──────────────────────────────────────────────────
+
+
+class TestIMAPClientSearchRemote:
+    def test_search_remote_empty_query_no_criteria(self):
+        client = IMAPClient("imap.example.com")
+        mock_conn = MagicMock()
+        client._conn = mock_conn
+        result = client.search_remote("INBOX", "")
+        assert result == []
+
+    def test_search_remote_calls_uid_search(self):
+        client = IMAPClient("imap.example.com")
+        mock_conn = MagicMock()
+        client._conn = mock_conn
+        mock_conn.select.return_value = ("OK", [])
+        mock_conn.uid.return_value = ("OK", [b"1 2 3"])
+        result = client.search_remote("INBOX", "meeting")
+        assert result == [1, 2, 3]
+        mock_conn.select.assert_called_with("INBOX", readonly=True)
+        mock_conn.uid.assert_called_once()
+
+    def test_search_remote_with_criteria(self):
+        client = IMAPClient("imap.example.com")
+        mock_conn = MagicMock()
+        client._conn = mock_conn
+        mock_conn.select.return_value = ("OK", [])
+        mock_conn.uid.return_value = ("OK", [b"42 99"])
+        result = client.search_remote(
+            "INBOX", "project",
+            criteria={"from_": "alice", "subject": "report", "after": "2024-01-01"},
+        )
+        assert result == [42, 99]
+        # Verify the SEARCH command includes FROM, SUBJECT, SINCE
+        call_args = mock_conn.uid.call_args[0]
+        assert "FROM" in str(call_args)
+        assert "SUBJECT" in str(call_args)
+        assert "SINCE" in str(call_args)
+        assert "01-Jan-2024" in str(call_args)  # Converted from ISO
+
+    def test_search_remote_to_and_cc(self):
+        client = IMAPClient("imap.example.com")
+        mock_conn = MagicMock()
+        client._conn = mock_conn
+        mock_conn.select.return_value = ("OK", [])
+        mock_conn.uid.return_value = ("OK", [b"7"])
+        result = client.search_remote("INBOX", "", criteria={"to": "bob", "cc": "carol"})
+        assert result == [7]
+        cmd = str(mock_conn.uid.call_args[0])
+        assert 'TO "bob"' in cmd
+        assert 'CC "carol"' in cmd
+
+    def test_search_remote_participant(self):
+        client = IMAPClient("imap.example.com")
+        mock_conn = MagicMock()
+        client._conn = mock_conn
+        mock_conn.select.return_value = ("OK", [])
+        mock_conn.uid.return_value = ("OK", [b"5"])
+        result = client.search_remote("INBOX", "", criteria={"participant": "dave"})
+        assert result == [5]
+        cmd = str(mock_conn.uid.call_args[0])
+        assert "FROM" in cmd
+        assert "TO" in cmd
+        assert "CC" in cmd
+        assert "dave" in cmd
+
+    def test_search_remote_select_failure_returns_empty(self):
+        client = IMAPClient("imap.example.com")
+        mock_conn = MagicMock()
+        client._conn = mock_conn
+        mock_conn.select.return_value = ("NO", [])
+        # When select fails, UID SEARCH also fails → returns empty list
+        result = client.search_remote("INBOX", "test")
+        assert result == []
+
+    def test_search_remote_uid_search_failure_returns_empty(self):
+        client = IMAPClient("imap.example.com")
+        mock_conn = MagicMock()
+        client._conn = mock_conn
+        mock_conn.select.return_value = ("OK", [])
+        mock_conn.uid.return_value = ("BAD", [])
+        result = client.search_remote("INBOX", "test")
+        assert result == []
+
+    def test_search_remote_date_conversion(self):
+        """Verify ISO dates are converted to IMAP format in the command."""
+        client = IMAPClient("imap.example.com")
+        mock_conn = MagicMock()
+        client._conn = mock_conn
+        mock_conn.select.return_value = ("OK", [])
+        mock_conn.uid.return_value = ("OK", [b"1"])
+        client.search_remote("INBOX", "", criteria={"after": "2024-03-15", "before": "2024-04-20"})
+        cmd = str(mock_conn.uid.call_args[0])
+        assert "15-Mar-2024" in cmd
+        assert "20-Apr-2024" in cmd
