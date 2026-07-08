@@ -19,6 +19,11 @@
     onclose();
   }
 
+  /** Close only when clicking the overlay background, not its children. */
+  function handleOverlayClick(e) {
+    if (e.target === e.currentTarget) close();
+  }
+
   function handleKeydown(e) {
     if (e.key === "Escape") {
       e.preventDefault();
@@ -48,9 +53,8 @@
 
 {#if showing}
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-  <div class="preview-overlay" onclick={close} role="dialog" aria-label={title}>
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="preview-modal" onclick={(e) => e.stopPropagation()} role="document">
+  <div class="preview-overlay" onclick={handleOverlayClick} role="dialog" aria-label={title} tabindex="-1">
+    <div class="preview-modal" role="document">
       <div class="preview-header">
         <span class="preview-title">{title}</span>
         <div class="preview-actions">
@@ -64,7 +68,6 @@
       </div>
       <div class="preview-body">
         {#if htmlContent}
-          <!-- svelte-ignore a11y_html_has_lang -->
           <div class="rendered-content">{@html htmlContent}</div>
         {:else}
           <p class="empty">(empty)</p>

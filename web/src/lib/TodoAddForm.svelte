@@ -282,7 +282,7 @@
       {#if showParentSuggestions && parentSuggestions.length > 0}
         <div class="autocomplete-dropdown">
           {#each parentSuggestions as item}
-            <div class="autocomplete-item" onmousedown={() => selectParent(item)} role="button" tabindex="-1">
+            <div class="autocomplete-item" onmousedown={() => selectParent(item)} onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectParent(item); } }} role="button" tabindex="-1">
               <span class="ac-uuid">{item.uuid.slice(0, 8)}</span>
               <span class="ac-title">{@html highlightMatch(item.titolo, parentUuid)}</span>
             </div>

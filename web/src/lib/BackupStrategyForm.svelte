@@ -92,6 +92,19 @@
     }
   }
 
+  /** Close when clicking the overlay background, not its children. */
+  function handleOverlayClick(e) {
+    if (e.target === e.currentTarget) onDismiss();
+  }
+
+  /** Keyboard activation for the overlay (role="button"). */
+  function handleOverlayKeydown(e) {
+    if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onDismiss();
+    }
+  }
+
   async function handleSave() {
     if (validationError) {
       error = validationError;
@@ -138,8 +151,8 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="modal-overlay" onclick={onDismiss} onkeydown={(e) => e.key === "Escape" && onDismiss()} role="button" tabindex="-1" aria-label="Dismiss">
-  <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" tabindex="0">
+<div class="modal-overlay" onclick={handleOverlayClick} onkeydown={handleOverlayKeydown} role="button" tabindex="0" aria-label="Dismiss">
+  <div class="modal" role="dialog" aria-modal="true" tabindex="0">
     <div class="modal-header">
       <h2>{isEdit ? "Edit Backup Strategy" : "Add Backup Strategy"}</h2>
       <p class="subtitle">{isEdit ? `Editing "${strategy.label || strategy.id}"` : "Configure a new backup strategy"}</p>

@@ -12,6 +12,7 @@
   // Snapshot of initial props for dirty-state comparison.
   // $state ensures Svelte treats this as a reactive binding without tracking
   // updates — intentionally a one-time capture, not a live $derived.
+  // svelte-ignore state_referenced_locally — intentionally captured at mount for dirty-state comparison
   let _initial = $state(initialData);
 
   let accountEmail = $state(_initial.account || "");

@@ -241,7 +241,7 @@
           <span class="chip-edit-badge">✎</span>
         {/if}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <span class="chip-label" role="button" tabindex="-1" ondblclick={() => startEdit(i)} title={entry}>{chipLabel(entry)}</span>
+        <span class="chip-label" role="button" tabindex="-1" ondblclick={() => startEdit(i)} onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); startEdit(i); } }} title={entry}>{chipLabel(entry)}</span>
         <button
           class="chip-remove"
           onclick={() => removeEntry(i)}

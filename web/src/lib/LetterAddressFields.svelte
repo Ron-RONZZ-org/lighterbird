@@ -62,10 +62,10 @@
   ></textarea>
   {#if showSuggestions && filteredSuggestions.length > 0}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="suggestion-popup" role="listbox" onmousedown={(e) => e.preventDefault()}>
+    <div class="suggestion-popup" role="listbox" tabindex="-1" onmousedown={(e) => e.preventDefault()}>
       {#each filteredSuggestions as entry}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div class="suggestion-item" role="option" onmousedown={() => { onSuggestionSelect(entry); }}>
+        <div class="suggestion-item" role="option" tabindex="-1" aria-selected={false} onmousedown={() => { onSuggestionSelect(entry); }}>
           {entry.label}
         </div>
       {/each}
@@ -106,7 +106,6 @@
     align-items: center;
     justify-content: space-between;
   }
-  .field-row > label,
   .field-header label {
     color: var(--clr-sub);
     font-size: 0.8rem;
