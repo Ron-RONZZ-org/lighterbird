@@ -225,6 +225,16 @@ _IDX_DEAD_LETTERS_ACCOUNT = "CREATE INDEX IF NOT EXISTS idx_dead_letters_account
 _MIGRATE_MESSAGES_MODSEQ = """
 ALTER TABLE messages ADD COLUMN modseq INTEGER;
 """
+
+# ── Lazy body fetch / sync priority ──────────────────────────────────────
+# body_fetched: 1=full body already downloaded, 0=only header synced
+# sync_priority: lower = synced first (1 for special-use, 10 for custom)
+_MIGRATE_MESSAGES_BODY_FETCHED = """
+ALTER TABLE messages ADD COLUMN body_fetched INTEGER NOT NULL DEFAULT 1;
+"""
+_MIGRATE_FOLDERS_SYNC_PRIORITY = """
+ALTER TABLE folders ADD COLUMN sync_priority INTEGER NOT NULL DEFAULT 10;
+"""
 _MIGRATE_FOLDERS_UIDVALIDITY = """
 ALTER TABLE folders ADD COLUMN uidvalidity INTEGER;
 """
@@ -280,6 +290,9 @@ _SCHEMA_STATEMENTS: list[str] = [
     _MIGRATE_FOLDERS_HIGHEST_MODSEQ,
     _MIGRATE_FOLDERS_SPECIAL_USE,
     _DEAD_LETTERS_TABLE,
+    # Lazy body fetch / sync priority
+    _MIGRATE_MESSAGES_BODY_FETCHED,
+    _MIGRATE_FOLDERS_SYNC_PRIORITY,
     _IDX_MESSAGES_ACCOUNT,
     _IDX_MESSAGES_FOLDER,
     _IDX_MESSAGES_IMAP_UID,
