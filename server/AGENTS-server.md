@@ -51,6 +51,7 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 - `POST /api/v1/chat/stream` — (deprecated) SSE streaming without tool-calling
 - `GET /api/v1/prompt-commands/list` — list prompt commands for autocomplete
 - `POST /api/v1/prompt-commands/expand` — preview expanded prompt text
+- `POST /api/v1/render-preview` — shared content-to-HTML conversion (markdown/html/plain) for preview rendering used by ComposeEmail, JournalWrite, LetterBodyEditor
 - `POST /api/v1/prompt-commands/execute` — expand + multi-round tool loop
 - `POST /api/v1/prompt-commands/execute/resume` — resume paused HITL session
 - `POST /api/v1/prompt-commands/execute/stream` — (deprecated) SSE without tool-calling
