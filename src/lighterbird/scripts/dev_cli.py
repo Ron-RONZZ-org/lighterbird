@@ -52,12 +52,6 @@ def dev_main() -> None:
         "Run an isolated lighterbird development server.",
         default_port=6006,
     )
-    parser.add_argument(
-        "--port",
-        type=int,
-        default=None,
-        help="Port to bind the server (default: LIGHTERBIRD_PORT env var or 6006)",
-    )
     args = parser.parse_args()
 
     validate_seed_sources(args)
