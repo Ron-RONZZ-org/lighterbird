@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from lightercore.permissions import PermissionLevel
 from lighterbird.core.paths import safe_resolve_path
 from lighterbird.letter.services.letters import LetterService
 from lighterbird.server.command.errors import CommandValidationError
@@ -18,7 +19,7 @@ from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_letter_service
 
 
-@command("letter.export")
+@command("letter.export", permission_level=PermissionLevel.READ)
 def letter_export(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {
         "type": "status",
@@ -32,7 +33,7 @@ def letter_export(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     }
 
 
-@command("letter.export.md")
+@command("letter.export.md", permission_level=PermissionLevel.READ)
 def letter_export_md(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!letter export md <uuid>"""
     if not remaining:

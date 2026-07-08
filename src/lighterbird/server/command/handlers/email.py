@@ -24,6 +24,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from lightercore.permissions import PermissionLevel
+
 from lighterbird.email.service import EmailService
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.handlers.email_eml import (  # noqa: F401
@@ -142,7 +144,7 @@ def _build_email_list_filters(flags: dict[str, str], svc: EmailService) -> dict[
     return filters
 
 
-@command("email.list")
+@command("email.list", permission_level=PermissionLevel.READ)
 def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email list [--limit N] [--folder NAME] [--not-folder NAME] [--all]
                   [--sort newest|oldest|sender] [--group conversation]
@@ -215,7 +217,7 @@ def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("email.read")
+@command("email.read", permission_level=PermissionLevel.READ)
 def email_read(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email read <uuid>"""
     if not remaining:
@@ -362,7 +364,7 @@ def _build_search_filters(flags: dict[str, str],
     return filters, limit, query
 
 
-@command("email.search")
+@command("email.search", permission_level=PermissionLevel.READ)
 def email_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email search [--from] [--subject] [--body] [--after] [--before] [--limit]"""
     svc: EmailService = get_email_service()
@@ -439,7 +441,7 @@ def email_move(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("email.folders")
+@command("email.folders", permission_level=PermissionLevel.READ)
 def email_folders(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email folders [--account email]
 

@@ -85,7 +85,7 @@ def contacts_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     }
 
 
-@command("contact.list")
+@command("contact.list", permission_level=PermissionLevel.READ)
 def contact_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!contact list [--limit N]"""
     svc: ContactService = get_contact_service()
@@ -160,7 +160,7 @@ def contact_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "status", "title": "Contact Added", "data": {"uuid": contact["uuid"], "name": display_name}}
 
 
-@command("contact.view")
+@command("contact.view", permission_level=PermissionLevel.READ)
 def contact_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!contact view <uuid-or-email>"""
     if not remaining:
@@ -217,7 +217,7 @@ def contact_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     return {"type": "status", "title": "Contact Modified", "data": {"uuid": uuid[:8]}}
 
 
-@command("contact.delete")
+@command("contact.delete", permission_level=PermissionLevel.DESTRUCTIVE)
 def contact_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!contact delete <uuid> [uuid...]"""
     if not remaining:
@@ -233,7 +233,7 @@ def contact_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     return {"type": "status", "title": "Contact(s) Deleted", "data": {"removed": removed}}
 
 
-@command("contact.search")
+@command("contact.search", permission_level=PermissionLevel.READ)
 def contact_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!contact search <query>"""
     svc: ContactService = get_contact_service()
@@ -242,7 +242,7 @@ def contact_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     return {"type": "contacts-list", "title": "Contact Search", "data": {"contacts": contacts}}
 
 
-@command("contact.export.vcf")
+@command("contact.export.vcf", permission_level=PermissionLevel.READ)
 def contact_export_vcf(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!contact export vcf <uuid> [--all]"""
     svc: ContactService = get_contact_service()
@@ -339,7 +339,7 @@ def contact_category_root(remaining: list[str], flags: dict[str, str]) -> dict[s
     }
 
 
-@command("contact.category.list")
+@command("contact.category.list", permission_level=PermissionLevel.READ)
 def contact_category_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!contact category list [--all]
 

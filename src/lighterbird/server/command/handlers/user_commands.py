@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from lightercore.permissions import PermissionLevel
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_user_commands_service
@@ -35,7 +36,7 @@ def saved_commands_root(remaining: list[str], flags: dict[str, str]) -> dict[str
     }
 
 
-@command("user.saved-commands.list")
+@command("user.saved-commands.list", permission_level=PermissionLevel.READ)
 def saved_commands_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!user saved-commands list — List all saved commands."""
     svc: UserCommandsService = get_user_commands_service()
@@ -151,7 +152,7 @@ def saved_commands_modify(remaining: list[str], flags: dict[str, str]) -> dict[s
     }
 
 
-@command("user.saved-commands.delete", interactive=True)
+@command("user.saved-commands.delete", permission_level=PermissionLevel.DESTRUCTIVE, interactive=True)
 def saved_commands_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!user saved-commands delete <alias> [alias...]
 

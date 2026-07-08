@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from lightercore.permissions import PermissionLevel
 from lighterbird.letter.services.letters import LetterService
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.helpers import require_found, require_uuid
@@ -21,7 +22,7 @@ def _normalize_letter(letter: dict[str, Any]) -> dict[str, Any]:
     return dict(letter)
 
 
-@command("letter.list")
+@command("letter.list", permission_level=PermissionLevel.READ)
 def letter_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!letter list [--direction sent|received|all] [--sort newest|oldest|sender]
                     [--group conversation] [--limit N] [--tag TAG,...]"""
@@ -129,7 +130,7 @@ def letter_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("letter.view")
+@command("letter.view", permission_level=PermissionLevel.READ)
 def letter_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!letter view <uuid>"""
     uuid = require_uuid(remaining, "Usage: !letter view <uuid>")

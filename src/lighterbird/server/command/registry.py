@@ -33,6 +33,8 @@ from typing import Any
 
 from lighterbird.server.command.errors import CommandNotFound
 
+from lightercore.permissions import PermissionLevel
+
 logger = logging.getLogger(__name__)
 
 # ── Data structures ───────────────────────────────────────────────────────
@@ -65,6 +67,60 @@ def _invalidate_tree_cache() -> None:
     if not _bulk_loading:
         _tree_version += 1
         _tree_cache = None
+
+
+# ── Permission helpers ───────────────────────────────────────────────────
+
+
+def get_handler_metadata(path: str) -> dict | None:
+    """Return the metadata dict for a registered command path, or None.
+
+    Args:
+        path: Dot-separated command path (e.g. ``"email.list"``).
+
+    Returns:
+        The metadata dict from the ``@command()`` decorator, or None.
+    """
+    entry = _commands.get(path)
+    if entry is None:
+        return None
+    _, metadata = entry
+    return metadata
+
+
+def get_command_level(path: str) -> PermissionLevel | None:
+    """Return the explicit permission level for a command, or ``None``.
+
+    Returns ``None`` only when *path* is not a registered command.
+    For registered commands without an explicit ``permission_level``
+    in the decorator, returns :attr:`PermissionLevel.WRITE` as default.
+
+    Args:
+        path: Dot-separated command path (e.g. ``"email.list"``).
+
+    Returns:
+        The :class:`PermissionLevel` or ``None`` for unknown paths.
+    """
+    meta = get_handler_metadata(path)
+    if meta is None:
+        return None
+    return meta.get("permission_level", PermissionLevel.WRITE)
+
+
+def get_definitions_with_permissions() -> list[dict]:
+    """Like :func:`get_definitions` but includes ``permission_level``.
+
+    The level is an integer (1=READ, 2=WRITE, 3=DESTRUCTIVE, 4=SYSTEM)
+    matching the :class:`~lightercore.permissions.PermissionLevel` enum.
+    Unregistered paths default to ``None`` (not a command).
+    """
+    defs = get_definitions()
+    for d in defs:
+        path = ".".join(d["path"])
+        level = get_command_level(path)
+        if level is not None:
+            d["permission_level"] = level.value
+    return defs
 
 
 # ── Decorators ────────────────────────────────────────────────────────────

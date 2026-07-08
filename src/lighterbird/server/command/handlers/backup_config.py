@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from lightercore.permissions import PermissionLevel
 from lighterbird.core.backup import (
     BackupStrategy,
     add_strategy,
@@ -74,7 +75,7 @@ def backup_config(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
 # ── !backup config list ────────────────────────────────────────────────────
 
 
-@command("backup.config.list")
+@command("backup.config.list", permission_level=PermissionLevel.READ)
 def backup_config_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!backup config list
 
@@ -238,7 +239,7 @@ def backup_config_default_path(remaining: list[str], flags: dict[str, str]) -> d
 # ── !backup config delete ──────────────────────────────────────────────────
 
 
-@command("backup.config.delete", interactive=True)
+@command("backup.config.delete", permission_level=PermissionLevel.DESTRUCTIVE, interactive=True)
 def backup_config_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!backup config delete <id>
 

@@ -16,6 +16,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from lightercore.permissions import PermissionLevel
 from lighterbird.core.backup import (
     backup_all_strategies,
     backup_config_files,
@@ -130,7 +131,7 @@ def backup_now(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 # ── !backup list ───────────────────────────────────────────────────────────
 
 
-@command("backup.list")
+@command("backup.list", permission_level=PermissionLevel.READ)
 def backup_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!backup list [--stem email|calendar|contacts|todo|journal|letters|profiles|user_commands] [--strategy ID]
 
@@ -207,7 +208,7 @@ def backup_restore(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
 # ── !backup prune ──────────────────────────────────────────────────────────
 
 
-@command("backup.prune", interactive=True)
+@command("backup.prune", permission_level=PermissionLevel.DESTRUCTIVE, interactive=True)
 def backup_prune(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!backup prune [--keep N]
 
@@ -237,7 +238,7 @@ def backup_prune(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 # ── !backup export ─────────────────────────────────────────────────────────
 
 
-@command("backup.export")
+@command("backup.export", permission_level=PermissionLevel.READ)
 def backup_export(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!backup export [--output PATH]
 

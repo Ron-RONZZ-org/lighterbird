@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from lightercore.permissions import PermissionLevel
 from lighterbird.profiles.services.profiles import ProfileError, ProfileService
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
@@ -156,7 +157,7 @@ def _extract_profile_data(
 # ── Handlers ──────────────────────────────────────────────────────────────
 
 
-@command("user.info.list")
+@command("user.info.list", permission_level=PermissionLevel.READ)
 def user_info_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!user info list — List all user profiles."""
     svc: ProfileService = get_profiles_service()
@@ -219,7 +220,7 @@ def user_info_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     }
 
 
-@command("user.info.view")
+@command("user.info.view", permission_level=PermissionLevel.READ)
 def user_info_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!user info view <uuid> — View profile details."""
     if not remaining:
@@ -314,7 +315,7 @@ def _resolve_uuid(svc: ProfileService, raw: str) -> str | None:
     return None
 
 
-@command("user.info.delete")
+@command("user.info.delete", permission_level=PermissionLevel.DESTRUCTIVE)
 def user_info_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!user info delete <uuid-or-name> [uuid-or-name...] — Delete one or more profiles.
 

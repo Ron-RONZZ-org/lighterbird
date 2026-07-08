@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from lightercore.permissions import PermissionLevel
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 from lighterbird.server.llm.provider import get_provider
@@ -59,7 +60,7 @@ def llm_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("llm.prompt")
+@command("llm.prompt", permission_level=PermissionLevel.READ)
 def llm_prompt(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!llm prompt — Show current system prompt path."""
     from lighterbird.core.system_prompt import load_system_prompt, system_prompt_path
@@ -120,7 +121,7 @@ def llm_profile_root(remaining: list[str], flags: dict[str, str]) -> dict[str, A
     return {"type": "status", "title": "LLM Profile", "data": result}
 
 
-@command("llm.profile.show")
+@command("llm.profile.show", permission_level=PermissionLevel.READ)
 def llm_profile_show(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!llm profile show — Show current LLM configuration."""
     return {
@@ -242,7 +243,7 @@ def llm_profile_clear(remaining: list[str], flags: dict[str, str]) -> dict[str, 
     return {"type": "status", "title": "Profile Cleared", "data": {"_summary": "done"}}
 
 
-@command("llm.profile.list")
+@command("llm.profile.list", permission_level=PermissionLevel.READ)
 def llm_profile_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!llm profile list — List saved LLM profiles."""
     provider = get_provider()
@@ -280,7 +281,7 @@ def llm_profile_load(remaining: list[str], flags: dict[str, str]) -> dict[str, A
     }
 
 
-@command("llm.profile.delete")
+@command("llm.profile.delete", permission_level=PermissionLevel.DESTRUCTIVE)
 def llm_profile_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!llm profile delete <name> — Delete a saved profile."""
     if not remaining:

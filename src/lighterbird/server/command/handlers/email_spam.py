@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from lightercore.permissions import PermissionLevel
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_email_service
@@ -33,7 +34,7 @@ def spam_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("email.spam.list")
+@command("email.spam.list", permission_level=PermissionLevel.READ)
 def spam_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email spam list — List all spam blocks."""
     svc = get_email_service()
@@ -81,7 +82,7 @@ def spam_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("email.spam.remove")
+@command("email.spam.remove", permission_level=PermissionLevel.DESTRUCTIVE)
 def spam_remove(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email spam remove <uuid> — Remove a spam block by UUID."""
     if not remaining:

@@ -7,6 +7,7 @@
   import LlmSetupModal from "./LlmSetupModal.svelte";
   import ChatMessage from "./ChatMessage.svelte";
   import ResetConfirmDialog from "./ResetConfirmDialog.svelte";
+  import ConfirmToolDialog from "./ConfirmToolDialog.svelte";
   import { email as emailApi, calendar, contacts, todo, journal } from "./api.js";
   import { parseCommand } from "./parser.js";
   import { commandTree, findNode } from "./commandTree.js";
@@ -21,6 +22,8 @@
   let convoEl = $state(null);
   let isLoadingLlm = $state(false);
   let resetConfirm = $state(null); // {tokens, flags, message} or null
+  /** @type {{type:"chat"|"confirm_tool", session_id?:string, batch?:[], message?:string}|null} */
+  let pendingToolConfirm = $state(null);
 
   /** Build conversation context from message history (last 20 messages). */
   function buildContext() {
@@ -127,7 +130,7 @@
       return;
     }
 
-    // ── LLM chat mode ────────────────────────────────────────────────
+    // ── LLM chat mode (multi-round tool-calling) ─────────────────────
     if (llmAvailable === null) {
       await checkLlmAvailable();
     }
@@ -137,7 +140,6 @@
       return;
     }
 
-    // ── Streaming ────────────────────────────────────────────────────
     isLoadingLlm = true;
     const msgIdx = messages.length;
     messages = [...messages, { role: "assistant", html: "", text: "", actions: [], _streaming: true }];
@@ -146,63 +148,7 @@
     const context = buildContext();
 
     try {
-      const resp = await fetch("/api/v1/chat/stream", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: trimmed, context }),
-      });
-
-      if (!resp.ok) {
-        const detail = await resp.json().catch(() => ({}));
-        const errMsg = detail.detail?.error || detail.detail || `HTTP ${resp.status}`;
-        messages = messages.map((m, i) =>
-          i === msgIdx ? { ...m, html: `<p>Error: ${errMsg}</p>`, _streaming: false } : m,
-        );
-        isLoadingLlm = false;
-        scrollToBottom();
-        return;
-      }
-
-      // Read SSE stream
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let accumulated = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const payload = line.slice(6).trim();
-            if (payload === "[DONE]") continue;
-            try {
-              const parsed = JSON.parse(payload);
-              if (parsed.token) {
-                accumulated += parsed.token;
-                const html = renderMarkdown(accumulated);
-                messages = messages.map((m, i) =>
-                  i === msgIdx ? { ...m, html, text: accumulated, _streaming: true } : m,
-                );
-                scrollToBottom();
-              }
-            } catch { /* skip malformed SSE */ }
-          }
-        }
-      }
-
-      // Final render with completed text
-      const finalHtml = renderMarkdown(accumulated);
-      messages = messages.map((m, i) =>
-        i === msgIdx
-          ? { ...m, html: finalHtml, text: accumulated, _streaming: false, actions: [] }
-          : m,
-      );
+      await _runChatRound(trimmed, context, msgIdx);
     } catch (err) {
       messages = messages.map((m, i) =>
         i === msgIdx
@@ -259,6 +205,120 @@
     requestAnimationFrame(() => {
       if (convoEl) convoEl.scrollTop = convoEl.scrollHeight;
     });
+  }
+
+  /** Run one round of the multi-round chat (or resume). */
+  async function _runChatRound(message, context, msgIdx) {
+    const resp = await fetch("/api/v1/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message, context }),
+    });
+
+    if (!resp.ok) {
+      const detail = await resp.json().catch(() => ({}));
+      const errMsg = detail.detail?.error || detail.detail || `HTTP ${resp.status}`;
+      messages = messages.map((m, i) =>
+        i === msgIdx ? { ...m, html: `<p>Error: ${errMsg}</p>`, _streaming: false } : m,
+      );
+      return;
+    }
+
+    const result = await resp.json();
+
+    if (result.type === "confirm_tool") {
+      // Pause for user approval
+      messages = messages.map((m, i) =>
+        i === msgIdx ? { ...m, html: `<p><em>Waiting for your approval...</em></p>`, _streaming: false } : m,
+      );
+      pendingToolConfirm = result;
+      return;
+    }
+
+    if (result.type === "chat" && result.data?.html) {
+      messages = messages.map((m, i) =>
+        i === msgIdx
+          ? { ...m, html: result.data.html, text: result.data.html.replace(/<[^>]+>/g, ""), _streaming: false, actions: result.data.actions || [] }
+          : m,
+      );
+      return;
+    }
+
+    // Fallback: status or unknown type
+    const fallbackHtml = result.data?.message || result.data?.html || JSON.stringify(result);
+    messages = messages.map((m, i) =>
+      i === msgIdx ? { ...m, html: `<p>${fallbackHtml}</p>`, _streaming: false } : m,
+    );
+  }
+
+  /** Handle tool confirmation from ConfirmToolDialog. */
+  async function _handleToolConfirm(decisions) {
+    const session = pendingToolConfirm;
+    pendingToolConfirm = null;
+    if (!session?.session_id) return;
+
+    // Re-add the "thinking" message
+    const msgIdx = messages.length;
+    messages = [...messages, { role: "assistant", html: "", text: "", actions: [], _streaming: true }];
+
+    try {
+      const resp = await fetch("/api/v1/chat/resume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: session.session_id,
+          decisions,
+        }),
+      });
+
+      if (!resp.ok) {
+        const detail = await resp.json().catch(() => ({}));
+        const errMsg = detail.detail?.error || detail.detail || `HTTP ${resp.status}`;
+        messages = messages.map((m, i) =>
+          i === msgIdx ? { ...m, html: `<p>Error: ${errMsg}</p>`, _streaming: false } : m,
+        );
+        return;
+      }
+
+      const result = await resp.json();
+
+      if (result.type === "confirm_tool") {
+        // Another round of approvals needed
+        messages = messages.map((m, i) =>
+          i === msgIdx ? { ...m, html: `<p><em>Waiting for your approval...</em></p>`, _streaming: false } : m,
+        );
+        pendingToolConfirm = result;
+        return;
+      }
+
+      if (result.type === "chat" && result.data?.html) {
+        messages = messages.map((m, i) =>
+          i === msgIdx
+            ? { ...m, html: result.data.html, text: result.data.html.replace(/<[^>]+>/g, ""), _streaming: false, actions: result.data.actions || [] }
+            : m,
+        );
+        return;
+      }
+
+      const fallbackHtml = result.data?.message || JSON.stringify(result);
+      messages = messages.map((m, i) =>
+        i === msgIdx ? { ...m, html: `<p>${fallbackHtml}</p>`, _streaming: false } : m,
+      );
+    } catch (err) {
+      messages = messages.map((m, i) =>
+        i === msgIdx ? { ...m, html: `<p>Network error: ${err.message}</p>`, _streaming: false } : m,
+      );
+    }
+  }
+
+  /** Dismiss tool confirmation (user cancelled). */
+  function _handleToolDismiss() {
+    pendingToolConfirm = null;
+    messages = [...messages, {
+      role: "assistant",
+      html: "<p><em>Tool execution cancelled.</em></p>",
+      _streaming: false,
+    }];
   }
 
   // Refresh data cache on mount (and when messages change — triggers re-cache
@@ -372,6 +432,15 @@
       }
     }}
     onDismiss={() => { resetConfirm = null; }}
+  />
+{/if}
+
+{#if pendingToolConfirm}
+  <ConfirmToolDialog
+    batch={pendingToolConfirm.batch || []}
+    message={pendingToolConfirm.message || ""}
+    onConfirm={_handleToolConfirm}
+    onDismiss={_handleToolDismiss}
   />
 {/if}
 

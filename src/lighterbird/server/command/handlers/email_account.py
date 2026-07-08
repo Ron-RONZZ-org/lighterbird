@@ -7,13 +7,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from lightercore.permissions import PermissionLevel
 from lighterbird.email.service import EmailService
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_email_service
 
 
-@command("email.account.list")
+@command("email.account.list", permission_level=PermissionLevel.READ)
 def account_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email account list"""
     svc: EmailService = get_email_service()

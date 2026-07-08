@@ -13,6 +13,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
+from lightercore.permissions import PermissionLevel
 from lighterbird.core.paths import safe_resolve_path
 from lighterbird.journal.services import JournalService
 from lighterbird.server.command.errors import CommandValidationError
@@ -43,7 +44,7 @@ def journal_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("journal.list")
+@command("journal.list", permission_level=PermissionLevel.READ)
 def journal_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!journal list [--date YYYY-MM-DD] [--limit N]"""
     svc: JournalService = get_journal_service()
@@ -74,7 +75,7 @@ def journal_write(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     return {"type": "status", "title": "Journal Entry Written", "data": {"uuid": entry["uuid"], "title": title}}
 
 
-@command("journal.view")
+@command("journal.view", permission_level=PermissionLevel.READ)
 def journal_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!journal view <uuid>"""
     uuid = require_uuid(remaining, "Usage: !journal view <uuid>")
@@ -84,7 +85,7 @@ def journal_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "status", "title": entry.get("title", "(untitled)"), "data": dict(entry)}
 
 
-@command("journal.search")
+@command("journal.search", permission_level=PermissionLevel.READ)
 def journal_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!journal search <query>"""
     svc: JournalService = get_journal_service()
@@ -93,7 +94,7 @@ def journal_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     return {"type": "journal-list", "title": "Journal Search", "data": {"entries": entries, "total": len(entries)}}
 
 
-@command("journal.delete", interactive=True)
+@command("journal.delete", permission_level=PermissionLevel.DESTRUCTIVE, interactive=True)
 def journal_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!journal delete <uuid> [uuid...] — Delete one or more journal entries."""
     if not remaining:
@@ -121,7 +122,7 @@ def journal_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     }
 
 
-@command("journal.export")
+@command("journal.export", permission_level=PermissionLevel.READ)
 def journal_export(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!journal export md <uuid> [uuid...]"""
     if not remaining or remaining[0] != "md":
