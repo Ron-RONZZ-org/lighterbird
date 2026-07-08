@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from lightercore.permissions import PermissionLevel
+from lighterbird.core.paths import safe_resolve_path
 from lighterbird.email.service import EmailService
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command

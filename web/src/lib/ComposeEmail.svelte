@@ -21,7 +21,7 @@
   let bccList = $state(_initial.bcc ? _initial.bcc.split(",").map((s) => s.trim()).filter(Boolean) : []);
   let priority = $state(_initial.priority || "3");
   let bodyFormat = $state(_initial["body-format"] || _initial.body_format || "markdown"); // "markdown" | "html" | "plain"
-  let attachmentFiles = $state([]); // Array of {name, data} (base64)
+  let attachmentFiles = $state(_initial.files || []); // Array of {name, data} (base64)
   let saveAsSample = $state(true); // save as writing sample for LLM style learning
   let sending = $state(false);
   let savingDraft = $state(false);
