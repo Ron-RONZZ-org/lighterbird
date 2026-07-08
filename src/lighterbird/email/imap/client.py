@@ -661,5 +661,76 @@ class IMAPClient:
             )
             return None
 
+    def search_remote(
+        self, folder: str, query: str,
+        criteria: dict[str, str] | None = None,
+    ) -> list[int]:
+        """Server-side IMAP SEARCH, returns matching UIDs.
+
+        Delegates body text search to the IMAP server using ``UID SEARCH
+        TEXT`` / ``UID SEARCH SUBJECT`` / etc.  This is essential for
+        header-only synced messages whose body is not stored locally.
+
+        Args:
+            folder: Folder to search in (e.g. ``"INBOX"``).
+            query: Free-text search string.
+            criteria: Optional dict with structured filters:
+                - ``from_``: sender pattern
+                - ``subject``: subject pattern
+                - ``after``: date string (YYYY-MM-DD)
+                - ``before``: date string (YYYY-MM-DD)
+
+        Returns:
+            List of IMAP UIDs matching the search.
+
+        Raises:
+            ConnectionError: If the IMAP connection fails.
+        """
+        try:
+            self.conn.select(folder, readonly=True)
+        except Exception as exc:
+            raise ConnectionError(
+                f"Cannot select folder {folder!r} for search: {exc}"
+            ) from exc
+
+        # Build IMAP SEARCH criteria
+        parts: list[str] = []
+
+        if criteria:
+            from_str = criteria.get("from_", "")
+            if from_str:
+                parts.append(f'FROM "{from_str}"')
+            subj = criteria.get("subject", "")
+            if subj:
+                parts.append(f'SUBJECT "{subj}"')
+            after = criteria.get("after", "")
+            if after:
+                parts.append(f'SINCE {after}')
+            before = criteria.get("before", "")
+            if before:
+                parts.append(f'BEFORE {before}')
+
+        if query:
+            parts.append(f'TEXT "{query}"')
+
+        if not parts:
+            return []
+
+        search_cmd = " ".join(parts)
+
+        try:
+            typ, data = self.conn.uid("search", None, search_cmd)
+        except Exception as exc:
+            logger.warning(
+                "search_remote: UID SEARCH failed in %r: %s",
+                folder, exc,
+            )
+            return []
+
+        if typ != "OK" or not data or not data[0]:
+            return []
+
+        return [int(uid) for uid in data[0].split()]
+
 
 # store_message and _insert_message moved to storage.py

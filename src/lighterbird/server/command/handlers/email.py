@@ -418,13 +418,57 @@ def _build_search_filters(flags: dict[str, str],
     return filters, limit, query
 
 
-@command("email.search", permission_level=PermissionLevel.READ)
+@command("email.search", permission_level=PermissionLevel.READ,
+         flags=[
+             {"name": "from", "type": "string", "help": "Search by sender"},
+             {"name": "subject", "type": "string", "help": "Search by subject (local headers)"},
+             {"name": "body", "type": "bool", "help": "Search message body via IMAP SEARCH (slow, but finds text in header-only messages)"},
+             {"name": "header", "type": "bool", "help": "Search headers only (fast, local SQL)"},
+             {"name": "after", "type": "string", "help": "Messages after date (YYYY-MM-DD)"},
+             {"name": "before", "type": "string", "help": "Messages before date (YYYY-MM-DD)"},
+             {"name": "limit", "type": "int", "help": "Max results (default 50)"},
+             {"name": "account", "type": "string", "help": "Account email to search"},
+         ])
 def email_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email search [--from] [--subject] [--body] [--after] [--before] [--limit]"""
+    """!email search [query] [--from] [--subject] [--body] [--header]
+                   [--after DATE] [--before DATE] [--limit N] [--account EMAIL]
+
+    By default, a free-text query searches both headers and body via IMAP
+    server-side SEARCH.  Use ``--header`` to restrict to local headers only
+    (fast, no IMAP connection).  Use ``--body`` to force body search.
+
+    Examples::
+
+      !email search meeting              # search headers + body via IMAP
+      !email search --header meeting     # search headers only (local)
+      !email search --body "project X"   # force body search via IMAP
+      !email search --from alice         # local header search
+    """
     svc: EmailService = get_email_service()
     filters, limit, query = _build_search_filters(flags, remaining)
+    body_flag = "body" in flags
+    header_flag = "header" in flags
 
-    if filters:
+    # Determine which search strategy to use
+    needs_body = body_flag or (query and not header_flag)
+    account_email = flags.get("account") or filters.get("account", "")
+
+    if needs_body and account_email:
+        # IMAP server-side SEARCH
+        criteria = {}
+        if from_val := flags.get("from"):
+            criteria["from_"] = from_val
+        if subj_val := flags.get("subject"):
+            criteria["subject"] = subj_val
+        if after_val := flags.get("after"):
+            criteria["after"] = after_val
+        if before_val := flags.get("before"):
+            criteria["before"] = before_val
+        messages = [dict(m) for m in svc.search_remote(
+            account_email, query, criteria=criteria,
+        )]
+        messages = messages[:limit]
+    elif filters:
         messages = [dict(m) for m in svc.search_messages(filters, limit=limit)]
     else:
         messages = [dict(m) for m in svc.list_messages(limit=limit)]

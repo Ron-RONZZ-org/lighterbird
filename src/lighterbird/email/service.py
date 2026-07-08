@@ -129,6 +129,82 @@ class EmailService:
     def search_messages(self, filters: dict, limit=50):
         return self.messages.search_messages(filters, limit=limit)
 
+    def search_remote(
+        self, account_email: str, query: str,
+        folder: str | None = None,
+        criteria: dict[str, str] | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Server-side IMAP text search, returns matched messages.
+
+        When the local DB has header-only messages (``body_fetched=0``),
+        body text search via SQL ``LIKE`` returns no results.  This method
+        delegates the full-text search to the IMAP server via ``UID SEARCH
+        TEXT``, then cross-references the returned UIDs with the local DB.
+
+        Args:
+            account_email: Account to search.
+            query: Free-text search string.
+            folder: Optional folder to scope the search.
+            criteria: Optional structured filters (from_, subject, after, before).
+
+        Returns:
+            List of message dicts (same format as ``search_messages``).
+        """
+        acct = self.accounts.get_account_with_password(account_email)
+        if not acct or not acct.get("password"):
+            return []
+
+        from lighterbird.email.imap.client import IMAPClient
+
+        client = IMAPClient(
+            host=acct.get("imap_server", ""),
+            port=acct.get("imap_port", 993),
+            use_ssl=acct.get("imap_use_ssl", 1) == 1,
+        )
+        try:
+            client.connect(
+                username=acct.get("imap_username", "") or account_email,
+                password=acct["password"],
+            )
+
+            all_uids: set[int] = set()
+            target_folders = [folder] if folder else [
+                r["name"] for r in self.db.execute(
+                    "SELECT name FROM folders WHERE account_email = ? ORDER BY sync_priority, name",
+                    (account_email,),
+                )
+            ]
+
+            for fname in target_folders:
+                uids = client.search_remote(fname, query, criteria=criteria)
+                all_uids.update(uids)
+                if len(all_uids) >= limit:
+                    break
+
+            if not all_uids:
+                return []
+
+            # Cross-reference with local DB
+            uid_list = sorted(all_uids)[:limit]
+            placeholders = ",".join("?" for _ in uid_list)
+            rows = self.db.execute(
+                "SELECT * FROM messages WHERE account_email = ? "
+                f"AND imap_uid IN ({placeholders}) AND is_deleted = 0 "
+                "ORDER BY received_at DESC LIMIT ?",
+                (account_email, *uid_list, limit),
+            )
+            return list(rows)
+        except Exception:
+            logger = __import__("logging").getLogger(__name__)
+            logger.warning(
+                "search_remote: IMAP search failed for %s", account_email,
+                exc_info=True,
+            )
+            return []
+        finally:
+            client.disconnect()
+
     def export_eml(self, uuid_: str) -> str | None:
         """Export a message as .eml (RFC 822) string."""
         return self.messages.export_eml(uuid_)

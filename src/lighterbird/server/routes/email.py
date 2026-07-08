@@ -207,6 +207,8 @@ def list_messages(
     query: str | None = None,
     from_: str | None = Query(default=None, alias="from"),
     subject: str | None = None,
+    body_search: bool = Query(default=False, alias="body"),
+    header_only: bool = Query(default=False, alias="header"),
     after: str | None = None,
     before: str | None = None,
     read: bool | None = None,
@@ -217,6 +219,15 @@ def list_messages(
     cursor: str = "",
     email_svc: EmailService = Depends(get_email_service),
 ):
+    """Search/List email messages.
+
+    When ``body`` is true or a free-text ``query`` is given, the search
+    is delegated to the IMAP server via ``UID SEARCH TEXT``.  This is
+    required for header-only messages whose body is not stored locally.
+
+    When ``header`` is true, the search is restricted to locally-stored
+    headers (subject, from, date) — fast, no IMAP connection needed.
+    """
     filters = {}
     if query:
         filters["query"] = query
@@ -233,7 +244,6 @@ def list_messages(
     if account_email:
         filters["account"] = account_email
     if folder:
-        # Support comma-separated folder names from the frontend
         filters["folder"] = [f.strip() for f in folder.split(",") if f.strip()]
     if sort:
         filters["sort"] = sort
@@ -241,9 +251,20 @@ def list_messages(
         filters["group"] = group
     if cursor:
         filters["cursor"] = cursor
-    # Fetch limit+1 to detect next page
+
     fetch_limit = limit + 1
-    if filters:
+
+    # Body search → IMAP server-side SEARCH (works for header-only messages)
+    needs_body_search = body_search or (query and not header_only)
+    if needs_body_search and account_email:
+        msgs = email_svc.search_remote(
+            account_email, query or "",
+            folder=folder,
+            criteria={"from_": from_, "subject": subject,
+                       "after": after, "before": before},
+        )
+        msgs = msgs[:fetch_limit]
+    elif filters:
         msgs = email_svc.search_messages(filters, limit=fetch_limit)
     else:
         msgs = email_svc.list_messages(limit=fetch_limit, offset=offset, sort=sort)
