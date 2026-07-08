@@ -11,7 +11,7 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 - **`app.py`** — FastAPI application factory, startup/shutdown lifecycle
 - **`routes/`** — API route handlers organized by domain (email, calendar, contacts, journal, todo, letter, profiles, chat, admin, cowrite)
 - **`command/`** — `!` command system: tree definition, parser, registry, response models, per-domain handlers
-- **`llm/`** — LLM integration: chat sessions, streaming, provider resolution
+- **`llm/`** — LLM integration: chat sessions, provider resolution, and the shared **tool_loop** module (multi-round tool-calling loop with human-in-the-loop support)
 - **`cowrite/`** — AI-assisted writing integration for form editors
 - **`middleware.py`** — CORS, error handling, request logging, static file serving
 - **`deps.py`** — FastAPI dependency injection (get_db, get_email_service, get_db_for, etc.)
@@ -22,7 +22,7 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 
 - **The server is a single-user app** — no authentication middleware needed initially (future: optional auth)
 - **Svelte SPA is served as static files** — the FastAPI app mounts `web/dist/` as static files
-- **WebSocket endpoint for streaming LLM responses** — the command bar needs real-time streaming
+- **Multi-round tool-calling LLM chat** — `POST /api/v1/chat` uses a multi-round tool loop (`run_tool_loop` in `llm/tool_loop.py`) instead of one-shot command generation. The LLM receives all `!commands` as native tools and can iterate until it produces a final answer. WRITE-level tools gate behind user confirmation via `POST /api/v1/chat/resume`.
 - **REST API for everything else** — messages, contacts, calendar, todo, journal, letters, profiles CRUD
 - **Command system (`!` commands)** — the primary user interaction model. Defined in `command/tree.py`, dispatched by `command/registry.py`, handled by per-domain handlers in `command/handlers/`
 - **Backup scheduler** — automatic timestamped backups of all domain databases on configurable schedule
@@ -45,11 +45,15 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 - `GET /api/v1/letters/letters` — list letters
 - `GET /api/v1/profiles` — list user profiles
 - `POST /api/v1/cowrite` — AI-assisted writing
-- `WebSocket /api/v1/ai/chat` — streaming LLM chat
+- `POST /api/v1/chat` — multi-round tool-calling chat (replaces old one-shot flow)
+- `POST /api/v1/chat/resume` — resume paused HITL session after tool approval
+- `GET /api/v1/chat/notice` — stale-commands notice
+- `POST /api/v1/chat/stream` — (deprecated) SSE streaming without tool-calling
 - `GET /api/v1/prompt-commands/list` — list prompt commands for autocomplete
 - `POST /api/v1/prompt-commands/expand` — preview expanded prompt text
-- `POST /api/v1/prompt-commands/execute` — expand + send to LLM (sync JSON)
-- `POST /api/v1/prompt-commands/execute/stream` — expand + stream LLM response (SSE)
+- `POST /api/v1/prompt-commands/execute` — expand + multi-round tool loop
+- `POST /api/v1/prompt-commands/execute/resume` — resume paused HITL session
+- `POST /api/v1/prompt-commands/execute/stream` — (deprecated) SSE without tool-calling
 
 ## Documentation Reference
 
@@ -60,7 +64,7 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 
 1. **Thin route layer** — routes call into domain services and return JSON. No business logic in route handlers.
 2. **Pydantic schemas for all I/O** — never return raw dicts from routes. Define request/response models in `schemas.py`.
-3. **Streaming LLM responses** — use FastAPI's `StreamingResponse` or WebSocket for real-time LLM output. The command bar should show tokens as they arrive.
+3. **Multi-round tool loop for chat and prompt commands** — both `POST /api/v1/chat` and `POST /api/v1/prompt-commands/execute` use the shared `run_tool_loop()` from `lightercore.llm.tool_loop`. The LLM receives all `!commands` as native OpenAI-compatible tools and can iterate up to 20 rounds. READ-level tools execute silently; WRITE+ tools gate behind `confirm_tool` → `/chat/resume` (or `/execute/resume`).
 4. **Error responses are structured JSON** — `{"error": "...", "code": "...", "suggestion": "..."}` (inspired by A-lien's actionable error messages).
 5. **CORS is wide open in development** — restrictive in production (or behind a reverse proxy).
 6. **Static file serving for production** — mount `web/dist/` at the root path. For development, use Svelte's Vite dev server with a proxy to FastAPI.

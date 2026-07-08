@@ -350,6 +350,7 @@ Backend list commands return typed responses that map to frontend components:
 | `!user info list` | `status` (profiles list) | DynamicForm / StatusPopup |
 | `!reset <path.7z>` | `status` (reset complete) | StatusPopup |
 | `!reset --no-backup` | `form-required` (reset-no-backup) | ConfirmDialog |
+| `POST /api/v1/chat` (write+ tools) | `confirm_tool` | ConfirmToolDialog |
 
 ---
 
