@@ -64,7 +64,7 @@ def email_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "  !email account modify    — Modify an email account\n"
                 "  !email account delete    — Delete an email account\n"
                 "  !email signature list    — List account signatures\n"
-                "  !email signature add     — Add a named signature for an account\n"
+                "  !email signature add     — Add a named global signature\n"
                 "  !email signature modify  — Modify a signature by UUID\n"
                 "  !email signature delete  — Delete a signature by UUID\n"
                 "  !email signature default — Show/set default signature\n"

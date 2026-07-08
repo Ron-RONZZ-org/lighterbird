@@ -218,6 +218,21 @@ class ContactService(CRUDService):
             Path(path).write_text(vcf_text, encoding="utf-8")
         return vcf_text
 
+    # ── Autocomplete helpers ──────────────────────────────────────────
+
+    def list_organizations(self, limit: int = 100) -> list[str]:
+        """Return all distinct non-empty organization values.
+
+        Used by the frontend autocomplete for ``--organization`` fields.
+        """
+        rows = self.db.execute(
+            "SELECT DISTINCT organization FROM contacts "
+            "WHERE organization != '' AND organization IS NOT NULL "
+            "ORDER BY organization ASC LIMIT ?",
+            (limit,),
+        )
+        return [r["organization"] for r in rows]
+
     # ── Duplicate detection ────────────────────────────────────────────
 
     def find_duplicates(self) -> list[list[dict[str, Any]]]:

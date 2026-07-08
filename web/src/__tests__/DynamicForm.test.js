@@ -17,13 +17,14 @@ function flushEffects() {
 
 const mockNode = {
   params: [
-    { name: "first-name", type: "string", required: true, placeholder: "First name" },
-    { name: "last-name", type: "string", required: false, placeholder: "Last name" },
+    { name: "first-name", type: "string", required: true, placeholder: "First name", width: "short" },
+    { name: "last-name", type: "string", required: false, placeholder: "Last name", width: "short" },
   ],
   flags: [
     { name: "email", type: "string", required: false, help: "Email address" },
     { name: "notify", type: "flag", required: false, help: "Send notification" },
     { name: "age", type: "number", required: false, help: "Age in years" },
+    { name: "organization", type: "string", required: false, help: "Organization", autocompleteSource: "contact/org", width: "medium" },
   ],
 };
 
@@ -159,6 +160,10 @@ describe("DynamicForm", () => {
     // Change a field to make it dirty
     const firstNameInput = document.querySelector("#first-name");
     await fireEvent.input(firstNameInput, { target: { value: "Jane Modified" } });
+    flushEffects();
+    // Svelte 5 uses setTimeout(0) to debounce dirty change notifications,
+    // so we need to wait for the microtask queue.
+    await new Promise((r) => setTimeout(r, 10));
 
     // onDirtyChange(true) should have been called
     expect(onDirtyChange).toHaveBeenCalledWith(true);
@@ -180,6 +185,49 @@ describe("DynamicForm", () => {
     // notify is a flag type — renders as checkbox
     const notifyCheckbox = document.querySelector('input[type="checkbox"]');
     expect(notifyCheckbox).toBeTruthy();
+  });
+
+  it("applies width class to fields with width metadata", () => {
+    render(DynamicForm, {
+      commandPath: ["contact", "add"],
+    });
+    // first-name has width: "short" — check for the css class
+    const firstNameField = document.querySelector("#first-name")?.closest(".field");
+    expect(firstNameField?.classList.contains("width-short")).toBe(true);
+    // last-name also width: "short"
+    const lastNameField = document.querySelector("#last-name")?.closest(".field");
+    expect(lastNameField?.classList.contains("width-short")).toBe(true);
+  });
+
+  it("applies width-medium to fields with width: medium", () => {
+    render(DynamicForm, {
+      commandPath: ["contact", "add"],
+    });
+    const orgInput = document.querySelector("#organization");
+    expect(orgInput).toBeTruthy();
+    const orgField = orgInput?.closest(".field");
+    expect(orgField?.classList.contains("width-medium")).toBe(true);
+  });
+
+  it("sets list attribute and renders datalist when field has autocompleteSource", () => {
+    render(DynamicForm, {
+      commandPath: ["contact", "add"],
+    });
+    // The organization flag has autocompleteSource: "contact/org"
+    const orgInput = document.querySelector("#organization");
+    expect(orgInput).toBeTruthy();
+    expect(orgInput.getAttribute("list")).toBe("organization-list");
+    const datalist = document.querySelector("#organization-list");
+    expect(datalist).toBeTruthy();
+    expect(datalist.tagName).toBe("DATALIST");
+  });
+
+  it("does not set list attribute for fields without autocompleteSource", () => {
+    render(DynamicForm, {
+      commandPath: ["contact", "add"],
+    });
+    const emailInput = document.querySelector("#email");
+    expect(emailInput?.getAttribute("list")).toBeNull();
   });
 
   it("disables submit button while submitting", async () => {

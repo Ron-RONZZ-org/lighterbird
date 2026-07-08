@@ -113,7 +113,7 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     if no_signature:
         signature_value = ""  # empty string = send without signature
     elif signature_name is not None:
-        # Look up named signature from the account
+        # Look up named signature globally
         sig_text = svc.signatures.resolve_text(account_email, name=signature_name)
         signature_value = sig_text
     elif signature_override is not None:

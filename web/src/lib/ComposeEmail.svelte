@@ -36,15 +36,14 @@
   let selectedSignatureName = $state("default");
   let signaturePreview = $state("");
 
-  /** Load all signatures for the currently selected account */
-  function loadAccountSignatures(email) {
-    if (!email) return;
+  /** Load all signatures (global — not per-account) */
+  function loadAllSignatures() {
     fetch("/api/v1/command", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         tokens: ["email", "signature", "list"],
-        flags: { account: email },
+        flags: {},
       }),
     })
       .then((r) => r.json())
@@ -52,8 +51,7 @@
         const sigs = cmdData.data?.signatures || cmdData.signatures || [];
         signatureList = sigs;
         if (sigs.length > 0) {
-          // Find default or first
-          const def = sigs.find((s) => s.name === "default") || sigs[0];
+          const def = sigs[0];
           selectedSignatureName = def.name;
           signaturePreview = def.signature_text || "";
           useSignature = true;
@@ -70,11 +68,9 @@
       });
   }
 
-  // When account changes, load its signatures
+  // Load signatures on mount (no account dependency)
   $effect(() => {
-    if (accountEmail) {
-      loadAccountSignatures(accountEmail);
-    }
+    loadAllSignatures();
   });
 
   // When the selected signature changes, update the preview

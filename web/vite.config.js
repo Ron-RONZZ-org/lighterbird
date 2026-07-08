@@ -4,7 +4,7 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 const backendPort = process.env.LIGHTERBIRD_PORT || 6006;
 
 export default defineConfig({
-  plugins: [svelte()],
+  plugins: [svelte({ compilerOptions: { dev: true } })],
   server: {
     port: 6005,
     proxy: {
@@ -34,8 +34,11 @@ export default defineConfig({
     globals: true,
     server: {
       deps: {
-        inline: ["svelte"],
+        inline: ["svelte", "@sveltejs/vite-plugin-svelte"],
       },
+    },
+    transformMode: {
+      web: ["**/*.svelte"],
     },
   },
 });

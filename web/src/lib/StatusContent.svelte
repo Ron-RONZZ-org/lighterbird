@@ -109,8 +109,8 @@
     </div>
     {#each d.signatures as sig}
       <div class="row">
-        <span class="key">{sig.account_email || sig.email || ""}</span>
-        <span class="hint">{sig.name || "default"}</span>
+        <span class="key">{sig.name || "default"}</span>
+        <span class="hint">{#if sig.default_for}{sig.default_for.join(", ")}{/if}</span>
         <span class="val" title={sig.signature_text || sig.signature || ""}>
           {(sig.signature_text || sig.signature || "").length > 60
             ? (sig.signature_text || sig.signature || "").slice(0, 60) + "\u2026"

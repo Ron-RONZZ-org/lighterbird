@@ -71,6 +71,25 @@ describe("FormField", () => {
     expect(field).toBeTruthy();
   });
 
+  it("applies width class when width prop is set", () => {
+    const { container } = render(FormField, {
+      label: "Name",
+      width: "short",
+      children: () => "",
+    });
+    const field = container.querySelector(".field");
+    expect(field?.classList.contains("width-short")).toBe(true);
+  });
+
+  it("does not apply width class when width is empty", () => {
+    const { container } = render(FormField, {
+      label: "Name",
+      children: () => "",
+    });
+    const field = container.querySelector(".field");
+    expect(field?.classList.contains("width-short")).toBe(false);
+  });
+
   it("skips label rendering when label is empty", () => {
     const { container } = render(FormField, { children: () => "" });
     const label = container.querySelector("label");

@@ -17,13 +17,14 @@
     hint = "",
     error = "",
     required = false,
+    width = "",
     id = label ? label.toLowerCase().replace(/\s+/g, "-") : "",
     class: className = "",
     children,
   } = $props();
 </script>
 
-<div class="field {className}" class:has-error={!!error}>
+<div class="field {className} {width ? `width-${width}` : ''}" class:has-error={!!error}>
   {#if label}
     <label for={id}>
       <span class="field-label">{label}</span>
@@ -94,6 +95,9 @@
     font-size: 0.78rem;
     margin: 0;
   }
+  :global(.width-short) { max-width: 180px; }
+  :global(.width-medium) { max-width: 300px; }
+  :global(.width-full) { max-width: 100%; }
   :global(.form-actions) {
     display: flex;
     justify-content: flex-end;
