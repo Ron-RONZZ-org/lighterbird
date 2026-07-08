@@ -160,6 +160,44 @@
       .replace(/\b\w/g, (c) => c.toUpperCase()),
   );
 
+  // ── Autocomplete data loading ─────────────────────────────────────────
+  let autocompleteData = $state({}); // {fieldName: [values]}
+
+  $effect(() => {
+    // Collect unique autocompleteSource values from params + flags
+    const sources = new Set();
+    for (const p of (node?.params || [])) {
+      if (p.autocompleteSource) sources.add(p.autocompleteSource);
+    }
+    for (const f of (node?.flags || [])) {
+      if (f.autocompleteSource) sources.add(f.autocompleteSource);
+    }
+    if (sources.size === 0) return;
+
+    for (const src of sources) {
+      if (src === "contact/org") {
+        _fetchAutocompleteData("/api/v1/contacts/autocomplete/organization", src);
+      }
+    }
+  });
+
+  async function _fetchAutocompleteData(url, sourceKey) {
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const values = data.values || data;
+      autocompleteData = { ...autocompleteData, [sourceKey]: values };
+    } catch {
+      // silently fail — autocomplete is a nice-to-have
+    }
+  }
+
+  function _getAutocompleteOptions(fieldDef) {
+    if (!fieldDef.autocompleteSource) return [];
+    return autocompleteData[fieldDef.autocompleteSource] || [];
+  }
+
   function handleKeydown(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === "s") {
       e.preventDefault();
@@ -175,11 +213,13 @@
 
   {#each params as param}
     {@const val = fieldValues[param.name] || ""}
+    {@const acOptions = _getAutocompleteOptions(param)}
     <FormField
       label={param.name}
       hint={param.placeholder || ""}
       required={param.required}
       error={formErrors[param.name] || ""}
+      width={param.width || ""}
     >
       {#snippet children()}
         {#if param.type === "uuid" || param.uuidSource}
@@ -199,7 +239,13 @@
             oninput={(e) => setField(param.name, e.target.value)}
             required={param.required}
             placeholder={param.placeholder || ""}
+            list={param.autocompleteSource ? `${param.name}-list` : undefined}
           />
+          <datalist id={`${param.name}-list`}>
+            {#each acOptions as opt}
+              <option value={opt}></option>
+            {/each}
+          </datalist>
         {:else if param.type === "date"}
           <input
             id={param.name}
@@ -238,7 +284,13 @@
             oninput={(e) => setField(param.name, e.target.value)}
             required={param.required}
             placeholder={param.placeholder || ""}
+            list={param.autocompleteSource ? `${param.name}-list` : undefined}
           />
+          <datalist id={`${param.name}-list`}>
+            {#each acOptions as opt}
+              <option value={opt}></option>
+            {/each}
+          </datalist>
         {/if}
       {/snippet}
     </FormField>
@@ -246,8 +298,9 @@
 
   {#each flags as flag}
     {@const val = fieldValues[flag.name]}
+    {@const acOptions = _getAutocompleteOptions(flag)}
     {#if flag.type === "flag"}
-      <FormField label={flag.name} hint={flag.help || ""}>
+      <FormField label={flag.name} hint={flag.help || ""} width={flag.width || ""}>
         {#snippet children()}
           <label class="checkbox-label">
             <input
@@ -261,7 +314,7 @@
         {/snippet}
       </FormField>
     {:else if flag.uuidSource}
-      <FormField label={flag.name} hint={flag.help || ""} required={flag.required}>
+      <FormField label={flag.name} hint={flag.help || ""} required={flag.required} width={flag.width || ""}>
         {#snippet children()}
           <UuidPicker
             uuidSource={flag.uuidSource}
@@ -274,7 +327,7 @@
       </FormField>
     {:else}
       <FormField label={flag.name} hint={flag.help || ""} required={flag.required}
-        error={formErrors[flag.name] || ""}>
+        error={formErrors[flag.name] || ""} width={flag.width || ""}>
         {#snippet children()}
           <input
             id={flag.name}
@@ -283,7 +336,13 @@
             value={val || ""}
             oninput={(e) => setField(flag.name, e.target.value)}
             placeholder={flag.help || ""}
+            list={flag.autocompleteSource ? `${flag.name}-list` : undefined}
           />
+          <datalist id={`${flag.name}-list`}>
+            {#each acOptions as opt}
+              <option value={opt}></option>
+            {/each}
+          </datalist>
         {/snippet}
       </FormField>
     {/if}

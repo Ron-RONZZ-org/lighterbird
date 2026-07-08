@@ -94,6 +94,15 @@ def export_vcf(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/contacts/autocomplete/organization")
+def autocomplete_organization(
+    svc: ContactService = Depends(get_contact_service),
+):
+    """Return all distinct organization values for autocomplete."""
+    orgs = svc.list_organizations()
+    return {"values": orgs}
+
+
 @router.get("/contacts/{uuid}")
 def get_contact(uuid: str, svc: ContactService = Depends(get_contact_service)):
     contact = svc.get(uuid)

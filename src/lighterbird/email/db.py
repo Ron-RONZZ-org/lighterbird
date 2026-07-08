@@ -162,19 +162,20 @@ _IDX_SYNC_BACKLOG_MSG = "CREATE INDEX IF NOT EXISTS idx_sync_backlog_msg ON _syn
 
 _IDX_SIEVE_ACTIVATIONS_ACCOUNT = "CREATE INDEX IF NOT EXISTS idx_sieve_activations_account ON sieve_activations(account_email);"
 
-# ── Multi-signature support ────────────────────────────────────────────
+# ── Multi-signature support (v2: decoupled from accounts) ─────────────
 _EMAIL_SIGNATURES_TABLE = """
 CREATE TABLE IF NOT EXISTS email_signatures (
     uuid            TEXT PRIMARY KEY,
-    account_email   TEXT NOT NULL REFERENCES accounts(email) ON DELETE CASCADE,
     name            TEXT NOT NULL,
     signature_text  TEXT NOT NULL DEFAULT '',
     created_at      TEXT NOT NULL,
     updated_at      TEXT NOT NULL,
-    UNIQUE(account_email, name)
+    UNIQUE(name)
 );
 """
-_IDX_EMAIL_SIGNATURES_ACCOUNT = "CREATE INDEX IF NOT EXISTS idx_email_signatures_account ON email_signatures(account_email);"
+_MIGRATE_ACCOUNTS_DEFAULT_SIGNATURE = """
+ALTER TABLE accounts ADD COLUMN default_signature_uuid TEXT REFERENCES email_signatures(uuid) ON DELETE SET NULL;
+"""
 
 _IDX_MESSAGES_ACCOUNT = "CREATE INDEX IF NOT EXISTS idx_messages_account ON messages(account_email);"
 _IDX_MESSAGES_FOLDER = "CREATE INDEX IF NOT EXISTS idx_messages_folder ON messages(account_email, folder_name);"
@@ -280,9 +281,9 @@ _SCHEMA_STATEMENTS: list[str] = [
     _IDX_SYNC_BACKLOG_MSG,
     _IDX_DEAD_LETTERS_ACCOUNT,
     _IDX_SIEVE_ACTIVATIONS_ACCOUNT,
-    # Multi-signature (Phase 1)
+    # Multi-signature (Phase 2: decoupled from accounts)
+    _MIGRATE_ACCOUNTS_DEFAULT_SIGNATURE,
     _EMAIL_SIGNATURES_TABLE,
-    _IDX_EMAIL_SIGNATURES_ACCOUNT,
 ]
 
 
@@ -346,13 +347,91 @@ def _migrate_existing_signatures(db: LighterbirdDB) -> None:
         try:
             db.execute(
                 "INSERT OR IGNORE INTO email_signatures "
-                "(uuid, account_email, name, signature_text, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (str(uuid.uuid4()), row["email"], "default",
+                "(uuid, name, signature_text, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (str(uuid.uuid4()), row["email"] + " (default)",
                  row["signature"], row.get("created_at", ""), row.get("updated_at", "")),
             )
         except Exception:
             pass  # best-effort migration
+
+
+def _migrate_signatures_v2(db: LighterbirdDB) -> None:
+    """Migrate from per-account signatures (Phase 1) to global signatures (Phase 2).
+
+    Handles the transition where ``email_signatures`` still has the
+    ``account_email`` column (old schema). Renames the old table, creates
+    the new one, and copies data over with name deduplication.
+    Safe to call multiple times — idempotent via IF NOT EXISTS.
+    """
+    import uuid as _uuid
+    from datetime import UTC, datetime
+
+    # Check if old table exists with account_email column
+    try:
+        old_rows = list(db.execute(
+            "SELECT uuid, account_email, name, signature_text, created_at, updated_at "
+            "FROM email_signatures LIMIT 1"
+        ))
+    except Exception:
+        return  # Table doesn't exist yet — nothing to migrate
+
+    # If we got here, the old table exists but may have the new schema.
+    # Check if account_email column still exists.
+    try:
+        db.execute("SELECT account_email FROM email_signatures LIMIT 0")
+        has_account_email = True
+    except Exception:
+        has_account_email = False
+
+    if not has_account_email:
+        return  # Already migrated
+
+    # Rename old table
+    db.execute("ALTER TABLE email_signatures RENAME TO email_signatures_old")
+
+    # Create new table (IF NOT EXISTS so the CREATE TABLE from _SCHEMA_STATEMENTS wins)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS email_signatures (
+            uuid            TEXT PRIMARY KEY,
+            name            TEXT NOT NULL,
+            signature_text  TEXT NOT NULL DEFAULT '',
+            created_at      TEXT NOT NULL,
+            updated_at      TEXT NOT NULL,
+            UNIQUE(name)
+        )
+    """)
+
+    # Copy data — handle name conflicts by appending email local-part
+    old_data = list(db.execute(
+        "SELECT uuid, account_email, name, signature_text, created_at, updated_at "
+        "FROM email_signatures_old ORDER BY created_at ASC"
+    ))
+    seen_names: set[str] = set()
+    for row in old_data:
+        name = row["name"]
+        if name in seen_names:
+            local_part = row["account_email"].split("@")[0] if "@" in row["account_email"] else "acct"
+            name = f"{name}-{local_part}"
+        if name in seen_names:
+            name = f"{name}-{_uuid.uuid4().hex[:4]}"
+        seen_names.add(name)
+        try:
+            db.execute(
+                "INSERT OR IGNORE INTO email_signatures "
+                "(uuid, name, signature_text, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (row["uuid"], name,
+                 row["signature_text"], row["created_at"], row["updated_at"]),
+            )
+        except Exception:
+            pass
+
+    # Drop old table
+    try:
+        db.execute("DROP TABLE IF EXISTS email_signatures_old")
+    except Exception:
+        pass
 
 
 def get_db(path: Path | str | None = None) -> LighterbirdDB:
@@ -369,4 +448,5 @@ def get_db(path: Path | str | None = None) -> LighterbirdDB:
                 raise
 
     _migrate_existing_signatures(db)
+    _migrate_signatures_v2(db)
     return db

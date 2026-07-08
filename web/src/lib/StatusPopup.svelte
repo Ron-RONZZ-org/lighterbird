@@ -169,7 +169,7 @@
     }, { idKey: "form-email-signature-modify" })
   }
   onDeleteSignature={async (sig) => {
-    if (!confirm(`Delete signature "${sig.name || 'default'}" for ${sig.account_email || sig.email}?`)) return;
+    if (!confirm(`Delete signature "${sig.name || 'default'}"?`)) return;
     try {
       const resp = await fetch("/api/v1/command", {
         method: "POST",

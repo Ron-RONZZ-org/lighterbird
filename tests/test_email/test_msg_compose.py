@@ -196,14 +196,20 @@ class TestSendEmail:
     @patch("lighterbird.email.smtp.SMTPClient")
     def test_send_uses_account_signature(self, mock_smtp, host, db):
         """When no signature override, use account's stored signature."""
-        # Insert a signature into the email_signatures table
+        # Insert a global signature and set it as default for the account
         import uuid as _uuid
+        sig_uuid = str(_uuid.uuid4())
         db.execute(
             "INSERT OR IGNORE INTO email_signatures "
-            "(uuid, account_email, name, signature_text, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (str(_uuid.uuid4()), "test@example.com", "default",
+            "(uuid, name, signature_text, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (sig_uuid, "default",
              "-- \nAccount Sig", _NOW, _NOW),
+        )
+        # Set as default for the test account
+        db.execute(
+            "UPDATE accounts SET default_signature_uuid = ? WHERE email = ?",
+            (sig_uuid, "test@example.com"),
         )
         acct = _mock_account()
         host._account_service.get_account_with_password.return_value = acct
