@@ -216,11 +216,22 @@ lighterbird/
 
 5. **Use `lighterbird-dev --seed` for isolated E2E testing** — instead of starting the production server, use the isolated dev server which creates a temporary data directory and seeds it with test data from ``.dev``:
 
-   ```bash
-   # Terminal 1: start isolated seeded server
-   uv run lighterbird-dev --seed
+   **Always use a dynamically-allocated free port.** Never kill a process on the default port (6006) — it may belong to the user's manual dev instance. Find a free port first:
 
-   # Terminal 2: run Playwright E2E tests
+   ```bash
+   # Find a free TCP port (never kill a foreign process on the default port)
+   PORT=$(python3 -c "import socket; s=socket.socket(); s.bind(('',0)); print(s.getsockname()[1]); s.close()")
+   
+   # Start isolated seeded server on that port
+   setsid uv run lighterbird-dev --seed --port $PORT > /tmp/lighterbird-dev.log 2>&1 &
+   
+   # Wait for server to accept connections
+   for i in $(seq 1 30); do
+     curl -sf -o /dev/null http://127.0.0.1:$PORT/ && break
+     sleep 1
+   done
+   
+   # Run Playwright E2E tests against that port
    # (one-time setup: cd web && npx playwright install chromium)
    node tests/playwright_e2e.mjs
    node tests/e2e_comprehensive.mjs
