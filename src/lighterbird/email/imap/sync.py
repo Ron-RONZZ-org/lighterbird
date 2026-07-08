@@ -8,8 +8,11 @@ Updated for Phases 1-3 of the IMAP sync overhaul:
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from lighterbird.email.imap.client import IMAPClient
 
@@ -59,7 +62,20 @@ def sync_account(
     try:
         client.connect(username, password)
         result = SyncResult()
-        available = client.list_folders()
+
+        try:
+            available = client.list_folders()
+        except Exception:
+            logger.warning(
+                "[sync] list_folders() failed for %s — no folders discovered",
+                account_email, exc_info=True,
+            )
+            result.errors.append(
+                f"Failed to list IMAP folders for {account_email}. "
+                f"Sync will retry on next run.",
+            )
+            return result
+
         target_folders = folders or [f["name"] for f in available]
 
         # Build folder metadata map for special_use lookup
@@ -84,15 +100,27 @@ def sync_account(
 
             # Handle UIDVALIDITY change → invalidate local UIDs for this folder
             if uidvalidity is not None:
-                _check_uidvalidity(db_store.db, account_email, folder_name, uidvalidity)
+                try:
+                    _check_uidvalidity(db_store.db, account_email, folder_name, uidvalidity)
+                except Exception:
+                    logger.warning(
+                        "[sync] UIDVALIDITY check failed for %s/%s",
+                        account_email, folder_name, exc_info=True,
+                    )
 
             # Update highest_modseq in folders table
             if highest_modseq is not None:
-                db_store.db.execute(
-                    "UPDATE folders SET highest_modseq = ? "
-                    "WHERE account_email = ? AND name = ?",
-                    (highest_modseq, account_email, folder_name),
-                )
+                try:
+                    db_store.db.execute(
+                        "UPDATE folders SET highest_modseq = ? "
+                        "WHERE account_email = ? AND name = ?",
+                        (highest_modseq, account_email, folder_name),
+                    )
+                except Exception:
+                    logger.warning(
+                        "[sync] Failed to update highest_modseq for %s/%s",
+                        account_email, folder_name, exc_info=True,
+                    )
 
             # Sync new messages (existing behavior)
             fr = client.sync_folder(
@@ -146,7 +174,6 @@ def _check_uidvalidity(db: Any, account_email: str,
         return  # UIDVALIDITY unchanged — all good
 
     # UIDVALIDITY changed — invalidate all local UIDs for this folder
-    logger = __import__("logging").getLogger(__name__)
     logger.warning(
         "[sync] UIDVALIDITY changed for %s/%s: %s → %s. "
         "Invalidating local messages.",

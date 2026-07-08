@@ -55,38 +55,87 @@ _IMAP_UID_RE = re.compile(rb"UID (\d+)")
 def _parse_list_response(line: bytes) -> dict[str, Any] | None:
     """Parse a single IMAP LIST response line.
 
-    Handles both quoted and unquoted folder names, using a regex
-    that follows RFC 3501 ``mailbox-list`` grammar.  Returns dict
-    with ``name``, ``delimiter``, ``flags``, or None.
+    Uses a primary regex that follows RFC 3501 ``mailbox-list`` grammar,
+    with a fallback parser for non-standard responses (inspired by
+    A-lien's IMAP client).  Returns dict with ``name``, ``delimiter``,
+    ``flags``, ``special_use``, or ``None`` if the line cannot be parsed.
+
+    The fallback handles cases where the regex fails:
+    - Server returns extra response codes after the mailbox name
+    - Folder name sent as a literal (not quoted)
+    - Non-standard IMAP implementations
     """
     if not line:
         return None
 
+    name = ""
+    delimiter = "/"
+    flat_flags: list[str] = []
+
+    # Strategy 1: primary regex
     match = _LIST_RE.search(line)
-    if not match:
-        logger.warning("Failed to parse LIST response: %r", line[:200])
-        return None
+    if match:
+        raw_flags = match.group(1)
+        raw_delim = match.group(2) if match.group(2) is not None else match.group(3)
+        raw_name = match.group(4) if match.group(4) is not None else match.group(5)
 
-    raw_flags = match.group(1)
-    # Delimiter: quoted (group 2) or unquoted (group 3)
-    raw_delim = match.group(2) if match.group(2) is not None else match.group(3)
-    # Mailbox name: quoted (group 4) or unquoted (group 5)
-    raw_name = match.group(4) if match.group(4) is not None else match.group(5)
+        delimiter = raw_delim.decode("utf-8", errors="replace")
+        name = raw_name.decode("utf-8", errors="replace")
+        flat_flags = [
+            f.decode("utf-8", errors="replace")
+            for f in raw_flags.split() if f
+        ]
+    else:
+        # Strategy 2: fallback — split on double quotes, extract name as
+        # the last quoted segment.  This handles LIST responses where the
+        # regex fails (e.g. extended formats, literal names).
+        decoded = line.decode("utf-8", errors="replace")
+        parts = decoded.split('"')
 
-    delimiter = raw_delim.decode("utf-8", errors="replace")
-    name = raw_name.decode("utf-8", errors="replace")
+        # Find the last non-empty quoted segment as the name.
+        # Skip candidates that look like delimiters (/ or . or NIL).
+        for i in range(len(parts) - 1, 0, -1):
+            candidate = parts[i].strip()
+            if not candidate:
+                continue
+            # Skip delimiter-like candidates (single char, or NIL)
+            if candidate in ("/", ".", "NIL", "nil"):
+                continue
+            # Skip flag-like candidates (start with \ or ()
+            if candidate.startswith(("\\", "(")):
+                continue
+            name = candidate
+            if i >= 2:
+                delim_part = parts[i - 1].strip()
+                if delim_part and delim_part not in ("NIL", "nil"):
+                    delimiter = delim_part
+            break
+
+        # Extract flags from the first parenthesized group
+        open_paren = decoded.find("(")
+        close_paren = decoded.find(")", open_paren + 1) if open_paren >= 0 else -1
+        if 0 <= open_paren < close_paren:
+            raw_str = decoded[open_paren + 1:close_paren]
+            flat_flags = [f.strip() for f in raw_str.split() if f.strip()]
+
+        if not name:
+            logger.warning(
+                "Fallback LIST parse also failed: %r", line[:200],
+            )
+            return None
+
+        logger.debug(
+            "Fallback LIST parser used for line (regex did not match): %r "
+            "→ name=%r delimiter=%r flags=%r",
+            line[:200], name, delimiter, flat_flags,
+        )
 
     if not name:
         return None
 
-    flags = [
-        f.decode("utf-8", errors="replace")
-        for f in raw_flags.split() if f
-    ]
-
     # Detect SPECIAL-USE (case-insensitive matching)
     special_use = None
-    for flag in flags:
+    for flag in flat_flags:
         upper_flag = flag.upper().lstrip("\\")
         for key, val in _SPECIAL_USE_MAP.items():
             if key.upper().lstrip("\\") == upper_flag:
@@ -98,7 +147,7 @@ def _parse_list_response(line: bytes) -> dict[str, Any] | None:
     return {
         "name": name,
         "delimiter": delimiter or "/",
-        "flags": flags,
+        "flags": flat_flags,
         "special_use": special_use,
     }
 
@@ -149,11 +198,27 @@ class IMAPClient:
         result: list[dict[str, Any]] = []
         typ, data = self.conn.list()
         if typ != "OK" or not data:
+            logger.warning(
+                "list_folders: IMAP LIST returned typ=%r with %d line(s)",
+                typ, len(data) if data else 0,
+            )
             return result
+        skipped = 0
         for line in data:
             parsed = _parse_list_response(line)
             if parsed:
                 result.append(parsed)
+            else:
+                skipped += 1
+        if skipped:
+            logger.warning(
+                "list_folders: parsed %d folder(s), skipped %d unparseable line(s)",
+                len(result), skipped,
+            )
+        else:
+            logger.info(
+                "list_folders: parsed %d folder(s)", len(result),
+            )
         return result
 
     def ensure_folder(self, account_email: str, folder_name: str,
@@ -424,6 +489,10 @@ class IMAPClient:
                 pending_attachments: list[tuple[str, str, bytes]] = []
                 for item in fetch_data:
                     if not isinstance(item, tuple):
+                        logger.debug(
+                            "sync_folder: non-tuple item in FETCH response: %r",
+                            item[:200] if isinstance(item, bytes) else type(item).__name__,
+                        )
                         continue
                     raw_flags = item[0] if item[0] else b""
                     raw_data = item[1]
