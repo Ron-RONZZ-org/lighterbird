@@ -298,7 +298,7 @@ All list tab components (`EmailListTab`, `JournalListTab`, `SieveListTab`, `Cont
 | **Tags display** | Colored tag pills rendered inline in the row; batch-fetched via junction table |
 | **Sort dropdown** | `sort` param sent to backend; options: created, priority, due, title |
 | **Mode toggle** | `T` key or tree/flat toggle button re-queries backend with opposite mode |
-| **Context-appropriate toolbar** | View mode: [Select] [hint] [+ New <kbd>N</kbd>]; Selection mode: [Exit] [count] [Delete]; Search mode: full-width search input |
+| **Context-appropriate toolbar** | View mode: [Select] [hint] [+ New <kbd>N</kbd>]; Selection mode: [Exit] [count] [Delete]; Search mode (typing): full-width search input; Search mode (confirmed): compact search + action buttons |
 | **Unsaved-changes guard** | Tab close → ConfirmDialog if form dirty; browser `beforeunload` if any dirty form exists; forms expose `dirty` derived rune + `onDirtyChange` callback |
 
 ### Shared Export/Import Components

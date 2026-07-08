@@ -76,6 +76,116 @@ async function runTests(page) {
   });
 
   // ═══════════════════════════════════════════
+  console.log("\n--- EMAIL LIST GUI SEARCH ---");
+
+  await test("!email list opens email message list", async () => {
+    await typeCommand("!email list");
+    await pressEnter();
+    await assertTabOpened("Email");
+  });
+
+  await test("Search / opens search bar, hides action buttons (typing mode)", async () => {
+    await typeCommand("!email list");
+    await pressEnter();
+    await sleep(300);
+    // Ensure the command input is not focused (blur it so the EmailListTab
+    // keyboard handler processes the / key instead of the input field)
+    await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });
+    await sleep(100);
+
+    // Press / to open search
+    await page.keyboard.press('/');
+    await sleep(400);
+
+    // Search input should be visible
+    const searchInput = page.locator('[aria-label="Search messages"]');
+    assert(await searchInput.isVisible(), 'Search input should appear after pressing /');
+    console.log('  Search input visible ✓');
+
+    // In typing mode (full-width search), action buttons should NOT be visible
+    const selectBtn = page.locator('.tool-btn', { hasText: 'Select' });
+    const hasSelect = await selectBtn.isVisible().catch(() => false);
+    assert(!hasSelect, 'Select button should NOT be visible during search typing mode');
+    console.log('  Select button hidden during typing ✓');
+
+    // Verify the search bar is full-width (has class "full")
+    const searchBarFull = page.locator('.search-bar.full');
+    assert(await searchBarFull.isVisible(), 'Search bar should have "full" width class during typing');
+    console.log('  Search bar is full-width ✓');
+  });
+
+  await test("Search Enter confirms, shows action buttons alongside search bar", async () => {
+    await typeCommand("!email list");
+    await pressEnter();
+    await sleep(300);
+    await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });
+    await sleep(100);
+
+    // Open search
+    await page.keyboard.press('/');
+    await sleep(300);
+    const searchInput = page.locator('[aria-label="Search messages"]');
+    assert(await searchInput.isVisible(), 'Search input should appear');
+
+    // Type a query and press Enter
+    await searchInput.fill('test');
+    await page.keyboard.press('Enter');
+    await sleep(500);
+
+    // After Enter: search input should still be visible
+    assert(await searchInput.isVisible(), 'Search input should remain visible after Enter');
+    console.log('  Search input stays visible after Enter ✓');
+
+    // After Enter: action buttons should now be visible (search confirmed mode)
+    const selectBtn = page.locator('.tool-btn', { hasText: 'Select' });
+    const syncBtn = page.locator('.tool-btn', { hasText: 'Sync' });
+    assert(await selectBtn.isVisible(), 'Select button should be visible after Enter (confirmed search)');
+    assert(await syncBtn.isVisible(), 'Sync button should be visible after Enter (confirmed search)');
+    console.log('  Action buttons (Select, Sync) visible after Enter ✓');
+
+    // The search bar should now be compact (not full-width)
+    const searchBarFull = page.locator('.search-bar.full');
+    const searchBarCompact = page.locator('.search-bar.compact');
+    assert(!(await searchBarFull.isVisible().catch(() => false)), 'Search bar should NOT be full-width after Enter');
+    assert(await searchBarCompact.isVisible(), 'Search bar should be compact after Enter');
+    console.log('  Search bar is compact mode ✓');
+  });
+
+  await test("Search Escape closes search and returns to view mode", async () => {
+    await typeCommand("!email list");
+    await pressEnter();
+    await sleep(300);
+    await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });
+    await sleep(100);
+
+    // Open search, type, confirm
+    await page.keyboard.press('/');
+    await sleep(300);
+    const searchInput = page.locator('[aria-label="Search messages"]');
+    await searchInput.fill('test');
+    await page.keyboard.press('Enter');
+    await sleep(300);
+
+    // Now press Escape to close search
+    await page.keyboard.press('Escape');
+    await sleep(400);
+
+    // Search input should be gone
+    assert(!(await searchInput.isVisible().catch(() => false)),
+      'Search input should be hidden after Escape');
+
+    // View-mode hint should be visible again
+    const searchHint = page.locator('.search-hint');
+    assert(await searchHint.isVisible(), 'Search hint (/) should be visible again after Escape');
+    console.log('  Search closes via Escape ✓');
+
+    // The Select button should be visible in view mode
+    const selectBtn = page.locator('.tool-btn', { hasText: 'Select' });
+    assert(await selectBtn.isVisible(), 'Select button should be visible in view mode after search closes');
+    console.log('  View mode restored after search closes ✓');
+  });
+
+  // ═══════════════════════════════════════════
   console.log("\n--- CREATE (via API completion) ---");
 
   await test("!contact add --first-name Jane --last-name Doe --email jane@test.com", async () => {

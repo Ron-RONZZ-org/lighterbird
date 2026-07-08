@@ -338,7 +338,11 @@
     {showSearch}
     {searchQuery}
     {showFolderTree}
-    onToggleMode={() => sel.toggleSelectionMode()}
+    onToggleMode={() => {
+      // If search is active, close it first so the selection toolbar is shown
+      if (showSearch) closeSearch();
+      sel.toggleSelectionMode();
+    }}
     onDelete={() => { if (sel.numSelected > 0) sel.confirmDelete = true; }}
     onMove={() => { if (sel.numSelected > 0) showMoveDialog = true; }}
     onNew={handleNew}
