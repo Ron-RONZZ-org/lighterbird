@@ -81,14 +81,19 @@ def sync_account(
         # Build folder metadata map for special_use lookup
         folder_map: dict[str, dict] = {f["name"]: f for f in available}
 
+        # ── Phase 1: Register ALL folders in DB first ──────────────────────
+        # This ensures custom folders appear in the folder list immediately,
+        # even if the subsequent message-download phase takes a long time.
         for folder_name in target_folders:
             meta = folder_map.get(folder_name, {})
             special_use = meta.get("special_use")
-
-            # Ensure folder in DB with special_use
             client.ensure_folder(account_email, folder_name, db_store,
                                  special_use=special_use)
 
+        # ── Phase 2: Sync messages for each folder ─────────────────────────
+        # This phase is slow (downloads all message bodies). Folders are
+        # already visible from Phase 1.
+        for folder_name in target_folders:
             # Check UIDVALIDITY
             ok, uidvalidity, highest_modseq = client.select_folder_ex(
                 folder_name, readonly=True,
@@ -122,7 +127,7 @@ def sync_account(
                         account_email, folder_name, exc_info=True,
                     )
 
-            # Sync new messages (existing behavior)
+            # Sync new messages
             fr = client.sync_folder(
                 folder_name, account_email,
                 folder_name=folder_name,
