@@ -3,77 +3,96 @@
    * AdvancedSearchDialog.svelte
    *
    * Modal dialog for advanced email search with all available fields.
-   * On submit, calls onSearch with the collected filters.
-   * If currentFilters is passed, fields are pre-filled for editing.
+   * Header and Body are separate fields; the checkboxes are removed.
+   * Folder is a <select> dropdown fetched from the API.
+   * Dates use From/To labels (inclusive).
    */
   import { createDialogTrap } from "./listTabShared.svelte.js";
+  import { email as emailApi } from "./api.js";
 
   let {
     show = false,
     currentFilters = {},
+    accountEmail = "",
     onSearch = () => {},
     onClose = () => {},
   } = $props();
 
-  // Local state for form fields (initialized from currentFilters)
-  let query = $state("");
+  // Local state for form fields
+  let headerText = $state("");
+  let bodyText = $state("");
   let from = $state("");
-  let sender = $state("");
   let subject = $state("");
   let to = $state("");
   let cc = $state("");
   let bcc = $state("");
   let participant = $state("");
   let priority = $state("");
-  let after = $state("");
-  let before = $state("");
-  let body = $state(false);
-  let header = $state(false);
   let folder = $state("");
+  let dateFrom = $state("");
+  let dateTo = $state("");
+
+  // Folder list for the dropdown
+  let folderList = $state([]);
+
+  // Load folders when dialog opens
+  $effect(() => {
+    if (show) {
+      emailApi.listFolders().then((res) => {
+        folderList = res.folders || [];
+      }).catch(() => {});
+    }
+  });
 
   // Sync local state from currentFilters when dialog opens
   $effect(() => {
     if (show) {
-      query = currentFilters.query || "";
+      headerText = currentFilters.header_text || "";
+      bodyText = currentFilters.body_text || "";
       from = currentFilters.from || "";
-      sender = currentFilters.sender || "";
       subject = currentFilters.subject || "";
       to = currentFilters.to || "";
       cc = currentFilters.cc || "";
       bcc = currentFilters.bcc || "";
       participant = currentFilters.participant || "";
       priority = currentFilters.priority || "";
-      after = currentFilters.after || "";
-      before = currentFilters.before || "";
-      body = !!currentFilters.body;
-      header = !!currentFilters.header;
       folder = currentFilters.folder || "";
+      dateFrom = currentFilters.date_from || "";
+      dateTo = currentFilters.date_to || "";
     }
   });
 
+  // Filter folders by account if accountEmail is known
+  let filteredFolders = $derived(
+    accountEmail
+      ? folderList.filter((f) => f.account_email === accountEmail)
+      : folderList,
+  );
+
   function resetAll() {
-    query = ""; from = ""; sender = ""; subject = "";
+    headerText = ""; bodyText = ""; from = ""; subject = "";
     to = ""; cc = ""; bcc = ""; participant = "";
-    priority = ""; after = ""; before = "";
-    body = false; header = false; folder = "";
+    priority = ""; folder = ""; dateFrom = ""; dateTo = "";
   }
 
   function handleSearch() {
     const filters = {};
-    if (query) filters.query = query;
+    // Header search → local SQL (subject, from, to, cc)
+    if (headerText) filters.header_text = headerText;
+    // Body search → IMAP SEARCH
+    if (bodyText) filters.body_text = bodyText;
+    // Structured header fields
     if (from) filters.from = from;
-    if (sender) filters.sender = sender;
     if (subject) filters.subject = subject;
     if (to) filters.to = to;
     if (cc) filters.cc = cc;
     if (bcc) filters.bcc = bcc;
     if (participant) filters.participant = participant;
     if (priority) filters.priority = priority;
-    if (after) filters.after = after;
-    if (before) filters.before = before;
-    if (body) filters.body = true;
-    if (header) filters.header = true;
     if (folder) filters.folder = folder;
+    if (dateFrom) filters.date_from = dateFrom;
+    if (dateTo) filters.date_to = dateTo;
+
     onSearch(filters);
     onClose();
   }
@@ -98,20 +117,11 @@
       <h3>Advanced Search</h3>
 
       <div class="form-grid">
-        <div class="field">
-          <label for="as-query">Free text</label>
-          <input id="as-query" type="text" placeholder="Search all fields…"
-                 bind:value={query} />
-        </div>
+        <!-- Row 1: Standard header fields (2 cols) -->
         <div class="field">
           <label for="as-from">From</label>
           <input id="as-from" type="text" placeholder="Sender address or name"
                  bind:value={from} />
-        </div>
-        <div class="field">
-          <label for="as-sender">Sender (alias)</label>
-          <input id="as-sender" type="text" placeholder="Alias for --from"
-                 bind:value={sender} />
         </div>
         <div class="field">
           <label for="as-subject">Subject</label>
@@ -154,28 +164,37 @@
         </div>
         <div class="field">
           <label for="as-folder">Folder</label>
-          <input id="as-folder" type="text" placeholder="Folder name"
-                 bind:value={folder} />
+          <select id="as-folder" bind:value={folder}>
+            <option value="">All folders</option>
+            {#each filteredFolders as fldr (fldr.label)}
+              <option value={fldr.folder_name}>{fldr.label}</option>
+            {/each}
+          </select>
         </div>
         <div class="field">
-          <label for="as-after">After date</label>
-          <input id="as-after" type="date" bind:value={after} />
+          <label for="as-date-from">From date</label>
+          <input id="as-date-from" type="date" bind:value={dateFrom} />
         </div>
         <div class="field">
-          <label for="as-before">Before date</label>
-          <input id="as-before" type="date" bind:value={before} />
+          <label for="as-date-to">To date</label>
+          <input id="as-date-to" type="date" bind:value={dateTo} />
         </div>
       </div>
 
-      <div class="check-row">
-        <label>
-          <input type="checkbox" bind:checked={body} />
-          Search message body (IMAP, slower)
-        </label>
-        <label>
-          <input type="checkbox" bind:checked={header} />
-          Headers only (fast)
-        </label>
+      <!-- Full-width fields: Header text + Body text (replace free text + checkboxes) -->
+      <div class="text-fields">
+        <div class="field full">
+          <label for="as-header">Header</label>
+          <input id="as-header" type="text"
+                 placeholder="Search in subject, from, to, cc (fast, local)"
+                 bind:value={headerText} />
+        </div>
+        <div class="field full">
+          <label for="as-body">Body</label>
+          <input id="as-body" type="text"
+                 placeholder="Search in message body (via IMAP, slower)"
+                 bind:value={bodyText} />
+        </div>
       </div>
 
       <div class="actions">
@@ -206,7 +225,14 @@
     display: grid; grid-template-columns: 1fr 1fr;
     gap: 0.6rem;
   }
+  .text-fields {
+    display: flex; flex-direction: column; gap: 0.6rem;
+    margin: 0.8rem 0;
+    border-top: 1px solid #333;
+    padding-top: 0.8rem;
+  }
   .field { display: flex; flex-direction: column; gap: 0.2rem; }
+  .field.full { width: 100%; }
   .field label {
     font-size: 0.72rem; color: #7c7c9a;
     text-transform: uppercase; letter-spacing: 0.06em;
@@ -218,12 +244,7 @@
     font-family: monospace; font-size: 0.82rem; outline: none;
   }
   .field input:focus, .field select:focus { border-color: #6a6a9a; }
-  .check-row {
-    display: flex; gap: 1.5rem; margin: 0.8rem 0;
-    font-size: 0.82rem;
-  }
-  .check-row label { display: flex; align-items: center; gap: 0.3rem; cursor: pointer; }
-  .actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
+  .actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.5rem; }
   .btn {
     padding: 0.4rem 1rem; border: 1px solid #444;
     border-radius: 4px; background: #2a2a3e; color: #e0e0e0;

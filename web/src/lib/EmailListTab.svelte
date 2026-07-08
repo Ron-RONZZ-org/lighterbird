@@ -174,6 +174,32 @@
     performSearch(searchQuery, {});
   }
 
+  /**
+   * Translate local filter format to API params.
+   * - header_text → query + header=true  (local SQL on headers)
+   * - body_text   → query + body=true    (IMAP SEARCH)
+   * - date_from   → after (API)
+   * - date_to     → before (API)
+   */
+  function filtersToApiParams(filters) {
+    const params = {};
+    if (filters.header_text) params.query = filters.header_text;
+    if (filters.body_text) params.query = filters.body_text;
+    if (filters.from) params.from = filters.from;
+    if (filters.subject) params.subject = filters.subject;
+    if (filters.to) params.to = filters.to;
+    if (filters.cc) params.cc = filters.cc;
+    if (filters.bcc) params.bcc = filters.bcc;
+    if (filters.participant) params.participant = filters.participant;
+    if (filters.priority) params.priority = filters.priority;
+    if (filters.folder) params.folder = filters.folder;
+    if (filters.date_from) params.after = filters.date_from;
+    if (filters.date_to) params.before = filters.date_to;
+    if (filters.header_text) params.header = "true";
+    if (filters.body_text) params.body = "true";
+    return params;
+  }
+
   function handleNew() {
     tabStore.open("form", "Compose Email", { form: "email-send", initialData: { _returnIdKey: "persistent-email-list" } }, {
       idKey: "email-compose",
@@ -211,17 +237,74 @@
     const tabId = tabStore.active.id;
     if (abortController) abortController.abort();
     abortController = new AbortController();
-    const params = { ...currentFilters, ...(extraFilters || {}), limit: 50 };
+    const signal = abortController.signal;
+
+    // Build params: start with advanced filters, then add search bar query
+    const params = { ...currentFilters, ...filtersToApiParams(extraFilters || {}), limit: 50 };
+
+    // Free-text from the search bar (/) — default: all fields
     if (query && query.length >= 2) {
-      params.query = query;
+      // Two-phase search:
+      // Phase 1: headers only (fast, local SQL) → show results immediately
+      // Phase 2: body search (IMAP SEARCH, slower) → append additional results
+      const headerParams = { ...params, query, header: "true", limit: 50 };
+      emailApi.listMessages(headerParams, signal)
+        .then((result) => {
+          if (signal.aborted) return;
+          tabStore.safeUpdate(tabId, result);
+          // Phase 2: body search
+          const bodyParams = { ...params, query, body: "true", limit: 50 };
+          emailApi.listMessages(bodyParams, signal)
+            .then((bodyResult) => {
+              if (signal.aborted) return;
+              const merged = mergeSearchResults(result, bodyResult);
+              tabStore.safeUpdate(tabId, merged);
+            })
+            .catch((err) => {
+              if (err?.name === "AbortError") return;
+            });
+        })
+        .catch((err) => {
+          if (err?.name === "AbortError") return;
+        });
+    } else {
+      // No free-text query: just send filters (advanced search case)
+      if (params.header_text || params.body_text || Object.keys(params).length > 1) {
+        emailApi.listMessages(params, signal)
+          .then((result) => {
+            if (signal.aborted) return;
+            tabStore.safeUpdate(tabId, result);
+          })
+          .catch((err) => {
+            if (err?.name === "AbortError") return;
+          });
+      }
     }
-    emailApi.listMessages(params)
-      .then((result) => {
-        tabStore.safeUpdate(tabId, result);
-      })
-      .catch((err) => {
-        if (err?.name === "AbortError") return;
-      });
+  }
+
+  /**
+   * Merge two search results, deduplicating by uuid.
+   * Header results come first, then body-only results appended.
+   */
+  function mergeSearchResults(headerResult, bodyResult) {
+    const seen = new Set();
+    const merged = [];
+    for (const msg of (headerResult.messages || [])) {
+      seen.add(msg.uuid);
+      merged.push(msg);
+    }
+    for (const msg of (bodyResult.messages || [])) {
+      if (!seen.has(msg.uuid)) {
+        seen.add(msg.uuid);
+        merged.push(msg);
+      }
+    }
+    return {
+      messages: merged,
+      total: merged.length,
+      has_more: headerResult.has_more || bodyResult.has_more,
+      next_cursor: headerResult.next_cursor || bodyResult.next_cursor,
+    };
   }
 
   function handleSearchInput(e) {
@@ -386,74 +469,15 @@
     {syncing}
   />
 
-  <!-- Advanced search button -->
-  <div class="adv-search-row">
-    <button class="adv-search-btn" onclick={() => showAdvancedSearch = true}
-            title="Advanced search (all fields)">
-      <span class="adv-icon">[a]</span> Advanced
-    </button>
-  </div>
-
-  <!-- Folder tree panel -->
-  <EmailFolderPanel
-    folderTree={folders}
-    bind:folderVisibility
-    bind:expandedFolders
-    bind:show={showFolderTree}
-    onRefresh={applyFolderFilter}
-    onCreateFolder={handleCreateFolder}
-    onClose={() => { showFolderTree = false; }}
-  />
-
-  <!-- Advanced search tile bar -->
-  <SearchTileBar
-    filters={advancedSearchFilters}
-    onRemove={handleRemoveFilter}
-    onClear={handleClearFilters}
-  />
-
-  <!-- Sort dropdown overlay -->
-  <EmailSortOverlay
-    bind:sort
-    bind:groupByConversation
-    bind:groupBySender
-    bind:show={showSortDropdown}
-    onRefresh={applyFolderFilter}
-    onClose={() => { showSortDropdown = false; }}
-  />
-
-  <!-- Params dialog -->
-  <DropdownPanel show={showParamsDialog} onClose={() => { showParamsDialog = false; }}>
-    <EmailParamsDialog
-      {config}
-      onSave={handleSaveConfig}
-      onActivate={handleActivateConfig}
-      onDelete={handleDeleteConfig}
-      onClose={() => { showParamsDialog = false; }}
+  {#if showAdvancedSearch}
+    <AdvancedSearchDialog
+      show={showAdvancedSearch}
+      currentFilters={advancedSearchFilters}
+      accountEmail={data.filters?.account_email || ""}
+      onSearch={handleAdvancedSearch}
+      onClose={() => showAdvancedSearch = false}
     />
-  </DropdownPanel>
-
-  <!-- Message list -->
-  <div class="list" role="listbox" aria-label="Email messages" aria-multiselectable="true">
-    {#each messages as msg, i (msg.uuid)}
-      <EmailListRow
-        {msg}
-        index={i}
-        isSelected={sel.isSelected(msg.uuid)}
-        isFocused={i === sel.focusedIndex}
-        selectionMode={sel.selectionMode}
-        {uuidCopy}
-        {emailCopy}
-        onRowClick={(e, msg) => handleRowClick(e, msg, sel)}
-      />
-    {:else}
-      <p class="empty">No messages.</p>
-    {/each}
-    {#if hasMore}
-      <button class="load-more" onclick={loadMore} disabled={loadingMore}>
-        {loadingMore ? "Loading…" : "Load more"}
-      </button>
-    {/if}
+  {/if}
   </div>
 
   {#if sel.confirmDelete}
@@ -541,34 +565,6 @@
   .load-more:disabled {
     color: var(--clr-muted, #888);
     cursor: default;
-  }
-
-  .adv-search-row {
-    display: flex;
-    align-items: center;
-    padding: 0.25rem 0.75rem;
-    gap: 0.5rem;
-    border-bottom: 1px solid #2a2a3e;
-    background: #1a1a2e;
-  }
-  .adv-search-btn {
-    background: transparent;
-    border: 1px solid #4a4a6a;
-    border-radius: 4px;
-    color: #7c9bff;
-    cursor: pointer;
-    font-family: monospace;
-    font-size: 0.78rem;
-    padding: 0.2rem 0.5rem;
-    transition: background 0.1s, border-color 0.1s;
-  }
-  .adv-search-btn:hover {
-    background: #2a2a4e;
-    border-color: #6a6a9a;
-  }
-  .adv-icon {
-    color: #7fdb7f;
-    font-weight: bold;
   }
 
 </style>

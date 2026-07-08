@@ -50,11 +50,17 @@
             class:active={showSortDropdown}>Sort <kbd>S</kbd></button>
           <button class="tool-btn" title="Parameters (P)" onclick={onToggleParamsDialog}
             class:active={showParamsDialog}>Params <kbd>P</kbd></button>
-          <button class="tool-btn" title="Advanced search (A)" onclick={onToggleAdvancedSearch}>Adv <kbd>A</kbd></button>
+          <button class="tool-btn" title="Advanced search (A)" onclick={onToggleAdvancedSearch}>Adv srch <kbd>A</kbd></button>
         </div>
         <div class="right">
-          <button class="tool-btn" title="Advanced search (A)" onclick={onToggleAdvancedSearch}>Adv <kbd>A</kbd></button>
           {#if onNew}
+            <button class="tool-btn primary" onclick={onNew} title="New message">+ New <kbd>N</kbd></button>
+          {/if}
+          <button class="tool-btn" onclick={onImport} title="Import messages">Import</button>
+          <button class="tool-btn" onclick={onSync} disabled={syncing} title="Sync (Ctrl+R)">
+            {syncing ? "Syncing…" : "Sync"} <kbd>Ctrl+R</kbd>
+          </button>
+        </div>
             <button class="tool-btn primary" onclick={onNew} title="New message">+ New <kbd>N</kbd></button>
           {/if}
           <button class="tool-btn" onclick={onImport} title="Import messages">Import</button>
@@ -93,10 +99,13 @@
         class:active={showSortDropdown}>Sort <kbd>S</kbd></button>
       <button class="tool-btn" title="Parameters (P)" onclick={onToggleParamsDialog}
         class:active={showParamsDialog}>Params <kbd>P</kbd></button>
-      <button class="tool-btn" title="Advanced search (A)" onclick={onToggleAdvancedSearch}>Adv <kbd>A</kbd></button>
     </div>
     <div class="center">
       <span class="search-hint"><kbd>/</kbd> search</span>
+    </div>
+    <div class="right">
+      <button class="tool-btn" title="Advanced search (A)" onclick={onToggleAdvancedSearch}>Adv srch <kbd>A</kbd></button>
+      {#if onNew}
     </div>
     <div class="right">
       {#if onNew}
