@@ -25,6 +25,8 @@
         to: "To", cc: "CC", bcc: "BCC", participant: "Participant",
         priority: "Priority", after: "After", before: "Before",
         folder: "Folder", body: "Body search", header: "Headers only",
+        header_text: "Header", body_text: "Body",
+        date_from: "From date", date_to: "To date",
       };
       label = labels[key] || key;
       // Truncate long values

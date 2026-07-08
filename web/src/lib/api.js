@@ -47,6 +47,10 @@ async function request(method, path, body = null, opts = {}) {
     if (body !== null) {
       fetchOpts.body = JSON.stringify(body);
     }
+    // Pass signal from opts to fetch for AbortController support
+    if (opts.signal) {
+      fetchOpts.signal = opts.signal;
+    }
     resp = retry
       ? await fetchWithRetry(`${BASE}${path}`, fetchOpts)
       : await fetch(`${BASE}${path}`, fetchOpts);
@@ -119,7 +123,7 @@ export const email = {
   sync: (accountEmail = null) =>
     request("POST", "/email/sync", accountEmail ? { account_email: accountEmail } : {}, { retry: true }),
 
-  listMessages: (params = {}) => {
+  listMessages: (params = {}, signal = null) => {
     const q = new URLSearchParams();
     if (params.account_email) q.set("account_email", params.account_email);
     if (params.folder) q.set("folder", params.folder);
@@ -139,7 +143,9 @@ export const email = {
     if (params.sort) q.set("sort", params.sort);
     if (params.group) q.set("group", params.group);
     if (params.cursor) q.set("cursor", params.cursor);
-    return request("GET", `/email/messages?${q}`);
+    const fetchOpts = {};
+    if (signal) fetchOpts.signal = signal;
+    return request("GET", `/email/messages?${q}`, null, fetchOpts);
   },
 
   getMessage: (uuid) => request("GET", `/email/messages/${uuid}`),
