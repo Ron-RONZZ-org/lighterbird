@@ -175,6 +175,23 @@ lighterbird/
 | **LLM Co-writing** (`--cowrite`) | GUI only (`CowritePanel` + `POST /api/v1/cowrite`) | Cowriting requires diff visualization + per-field Accept/Reject workflow, which is impractical in CLI. The user must see LLM-proposed changes before applying them. |
 | *(add new exceptions here)* | | |
 
+## Dev Instance for Realistic Testing
+
+When working on lighterbird, **always spring up a seeded dev instance** for any testing beyond trivial unit-test changes. This gives you a real server with real accounts to test against.
+
+```bash
+# Quick dev instance (ephemeral — data lost on exit)
+uv run lighterbird-dev --seed --port 6006
+
+# Dev instance with persistent data (survives restarts)
+uv run lighterbird-dev --data-dir ~/lighterbird-data --seed --port 6006
+
+# Dev instance with your real credentials
+uv run lighterbird-dev --data-dir ~/lighterbird-data --prod --port 6006
+```
+
+E2E tests (Playwright) start their own seeded instance automatically — see the **E2E Test Automation** section below. The above is for manual exploration or API-level testing.
+
 ## Testing Requirements
 
 **Full test suite timeout**: Running `uv run pytest tests/` takes ~5+ minutes (427 email tests, plus calendar, contacts, todo, journal, server, core, and more). In practice it's been observed to exceed 7 minutes, so set a shell timeout of at least 600000ms (10 minutes). Unless you have specific reason to suspect wide-ranging breakage, run only tests relevant to your changes.
