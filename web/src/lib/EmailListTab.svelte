@@ -468,19 +468,9 @@
     onToggleAdvancedSearch={() => showAdvancedSearch = true}
     {syncing}
   />
+</div>
 
-  {#if showAdvancedSearch}
-    <AdvancedSearchDialog
-      show={showAdvancedSearch}
-      currentFilters={advancedSearchFilters}
-      accountEmail={data.filters?.account_email || ""}
-      onSearch={handleAdvancedSearch}
-      onClose={() => showAdvancedSearch = false}
-    />
-  {/if}
-  </div>
-
-  {#if sel.confirmDelete}
+{#if sel.confirmDelete}
     <ConfirmDialog
       message="Delete {sel.numSelected} message{sel.numSelected !== 1 ? 's' : ''}?"
       onConfirm={async () => { await sel.deleteSelected(); sel.confirmDelete = false; }}
@@ -522,7 +512,6 @@
       onClose={() => showAdvancedSearch = false}
     />
   {/if}
-</div>
 
 <style>
   .email-list {

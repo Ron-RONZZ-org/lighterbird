@@ -61,13 +61,6 @@
             {syncing ? "Syncing…" : "Sync"} <kbd>Ctrl+R</kbd>
           </button>
         </div>
-            <button class="tool-btn primary" onclick={onNew} title="New message">+ New <kbd>N</kbd></button>
-          {/if}
-          <button class="tool-btn" onclick={onImport} title="Import messages">Import</button>
-          <button class="tool-btn" onclick={onSync} disabled={syncing} title="Sync (Ctrl+R)">
-            {syncing ? "Syncing…" : "Sync"} <kbd>Ctrl+R</kbd>
-          </button>
-        </div>
       </svelte:fragment>
     </ListSearchBar>
   {:else if selectionMode}
@@ -105,9 +98,6 @@
     </div>
     <div class="right">
       <button class="tool-btn" title="Advanced search (A)" onclick={onToggleAdvancedSearch}>Adv srch <kbd>A</kbd></button>
-      {#if onNew}
-    </div>
-    <div class="right">
       {#if onNew}
         <button class="tool-btn primary" onclick={onNew} title="New message">+ New <kbd>N</kbd></button>
       {/if}
