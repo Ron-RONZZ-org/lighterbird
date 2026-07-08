@@ -19,6 +19,8 @@
 
   import { findNode, commandTree } from "./commandTree.js";
   import FormField from "./FormField.svelte";
+  import PreviewDialog from "./PreviewDialog.svelte";
+  import { createPreviewState } from "./preview.svelte.js";
   import UuidPicker from "./UuidPicker.svelte";
 
   let {
@@ -160,6 +162,68 @@
       .replace(/\b\w/g, (c) => c.toUpperCase()),
   );
 
+  // ── Preview state ────────────────────────────────────────────────────
+  let preview = $state(createPreviewState());
+
+  /** Open preview for the given content and format. */
+  function openPreview(content, format = "markdown", title = "Preview") {
+    preview.show(content, format, title);
+  }
+
+  // ── Field grouping for inline layout ──────────────────────────────────
+  /**
+   * Build a flat ordered list of all fields (params first, then flags).
+   * Each entry: { type: "param"|"flag", def: {…} }
+   */
+  let allFields = $derived.by(() => {
+    const fields = [];
+    for (const p of params) fields.push({ type: "param", def: p });
+    for (const f of flags) fields.push({ type: "flag", def: f });
+    return fields;
+  });
+
+  /**
+   * Group consecutive fields into rows.
+   * Fields with explicit width (e.g. "50%") that are NOT multiline
+   * are grouped into inline rows. All others get their own row.
+   */
+  let renderedGroups = $derived.by(() => {
+    const groups = [];
+    let currentInline = [];
+
+    function flushInline() {
+      if (currentInline.length > 0) {
+        groups.push({ inline: true, fields: [...currentInline] });
+        currentInline = [];
+      }
+    }
+
+    for (const field of allFields) {
+      const w = field.def.width || "";
+      const isMultiline = field.def.multiline;
+      // Inline = has width < 100%, not multiline, not a uuid field
+      const hasExplicitWidth = w !== "" && w !== "100%";
+      const shouldInline = hasExplicitWidth && !isMultiline
+        && field.def.type !== "uuid" && !field.def.uuidSource;
+
+      if (shouldInline) {
+        currentInline.push(field);
+      } else {
+        flushInline();
+        groups.push({ inline: false, fields: [field] });
+      }
+    }
+    flushInline();
+    return groups;
+  });
+
+  /** Extract numeric flex value from a width string like "50%" or "1fr" */
+  function flexWidth(width) {
+    if (!width || width === "100%") return "1";
+    if (width.endsWith("%")) return width.replace("%", "");
+    return width;
+  }
+
   // ── Autocomplete data loading ─────────────────────────────────────────
   let autocompleteData = $state({}); // {fieldName: [values]}
 
@@ -203,6 +267,22 @@
       e.preventDefault();
       handleSubmit(e);
     }
+    // Ctrl+Shift+P — preview the first multiline/text field's content
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "p" || e.key === "P")) {
+      e.preventDefault();
+      // Find first multiline/text field with content and preview it
+      for (const field of allFields) {
+        const val = fieldValues[field.def.name];
+        if (val && typeof val === "string" && val.trim()) {
+          const isLongText = field.def.multiline || (val && val.length > 100);
+          if (isLongText) {
+            const fmt = fieldValues["format"] || fieldValues["body-format"] || fieldValues["body_format"] || "markdown";
+            openPreview(val, fmt, "Preview: " + field.def.name);
+            break;
+          }
+        }
+      }
+    }
   }
 </script>
 
@@ -211,155 +291,138 @@
 <form onsubmit={handleSubmit} class="dynamic-form">
   <h3 class="form-title">{formTitle}</h3>
 
-  {#each params as param}
-    {@const val = fieldValues[param.name] || ""}
-    {@const acOptions = _getAutocompleteOptions(param)}
-    <FormField
-      label={param.name}
-      hint={param.placeholder || ""}
-      required={param.required}
-      error={formErrors[param.name] || ""}
-      width={param.width || ""}
-    >
-      {#snippet children()}
-        {#if param.type === "uuid" || param.uuidSource}
-          <UuidPicker
-            uuidSource={param.uuidSource || ""}
-            value={val}
-            placeholder={param.placeholder || `Enter ${param.name}`}
-            required={param.required}
-            onchange={(v) => setField(param.name, v)}
-          />
-        {:else if param.type === "datetime"}
-          <input
-            id={param.name}
-            type="datetime-local"
-            class="df-input"
-            value={val}
-            oninput={(e) => setField(param.name, e.target.value)}
-            required={param.required}
-            placeholder={param.placeholder || ""}
-            list={param.autocompleteSource ? `${param.name}-list` : undefined}
-          />
-          <datalist id={`${param.name}-list`}>
-            {#each acOptions as opt}
-              <option value={opt}></option>
-            {/each}
-          </datalist>
-        {:else if param.type === "date"}
-          <input
-            id={param.name}
-            type="date"
-            class="df-input"
-            value={val}
-            oninput={(e) => setField(param.name, e.target.value)}
-            required={param.required}
-          />
-        {:else if param.type === "number"}
-          <input
-            id={param.name}
-            type="number"
-            class="df-input"
-            value={val}
-            oninput={(e) => setField(param.name, e.target.value)}
-            required={param.required}
-            placeholder={param.placeholder || ""}
-          />
-        {:else if isSensitive(param.name)}
-          <input
-            id={param.name}
-            type="password"
-            class="df-input"
-            value={val}
-            oninput={(e) => setField(param.name, e.target.value)}
-            required={param.required}
-            placeholder={param.placeholder || ""}
-          />
-        {:else}
-          <input
-            id={param.name}
-            type="text"
-            class="df-input"
-            value={val}
-            oninput={(e) => setField(param.name, e.target.value)}
-            required={param.required}
-            placeholder={param.placeholder || ""}
-            list={param.autocompleteSource ? `${param.name}-list` : undefined}
-          />
-          <datalist id={`${param.name}-list`}>
-            {#each acOptions as opt}
-              <option value={opt}></option>
-            {/each}
-          </datalist>
-        {/if}
-      {/snippet}
-    </FormField>
-  {/each}
-
-  {#each flags as flag}
-    {@const val = fieldValues[flag.name]}
-    {@const acOptions = _getAutocompleteOptions(flag)}
-    {#if flag.type === "flag"}
-      <FormField label={flag.name} hint={flag.help || ""} width={flag.width || ""}>
-        {#snippet children()}
-          <label class="checkbox-label">
-            <input
-              type="checkbox"
-              class="df-checkbox"
-              checked={!!val}
-              onchange={(e) => setField(flag.name, e.target.checked)}
-            />
-            <span class="checkbox-text">{flag.help || "Enable"}</span>
-          </label>
-        {/snippet}
-      </FormField>
-    {:else if flag.uuidSource}
-      <FormField label={flag.name} hint={flag.help || ""} required={flag.required} width={flag.width || ""}>
-        {#snippet children()}
-          <UuidPicker
-            uuidSource={flag.uuidSource}
-            value={val || ""}
-            placeholder={flag.help || `Select ${flag.name}`}
-            required={flag.required}
-            onchange={(v) => setField(flag.name, v)}
-          />
-        {/snippet}
-      </FormField>
-    {:else if flag.values && flag.values.length > 0}
-      <FormField label={flag.name} hint={flag.help || ""} required={flag.required}
-        error={formErrors[flag.name] || ""} width={flag.width || ""}>
-        {#snippet children()}
-          <select
-            id={flag.name}
-            class="df-input"
-            value={val || ""}
-            onchange={(e) => setField(flag.name, e.target.value)}
-          >
-            <option value="">— Select {flag.name} —</option>
-            {#each flag.values as opt}
-              <option value={opt}>{opt}</option>
-            {/each}
-          </select>
-        {/snippet}
-      </FormField>
+  {#each renderedGroups as group}
+    {#if group.inline}
+      <div class="field-row">
+        {#each group.fields as field}
+          {@const fd = field.def}
+          {@const val = fieldValues[fd.name]}
+          {@const isMultiline = fd.multiline}
+          <div class="field-cell" style="flex:{flexWidth(fd.width)}">
+            <FormField
+              label={fd.name}
+              hint={fd.placeholder || fd.help || ""}
+              required={fd.required}
+              error={formErrors[fd.name] || ""}
+            >
+              {#snippet children()}
+                {#if field.type === "flag" && fd.type === "flag"}
+                  <label class="checkbox-label">
+                    <input type="checkbox" class="df-checkbox"
+                      checked={!!val}
+                      onchange={(e) => setField(fd.name, e.target.checked)} />
+                    <span class="checkbox-text">{fd.help || "Enable"}</span>
+                  </label>
+                {:else if fd.uuidSource}
+                  <UuidPicker uuidSource={fd.uuidSource} value={val || ""}
+                    placeholder={fd.help || `Select ${fd.name}`}
+                    required={fd.required}
+                    onchange={(v) => setField(fd.name, v)} />
+                {:else if field.type === "flag" && fd.values && fd.values.length > 0}
+                  <select id={fd.name} class="df-input"
+                    value={val || ""}
+                    onchange={(e) => setField(fd.name, e.target.value)}>
+                    <option value="">— Select {fd.name} —</option>
+                    {#each fd.values as opt}
+                      <option value={opt}>{opt}</option>
+                    {/each}
+                  </select>
+                {:else}
+                  <input id={fd.name} type={fieldType(fd)} class="df-input"
+                    value={val || ""}
+                    oninput={(e) => setField(fd.name, e.target.value)}
+                    placeholder={fd.help || fd.placeholder || ""} />
+                {/if}
+              {/snippet}
+            </FormField>
+          </div>
+        {/each}
+      </div>
     {:else}
-      <FormField label={flag.name} hint={flag.help || ""} required={flag.required}
-        error={formErrors[flag.name] || ""} width={flag.width || ""}>
+      {@const fd = group.fields[0].def}
+      {@const field = group.fields[0]}
+      {@const val = fieldValues[fd.name] || ""}
+      {@const acOptions = _getAutocompleteOptions(fd)}
+      {@const isMultiline = fd.multiline}
+      <FormField
+        label={fd.name}
+        hint={fd.placeholder || fd.help || ""}
+        required={fd.required}
+        error={formErrors[fd.name] || ""}
+      >
         {#snippet children()}
-          <input
-            id={flag.name}
-            type={fieldType(flag)}
-            class="df-input"
-            value={val || ""}
-            oninput={(e) => setField(flag.name, e.target.value)}
-            placeholder={flag.help || ""}
-            list={flag.autocompleteSource ? `${flag.name}-list` : undefined}
-          />
-          <datalist id={`${flag.name}-list`}>
-            {#each acOptions as opt}
-              <option value={opt}></option>
-            {/each}
-          </datalist>
+          {#if fd.type === "uuid" || fd.uuidSource}
+            <UuidPicker
+              uuidSource={fd.uuidSource || ""}
+              value={val}
+              placeholder={fd.placeholder || `Enter ${fd.name}`}
+              required={fd.required}
+              onchange={(v) => setField(fd.name, v)}
+            />
+          {:else if field.type === "flag" && fd.type === "flag"}
+            <label class="checkbox-label">
+              <input type="checkbox" class="df-checkbox"
+                checked={!!val}
+                onchange={(e) => setField(fd.name, e.target.checked)} />
+              <span class="checkbox-text">{fd.help || "Enable"}</span>
+            </label>
+          {:else if fd.uuidSource}
+            <UuidPicker uuidSource={fd.uuidSource} value={val || ""}
+              placeholder={fd.help || `Select ${fd.name}`}
+              required={fd.required}
+              onchange={(v) => setField(fd.name, v)} />
+          {:else if field.type === "flag" && fd.values && fd.values.length > 0}
+            <select id={fd.name} class="df-input"
+              value={val || ""}
+              onchange={(e) => setField(fd.name, e.target.value)}>
+              <option value="">— Select {fd.name} —</option>
+              {#each fd.values as opt}
+                <option value={opt}>{opt}</option>
+              {/each}
+            </select>
+          {:else if fd.type === "datetime"}
+            <input id={fd.name} type="datetime-local" class="df-input"
+              value={val} oninput={(e) => setField(fd.name, e.target.value)}
+              required={fd.required} placeholder={fd.placeholder || ""} />
+          {:else if fd.type === "date"}
+            <input id={fd.name} type="date" class="df-input"
+              value={val} oninput={(e) => setField(fd.name, e.target.value)}
+              required={fd.required} />
+          {:else if fd.type === "number"}
+            <input id={fd.name} type="number" class="df-input"
+              value={val} oninput={(e) => setField(fd.name, e.target.value)}
+              required={fd.required} placeholder={fd.placeholder || ""} />
+          {:else if isMultiline}
+            <div class="multiline-wrap">
+              <textarea id={fd.name} class="df-textarea"
+                value={val} oninput={(e) => setField(fd.name, e.target.value)}
+                required={fd.required} placeholder={fd.placeholder || fd.help || ""}
+                rows="8"></textarea>
+              <div class="multiline-tools">
+                <button type="button" class="preview-btn"
+                  onclick={() => {
+                    const fmt = fieldValues["format"] || fieldValues["body-format"] || "markdown";
+                    openPreview(fieldValues[fd.name] || "", fmt, "Preview: " + fd.name);
+                  }}
+                  disabled={!fieldValues[fd.name] || !fieldValues[fd.name].trim()}
+                  title="Preview (Ctrl+Shift+P)">Preview</button>
+              </div>
+            </div>
+          {:else if isSensitive(fd.name)}
+            <input id={fd.name} type="password" class="df-input"
+              value={val} oninput={(e) => setField(fd.name, e.target.value)}
+              required={fd.required} placeholder={fd.placeholder || ""} />
+          {:else}
+            <input id={fd.name} type={fieldType(fd)} class="df-input"
+              value={val} oninput={(e) => setField(fd.name, e.target.value)}
+              required={fd.required} placeholder={fd.placeholder || fd.help || ""}
+              list={fd.autocompleteSource ? `${fd.name}-list` : undefined} />
+            <datalist id={`${fd.name}-list`}>
+              {#each acOptions as opt}
+                <option value={opt}></option>
+              {/each}
+            </datalist>
+          {/if}
         {/snippet}
       </FormField>
     {/if}
@@ -371,6 +434,15 @@
     </button>
   </div>
 </form>
+
+{#if preview.showing}
+  <PreviewDialog
+    showing={preview.showing}
+    htmlContent={preview.htmlContent}
+    title={preview.title}
+    onclose={() => preview.close()}
+  />
+{/if}
 
 <style>
   .dynamic-form {
@@ -385,6 +457,14 @@
     color: #e0e0e0;
     font-weight: 600;
     font-family: monospace;
+  }
+  .field-row {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+  }
+  .field-cell {
+    min-width: 0;
   }
   :global(.df-input) {
     width: 100%;
@@ -402,6 +482,24 @@
   :global(.df-input:focus) {
     border-color: #5a5a8a;
   }
+  :global(.df-textarea) {
+    width: 100%;
+    padding: 0.5rem 0.6rem;
+    background: #16213e;
+    border: 1px solid #333;
+    color: #e0e0e0;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.15s;
+    box-sizing: border-box;
+    resize: vertical;
+    min-height: 120px;
+  }
+  :global(.df-textarea:focus) {
+    border-color: #5a5a8a;
+  }
   :global(.df-checkbox) {
     width: 1.1rem;
     height: 1.1rem;
@@ -416,5 +514,34 @@
   .checkbox-text {
     font-size: 0.85rem;
     color: #ccc;
+  }
+  .multiline-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+  .multiline-tools {
+    display: flex;
+    justify-content: flex-end;
+  }
+  .preview-btn {
+    padding: 0.25rem 0.5rem;
+    border: 1px solid #444;
+    border-radius: 4px;
+    background: transparent;
+    color: #b0b0c0;
+    font-family: monospace;
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+    white-space: nowrap;
+  }
+  .preview-btn:hover:not(:disabled) {
+    background: #2a2a44;
+    color: #e0e0e0;
+  }
+  .preview-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 </style>

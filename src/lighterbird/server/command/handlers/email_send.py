@@ -28,6 +28,8 @@ from lighterbird.server.deps import get_email_service
              {"name": "body-format", "type": "string", "help": "Body format: markdown, html, or plain"},
              {"name": "signature", "type": "string", "help": "Override account signature text"},
              {"name": "signature-name", "type": "string", "help": "Use a named signature from the account"},
+             {"name": "signature-format", "type": "string", "help": "Signature format when using --signature: plain, html, or markdown",
+              "values": ["plain", "html", "markdown"]},
              {"name": "no-signature", "type": "bool", "help": "Send without any signature"},
              {"name": "file", "type": "string", "help": "Attachment (name:base64)"},
              {"name": "no-save-sample", "type": "bool", "help": "Do not save as writing sample"},

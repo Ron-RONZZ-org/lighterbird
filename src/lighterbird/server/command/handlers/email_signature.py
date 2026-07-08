@@ -48,12 +48,14 @@ def signature_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
 
 @command("email.signature.add",
          params=[
-             {"name": "name", "type": "string", "help": "Unique signature name (e.g. work, personal)", "required": True},
-             {"name": "text", "type": "string", "help": "Signature text (plain text or HTML)"},
+             {"name": "name", "type": "string", "help": "Unique signature name (e.g. work, personal)", "required": True,
+              "width": "50%"},
+             {"name": "text", "type": "string", "help": "Signature text (plain text or HTML)",
+              "multiline": True},
          ],
          flags=[
              {"name": "format", "type": "string", "help": "Signature format: plain, html, or markdown",
-              "values": ["plain", "html", "markdown"]},
+              "values": ["plain", "html", "markdown"], "width": "50%"},
          ],
          interactive=True)
 def signature_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
@@ -98,7 +100,8 @@ def signature_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
          ],
          flags=[
              {"name": "name", "type": "string", "help": "New signature name"},
-             {"name": "text", "type": "string", "help": "New signature text"},
+             {"name": "text", "type": "string", "help": "New signature text",
+              "multiline": True},
              {"name": "format", "type": "string", "help": "Signature format: plain, html, or markdown",
               "values": ["plain", "html", "markdown"]},
          ],
