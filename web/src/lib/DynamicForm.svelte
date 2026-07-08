@@ -405,7 +405,7 @@
                     openPreview(fieldValues[fd.name] || "", fmt, "Preview: " + fd.name);
                   }}
                   disabled={!fieldValues[fd.name] || !fieldValues[fd.name].trim()}
-                  title="Preview (Ctrl+Shift+P)">Preview</button>
+                  title="Preview (Ctrl+Shift+P)">Preview <kbd>Ctrl+Shift+P</kbd></button>
               </div>
             </div>
           {:else if isSensitive(fd.name)}

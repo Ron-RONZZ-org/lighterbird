@@ -121,8 +121,8 @@
           <option value="plain">Plain Text</option>
         </select>
         <button type="button" class="preview-btn" onclick={() => preview.show(text, bodyFormat, "Journal Preview")}
-          disabled={!text.trim()}>
-          Preview
+          disabled={!text.trim()} title="Preview (Ctrl+Shift+P)">
+          Preview <kbd>Ctrl+Shift+P</kbd>
         </button>
       </div>
     </div>

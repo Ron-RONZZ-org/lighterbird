@@ -52,9 +52,11 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 - `GET /api/v1/prompt-commands/list` — list prompt commands for autocomplete
 - `POST /api/v1/prompt-commands/expand` — preview expanded prompt text
 - `POST /api/v1/render-preview` — shared content-to-HTML conversion (markdown/html/plain) for preview rendering used by ComposeEmail, JournalWrite, LetterBodyEditor
+- `POST /api/v1/email/preview` — compose full email preview HTML from subject, body, body_format, optional signature, and optional attachments (uses ``compose_email_html()`` internally). Returns ``{"html": "…"}``.
 - `POST /api/v1/prompt-commands/execute` — expand + multi-round tool loop
 - `POST /api/v1/prompt-commands/execute/resume` — resume paused HITL session
 - `POST /api/v1/prompt-commands/execute/stream` — (deprecated) SSE without tool-calling
+- `render_utils.py` — shared utilities: ``convert_to_html(content, fmt)`` for single-content conversion, ``compose_email_html(subject, body, body_format, signature_text, signature_format, attachments, attachment_base_url, full_document)`` for full email composition. ``compose_email_html()`` is used by both the preview endpoint and the SMTP send path for consistent rendering.
 
 ## Documentation Reference
 
@@ -72,3 +74,5 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 7. **Command system is the primary API.** All domain operations are accessible via `!commands`. REST routes exist for frontend convenience (list/search CRUD), but the command handler is the authoritative implementation.
 8. **Register all interactive commands.** Any command that may be invoked with missing required args must be registered in `_INTERACTIVE_FORMS` (see root AGENTS.md) so the server can return a `form-required` response with pre-filled options.
 9. **Backup covers all domain databases.** The backup scheduler auto-discovers `.db` files in the data directory — no need to register new databases manually.
+10. **Unified email composition** — Use ``compose_email_html()`` from ``render_utils.py`` whenever an HTML email body needs to be produced from body + signature parts. This function is the single source of truth for email rendering, used by both ``POST /api/v1/email/preview`` and the SMTP send path (``msg_compose.py``). It delegates to ``convert_to_html()`` for per-part conversion, ensuring preview and send produce identical output.
+11. **Form error handling** — ``FormTab.handleFormSubmit()`` in the frontend no longer opens an error tab on submission failure. Instead, it keeps the form open, preserves user input, and displays a red error banner above the form. Backend ``CommandValidationError`` messages (``error`` + ``suggestion``) are concatenated and shown in the banner. The ``submitting`` flag is cleared so the user can retry.
