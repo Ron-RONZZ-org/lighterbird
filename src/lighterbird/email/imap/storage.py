@@ -97,8 +97,8 @@ def _insert_message(
             imap_uid, from_addr, to_recipients, cc_recipients,
             subject, body, html_body,
             priority, is_read, is_starred, is_deleted,
-            received_at, created_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            body_fetched, received_at, created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
            ON CONFLICT(uuid) DO UPDATE SET
                account_email  = excluded.account_email,
                folder_name    = excluded.folder_name,
@@ -117,6 +117,7 @@ def _insert_message(
                 is_read        = COALESCE((SELECT is_read FROM messages WHERE uuid = excluded.uuid), excluded.is_read),
                 is_starred     = COALESCE((SELECT is_starred FROM messages WHERE uuid = excluded.uuid), excluded.is_starred),
                 is_deleted     = COALESCE((SELECT is_deleted FROM messages WHERE uuid = excluded.uuid), excluded.is_deleted),
+               body_fetched   = excluded.body_fetched,
                received_at    = excluded.received_at,
                created_at     = excluded.created_at,
                updated_at     = excluded.updated_at""",
@@ -127,6 +128,7 @@ def _insert_message(
          data.get("cc_recipients", "[]"), data.get("subject", ""), data.get("body", ""),
          data.get("html_body", ""), data.get("priority", 5),
          int(data.get("is_read", 0)), int(data.get("is_starred", 0)),
-         int(data.get("is_deleted", 0)), data.get("received_at", ""),
+         int(data.get("is_deleted", 0)),
+         int(data.get("body_fetched", 1)), data.get("received_at", ""),
          data.get("created_at", ""), data.get("updated_at", "")),
     )

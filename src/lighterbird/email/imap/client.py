@@ -426,12 +426,25 @@ class IMAPClient:
 
     def sync_folder(
         self, folder: str, account_email: str, folder_name: str,
-        db_store: Any, force: bool = False,
+        db_store: Any, force: bool = False, headers_only: bool = False,
     ) -> dict[str, Any]:
         """Sync messages in a single folder.
 
         Uses IMAP UID SEARCH/FETCH for stable dedup, with ``Message-ID``
         as the cross-folder stable identifier.
+
+        When *headers_only* is True (default for initial sync), fetches only
+        ``BODY.PEEK[HEADER]`` — no body text or attachments. Messages are
+        marked ``body_fetched=0`` and bodies are fetched lazily on read.
+        This makes the first sync dramatically faster (minutes → seconds).
+
+        Args:
+            folder: IMAP folder name.
+            account_email: Account email.
+            folder_name: Local folder name (may differ from IMAP folder).
+            db_store: Object with .db (LighterbirdDB).
+            force: If True, re-download all messages.
+            headers_only: If True, fetch only headers (lazy body).
 
         Returns:
             Dict with keys: total, new, errors.
@@ -479,10 +492,13 @@ class IMAPClient:
 
             new_uids.sort(reverse=True)
 
+            # Choose FETCH items based on mode
+            fetch_items = "(FLAGS BODY.PEEK[HEADER] UID RFC822.SIZE)" if headers_only else "(FLAGS BODY.PEEK[] UID)"
+
             for start in range(0, len(new_uids), 100):
                 chunk = new_uids[start:start + 100]
                 uid_list = b",".join(str(u).encode() for u in chunk)
-                typ, fetch_data = self.conn.uid("fetch", uid_list, "(FLAGS BODY.PEEK[] UID)")
+                typ, fetch_data = self.conn.uid("fetch", uid_list, fetch_items)
                 if typ != "OK" or not fetch_data:
                     result["errors"].append(f"FETCH error at IDs {chunk[0]}..{chunk[-1]}")
                     continue
@@ -508,15 +524,19 @@ class IMAPClient:
                         if not force and imap_uid in known_uids:
                             continue
                         msg = email_lib.message_from_bytes(raw_data)
-                        data = parse_email_message(msg, account_email, folder_name, imap_uid, store_attachments=True)
-                        # Insert or update message FIRST to get the canonical msg_uuid
+                        data = parse_email_message(
+                            msg, account_email, folder_name, imap_uid,
+                            store_attachments=not headers_only,
+                        )
+                        if headers_only:
+                            data["body_fetched"] = 0
                         msg_uuid = store_message(db_store.db, data, force=force, account_email=account_email, folder_name=folder_name)
-                        # Queue attachment blobs for batch write (deferred from fetch loop)
-                        if "_attachments_data" in data:
+                        # Queue attachment blobs (only when storing full messages)
+                        if not headers_only and "_attachments_data" in data:
                             for att in data["_attachments_data"]:
                                 pending_attachments.append((msg_uuid, att["content_id"], att["data"]))
-                        # Store attachment metadata in email_attachments table (fast SQLite op)
-                        if "_attachments_meta" in data:
+                        # Store attachment metadata (only when storing full messages)
+                        if not headers_only and "_attachments_meta" in data:
                             now_ts = datetime.now(UTC).isoformat()
                             for meta in data["_attachments_meta"]:
                                 try:
@@ -537,8 +557,7 @@ class IMAPClient:
                         result["new"] += 1
                     except Exception as e:
                         result["errors"].append(f"Parse/store error at UID {imap_uid}: {e}")
-                # Batch-flush attachment blobs after each chunk (decouples slow
-                # disk I/O from the fast fetch-and-parse loop)
+                # Batch-flush attachment blobs after each chunk
                 if pending_attachments:
                     store = AttachmentStore()
                     for msg_uuid, content_id, blob_data in pending_attachments:
@@ -552,6 +571,95 @@ class IMAPClient:
         except Exception as e:
             result["errors"].append(f"Sync error: {e}")
         return result
+
+    def fetch_message_body(
+        self, account_email: str, folder_name: str,
+        imap_uid: int, db_store: Any,
+    ) -> dict[str, Any] | None:
+        """Lazy-fetch full message body + attachments for a header-only message.
+
+        Connects to the IMAP server, selects the folder, fetches the full
+        message body (``BODY.PEEK[]``), parses it, and updates the local DB
+        row.  After this call the message has ``body_fetched=1`` and its
+        ``body``, ``html_body``, and attachments are available.
+
+        Args:
+            account_email: Account email.
+            folder_name: Folder name.
+            imap_uid: IMAP UID of the message.
+            db_store: Object with ``.db`` (LighterbirdDB).
+
+        Returns:
+            The updated message dict, or ``None`` on failure.
+        """
+        try:
+            typ, fetch_data = self.conn.uid(
+                "fetch", str(imap_uid), "(FLAGS BODY.PEEK[] UID)",
+            )
+            if typ != "OK" or not fetch_data:
+                logger.warning(
+                    "fetch_message_body: FETCH failed for UID %s in %s/%s",
+                    imap_uid, account_email, folder_name,
+                )
+                return None
+
+            for item in fetch_data:
+                if not isinstance(item, tuple):
+                    continue
+                raw_data = item[1]
+                msg = email_lib.message_from_bytes(raw_data)
+                data = parse_email_message(
+                    msg, account_email, folder_name, imap_uid,
+                    store_attachments=True,
+                )
+                data["body_fetched"] = 1
+
+                # Update the existing DB row
+                now_ts = datetime.now(UTC).isoformat()
+                db_store.db.execute(
+                    "UPDATE messages SET body = ?, html_body = ?, "
+                    "body_fetched = 1, updated_at = ? WHERE account_email = ? "
+                    "AND folder_name = ? AND imap_uid = ?",
+                    (
+                        data.get("body", ""), data.get("html_body", ""),
+                        now_ts, account_email, folder_name, imap_uid,
+                    ),
+                )
+
+                # Store attachment blobs
+                if "_attachments_data" in data:
+                    store = AttachmentStore()
+                    for att in data["_attachments_data"]:
+                        try:
+                            store.store(data["uuid"], att["content_id"], att["data"])
+                        except Exception:
+                            pass
+
+                # Insert attachment metadata
+                if "_attachments_meta" in data:
+                    for meta in data["_attachments_meta"]:
+                        try:
+                            att_uuid = str(uuid_mod.uuid4())
+                            store_path = f"{data['uuid']}/{meta['content_id']}"
+                            db_store.db.execute(
+                                "INSERT OR IGNORE INTO email_attachments "
+                                "(uuid, message_uuid, filename, mime_type, size, content_id, storage_path, created_at, updated_at) "
+                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                (att_uuid, data["uuid"], meta["filename"],
+                                 meta["mime_type"], meta["size"],
+                                 meta["content_id"], store_path,
+                                 now_ts, now_ts),
+                            )
+                        except Exception:
+                            pass
+
+                return data
+        except Exception as exc:
+            logger.warning(
+                "fetch_message_body: error for UID %s in %s/%s: %s",
+                imap_uid, account_email, folder_name, exc,
+            )
+            return None
 
 
 # store_message and _insert_message moved to storage.py

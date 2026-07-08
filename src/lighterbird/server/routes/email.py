@@ -279,7 +279,19 @@ def get_message(uuid: str, email_svc: EmailService = Depends(get_email_service))
     if not msg:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Message not found: {uuid[:8]}")
+
+    # Lazy body fetch: if this message was synced header-only, download the
+    # full message body (and attachments) on demand.
+    if not msg.get("body_fetched", 1) and msg.get("imap_uid") and msg.get("account_email") and msg.get("folder_name"):
+        _lazy_fetch_body(email_svc, msg)
+
     result = dict(msg)
+    # Re-read after potential lazy fetch
+    if msg.get("body_fetched") == 0:
+        fresh = email_svc.get_message(uuid)
+        if fresh:
+            result = dict(fresh)
+
     # Include attachment count
     att_rows = list(email_svc.db.execute(
         "SELECT COUNT(*) AS cnt FROM email_attachments WHERE message_uuid = ?",
@@ -287,6 +299,55 @@ def get_message(uuid: str, email_svc: EmailService = Depends(get_email_service))
     ))
     result["attachment_count"] = att_rows[0]["cnt"] if att_rows else 0
     return result
+
+
+def _lazy_fetch_body(email_svc: EmailService, msg: dict) -> None:
+    """Fetch full message body for a header-only synced message."""
+    import logging
+    logger = logging.getLogger(__name__)
+
+    acct = email_svc.accounts.get_account_with_password(msg["account_email"])
+    if not acct or not acct.get("password"):
+        logger.warning(
+            "lazy_fetch: no password for %s, cannot fetch body",
+            msg["account_email"],
+        )
+        return
+
+    from lighterbird.email.imap.client import IMAPClient
+
+    client = IMAPClient(
+        host=acct.get("imap_server", ""),
+        port=acct.get("imap_port", 993),
+        use_ssl=acct.get("imap_use_ssl", 1) == 1,
+    )
+    try:
+        client.connect(
+            username=acct.get("imap_username", "") or msg["account_email"],
+            password=acct["password"],
+        )
+        data = client.fetch_message_body(
+            msg["account_email"], msg["folder_name"],
+            msg["imap_uid"], email_svc,
+        )
+        if data is not None:
+            logger.info(
+                "lazy_fetch: fetched body for %s/%s UID %s",
+                msg["account_email"][:20], msg["folder_name"][:20], msg["imap_uid"],
+            )
+        else:
+            logger.warning(
+                "lazy_fetch: failed for %s/%s UID %s",
+                msg["account_email"][:20], msg["folder_name"][:20], msg["imap_uid"],
+            )
+    except Exception as exc:
+        logger.warning(
+            "lazy_fetch: error for %s/%s UID %s: %s",
+            msg["account_email"][:20], msg["folder_name"][:20],
+            msg["imap_uid"], exc,
+        )
+    finally:
+        client.disconnect()
 
 
 _EMAIL_HTML_TMPL = """\

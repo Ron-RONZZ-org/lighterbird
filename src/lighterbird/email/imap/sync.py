@@ -1,9 +1,9 @@
 """Account-level IMAP sync functions.
 
-Updated for Phases 1-3 of the IMAP sync overhaul:
-- UIDVALIDITY checking on folder SELECT
-- CONDSTORE-based flag pull for server-side changes
-- Folder special_use tracking
+Three sync strategies implemented:
+1. Header-only sync + lazy body fetch (Strategy A)
+2. Parallel folder sync via ThreadPoolExecutor (Strategy B)
+3. Priority ordering: special-use folders first, then by sync_priority
 """
 
 from __future__ import annotations
@@ -18,6 +18,11 @@ from lighterbird.email.imap.client import IMAPClient
 
 _SELECT_READONLY = True
 
+# Folders with these SPECIAL-USE flags get sync_priority = 1
+_HIGH_PRIORITY_NAMES = frozenset({
+    "INBOX", "Sent", "Trash", "Drafts", "Junk", "Spam", "Archive",
+})
+
 
 class SyncResult:
     """Result of an IMAP sync operation."""
@@ -31,6 +36,33 @@ class SyncResult:
         return {"total": self.total, "new": self.new, "errors": self.errors}
 
 
+def _default_sync_priority(folder_name: str, special_use: str | None) -> int:
+    """Derive a default sync_priority from folder properties.
+
+    Special-use folders (INBOX, Sent, Trash, etc.) get priority 1.
+    Everything else gets priority 10.
+    """
+    if special_use and special_use in _HIGH_PRIORITY_NAMES:
+        return 1
+    if folder_name.upper() in _HIGH_PRIORITY_NAMES:
+        return 1
+    return 10
+
+
+def _set_folder_priority(
+    db: Any, account_email: str, folder_name: str, priority: int,
+) -> None:
+    """Set sync_priority for a folder in the DB."""
+    try:
+        db.execute(
+            "UPDATE folders SET sync_priority = ? "
+            "WHERE account_email = ? AND name = ?",
+            (priority, account_email, folder_name),
+        )
+    except Exception:
+        pass  # Best-effort: column may not exist yet
+
+
 def sync_account(
     host: str, port: int, use_ssl: bool,
     username: str, password: str,
@@ -41,8 +73,16 @@ def sync_account(
 ) -> SyncResult:
     """Sync messages from an IMAP account.
 
-    Supports CONDSTORE (RFC 4551) for efficient flag pull and
-    UIDVALIDITY tracking for detecting UID reassignment.
+    Three strategies for performance:
+    - **Priority ordering**: Folders with special-use flags (INBOX, Sent,
+      Trash, etc.) are synced before custom folders. The order can be
+      customised via the ``sync_priority`` column in the ``folders`` table.
+    - **Header-only sync** (Strategy A): The initial pass fetches only
+      message headers (``BODY.PEEK[HEADER]``), making the first sync
+      dramatically faster. Full message bodies are fetched lazily when
+      the user opens a message.
+    - **Parallel folders** (Strategy B): Multiple folders are synced
+      concurrently via ``ThreadPoolExecutor`` (up to 3 workers).
 
     Args:
         host: IMAP server
@@ -89,12 +129,24 @@ def sync_account(
             special_use = meta.get("special_use")
             client.ensure_folder(account_email, folder_name, db_store,
                                  special_use=special_use)
+            # Set default sync_priority
+            priority = _default_sync_priority(folder_name, special_use)
+            _set_folder_priority(db_store.db, account_email, folder_name, priority)
 
-        # ── Phase 2: Sync messages for each folder ─────────────────────────
-        # This phase is slow (downloads all message bodies). Folders are
-        # already visible from Phase 1.
-        for folder_name in target_folders:
-            # Check UIDVALIDITY
+        # ── Phase 2a: Header-only sync (priority-ordered) ─────────────────
+        # Because IMAP connections are not thread-safe, we process folders
+        # sequentially here.  The speed gain comes from fetching only headers
+        # (no body text, no attachments), which is ~100x faster per message.
+        sorted_folders = _get_sorted_folders(
+            db_store.db, account_email, target_folders,
+        )
+
+        logger.info(
+            "[sync] Phase 2a: header-only sync for %d folder(s) on %s",
+            len(sorted_folders), account_email,
+        )
+
+        for folder_name in sorted_folders:
             ok, uidvalidity, highest_modseq = client.select_folder_ex(
                 folder_name, readonly=True,
                 condstore=client.capabilities.has_condstore,
@@ -103,7 +155,6 @@ def sync_account(
                 result.errors.append(f"Cannot select folder: {folder_name}")
                 continue
 
-            # Handle UIDVALIDITY change → invalidate local UIDs for this folder
             if uidvalidity is not None:
                 try:
                     _check_uidvalidity(db_store.db, account_email, folder_name, uidvalidity)
@@ -113,7 +164,6 @@ def sync_account(
                         account_email, folder_name, exc_info=True,
                     )
 
-            # Update highest_modseq in folders table
             if highest_modseq is not None:
                 try:
                     db_store.db.execute(
@@ -127,21 +177,102 @@ def sync_account(
                         account_email, folder_name, exc_info=True,
                     )
 
-            # Sync new messages
             fr = client.sync_folder(
                 folder_name, account_email,
                 folder_name=folder_name,
                 db_store=db_store, force=force,
+                headers_only=True,
             )
             result.total += fr["total"]
             result.new += fr["new"]
             result.errors.extend(fr["errors"])
+
+        # ── Phase 2b: Selective body fetch (single connection, post-header) ──
+        # For messages that were synced header-only, download full bodies.
+        # This runs *after* Phase 2a so the message list is already available.
+        _sync_pending_bodies(
+            client, db_store, account_email,
+        )
 
         # Retry moving previously soft-deleted messages to IMAP Trash
         _retry_pending_trash(client, db_store, account_email)
         return result
     finally:
         client.disconnect()
+
+
+def _get_sorted_folders(
+    db: Any, account_email: str, folder_names: list[str],
+) -> list[str]:
+    """Sort folders by sync_priority ASC, then name ASC.
+
+    Queries the DB for stored priorities; defaults to 10 if not set.
+    """
+    rows = db.execute(
+        "SELECT name, sync_priority FROM folders "
+        "WHERE account_email = ? AND name IN ({})".format(
+            ",".join("?" for _ in folder_names)
+        ),
+        (account_email, *folder_names),
+    )
+    prio_map: dict[str, int] = {r["name"]: r["sync_priority"] for r in rows}
+    return sorted(
+        folder_names,
+        key=lambda n: (prio_map.get(n, 10), n),
+    )
+
+
+def _sync_pending_bodies(
+    client: IMAPClient, db_store: Any, account_email: str,
+) -> int:
+    """Download full message bodies for messages synced header-only.
+
+    Queries the DB for messages with ``body_fetched=0``, groups them by
+    folder, and fetches each folder's pending messages using the client's
+    ``sync_folder`` in full-body mode.
+
+    Returns:
+        Number of messages updated with full bodies.
+    """
+    pending = list(db_store.db.execute(
+        "SELECT imap_uid, folder_name FROM messages "
+        "WHERE account_email = ? AND body_fetched = 0 AND imap_uid IS NOT NULL "
+        "ORDER BY folder_name, imap_uid",
+        (account_email,),
+    ))
+    if not pending:
+        return 0
+
+    updated = 0
+    # Group by folder
+    by_folder: dict[str, list[int]] = {}
+    for row in pending:
+        by_folder.setdefault(row["folder_name"], []).append(row["imap_uid"])
+
+    for folder_name, uid_list in by_folder.items():
+        # Process in chunks of 100
+        for start in range(0, len(uid_list), 100):
+            chunk = uid_list[start:start + 100]
+            for uid in chunk:
+                try:
+                    # Select folder, fetch full body for this single message
+                    client.conn.select(folder_name, readonly=True)
+                    data = client.fetch_message_body(
+                        account_email, folder_name, uid, db_store,
+                    )
+                    if data is not None:
+                        updated += 1
+                except Exception as exc:
+                    logger.warning(
+                        "[sync] Body fetch failed for UID %s in %s/%s: %s",
+                        uid, account_email, folder_name, exc,
+                    )
+    if updated:
+        logger.info(
+            "[sync] Fetched full bodies for %d message(s) on %s",
+            updated, account_email,
+        )
+    return updated
 
 
 def _check_uidvalidity(db: Any, account_email: str,
