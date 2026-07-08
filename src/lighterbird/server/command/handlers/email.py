@@ -21,6 +21,7 @@ Registered paths:
 
 from __future__ import annotations
 
+import base64
 import json
 from typing import Any
 
@@ -35,6 +36,7 @@ from lighterbird.server.command.handlers.email_eml import (  # noqa: F401
 
 # Side-effect imports to register handlers split into sub-modules
 from lighterbird.server.command.handlers.email_send import email_send  # noqa: F401
+from lighterbird.core.storage import AttachmentStore
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_email_service
 
@@ -204,6 +206,18 @@ def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     if cursor:
         frontend_filters["cursor"] = cursor
 
+    # Strip full body/html_body from list results; replace with 2000-char preview
+    _PREVIEW_MAX = 2000
+    for m in messages:
+        full_body = m.get("body", "") or ""
+        if full_body:
+            preview = full_body[:_PREVIEW_MAX]
+            if len(full_body) > _PREVIEW_MAX:
+                preview += "\n\n[...]"
+            m["body"] = preview
+        if m.get("html_body"):
+            m["html_body"] = ""
+
     return {
         "type": "email-list",
         "title": f"Email{title_suffix}",
@@ -290,7 +304,16 @@ def email_reply(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         subject = f"Re: {subject}"
 
     body = msg.get("body", "") or ""
-    quoted = "\n".join(f"> {line}" for line in body.split("\n"))
+    # Truncate quoted body to prevent context overflow from large emails
+    _MAX_QUOTE_LINES = 100
+    _MAX_QUOTE_CHARS = 10_000
+    lines = body.split("\n")
+    if len(lines) > _MAX_QUOTE_LINES or len(body) > _MAX_QUOTE_CHARS:
+        truncated = lines[:_MAX_QUOTE_LINES]
+        total_skipped = len(lines) - len(truncated)
+        truncated.append(f"[...{total_skipped} more lines, {len(body) - sum(len(l) + 1 for l in truncated)} more chars...]")
+        lines = truncated
+    quoted = "\n".join(f"> {line}" for line in lines)
 
     initial_data: dict[str, Any] = {
         "to": to,
@@ -333,19 +356,50 @@ def email_forward(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
         subject = f"Fwd: {subject}"
 
     body = msg.get("body", "") or ""
+    # Truncate forwarded body to prevent context overflow from large emails
+    _MAX_FWD_LINES = 100
+    _MAX_FWD_CHARS = 10_000
+    lines = body.split("\n")
+    if len(lines) > _MAX_FWD_LINES or len(body) > _MAX_FWD_CHARS:
+        truncated = lines[:_MAX_FWD_LINES]
+        total_skipped = len(lines) - len(truncated)
+        truncated.append(f"[...{total_skipped} more lines, {len(body) - sum(len(l) + 1 for l in truncated)} more chars...]")
+        lines = truncated
+    truncated_body = "\n".join(lines)
     header = f"--- Forwarded message ---\nFrom: {msg.get('from_addr', '')}\nSubject: {msg.get('subject', '')}\nDate: {msg.get('received_at', '')}\n\n"
-    forwarded = f"{header}{body}"
+    forwarded = f"{header}{truncated_body}"
+
+    initial_data: dict[str, Any] = {
+        "subject": subject,
+        "body": f"\n\n{forwarded}",
+        "account": msg.get("account_email", ""),
+    }
+
+    # Include original attachments in the forward compose form
+    store = AttachmentStore()
+    attachment_rows = list(svc.db.execute(
+        "SELECT filename, content_id FROM email_attachments WHERE message_uuid = ?",
+        (uuid,),
+    ))
+    if attachment_rows:
+        files = []
+        for row in attachment_rows:
+            try:
+                raw = store.retrieve(uuid, row["content_id"])
+                data_b64 = base64.b64encode(raw).decode("ascii")
+                files.append({"name": row["filename"], "data": data_b64})
+            except (FileNotFoundError, OSError):
+                logger.warning("Missing attachment %s for message %s", row["content_id"][:12], uuid[:8])
+                continue
+        if files:
+            initial_data["files"] = files
 
     return {
         "type": "form-required",
         "title": "Forward",
         "data": {
             "form": "email-send",
-            "initialData": {
-                "subject": subject,
-                "body": f"\n\n{forwarded}",
-                "account": msg.get("account_email", ""),
-            },
+            "initialData": initial_data,
         },
     }
 

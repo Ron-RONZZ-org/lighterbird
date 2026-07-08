@@ -334,6 +334,78 @@ class TestEmailHandlers:
         assert result["data"]["form"] == "email-send"
         assert "Fwd: Original" in result["data"]["initialData"]["subject"]
 
+    def test_email_list_body_preview_truncated(self, mock_email_svc):
+        """email list truncates body to 2000 chars with [...] note."""
+        mock_email_svc.search_messages.return_value = [
+            {"uuid": "abc123", "subject": "Long", "from_addr": "a@b.com",
+             "body": "A" * 5000, "html_body": "<p>html</p>"},
+        ]
+        result = dispatch(["email", "list"], {})
+        msgs = result["data"]["messages"]
+        assert len(msgs) == 1
+        assert len(msgs[0]["body"]) <= 2010  # 2000 + "[...]"
+        assert msgs[0]["body"].endswith("[...]")
+        assert msgs[0]["html_body"] == ""
+
+    def test_email_list_body_short_not_truncated(self, mock_email_svc):
+        """email list keeps short body unchanged."""
+        mock_email_svc.search_messages.return_value = [
+            {"uuid": "abc123", "subject": "Short", "from_addr": "a@b.com",
+             "body": "Hello!", "html_body": ""},
+        ]
+        result = dispatch(["email", "list"], {})
+        msgs = result["data"]["messages"]
+        assert msgs[0]["body"] == "Hello!"
+
+    def test_email_reply_truncates_long_body(self, mock_email_svc):
+        """email reply truncates body to 100 lines / 10K chars."""
+        long_body = "\n".join(f"Line {i}" for i in range(200))
+        mock_email_svc.get_message.return_value = {
+            "uuid": "abc123", "subject": "Original", "from_addr": "a@b.com",
+            "to_recipients": ["me@b.com"], "body": long_body, "account_email": "me@b.com",
+        }
+        result = dispatch(["email", "reply", "abc123"], {})
+        quoted = result["data"]["initialData"]["body"]
+        # Should have at most 103 lines (blank + 100 quoted + [...] note)
+        assert quoted.count("\n") <= 103, f"Too many lines: {quoted.count('\n')}"
+        assert "100 more lines" in quoted, "Expected truncation note in reply"
+
+    def test_email_forward_truncates_long_body(self, mock_email_svc):
+        """email forward truncates body to 100 lines / 10K chars."""
+        long_body = "\n".join(f"Line {i}" for i in range(200))
+        mock_email_svc.get_message.return_value = {
+            "uuid": "abc123", "subject": "Original", "from_addr": "a@b.com",
+            "body": long_body, "account_email": "me@b.com",
+        }
+        result = dispatch(["email", "forward", "abc123"], {})
+        body = result["data"]["initialData"]["body"]
+        assert "100 more lines" in body, "Expected truncation note in forward"
+
+    def test_email_forward_with_attachments(self, mock_email_svc, monkeypatch):
+        """email forward includes attachments from the original message."""
+        import base64
+        from unittest.mock import MagicMock
+
+        mock_store = MagicMock()
+        mock_store.retrieve.return_value = b"fake_pdf_content"
+        monkeypatch.setattr("lighterbird.server.command.handlers.email.AttachmentStore", lambda: mock_store)
+
+        mock_db = MagicMock()
+        mock_db.execute.return_value = [
+            {"filename": "doc.pdf", "content_id": "cid1"},
+        ]
+        mock_email_svc.db = mock_db
+        mock_email_svc.get_message.return_value = {
+            "uuid": "abc123", "subject": "Original", "from_addr": "a@b.com",
+            "body": "Hello!", "account_email": "me@b.com",
+        }
+
+        result = dispatch(["email", "forward", "abc123"], {})
+        files = result["data"]["initialData"].get("files", [])
+        assert len(files) == 1
+        assert files[0]["name"] == "doc.pdf"
+        assert files[0]["data"] == base64.b64encode(b"fake_pdf_content").decode("ascii")
+
 # ── Calendar handlers ────────────────────────────────────────────────────────
 
 
