@@ -99,26 +99,6 @@ class LLMProviderWrapper:
                 return _err_placeholder()
             return "LLM request failed. Check your provider configuration."
 
-    async def generate_command(
-        self,
-        message: str,
-        command_defs: list[dict],
-        context: list[dict] | None = None,
-    ) -> dict[str, Any] | None:
-        """Ask the LLM to generate a structured command.
-
-        Returns:
-            ``{"tokens": [...], "flags": {...}}`` or ``None``.
-        """
-        if not self.is_available():
-            return None
-
-        provider = _create_core_provider(self.config)
-        result = await provider.generate_command(message, command_defs)
-        if isinstance(result, dict):
-            return result
-        return None
-
     def reload_prompt(self) -> str:
         """Reload the system prompt from disk (for when the user edits it)."""
         return reload_system_prompt()
