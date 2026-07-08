@@ -700,9 +700,23 @@ class IMAPClient:
             from_str = criteria.get("from_", "")
             if from_str:
                 parts.append(f'FROM "{from_str}"')
+            to_str = criteria.get("to", "")
+            if to_str:
+                parts.append(f'TO "{to_str}"')
+            cc_str = criteria.get("cc", "")
+            if cc_str:
+                parts.append(f'CC "{cc_str}"')
             subj = criteria.get("subject", "")
             if subj:
                 parts.append(f'SUBJECT "{subj}"')
+            # participant = OR( FROM, TO, CC ) — searches all sender/recipient fields
+            participant_str = criteria.get("participant", "")
+            if participant_str:
+                parts.append(
+                    f'OR FROM "{participant_str}" '
+                    f'OR TO "{participant_str}" '
+                    f'CC "{participant_str}"'
+                )
             after = criteria.get("after", "")
             if after:
                 parts.append(f'SINCE {after}')

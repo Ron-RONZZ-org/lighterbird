@@ -4,6 +4,8 @@
   import { openMessage, openMessageInNewTab, handleRowClick, deleteSelected, moveSelected } from "./emailMessageOps.svelte.js";
   import EmailListToolbar from "./EmailListToolbar.svelte";
   import EmailFolderPanel from "./EmailFolderPanel.svelte";
+  import AdvancedSearchDialog from "./AdvancedSearchDialog.svelte";
+  import SearchTileBar from "./SearchTileBar.svelte";
   import EmailListRow from "./EmailListRow.svelte";
   import EmailParamsDialog from "./EmailParamsDialog.svelte";
   import EmailSortOverlay from "./EmailSortOverlay.svelte";
@@ -138,6 +140,9 @@
   let showParamsDialog = $state(false);
   let showImportDialog = $state(false);
   let showExportDialog = $state(false);
+  let showAdvancedSearch = $state(false);
+  let advancedSearchFilters = $state({});
+  let searchKey = $state(0); // increment to trigger re-search
 
   let exportItems = $derived(messages.filter(m => sel.selectedKeys.has(m.uuid)));
 
@@ -147,6 +152,26 @@
 
   function openExportDialog() {
     showExportDialog = true;
+  }
+
+  function handleAdvancedSearch(filters) {
+    advancedSearchFilters = filters;
+    searchKey++;
+    performSearch(searchQuery, filters);
+  }
+
+  function handleRemoveFilter(key) {
+    const next = { ...advancedSearchFilters };
+    delete next[key];
+    advancedSearchFilters = next;
+    searchKey++;
+    performSearch(searchQuery, next);
+  }
+
+  function handleClearFilters() {
+    advancedSearchFilters = {};
+    searchKey++;
+    performSearch(searchQuery, {});
   }
 
   function handleNew() {
@@ -182,11 +207,11 @@
     }
   });
 
-  function performSearch(query) {
+  function performSearch(query, extraFilters) {
     const tabId = tabStore.active.id;
     if (abortController) abortController.abort();
     abortController = new AbortController();
-    const params = { ...currentFilters, limit: 50 };
+    const params = { ...currentFilters, ...(extraFilters || {}), limit: 50 };
     if (query && query.length >= 2) {
       params.query = query;
     }
@@ -356,6 +381,14 @@
     {syncing}
   />
 
+  <!-- Advanced search button -->
+  <div class="adv-search-row">
+    <button class="adv-search-btn" onclick={() => showAdvancedSearch = true}
+            title="Advanced search (all fields)">
+      <span class="adv-icon">[a]</span> Advanced
+    </button>
+  </div>
+
   <!-- Folder tree panel -->
   <EmailFolderPanel
     folderTree={folders}
@@ -365,6 +398,13 @@
     onRefresh={applyFolderFilter}
     onCreateFolder={handleCreateFolder}
     onClose={() => { showFolderTree = false; }}
+  />
+
+  <!-- Advanced search tile bar -->
+  <SearchTileBar
+    filters={advancedSearchFilters}
+    onRemove={handleRemoveFilter}
+    onClear={handleClearFilters}
   />
 
   <!-- Sort dropdown overlay -->
@@ -445,6 +485,14 @@
       onClose={() => showImportDialog = false}
     />
   {/if}
+  {#if showAdvancedSearch}
+    <AdvancedSearchDialog
+      show={showAdvancedSearch}
+      currentFilters={advancedSearchFilters}
+      onSearch={handleAdvancedSearch}
+      onClose={() => showAdvancedSearch = false}
+    />
+  {/if}
 </div>
 
 <style>
@@ -488,6 +536,34 @@
   .load-more:disabled {
     color: var(--clr-muted, #888);
     cursor: default;
+  }
+
+  .adv-search-row {
+    display: flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    gap: 0.5rem;
+    border-bottom: 1px solid #2a2a3e;
+    background: #1a1a2e;
+  }
+  .adv-search-btn {
+    background: transparent;
+    border: 1px solid #4a4a6a;
+    border-radius: 4px;
+    color: #7c9bff;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 0.78rem;
+    padding: 0.2rem 0.5rem;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .adv-search-btn:hover {
+    background: #2a2a4e;
+    border-color: #6a6a9a;
+  }
+  .adv-icon {
+    color: #7fdb7f;
+    font-weight: bold;
   }
 
 </style>
