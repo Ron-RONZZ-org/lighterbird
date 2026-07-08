@@ -20,33 +20,50 @@ Code lives in `src/lighterbird/scripts/`.
 # Isolated dev server with seed data from .dev (auto-discovered from project root)
 uv run lighterbird-dev --seed
 
+# Isolated dev server with seed data from .prod (real credentials)
+uv run lighterbird-dev --prod
+
 # Isolated dev server without seed data
 uv run lighterbird-dev
 
 # Restore seed from a backup archive
 uv run lighterbird-dev --seed-from path/to/backup.7z
 
+# Persistent data directory (data survives restarts)
+uv run lighterbird-dev --data-dir ~/lighterbird-data --prod
+
+# Re-seed only on first run; subsequent starts skip seed
+uv run lighterbird-dev --data-dir ~/lighterbird-data --seed
+
 # Custom port
 uv run lighterbird-dev --seed --port 9000
+uv run lighterbird-dev --prod --port 9000
 
 # Preserve the temp data directory after exit (for debugging)
 uv run lighterbird-dev --seed --keep-data
+uv run lighterbird-dev --prod --keep-data
 ```
 
 ## How It Works
 
 `lighterbird-dev`:
 
-1. Creates a temporary directory (`/tmp/lighterbird-dev-*/`)
-2. Sets `LIGHTERBIRD_DATA_DIR`, `LIGHTERBIRD_CONFIG_DIR`, `LIGHTERBIRD_CACHE_DIR`, and `LIGHTERBIRD_STATE_DIR` to paths inside the temp directory
-3. If `--seed` is given, calls `seed_data_dir()` which:
-   - Parses `.dev` for test credentials (email, calendar, LLM API key)
+1. Determines the data root:
+   - **With `--data-dir <path>`**: uses the given persistent path (created if missing).
+   - **Without `--data-dir`**: creates a temporary directory (`/tmp/lighterbird-dev-*/`).
+2. Sets `LIGHTERBIRD_DATA_DIR`, `LIGHTERBIRD_CONFIG_DIR`, `LIGHTERBIRD_CACHE_DIR`, and `LIGHTERBIRD_STATE_DIR` to paths inside the data root.
+3. If a seed source is given (`--seed`, `--prod`, or `--seed-from`), checks whether the data directory already has content. If it does, seeding is **skipped** (existing data preserved). If empty, seeding proceeds.
+4. Starts uvicorn on the isolated databases.
+5. On exit:
+   - **`--data-dir`** paths are **never** cleaned up (data is persistent by intent).
+   - **Temp directories** are removed (unless `--keep-data`).
+
+The seeding step (when it runs) calls `seed_data_dir()` which:
+   - Parses `.dev` or `.prod` for credentials (email, calendar, LLM API key)
    - Initializes all 8 domain databases with their schemas (using each domain's `get_db()` function)
    - Inserts seed data directly via SQL INSERT
    - Stores email and calendar passwords in the system keyring
    - Configures the LLM provider from `TEST_DEEPSEEK_APIKEY`
-4. Starts uvicorn on the isolated databases
-5. On exit, removes the temp directory (unless `--keep-data`)
 
 If `--seed-from <archive.7z>` is given instead, it extracts the 7z archive into the data directory using `lighterbird.core.backup._extract_archive()` before starting the server.
 
@@ -66,9 +83,10 @@ If `--seed-from <archive.7z>` is given instead, it extracts the 7z archive into 
 ## Constraints
 
 - **Keyring access is required** for seeded email/calendar accounts. If no system keyring is available, the seed script will fail when trying to store passwords (the `AccountService` raises `RuntimeError`).
-- **The `.dev` file must exist** in the project root when using `--seed`. It contains real test credentials for IMAP, SMTP, and CalDAV servers.
+- **The `.dev` file must exist** in the project root when using `--seed`, and the **`.prod` file** must exist when using `--prod`. They contain real credentials for IMAP, SMTP, and CalDAV servers.
 - **Auto-detection of IMAP/SMTP servers** uses `email.server_detect.detect_servers()`, which performs MX lookups and provider pattern matching. This requires network access.
 - **The temp directory is cleaned up on exit** unless `--keep-data` is passed.
+- **With `--data-dir`, the directory is never cleaned up** — data persists across restarts. Seeding is skipped on subsequent runs if the directory already contains data.
 
 ## Testing with the Seeded Server
 
