@@ -35,6 +35,7 @@ junit-*.xml
 
 # Dev environment
 .dev
+/.prod
 
 # Agent memory
 .serena/

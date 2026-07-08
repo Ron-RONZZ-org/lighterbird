@@ -144,21 +144,32 @@ uv pip install -e "../lightercore" -e ".[dev]"
 For E2E testing or isolated development, use the `lighterbird-dev` CLI. It creates a temporary data directory, optionally seeds it with test credentials, and starts the server. The port can be set via `--port` or the `LIGHTERBIRD_PORT` environment variable:
 
 ```bash
-# Start with seed data from .dev
+# Start with seed data from .dev (test credentials)
 uv run lighterbird-dev --seed
+
+# Start with seed data from .prod (your real credentials)
+uv run lighterbird-dev --prod
 
 # Start with clean temp database (no seed)
 uv run lighterbird-dev
+
+# Start with persistent data directory (data survives restarts)
+uv run lighterbird-dev --data-dir ~/lighterbird-data --prod
+
+# Start with persistent dir, reseed from .dev if empty
+uv run lighterbird-dev --data-dir ~/lighterbird-data --seed
 ```
 
 The seed data includes:
-- An email account with auto-detected IMAP/SMTP servers
+- Email accounts with auto-detected IMAP/SMTP servers
 - A calendar account with a sample event
 - A test contact (from ``test-contact.toml`` if present)
 - Sample todos, journal entry, and letter
 - A user profile (from ``test-profile.toml`` if present)
 
-Use ``--seed-from <archive.7z>`` to restore from a backup archive.
+Use ``--seed-from <archive.7z>`` to restore from a backup archive. For persistent development, use ``--data-dir <path>`` instead of the default temp directory — data inside the directory will survive server restarts.
+
+Both ``.dev`` and ``.prod`` files use the same ``KEY="VALUE"`` format and are placed in the project root. The ``.prod`` file is gitignored — it's intended for your real credentials, while ``.dev`` holds shared test credentials for CI or teammate use.
 
 ## Status
 
