@@ -52,6 +52,20 @@ _LIST_RE = re.compile(
 _IMAP_UID_RE = re.compile(rb"UID (\d+)")
 
 
+def _to_imap_date(iso_date: str) -> str:
+    """Convert ISO date (``YYYY-MM-DD``) to IMAP date format (``DD-Mon-YYYY``).
+
+    IMAP SEARCH uses ``SINCE 1-Jan-2024`` not ``SINCE 2024-01-01``.
+    Returns the original string if parsing fails.
+    """
+    import datetime
+    try:
+        dt = datetime.datetime.strptime(iso_date, "%Y-%m-%d").date()
+        return dt.strftime("%d-%b-%Y")
+    except (ValueError, TypeError):
+        return iso_date
+
+
 def _parse_list_response(line: bytes) -> dict[str, Any] | None:
     """Parse a single IMAP LIST response line.
 
@@ -719,10 +733,10 @@ class IMAPClient:
                 )
             after = criteria.get("after", "")
             if after:
-                parts.append(f'SINCE {after}')
+                parts.append(f'SINCE {_to_imap_date(after)}')
             before = criteria.get("before", "")
             if before:
-                parts.append(f'BEFORE {before}')
+                parts.append(f'BEFORE {_to_imap_date(before)}')
 
         if query:
             parts.append(f'TEXT "{query}"')
