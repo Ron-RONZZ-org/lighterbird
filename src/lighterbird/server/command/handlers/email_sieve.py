@@ -6,7 +6,11 @@ Handles script CRUD and per-account activation using natural keys
 
 from __future__ import annotations
 
+import json
+import re
 from typing import Any
+
+from lightercore.permissions import PermissionLevel
 
 from lighterbird.email.service import EmailService
 from lighterbird.server.command.errors import CommandValidationError
@@ -56,7 +60,7 @@ def sieve_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("email.sieve.list")
+@command("email.sieve.list", permission_level=PermissionLevel.READ)
 def sieve_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email sieve list [--account email]"""
     svc: EmailService = get_email_service()
@@ -66,7 +70,7 @@ def sieve_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "status", "title": "Sieve Scripts", "data": {"scripts": scripts}}
 
 
-@command("email.sieve.view")
+@command("email.sieve.view", permission_level=PermissionLevel.READ)
 def sieve_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email sieve view <name> [--account email]"""
     if not remaining:

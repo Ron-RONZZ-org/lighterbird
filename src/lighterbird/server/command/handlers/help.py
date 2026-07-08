@@ -7,10 +7,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from lightercore.permissions import PermissionLevel
 from lighterbird.server.command.registry import command, get_definitions
 
 
-@command("help")
+@command("help", permission_level=PermissionLevel.READ)
 def show_help(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!help [command]"""
     defs = get_definitions()

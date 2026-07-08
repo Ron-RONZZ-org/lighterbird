@@ -10,12 +10,10 @@ Registered paths:
 
 from __future__ import annotations
 
-import json
 import logging
-import os
 from typing import Any
-from urllib.parse import urlparse
 
+from lightercore.permissions import PermissionLevel
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_todo_service
@@ -168,7 +166,7 @@ def _attach_file(svc: TodoService, todo_uuid: str, path_or_url: str) -> None:
         )
 
 
-@command("todo.view")
+@command("todo.view", permission_level=PermissionLevel.READ)
 def todo_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!todo view <uuid>"""
     if not remaining:
@@ -272,7 +270,7 @@ def todo_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("todo.delete", interactive=True)
+@command("todo.delete", permission_level=PermissionLevel.DESTRUCTIVE, interactive=True)
 def todo_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!todo delete <uuid> [uuid...]"""
     if not remaining:

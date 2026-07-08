@@ -9,9 +9,9 @@ Registered paths:
 
 from __future__ import annotations
 
-import datetime
 from typing import Any
 
+from lightercore.permissions import PermissionLevel
 from lighterbird.core.paths import safe_resolve_path
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
@@ -19,7 +19,7 @@ from lighterbird.server.deps import get_todo_service
 from lighterbird.todo.services import TodoService
 
 
-@command("todo.export")
+@command("todo.export", permission_level=PermissionLevel.READ)
 def todo_export_root(remaining: list[str],
                      flags: dict[str, str]) -> dict[str, Any]:
     """!todo export — Show available export subcommands."""
@@ -36,7 +36,7 @@ def todo_export_root(remaining: list[str],
     }
 
 
-@command("todo.export.md")
+@command("todo.export.md", permission_level=PermissionLevel.READ)
 def todo_export_md(remaining: list[str],
                    flags: dict[str, str]) -> dict[str, Any]:
     """!todo export md <uuid> | !todo export md --all"""

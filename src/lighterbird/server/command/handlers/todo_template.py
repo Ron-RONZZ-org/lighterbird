@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from lightercore.permissions import PermissionLevel
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_todo_service
@@ -46,7 +47,7 @@ def todo_template_root(remaining: list[str],
     }
 
 
-@command("todo.template.list")
+@command("todo.template.list", permission_level=PermissionLevel.READ)
 def todo_template_list(remaining: list[str],
                        flags: dict[str, str]) -> dict[str, Any]:
     """!todo template list"""
@@ -98,7 +99,7 @@ def todo_template_add(remaining: list[str],
     }
 
 
-@command("todo.template.view")
+@command("todo.template.view", permission_level=PermissionLevel.READ)
 def todo_template_view(remaining: list[str],
                        flags: dict[str, str]) -> dict[str, Any]:
     """!todo template view <name>"""
@@ -192,7 +193,7 @@ def todo_template_modify(remaining: list[str],
     }
 
 
-@command("todo.template.delete", interactive=True)
+@command("todo.template.delete", permission_level=PermissionLevel.DESTRUCTIVE, interactive=True)
 def todo_template_delete(remaining: list[str],
                          flags: dict[str, str]) -> dict[str, Any]:
     """!todo template delete <name>"""

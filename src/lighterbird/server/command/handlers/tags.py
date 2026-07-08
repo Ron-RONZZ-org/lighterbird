@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from lightercore.permissions import PermissionLevel
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_tag_service
@@ -38,7 +39,7 @@ def tag_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("tag.list")
+@command("tag.list", permission_level=PermissionLevel.READ)
 def tag_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!tag list [--domain NAME]
 
@@ -95,7 +96,7 @@ def tag_rename(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "status", "title": "Tag Renamed", "data": {"old": old_name, "new": tag["name"]}}
 
 
-@command("tag.delete")
+@command("tag.delete", permission_level=PermissionLevel.DESTRUCTIVE)
 def tag_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!tag delete <name> — Delete a tag and all its associations."""
     if not remaining:

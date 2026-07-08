@@ -19,6 +19,50 @@
   import TodoViewTab from "./TodoViewTab.svelte";
   import CalendarEventsListTab from "./CalendarEventsListTab.svelte";
   import SieveEditorForm from "./SieveEditorForm.svelte";
+  import ConfirmToolDialog from "./ConfirmToolDialog.svelte";
+
+  /** Handle tool confirmation from a /* prompt command tab. */
+  async function handleToolConfirm(tab, decisions) {
+    try {
+      const resp = await fetch("/api/v1/prompt-commands/execute/resume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: tab.data?.session_id,
+          decisions,
+        }),
+      });
+      if (!resp.ok) {
+        tabStore.update(tab.id, {
+          type: "error",
+          data: { message: `Resume failed: HTTP ${resp.status}` },
+        });
+        return;
+      }
+      const result = await resp.json();
+      if (result.type === "confirm_tool") {
+        // Another round of approvals
+        tabStore.update(tab.id, { type: "confirm_tool", data: result });
+        return;
+      }
+      // Final result: show as chat or status
+      if (result.type === "chat" && result.data?.html) {
+        tabStore.update(tab.id, { type: "chat", data: result.data });
+      } else {
+        // Re-fetch the command to render properly
+        tabStore.update(tab.id, { type: result.type || "status", title: result.title || "", data: result.data || result });
+      }
+    } catch (err) {
+      tabStore.update(tab.id, {
+        type: "error",
+        data: { message: err.message || "Failed to resume" },
+      });
+    }
+  }
+
+  function handleToolDismiss(tab) {
+    tabStore.close(tab.id);
+  }
   import FormTab from "./FormTab.svelte";
   import LetterListTab from "./LetterListTab.svelte";
   import LetterViewTab from "./LetterViewTab.svelte";
@@ -217,6 +261,15 @@
         <HelpPopup data={tabStore.active.data} />
       {:else if tabStore.active.type === "templates"}
         <StatusPopup data={tabStore.active.data} />
+      {:else if tabStore.active.type === "confirm_tool"}
+        <ConfirmToolDialog
+          batch={tabStore.active.data?.batch || []}
+          message={tabStore.active.data?.message || ""}
+          onConfirm={(decisions) => handleToolConfirm(tabStore.active, decisions)}
+          onDismiss={() => handleToolDismiss(tabStore.active)}
+        />
+      {:else if tabStore.active.type === "chat"}
+        <StatusPopup data={tabStore.active.data} />
       {:else if tabStore.active.type === "form"}
         <FormTab data={tabStore.active.data} tabId={tabStore.active.id} />
       {:else}
@@ -324,6 +377,7 @@
       help: "?",
       loading: "⏳",
       chat: "💬",
+      "confirm_tool": "🔐",
       form: "✏",
     };
     return icons[type] || "•";

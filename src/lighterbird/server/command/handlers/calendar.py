@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from lightercore.permissions import PermissionLevel
+
 from lighterbird.calendar.service import CalendarService
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
@@ -54,7 +56,7 @@ def calendar_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     }
 
 
-@command("calendar.list")
+@command("calendar.list", permission_level=PermissionLevel.READ)
 def calendar_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar list [start] [end] [--calendar uuid] [--query TEXT]"""
     svc: CalendarService = get_calendar_service()
@@ -139,7 +141,7 @@ def event_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "status", "title": "Event Created", "data": {"uuid": evt["uuid"], "title": evt["title"], "rrule": evt.get("rrule", "") or "(none)"}}
 
 
-@command("calendar.event.view")
+@command("calendar.event.view", permission_level=PermissionLevel.READ)
 def event_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar event view <uuid>"""
     if not remaining:
@@ -178,7 +180,7 @@ def event_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "status", "title": "Event Modified", "data": {"uuid": uuid[:8]}}
 
 
-@command("calendar.event.delete", interactive=True)
+@command("calendar.event.delete", permission_level=PermissionLevel.DESTRUCTIVE, interactive=True)
 def event_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar event delete <uuid> [uuid...]"""
     if not remaining:
@@ -194,7 +196,7 @@ def event_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "status", "title": "Event(s) Deleted", "data": {"removed": removed}}
 
 
-@command("calendar.event.export.ics")
+@command("calendar.event.export.ics", permission_level=PermissionLevel.READ)
 def event_export_ics(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar event export ics <uuid> [<uuid>...]"""
     if not remaining:
@@ -270,7 +272,7 @@ def event_import_ics(remaining: list[str], flags: dict[str, str]) -> dict[str, A
     return {"type": "status", "title": "ICS Import", "data": {"imported": len(uuids), "uuids": uuids}}
 
 
-@command("calendar.sync-status")
+@command("calendar.sync-status", permission_level=PermissionLevel.READ)
 def calendar_sync_status(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar sync-status [--all]
 
@@ -354,7 +356,7 @@ def event_rrule_clear(remaining: list[str], flags: dict[str, str]) -> dict[str, 
     return {"type": "status", "title": "RRULE Cleared", "data": {"uuid": uuid[:8]}}
 
 
-@command("calendar.event.rrule.show")
+@command("calendar.event.rrule.show", permission_level=PermissionLevel.READ)
 def event_rrule_show(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar event rrule show <uuid> [--limit N]
 
@@ -399,7 +401,7 @@ def event_rrule_show(remaining: list[str], flags: dict[str, str]) -> dict[str, A
     }
 
 
-@command("calendar.event.search")
+@command("calendar.event.search", permission_level=PermissionLevel.READ)
 def event_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar event search [--query TEXT] [--start DATE] [--end DATE] [--calendar UUID]"""
     svc: CalendarService = get_calendar_service()
@@ -422,7 +424,7 @@ def event_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 # ── Calendar account sub-commands ───────────────────────────────────────
 
 
-@command("calendar.account.list")
+@command("calendar.account.list", permission_level=PermissionLevel.READ)
 def cal_account_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar account list"""
     svc: CalendarService = get_calendar_service()
@@ -464,7 +466,7 @@ def cal_account_modify(remaining: list[str], flags: dict[str, str]) -> dict[str,
     return {"type": "status", "title": "Calendar Modified", "data": {"uuid": uuid[:8]}}
 
 
-@command("calendar.account.delete", interactive=True)
+@command("calendar.account.delete", permission_level=PermissionLevel.DESTRUCTIVE, interactive=True)
 def cal_account_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar account delete <uuid> [uuid...]"""
     if not remaining:

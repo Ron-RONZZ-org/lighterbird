@@ -10,12 +10,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from lightercore.permissions import PermissionLevel
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_todo_service
 from lighterbird.todo.services import TodoService
 
 
-@command("todo.list")
+@command("todo.list", permission_level=PermissionLevel.READ)
 def todo_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!todo list [--status pending|done] [--tags tag1,tag2]
                   [--sort created|priority|due|title] [--mode flat|tree]"""
@@ -36,7 +37,7 @@ def todo_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "todo-list", "title": "Todos", "data": {"todos": todos}}
 
 
-@command("todo.tree")
+@command("todo.tree", permission_level=PermissionLevel.READ)
 def todo_tree(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!todo tree [--status pending|done] [--mode tree|flat]"""
     svc: TodoService = get_todo_service()
@@ -54,7 +55,7 @@ def todo_tree(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }}
 
 
-@command("todo.search")
+@command("todo.search", permission_level=PermissionLevel.READ)
 def todo_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!todo search <query> [--status STATE] [--tags tag1,tag2]"""
     svc: TodoService = get_todo_service()
