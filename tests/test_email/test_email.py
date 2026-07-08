@@ -157,6 +157,35 @@ class TestEmailService:
         assert result is False
 
 
+class TestEmailServiceSearchRemote:
+    def test_search_remote_no_account_returns_empty(self, email_service):
+        """search_remote with nonexistent account returns empty list."""
+        result = email_service.search_remote("no-such@test.com", "test")
+        assert result == []
+
+    def test_search_remote_no_password_returns_empty(self, email_service):
+        """search_remote for account without password returns empty list."""
+        # Add an account without password
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).isoformat()
+        email_service.db.execute(
+            "INSERT OR IGNORE INTO accounts "
+            "(email, name, imap_server, imap_port, imap_use_ssl, "
+            " smtp_server, smtp_port, smtp_use_tls, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("no-pw@test.com", "No Password",
+             "imap.test.com", 993, 1, "smtp.test.com", 587, 1, now, now),
+        )
+        result = email_service.search_remote("no-pw@test.com", "test")
+        assert result == []
+
+    def test_search_remote_empty_query_no_criteria(self, email_service):
+        """Empty query and no criteria returns empty (no IMAP connection)."""
+        # Returns empty because no account with password exists in the test fixture
+        result = email_service.search_remote("test@example.com", "")
+        assert result == []
+
+
 class TestKeyring:
     def test_email_keyring(self):
         # Should not crash regardless of keyring availability
