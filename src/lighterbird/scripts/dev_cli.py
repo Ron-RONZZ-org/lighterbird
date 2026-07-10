@@ -43,15 +43,20 @@ def dev_main() -> None:
     By default creates a temporary data directory (``/tmp/lighterbird-dev-*``)
     and optionally seeds it with test data before starting the server.
 
-    Use ``--data-dir PATH`` to keep data persistent across restarts — the
-    server will re-use the same data and config directories on subsequent
-    runs.  Seeding (from ``--seed``, ``--prod``, or ``--seed-from``) only
-    runs when the data directory is empty or does not yet exist.
+    Flags:
+    - ``--data-dir PATH`` — keep data persistent across restarts.
+    - ``--local-config PATH`` — use a custom config directory for testing
+      prompt command, user-command, or hook changes.  Overrides any config
+      dir set by ``--data-dir``.
     """
     parser = standard_dev_parser(
         "Run an isolated lighterbird development server.",
         default_port=6006,
     )
+    parser.add_argument("--local-config", type=str, default=None,
+                        help="Use a local config directory (e.g. a git checkout) "
+                             "for prompt commands, user commands, and hooks. "
+                             "Overrides the config dir from --data-dir if both are given.")
     args = parser.parse_args()
 
     validate_seed_sources(args)
@@ -70,8 +75,18 @@ def dev_main() -> None:
         args.data_dir, app_name="lighterbird",
     )
 
+    # --local-config overrides the config dir set by --data-dir or the
+    # default temp dir.
+    if args.local_config:
+        local_config = Path(args.local_config).expanduser().resolve()
+        local_config.mkdir(parents=True, exist_ok=True)
+        os.environ["LIGHTERBIRD_CONFIG_DIR"] = str(local_config)
+        config_dir = local_config
+        _log(f"Local config dir: {config_dir} (overrides configured config dir)")
+    else:
+        _log(f"Config dir: {config_dir}")
+
     _log(f"Data dir: {data_dir}")
-    _log(f"Config dir: {config_dir}")
 
     already_seeded = is_seeded(data_dir)
 
