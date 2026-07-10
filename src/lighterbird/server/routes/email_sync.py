@@ -40,9 +40,7 @@ def sync_email_start(
         """Run the sync in a background thread."""
         try:
             if req.account_email:
-                # sync_account reports its own progress via the tracker
-                # (including complete() on success)
-                email_svc.sync_account(
+                result = email_svc.sync_account(
                     req.account_email,
                     progress_tracker=tracker,
                     task_id=task_id,
@@ -61,6 +59,13 @@ def sync_email_start(
                                  errors=errors or None)
         except Exception as exc:
             tracker.fail(task_id, str(exc))
+        finally:
+            # Ensure the task is always completed, even when the IMAP sync
+            # function returns early (e.g. connection failure before the
+            # progress_tracker.complete() call inside sync_account()).
+            prog = tracker.get(task_id)
+            if prog and prog["status"] == "running":
+                tracker.complete(task_id, errors=["Sync failed or timed out"])
 
     thread = threading.Thread(target=_run_sync, daemon=True)
     thread.start()
