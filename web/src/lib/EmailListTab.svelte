@@ -44,6 +44,7 @@
   let syncTaskId = $state(null);
   let syncProgress = $state(null);
   let syncPollTimer = $state(null);
+  let syncError = $state("");
 
   // When data prop changes (new query / new tab data), reset pagination
   $effect(() => {
@@ -359,17 +360,26 @@
     syncing = true;
     syncProgress = null;
     syncTaskId = null;
+    syncError = "";
 
     try {
       const startResult = await emailApi.syncStart();
       syncTaskId = startResult.task_id;
       pollSyncProgress();
-    } catch { /* silent */ }
+    } catch (err) {
+      syncError = `Sync failed to start: ${err?.message || err || "Unknown error"}`;
+      syncing = false;
+      clearSyncError();
+    }
   }
 
   function syncErrorMsg(errors) {
     if (!errors || errors.length === 0) return "";
     return errors.join("; ");
+  }
+
+  function clearSyncError() {
+    setTimeout(() => { syncError = ""; }, 8000);
   }
 
   function pollSyncProgress() {
@@ -384,15 +394,16 @@
           syncing = false;
           syncTaskId = null;
           if (prog.errors && prog.errors.length > 0) {
-            console.warn("Sync completed with errors:", prog.errors.join("; "));
+            syncError = `Sync completed with errors: ${syncErrorMsg(prog.errors)}`;
+            clearSyncError();
           }
           await refreshList();
         } else if (prog.status === "error") {
           syncProgress = prog;
           syncing = false;
           syncTaskId = null;
-          const err = syncErrorMsg(prog.errors);
-          console.warn("Sync failed:", err || "Unknown error");
+          syncError = `Sync failed: ${syncErrorMsg(prog.errors) || "Unknown error"}`;
+          clearSyncError();
         } else {
           syncPollTimer = setTimeout(poll, 1500);
         }
@@ -524,6 +535,13 @@
     {syncProgress}
   />
 </div>
+
+{#if syncError}
+  <div class="sync-error-banner" role="alert">
+    <span class="sync-error-icon">⚠</span>
+    <span class="sync-error-text">{syncError}</span>
+  </div>
+{/if}
 
   <!-- Folder tree panel -->
   <EmailFolderPanel
@@ -664,6 +682,31 @@
   .load-more:disabled {
     color: var(--clr-muted, #888);
     cursor: default;
+  }
+
+  .sync-error-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.75rem;
+    background: #3a1a1a;
+    border-bottom: 1px solid #6a2a2a;
+    color: #e8a0a0;
+    font-family: monospace;
+    font-size: 0.78rem;
+    animation: syncErrorFadeIn 0.2s ease;
+  }
+  .sync-error-icon {
+    font-size: 0.9rem;
+    flex-shrink: 0;
+  }
+  .sync-error-text {
+    flex: 1;
+    word-break: break-word;
+  }
+  @keyframes syncErrorFadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
 </style>

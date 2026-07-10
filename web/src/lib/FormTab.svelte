@@ -38,6 +38,7 @@
   let initialData = $derived(data?.initialData || {});
   let commandPath = $derived(data?.commandPath || _inferCommandPath(formType));
   let formDirty = $state(false);
+  let formError = $state(data?.error || ""); // non-field-level error displayed as banner
 
   function handleDirtyChange(dirty) {
     formDirty = dirty;
@@ -89,7 +90,6 @@
   }
 
   let submitting = $state(false);
-  let formError = $state(""); // non-field-level error message displayed as banner
 
   /** Submit form data to the command endpoint. */
   async function handleFormSubmit(payload) {

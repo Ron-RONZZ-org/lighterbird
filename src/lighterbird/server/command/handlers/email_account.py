@@ -53,20 +53,32 @@ def account_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     detected = detect_servers(email_addr, imap_server=imap_server, smtp_server=smtp_server)
 
     # Validate that the detected IMAP hostname actually resolves in DNS.
-    # If it doesn't, still create the account but warn the user, since
-    # the hostname may be a private/custom server not in public DNS.
+    # If it doesn't, redirect to the interactive form with pre-filled data
+    # so the user can enter the correct IMAP/SMTP servers manually.
     if not imap_server and detected.get("method") == "fallback":
         import socket
         try:
             socket.getaddrinfo(detected["imap"], detected.get("imap_port", 993))
         except socket.gaierror:
-            # DNS lookup failed for auto-detected fallback — user should
-            # specify --imap manually or check the server name.
-            raise CommandValidationError(
-                f"Auto-detected IMAP server '{detected['imap']}' does not resolve in DNS. "
-                f"The server for {email_addr} could not be determined automatically. "
-                f"Please specify --imap and --smtp manually.",
-            )
+            return {
+                "type": "form-required",
+                "title": "Add Email Account",
+                "data": {
+                    "form": "email-account-add",
+                    "initialData": {
+                        "email": email_addr,
+                        "password": password,
+                        "name": name,
+                        "imap_server": detected["imap"],
+                        "smtp_server": detected["smtp"],
+                    },
+                    "error": (
+                        f"Could not auto-detect the IMAP server for {email_addr}. "
+                        f"The server '{detected['imap']}' does not resolve in DNS. "
+                        "Please enter the correct IMAP and SMTP server addresses manually."
+                    ),
+                },
+            }
     acct_data = {
         "name": name or email_addr.split("@")[0],
         "email": email_addr.lower().strip(),

@@ -108,6 +108,7 @@
             tabStore.open("form", result.title || "Complete Form", {
               form,
               initialData: initialData || {},
+              error: result.data?.error || "",
             }, { idKey: `form-${form}` });
             scrollToBottom();
             return;
