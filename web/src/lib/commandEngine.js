@@ -291,7 +291,10 @@ function addAccounts(cache, result) {
       // Accounts are keyed by email (not uuid), so use email as both
       // uuid and value to avoid .slice(0, 8) truncation in the UI.
       const email = a.email || a.uuid || "";
-      result.push({ uuid: email, value: email, label: `${email} (${a.name || ""})` });
+      // value shows as primary text, label shows as grey hint — don't
+      // duplicate the email in the label since it's already the primary.
+      const hint = a.name ? `(${a.name})` : "";
+      result.push({ uuid: email, value: email, label: hint });
     }
   }
 }
