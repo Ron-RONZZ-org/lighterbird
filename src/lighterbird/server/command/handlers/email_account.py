@@ -180,7 +180,8 @@ def account_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     return {"type": "status", "title": "Account Modified", "data": {"email": email}}
 
 
-@command("email.account.delete", interactive=True)
+@command("email.account.delete", interactive=True,
+         params=[{"name": "email", "type": "string", "help": "Account email", "required": True, "uuidSource": "email.accounts", "repeatable": True}])
 def account_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email account delete <email> [email...]"""
     if not remaining:

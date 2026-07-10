@@ -172,7 +172,8 @@ def _generate_letter_html(uuid: str, sender: str, recipient: str, subject: str) 
 </html>"""
 
 
-@command("letter.pdf")
+@command("letter.pdf",
+         params=[{"name": "uuid", "type": "string", "help": "Letter UUID", "required": True, "uuidSource": "letters.letters"}])
 def letter_pdf(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!letter pdf <uuid> [--output PATH]
 

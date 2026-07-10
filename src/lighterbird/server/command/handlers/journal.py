@@ -75,7 +75,8 @@ def journal_write(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     return {"type": "status", "title": "Journal Entry Written", "data": {"uuid": entry["uuid"], "title": title}}
 
 
-@command("journal.view", permission_level=PermissionLevel.READ)
+@command("journal.view", permission_level=PermissionLevel.READ,
+         params=[{"name": "uuid", "type": "string", "help": "Journal entry UUID", "required": True, "uuidSource": "journal.entries"}])
 def journal_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!journal view <uuid>"""
     uuid = require_uuid(remaining, "Usage: !journal view <uuid>")
@@ -94,7 +95,8 @@ def journal_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     return {"type": "journal-list", "title": "Journal Search", "data": {"entries": entries, "total": len(entries)}}
 
 
-@command("journal.delete", permission_level=PermissionLevel.DESTRUCTIVE, interactive=True)
+@command("journal.delete", permission_level=PermissionLevel.DESTRUCTIVE, interactive=True,
+         params=[{"name": "uuid", "type": "string", "help": "Journal entry UUID(s)", "required": True, "uuidSource": "journal.entries", "repeatable": True}])
 def journal_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!journal delete <uuid> [uuid...] — Delete one or more journal entries."""
     if not remaining:

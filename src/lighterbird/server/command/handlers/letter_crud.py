@@ -130,7 +130,8 @@ def letter_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("letter.view", permission_level=PermissionLevel.READ)
+@command("letter.view", permission_level=PermissionLevel.READ,
+         params=[{"name": "uuid", "type": "string", "help": "Letter UUID", "required": True, "uuidSource": "letters.letters"}])
 def letter_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!letter view <uuid>"""
     uuid = require_uuid(remaining, "Usage: !letter view <uuid>")

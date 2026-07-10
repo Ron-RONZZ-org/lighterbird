@@ -13,6 +13,8 @@ let _dataCache = $state({
   journal: [],
   events: [],
   folders: [],
+  letters: [],
+  profiles: [],
 });
 let _persistentDataType = $state(null);
 
@@ -26,6 +28,8 @@ function _cacheData(data) {
   if (data.entries) update.journal = data.entries;
   if (data.events) update.events = data.events;
   if (data.folders) update.folders = data.folders;
+  if (data.letters) update.letters = data.letters;
+  if (data.profiles) update.profiles = data.profiles;
   if (Object.keys(update).length > 0) {
     _dataCache = {
       accounts: update.accounts ?? _dataCache.accounts,
@@ -35,6 +39,8 @@ function _cacheData(data) {
       journal: update.journal ?? _dataCache.journal,
       events: update.events ?? _dataCache.events,
       folders: update.folders ?? _dataCache.folders,
+      letters: update.letters ?? _dataCache.letters,
+      profiles: update.profiles ?? _dataCache.profiles,
     };
   }
 }
@@ -109,6 +115,8 @@ export const popup = {
       journal: data.journal ?? _dataCache.journal,
       events: data.events ?? _dataCache.events,
       folders: data.folders ?? _dataCache.folders,
+      letters: data.letters ?? _dataCache.letters,
+      profiles: data.profiles ?? _dataCache.profiles,
     };
   },
 };
