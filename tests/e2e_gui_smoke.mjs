@@ -1072,6 +1072,30 @@ async function runTests(page) {
     await sleep(200);
   });
 
+  await test("A key opens advanced search dialog in email list", async () => {
+    await typeCommand("!email list");
+    await pressEnter();
+    await sleep(500);
+
+    // Press A to open advanced search
+    await page.keyboard.press("a");
+    await sleep(400);
+
+    // Advanced search dialog should appear
+    const panel = page.locator('[aria-label="Tab content"]');
+    const advSearch = panel.locator('.adv-search, .adv-search-dialog, [class*="advanced-search"], h3:has-text("Advanced"), h4:has-text("Advanced")');
+    const advVisible = await advSearch.isVisible().catch(() => false);
+    if (!advVisible) {
+      // Try locating by known AdvancedSearchDialog fields
+      const headerField = panel.locator('label:has-text("Header"), label:has-text("Header text"), input[placeholder*="header" i]');
+      const headerCount = await headerField.count().catch(() => 0);
+      assert(headerCount > 0, "A key should open advanced search dialog with header/body fields");
+    }
+    // Close with Escape
+    await page.keyboard.press("Escape");
+    await sleep(200);
+  });
+
   // ════════════════════════════════════════════
   // 21. BANNER DISPLAY
   // ════════════════════════════════════════════

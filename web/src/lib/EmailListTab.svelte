@@ -28,6 +28,7 @@
     { key: "p", desc: "Toggle params dialog", category: "Email List" },
     { key: "r", desc: "Reply to selected message", category: "Email List" },
     { key: "l", desc: "Load more messages", category: "Email List" },
+    { key: "a", desc: "Open advanced search", category: "Email List" },
     { key: "Ctrl+R", desc: "Sync emails", modifiers: "Ctrl", category: "Email List" },
     { key: "Ctrl+M", desc: "Move selected messages", modifiers: "Ctrl", category: "Email List" },
   ]);
@@ -116,6 +117,7 @@
           case "s": case "S": if (plain) { showSortDropdown = !showSortDropdown; e.preventDefault(); } return true;
           case "p": case "P": if (plain) { showParamsDialog = !showParamsDialog; e.preventDefault(); } return true;
           case "l": case "L": if (plain && hasMore) { loadMore(); e.preventDefault(); } return true;
+          case "a": case "A": if (plain) { showAdvancedSearch = true; e.preventDefault(); } return true;
           case "Escape":
             if (showShortcutHelp) { showShortcutHelp = false; e.preventDefault(); return true; }
             if (showSearch) { closeSearch(); e.preventDefault(); return true; }
