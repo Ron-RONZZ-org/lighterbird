@@ -118,6 +118,8 @@ def account_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
              {"name": "smtp-server", "type": "string", "help": "SMTP server hostname"},
              {"name": "password", "type": "string", "help": "Account password"},
              {"name": "signature", "type": "string", "help": "Email signature text"},
+             {"name": "password", "type": "string",
+              "help": "Leave blank for no change"},
              {"name": "redetect", "type": "bool",
               "help": "Re-detect IMAP/SMTP servers from MX records"},
          ])
