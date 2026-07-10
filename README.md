@@ -90,6 +90,30 @@ LIGHTERBIRD_PORT=8764 npm run dev
 
 The `lighterbird-dev` CLI also respects `LIGHTERBIRD_PORT`. The `--port` CLI flag takes precedence over the env var (CLI > env > 6006). In production (built SPA served by FastAPI), port configuration is automatic — everything runs on the same origin, no proxy needed.
 
+### Customising the LLM
+
+Two user-editable config files are auto-created on first server start:
+
+- **`~/.config/lighterbird/system_prompt.md`** — the LLM agent's system prompt.
+  Edit to change how the AI behaves (tone, rules, constraints).
+- **`~/.config/lighterbird/cowrite_style.md`** — co-writing style guide.
+  Edit to control tone, language, and formatting for AI-assisted writing.
+
+Both files are seeded with sensible defaults and can be edited freely.
+Changes take effect after the next LLM request (no server restart needed
+for the system prompt — call ``POST /api/v1/llm/reload-prompt`` to apply
+immediately).
+
+### Disable file watching
+
+To run the Vite dev server without file watching or HMR (useful when you want manual refresh on restart):
+
+```bash
+DISABLE_WATCH=true npm run dev
+```
+
+This sets `server.watch: null` and `server.hmr: false` — no chokidar watcher runs and no WebSocket connection is established. Restart the process to see changes.
+
 ## Testing
 
 ### Unit Tests (pytest)

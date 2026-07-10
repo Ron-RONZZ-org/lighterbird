@@ -37,7 +37,13 @@ from lighterbird.server.tasks import init_workers, shutdown_workers
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """FastAPI lifespan handler — starts/stops background workers."""
+    """FastAPI lifespan handler — seeds config defaults, starts/stops background workers."""
+    # Seed default config files (system_prompt.md, cowrite_style.md, etc.) on startup
+    try:
+        from lighterbird.core.config_defaults import seed_config_defaults
+        seed_config_defaults()
+    except Exception:
+        logger.warning("Config defaults seeding failed (non-fatal)")
     workers = init_workers()
     app.state.worker_pool = workers
     yield
