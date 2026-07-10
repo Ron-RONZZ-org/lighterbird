@@ -242,6 +242,35 @@ class TestSyncAccount:
         assert progress["current_folder"] == 2  # last folder index
         assert progress["folder_name"] == "Sent"
 
+    @patch("lighterbird.email.imap.sync.IMAPClient")
+    def test_folder_offset_shifts_current_folder(self, mock_client_class):
+        """folder_offset should shift the current_folder reported to the tracker."""
+        mock_client = _make_mock_client()
+        mock_client_class.return_value = mock_client
+        mock_client.list_folders.return_value = [
+            {"name": "INBOX", "delimiter": "/", "flags": [], "special_use": None},
+            {"name": "Sent", "delimiter": "/", "flags": [], "special_use": None},
+        ]
+        mock_client.sync_folder.return_value = {"total": 1, "new": 1, "errors": []}
+
+        tracker = SyncProgressTracker()
+        task_id = tracker.start("user@example.com")
+
+        sync_account(
+            host="imap.example.com", port=993, use_ssl=True,
+            username="user", password="pass",
+            account_email="user@example.com",
+            db_store=MagicMock(),
+            progress_tracker=tracker,
+            task_id=task_id,
+            manage_progress=False,
+            folder_offset=10,
+        )
+
+        progress = tracker.get(task_id)
+        # With folder_offset=10 and 2 folders, last update_folder should be idx 12
+        assert progress["current_folder"] == 12
+
 
 class TestRetryPendingTrash:
     def test_no_pending(self):

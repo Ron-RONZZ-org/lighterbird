@@ -73,6 +73,7 @@ def sync_account(
     progress_tracker: Any = None,
     task_id: str | None = None,
     manage_progress: bool = True,
+    folder_offset: int = 0,
 ) -> SyncResult:
     """Sync messages from an IMAP account.
 
@@ -103,6 +104,9 @@ def sync_account(
             iterating folders and **complete()** after. Set to False when the
             caller (e.g. ``sync_all``) owns the lifecycle — folder-level progress
             updates (``update_folder``) are still sent regardless.
+        folder_offset: Starting index for folder-level progress updates.
+            Used by ``sync_all`` to provide a global folder counter across
+            multiple accounts so the progress bar moves from 0% to 100%.
 
     Returns:
         SyncResult with counts.
@@ -162,7 +166,9 @@ def sync_account(
 
         for idx, folder_name in enumerate(sorted_folders, start=1):
             if progress_tracker is not None and task_id:
-                progress_tracker.update_folder(task_id, idx, folder_name)
+                progress_tracker.update_folder(
+                    task_id, folder_offset + idx, folder_name,
+                )
 
             # CONDSTORE optimization: if server modseq hasn't changed since
             # last sync, skip this folder entirely (no new messages).

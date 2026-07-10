@@ -61,7 +61,8 @@ class EmailService:
 
     def sync_account(self, email: str, force: bool = False,
                      progress_tracker=None, task_id: str | None = None,
-                     manage_progress: bool = True):
+                     manage_progress: bool = True,
+                     folder_offset: int = 0):
         """Sync messages for a single account by email.
 
         Always returns a SyncResult (never raises). Pending flag syncs
@@ -72,6 +73,9 @@ class EmailService:
         progress is reported via ``progress_tracker.update_folder()``.
         When *manage_progress* is True (default), the tracker is also
         configured with the folder count and marked complete at the end.
+        *folder_offset* is the global starting index for folder progress;
+        used by ``sync_all`` for a smooth 0–100% progress bar across
+        multiple accounts.
         """
         from lighterbird.email.imap import sync_account as _sync
         from lighterbird.email.imap.sync import SyncResult
@@ -99,6 +103,7 @@ class EmailService:
                     progress_tracker=progress_tracker,
                     task_id=task_id,
                     manage_progress=manage_progress,
+                    folder_offset=folder_offset,
                 )
             except ConnectionError as e:
                 result = SyncResult()
@@ -119,26 +124,41 @@ class EmailService:
         """Sync messages for all accounts.
 
         When *progress_tracker* is provided, progress is reported at the
-        folder level as each account is synced in turn.  The total number
-        of accounts is used as the denominator so the user sees which
-        account is currently being processed.
+        folder level using a global folder counter across all accounts,
+        so the progress bar moves smoothly from 0% to 100%.
         """
         accounts = self.accounts.list_accounts()
+
+        # Count total folders across all accounts for a smooth progress bar
+        total_folder_count = 0
         if progress_tracker is not None and task_id:
-            progress_tracker.set_total_folders(task_id, len(accounts))
+            for acct in accounts:
+                rows = self.db.execute(
+                    "SELECT COUNT(*) AS cnt FROM folders WHERE account_email = ?",
+                    (acct["email"],),
+                )
+                total_folder_count += rows[0]["cnt"] if rows else 0
+            progress_tracker.set_total_folders(task_id, total_folder_count)
+
         results = {}
-        for idx, acct in enumerate(accounts, start=1):
+        folder_offset = 0
+        for acct in accounts:
             email = acct["email"]
-            if progress_tracker is not None and task_id:
-                progress_tracker.update_folder(task_id, idx, email)
             try:
                 sr = self.sync_account(
                     email, force=force,
                     progress_tracker=progress_tracker,
                     task_id=task_id,
                     manage_progress=False,
+                    folder_offset=folder_offset,
                 )
                 results[email] = sr.to_dict()
+                # Advance offset by the number of folders for this account
+                rows = self.db.execute(
+                    "SELECT COUNT(*) AS cnt FROM folders WHERE account_email = ?",
+                    (email,),
+                )
+                folder_offset += rows[0]["cnt"] if rows else 0
             except Exception as e:
                 results[email] = {"total": 0, "new": 0, "errors": [str(e)]}
         return results

@@ -337,8 +337,12 @@
       if (searchQuery && searchQuery.length >= 2) {
         params.query = searchQuery;
       }
-      const result = await emailApi.listMessages(params);
+      const [result, folderResult] = await Promise.all([
+        emailApi.listMessages(params),
+        emailApi.listFolders(),
+      ]);
       tabStore.safeUpdate(tabId, result);
+      folders = folderResult.folders || [];
     } catch { /* silent */ }
   }
 
