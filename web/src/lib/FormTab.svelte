@@ -14,7 +14,7 @@
   import { tabStore } from "./tabStore.svelte.js";
   import { dirtyFormStore } from "./dirtyFormStore.svelte.js";
   import { banner } from "./bannerStore.svelte.js";
-  import { journal as journalApi, todo as todoApi, contacts as contactsApi, calendar as calendarApi, letters as lettersApi, email as emailApi } from "./api.js";
+  import { LIST_REFRESHERS } from "./mutationToTab.js";
   import ComposeEmail from "./ComposeEmail.svelte";
   import JournalWrite from "./JournalWrite.svelte";
   import TodoAddForm from "./TodoAddForm.svelte";
@@ -22,16 +22,6 @@
   import DynamicForm from "./DynamicForm.svelte";
   import SieveEditorForm from "./SieveEditorForm.svelte";
   import LetterForm from "./LetterForm.svelte";
-
-  /** List refreshers keyed by _returnIdKey — fetch fresh data with highlight. */
-  const LIST_REFRESHERS = {
-    "persistent-journal-list":         (highlight) => journalApi.list({ limit: 50 }).then(r => ({ ...r, highlight })),
-    "persistent-todo-list":            (highlight) => todoApi.list({ limit: 50 }).then(r => ({ ...r, highlight })),
-    "persistent-contacts-list":        (highlight) => contactsApi.list({ limit: 50 }).then(r => ({ ...r, highlight })),
-    "persistent-calendar-events":      (highlight) => calendarApi.listEvents({ limit: 50 }).then(r => ({ ...r, highlight })),
-    "persistent-letter-list":          (highlight) => lettersApi.list({ limit: 50 }).then(r => ({ ...r, highlight })),
-    "persistent-email-list":           (highlight) => emailApi.list({ limit: 50 }).then(r => ({ ...r, highlight })),
-  };
 
   let { data = {} } = $props();
   let formType = $derived(data?.form || "");

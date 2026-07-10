@@ -138,6 +138,8 @@ The HTML/plain text toggle in `EmailViewTab.svelte` is persisted across emails v
 17. **Signature format dropdown.** Email signatures support `--format` (plain/html/markdown). `DynamicForm.svelte` renders a `<select>` for flags that include a `values` array in their tree metadata (e.g., `{"values": ["plain", "html", "markdown"]}`).
 18. **Multi-command input is frontend-only.** `HomeTab.svelte` handles multi-command detection (`isMultiCommand`) and batch execution. The shared parsing utility (`splitCommands` / `isMultiCommand`) lives in `@lightercore/ui/multiCommand.js`. Interactive commands (forms) are skipped with an error in batch mode. No backend changes needed — each command is sent as a separate `POST /api/v1/command` call.
 
+19. **Mutation redirect with highlight.** After a successful `!xxx add/modify/delete` command (direct execution, all required params provided), `App.svelte` redirects to the corresponding list tab instead of showing a transient popup. The affected entry is briefly highlighted with a 2s CSS fade animation (except on delete, where the entry is gone). Uses a hybrid refresh strategy: inject highlight into existing list tabs for add/modify (no loading flicker), always re-fetch for delete. The routing logic and mapping table live in `web/src/lib/mutationToTab.js`. The same pattern was previously a special case only for `!email send`; it now covers all domains: todo, contact, journal, calendar event, letter, sieve, and email send/trash/archive.
+
 ## GUI Style — Imitate Existing Components
 
 **Do not write custom CSS from scratch.** All new UI components must imitate the styling patterns found in these canonical source files:

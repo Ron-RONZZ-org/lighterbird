@@ -177,7 +177,7 @@ def event_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         updates["description"] = flags["description"]
     if updates:
         svc.events.update(uuid, updates)
-    return {"type": "status", "title": "Event Modified", "data": {"uuid": uuid[:8]}}
+    return {"type": "status", "title": "Event Modified", "data": {"uuid": uuid}}
 
 
 @command("calendar.event.delete", permission_level=PermissionLevel.DESTRUCTIVE, interactive=True)

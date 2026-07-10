@@ -304,6 +304,7 @@
               hint={fd.placeholder || fd.help || ""}
               required={fd.required}
               error={formErrors[fd.name] || ""}
+              width={fd.width}
             >
               {#snippet children()}
                 {#if field.type === "flag" && fd.type === "flag"}
@@ -331,7 +332,15 @@
                   <input id={fd.name} type={fieldType(fd)} class="df-input"
                     value={val || ""}
                     oninput={(e) => setField(fd.name, e.target.value)}
-                    placeholder={fd.help || fd.placeholder || ""} />
+                    placeholder={fd.help || fd.placeholder || ""}
+                    list={fd.autocompleteSource ? `${fd.name}-list` : undefined} />
+                  {#if fd.autocompleteSource}
+                    <datalist id={`${fd.name}-list`}>
+                      {#each _getAutocompleteOptions(fd) as opt}
+                        <option value={opt}></option>
+                      {/each}
+                    </datalist>
+                  {/if}
                 {/if}
               {/snippet}
             </FormField>
@@ -349,6 +358,7 @@
         hint={fd.placeholder || fd.help || ""}
         required={fd.required}
         error={formErrors[fd.name] || ""}
+        width={fd.width}
       >
         {#snippet children()}
           {#if fd.type === "uuid" || fd.uuidSource}

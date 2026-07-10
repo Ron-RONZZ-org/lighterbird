@@ -11,6 +11,7 @@
   import { parseCommand } from "./lib/parser.js";
   import { detectPersistentType } from "./lib/persistentTypes.js";
   import { email, calendar, contacts, todo, journal, letters } from "./lib/api.js";
+  import { isMutationCommand, extractHighlightUuid, persistentIdKey, LIST_REFRESHERS } from "./lib/mutationToTab.js";
   import ComposeEmail from "./lib/ComposeEmail.svelte";
   import EventForm from "./lib/EventForm.svelte";
   import ConfirmDialog from "./lib/ConfirmDialog.svelte";
@@ -224,23 +225,53 @@
         }
       }
 
-      // ── Email sent: redirect to email list with success banner ──────
-      // When ``!email send <to> <subject> ...`` succeeds (all required args
-      // provided), the backend returns a "Sent" status.  Instead of showing
-      // a brief transient popup, redirect to the email list tab and display
-      // a "Message sent." banner for 3s.
-      if (result.type === "status" && result.title === "Sent" && /^!email\s+send\b/i.test(trimmed)) {
-        const listInput = "!email list";
-        try {
-          const listResult = await execute(listInput);
-          popup.showPersistent(listResult.type, listResult.title, listResult.data || {}, "email-list");
-          banner.show("Message sent.", "success");
-        } catch {
-          // Fallback to normal status display if list refresh fails
-          popup.show(result.type, result.title, result.data);
+      // ── Mutation redirect: navigate to list tab with highlight ─────
+      // After a successful add/modify/delete, redirect to the corresponding
+      // list tab instead of showing a transient popup. The affected entry
+      // is briefly highlighted (except on delete, where it's gone).
+      if (result.type !== "error" && trimmed.startsWith("!")) {
+        const { tokens } = parseCommand(trimmed);
+        const mutationCfg = isMutationCommand(tokens);
+        if (mutationCfg) {
+          const isDelete = mutationCfg.isDelete;
+          const highlightUuid = extractHighlightUuid(result, isDelete);
+          const idKey = persistentIdKey(mutationCfg.listIdKey);
+          const existingTab = tabStore.tabs.find(t => t.idKey === idKey && t.id !== "home");
+
+          if (existingTab && !isDelete && highlightUuid) {
+            // Tab exists and we have a highlight — inject into existing data
+            // to avoid a loading flicker. The highlight auto-clears after 2s.
+            tabStore.update(existingTab.id, { ...existingTab.data, highlight: highlightUuid });
+            tabStore.setActive(existingTab.id);
+          } else {
+            // Tab doesn't exist, or it's a delete — re-fetch list data
+            try {
+              const listInput = "!" + mutationCfg.listTokens.join(" ");
+              const listResult = await execute(listInput);
+              const listData = { ...(listResult.data || {}) };
+              if (!isDelete && highlightUuid) {
+                listData.highlight = highlightUuid;
+              }
+              popup.showPersistent(
+                listResult.type,
+                listResult.title,
+                listData,
+                mutationCfg.listIdKey,
+              );
+            } catch {
+              // Fallback to normal status display if list refresh fails
+              popup.show(result.type, result.title, result.data);
+            }
+          }
+
+          // Email send: show success banner
+          if (result.title === "Sent" && tokens[0] === "email" && tokens[1] === "send") {
+            banner.show("Message sent.", "success");
+          }
+
+          isLoading = false;
+          return;
         }
-        isLoading = false;
-        return;
       }
 
       const dataType = detectPersistentType(input);
