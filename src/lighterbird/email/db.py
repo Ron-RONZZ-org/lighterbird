@@ -195,7 +195,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_imap_uid
 _IDX_MESSAGES_MESSAGE_ID = """
 CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_message_id
     ON messages(account_email, message_id)
-    WHERE message_id IS NOT NULL;
+    WHERE message_id IS NOT NULL AND message_id != '';
+"""
+# Drop the old message_id index that included empty strings (causing
+# spurious UNIQUE constraint violations for messages without Message-ID).
+# Replaced by the corrected definition below.
+_MIGRATE_DROP_OLD_MESSAGE_ID_IDX = """
+DROP INDEX IF EXISTS idx_messages_message_id;
 """
 _IDX_MESSAGES_MODSEQ = """
 CREATE INDEX IF NOT EXISTS idx_messages_modseq
@@ -296,6 +302,7 @@ _SCHEMA_STATEMENTS: list[str] = [
     _IDX_MESSAGES_ACCOUNT,
     _IDX_MESSAGES_FOLDER,
     _IDX_MESSAGES_IMAP_UID,
+    _MIGRATE_DROP_OLD_MESSAGE_ID_IDX,  # Drop then recreate to fix WHERE clause
     _IDX_MESSAGES_MESSAGE_ID,
     _IDX_MESSAGES_MODSEQ,
     _IDX_MESSAGES_DATE,

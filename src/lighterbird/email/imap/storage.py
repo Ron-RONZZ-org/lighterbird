@@ -26,7 +26,7 @@ def store_message(
     message_id = data.get("message_id")
 
     # Try dedup by Message-ID first
-    if message_id and account_email:
+    if message_id is not None and account_email:
         existing = db.execute_one(
             "SELECT uuid, is_read, is_starred FROM messages "
             "WHERE account_email = ? AND message_id = ?",
