@@ -70,6 +70,8 @@ def sync_account(
     db_store: Any,
     folders: list[str] | None = None,
     force: bool = False,
+    progress_tracker: Any = None,
+    task_id: str | None = None,
 ) -> SyncResult:
     """Sync messages from an IMAP account.
 
@@ -114,6 +116,8 @@ def sync_account(
                 f"Failed to list IMAP folders for {account_email}. "
                 f"Sync will retry on next run.",
             )
+            if progress_tracker is not None and task_id:
+                progress_tracker.fail(task_id, result.errors[-1])
             return result
 
         target_folders = folders or [f["name"] for f in available]
@@ -146,7 +150,13 @@ def sync_account(
             len(sorted_folders), account_email,
         )
 
-        for folder_name in sorted_folders:
+        if progress_tracker is not None and task_id:
+            progress_tracker.set_total_folders(task_id, len(sorted_folders))
+
+        for idx, folder_name in enumerate(sorted_folders, start=1):
+            if progress_tracker is not None and task_id:
+                progress_tracker.update_folder(task_id, idx, folder_name)
+
             # CONDSTORE optimization: if server modseq hasn't changed since
             # last sync, skip this folder entirely (no new messages).
             if not force and client.capabilities.has_condstore:
@@ -221,6 +231,13 @@ def sync_account(
 
         # Retry moving previously soft-deleted messages to IMAP Trash
         _retry_pending_trash(client, db_store, account_email)
+        if progress_tracker is not None and task_id:
+            progress_tracker.complete(
+                task_id,
+                result_total=result.total,
+                result_new=result.new,
+                errors=result.errors or None,
+            )
         return result
     finally:
         client.disconnect()

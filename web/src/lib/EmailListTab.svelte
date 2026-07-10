@@ -15,6 +15,7 @@
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import ExportDialog from "./ExportDialog.svelte";
   import ImportDialog from "./ImportDialog.svelte";
+  import ProgressBar from "./ProgressBar.svelte";
   import {
     createSelectionManager,
     createCopyState,
@@ -40,6 +41,9 @@
   let nextCursor = $state("");
   let loadingMore = $state(false);
   let syncing = $state(false);
+  let syncTaskId = $state(null);
+  let syncProgress = $state(null);
+  let syncPollTimer = $state(null);
 
   // When data prop changes (new query / new tab data), reset pagination
   $effect(() => {
@@ -353,11 +357,46 @@
   async function handleSync() {
     if (syncing) return;
     syncing = true;
+    syncProgress = null;
+    syncTaskId = null;
+
     try {
-      await emailApi.sync();
-      await refreshList();
+      const startResult = await emailApi.syncStart();
+      syncTaskId = startResult.task_id;
+      pollSyncProgress();
     } catch { /* silent */ }
-    finally { syncing = false; }
+  }
+
+  function pollSyncProgress() {
+    if (!syncTaskId) return;
+    const poll = async () => {
+      try {
+        const prog = await emailApi.getSyncProgress(syncTaskId);
+        if (!prog) { stopSync(); return; }
+        syncProgress = prog;
+        if (prog.status === "complete") {
+          syncProgress = prog;
+          syncing = false;
+          syncTaskId = null;
+          await refreshList();
+        } else if (prog.status === "error") {
+          syncing = false;
+          syncTaskId = null;
+        } else {
+          syncPollTimer = setTimeout(poll, 1500);
+        }
+      } catch {
+        stopSync();
+      }
+    };
+    syncPollTimer = setTimeout(poll, 500);
+  }
+
+  function stopSync() {
+    syncing = false;
+    syncTaskId = null;
+    syncProgress = null;
+    if (syncPollTimer) { clearTimeout(syncPollTimer); syncPollTimer = null; }
   }
 
   // Live-update read status — handled in App.svelte (always-mounted root)
@@ -431,10 +470,12 @@
     sel.handleKeydown(e);
   }
 
-  // Save config on tab close
+  // Save config on tab close + stop sync polling
   $effect(() => {
-    // Flush on unmount
-    return () => { config.flush(); };
+    return () => {
+      config.flush();
+      if (syncPollTimer) { clearTimeout(syncPollTimer); syncPollTimer = null; }
+    };
   });
 </script>
 
@@ -469,6 +510,7 @@
     onSync={handleSync}
     onToggleAdvancedSearch={() => showAdvancedSearch = true}
     {syncing}
+    {syncProgress}
   />
 </div>
 
