@@ -377,6 +377,7 @@ Reusable components for form inputs live in `web/src/lib/`:
 |-----------|---------|
 | `FormField.svelte` | Unified form field wrapper (label, hint, error, required badge) |
 | `MultiEntryField.svelte` | Chip-based multi-value input with autocomplete; props: `label`, `entries` (Svelte 5 `$bindable` array), `autocompleteQuery`, `placeholder`, `hint`, `allowDuplicates`, `maxEntries`, `onDirtyChange` |
+| `ProgressBar.svelte` | Compact progress bar with label + percentage; props: `current`, `total`, `label`, `status`, `compact` |
 | | Used by: ComposeEmail (cc, bcc), TodoAddForm (dependency, tags), LetterForm (tags), LetterListTab (tag filter) |
 | | Behavior: ENTER adds chip, X removes, double-click edits, Backspace on empty removes last |
 | `ListSearchBar.svelte` | Shared search bar for all list tabs; focus-driven inline search with compact/confirmed mode. Props: `showSearch`, `searchQuery`, `placeholder`, `ariaLabel`, `onSearchInput`, `onSearchEnter`, `onSearchEscape`, `onSearchClear`. Slot: `actions` (buttons shown when search is confirmed/not focused). Used by: `EmailListToolbar`, `TodoSearchBar`, `LetterSearchBar`, and inline toolbars in `JournalListTab`, `ContactsListTab`, `CalendarEventsListTab`. |

@@ -123,6 +123,12 @@ export const email = {
   sync: (accountEmail = null) =>
     request("POST", "/email/sync", accountEmail ? { account_email: accountEmail } : {}, { retry: true }),
 
+  syncStart: (accountEmail = null) =>
+    request("POST", "/email/sync/start", accountEmail ? { account_email: accountEmail } : {}),
+
+  getSyncProgress: (taskId) =>
+    request("GET", `/email/sync/progress/${encodeURIComponent(taskId)}`),
+
   listMessages: (params = {}, signal = null) => {
     const q = new URLSearchParams();
     if (params.account_email) q.set("account_email", params.account_email);

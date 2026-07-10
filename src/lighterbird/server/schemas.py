@@ -66,6 +66,27 @@ class SyncAllResponse(BaseModel):
     results: dict[str, SyncResultResponse | dict]
 
 
+class SyncStartResponse(BaseModel):
+    """Response after starting an async sync task."""
+    task_id: str
+    account_email: str | None = None
+
+
+class SyncProgressResponse(BaseModel):
+    """Progress of a running/completed sync task."""
+    task_id: str
+    account_email: str
+    status: str  # "running", "complete", "error"
+    started_at: str
+    completed_at: str | None = None
+    total_folders: int = 0
+    current_folder: int = 0
+    folder_name: str = ""
+    total_messages: int = 0
+    new_messages: int = 0
+    errors: list[str] = []
+
+
 class MessageResponse(BaseModel):
     uuid: str
     account_email: str

@@ -1,5 +1,6 @@
 <script>
   import ListSearchBar from "./ListSearchBar.svelte";
+  import ProgressBar from "./ProgressBar.svelte";
 
   let {
     selectionMode = false,
@@ -26,6 +27,7 @@
     onSync = () => {},
     onToggleAdvancedSearch = () => {},
     syncing = false,
+    syncProgress = null,
   } = $props();
 </script>
 
@@ -101,9 +103,21 @@
       {#if onNew}
         <button class="tool-btn primary" onclick={onNew} title="New message">+ New <kbd>N</kbd></button>
       {/if}
-      <button class="tool-btn" onclick={onSync} disabled={syncing} title="Sync (Ctrl+R)">
-        {syncing ? "Syncing…" : "Sync"} <kbd>Ctrl+R</kbd>
-      </button>
+      {#if syncing && syncProgress}
+        <div class="sync-progress">
+          <ProgressBar
+            current={syncProgress.current_folder}
+            total={syncProgress.total_folders}
+            label={syncProgress.folder_name || "Sync"}
+            status={syncProgress.status}
+            compact={true}
+          />
+        </div>
+      {:else}
+        <button class="tool-btn" onclick={onSync} disabled={syncing} title="Sync (Ctrl+R)">
+          {syncing ? "Syncing…" : "Sync"} <kbd>Ctrl+R</kbd>
+        </button>
+      {/if}
       <button class="tool-btn" onclick={onImport} title="Import messages (M)">Import <kbd>M</kbd></button>
     </div>
   {/if}
@@ -185,4 +199,7 @@
 
   .count { color: #7c7c9a; font-size: 0.82rem; }
   .count.muted { color: #555; }
+  .sync-progress {
+    min-width: 160px;
+  }
 </style>
