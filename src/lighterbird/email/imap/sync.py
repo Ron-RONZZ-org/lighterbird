@@ -72,6 +72,7 @@ def sync_account(
     force: bool = False,
     progress_tracker: Any = None,
     task_id: str | None = None,
+    manage_progress: bool = True,
 ) -> SyncResult:
     """Sync messages from an IMAP account.
 
@@ -96,6 +97,12 @@ def sync_account(
         db_store: Object with .db (LighterbirdDB)
         folders: Specific folders to sync (None = sync all discovered)
         force: If True, re-download all messages
+        progress_tracker: Optional | SyncProgressTracker for progress reporting.
+        task_id: Task ID for progress tracking.
+        manage_progress: If True (default), calls **set_total_folders()** before
+            iterating folders and **complete()** after. Set to False when the
+            caller (e.g. ``sync_all``) owns the lifecycle — folder-level progress
+            updates (``update_folder``) are still sent regardless.
 
     Returns:
         SyncResult with counts.
@@ -150,7 +157,7 @@ def sync_account(
             len(sorted_folders), account_email,
         )
 
-        if progress_tracker is not None and task_id:
+        if progress_tracker is not None and task_id and manage_progress:
             progress_tracker.set_total_folders(task_id, len(sorted_folders))
 
         for idx, folder_name in enumerate(sorted_folders, start=1):
@@ -231,7 +238,7 @@ def sync_account(
 
         # Retry moving previously soft-deleted messages to IMAP Trash
         _retry_pending_trash(client, db_store, account_email)
-        if progress_tracker is not None and task_id:
+        if progress_tracker is not None and task_id and manage_progress:
             progress_tracker.complete(
                 task_id,
                 result_total=result.total,

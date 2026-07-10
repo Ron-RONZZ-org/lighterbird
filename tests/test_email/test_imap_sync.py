@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from lighterbird.email.imap.sync import SyncResult, _retry_pending_trash, sync_account
+from lighterbird.server.sync_progress import SyncProgressTracker
 
 
 class TestSyncResult:
@@ -177,6 +178,69 @@ class TestSyncAccount:
         # The second folder had a _check_uidvalidity error, but it was caught,
         # so sync_folder was still called for Sent
         assert mock_client.sync_folder.call_count == 3
+
+    @patch("lighterbird.email.imap.sync.IMAPClient")
+    def test_manage_progress_true_calls_complete(self, mock_client_class):
+        """With manage_progress=True (default), sync_account should call
+        set_total_folders and complete on the progress tracker."""
+        mock_client = _make_mock_client()
+        mock_client_class.return_value = mock_client
+        mock_client.list_folders.return_value = [
+            {"name": "INBOX", "delimiter": "/", "flags": [], "special_use": None},
+        ]
+        mock_client.sync_folder.return_value = {"total": 1, "new": 1, "errors": []}
+
+        tracker = SyncProgressTracker()
+        task_id = tracker.start("user@example.com")
+
+        result = sync_account(
+            host="imap.example.com", port=993, use_ssl=True,
+            username="user", password="pass",
+            account_email="user@example.com",
+            db_store=MagicMock(),
+            progress_tracker=tracker,
+            task_id=task_id,
+            manage_progress=True,
+        )
+
+        progress = tracker.get(task_id)
+        assert progress["status"] == "complete"
+        assert progress["total_messages"] == 1
+        assert progress["new_messages"] == 1
+
+    @patch("lighterbird.email.imap.sync.IMAPClient")
+    def test_manage_progress_false_skips_total_and_complete(self, mock_client_class):
+        """With manage_progress=False, sync_account should NOT call
+        set_total_folders or complete, but still update folder progress."""
+        mock_client = _make_mock_client()
+        mock_client_class.return_value = mock_client
+        mock_client.list_folders.return_value = [
+            {"name": "INBOX", "delimiter": "/", "flags": [], "special_use": None},
+            {"name": "Sent", "delimiter": "/", "flags": [], "special_use": None},
+        ]
+        mock_client.sync_folder.return_value = {"total": 1, "new": 1, "errors": []}
+
+        tracker = SyncProgressTracker()
+        task_id = tracker.start("user@example.com")
+
+        result = sync_account(
+            host="imap.example.com", port=993, use_ssl=True,
+            username="user", password="pass",
+            account_email="user@example.com",
+            db_store=MagicMock(),
+            progress_tracker=tracker,
+            task_id=task_id,
+            manage_progress=False,
+        )
+
+        progress = tracker.get(task_id)
+        # Status should still be "running" — caller is responsible for complete()
+        assert progress["status"] == "running"
+        # total_folders should NOT have been set by sync_account
+        assert progress["total_folders"] == 0
+        # But folder updates should still have been sent
+        assert progress["current_folder"] == 2  # last folder index
+        assert progress["folder_name"] == "Sent"
 
 
 class TestRetryPendingTrash:
