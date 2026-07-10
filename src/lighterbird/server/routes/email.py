@@ -108,6 +108,13 @@ def delete_account(email: str, email_svc: EmailService = Depends(get_email_servi
     return {"status": "deleted"}
 
 
+@router.get("/autocomplete/account")
+def autocomplete_account(email_svc: EmailService = Depends(get_email_service)):
+    """Return all registered email account addresses for autocomplete."""
+    accounts = email_svc.list_accounts()
+    return {"values": [a["email"] for a in accounts]}
+
+
 @router.post("/sync", response_model=SyncResultResponse)
 def sync_email(
     req: SyncRequest = SyncRequest(),

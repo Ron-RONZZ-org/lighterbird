@@ -107,6 +107,11 @@ def account_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
 
 @command("email.account.modify", interactive=True,
+         params=[
+             {"name": "email", "type": "string",
+              "help": "Email address to modify",
+              "required": True, "autocompleteSource": "email/account"},
+         ],
          flags=[
              {"name": "name", "type": "string", "help": "Display name"},
              {"name": "imap-server", "type": "string", "help": "IMAP server hostname"},
