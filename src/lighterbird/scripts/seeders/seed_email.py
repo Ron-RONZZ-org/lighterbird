@@ -12,16 +12,25 @@ def _create_account(
     creds: dict[str, str], now: str,
 ) -> None:
     """Insert a single email account and its folders."""
+    import logging
     from lighterbird.email.server_detect import detect_servers
 
+    logger = logging.getLogger(__name__)
     name = email.split("@")[0]
     try:
         detected = detect_servers(email)
-    except Exception:
+    except Exception as exc:
+        # Auto-detection failed — use fallback pattern but WARN the user.
+        domain = email.split('@')[1]
         detected = {
-            "imap": f"imap.{email.split('@')[1]}",
-            "smtp": f"smtp.{email.split('@')[1]}",
+            "imap": f"imap.{domain}",
+            "smtp": f"smtp.{domain}",
         }
+        logger.warning(
+            "[seed] Auto-detection failed for %s: %s. "
+            "Falling back to %s / %s — verify these resolve in DNS.",
+            email, exc, detected["imap"], detected["smtp"],
+        )
 
     domain = email.split("@")[1]
     db.execute(
