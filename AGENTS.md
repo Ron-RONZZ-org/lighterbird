@@ -328,6 +328,14 @@ Existing ``.mjs`` scripts (``tests/playwright_e2e.mjs``, ``tests/e2e_comprehensi
 
 11. **Multi-command input support.** The input box supports multiple `!` commands in a single message. If the first character is `!`, the input is split on `!` boundaries (ignoring `!` inside single/double-quoted strings). Each command executes sequentially via the existing `execute()` pipeline. Interactive/form commands are skipped with an error in batch mode. The shared parsing utility lives in `lightercore/web/src/lib/multiCommand.js` (`splitCommands()` / `isMultiCommand()`), re-exported via `@lightercore/ui`. This is a frontend-only feature — the backend `POST /api/v1/command` receives individual commands as always.
 
+12. **Autocomplete for UUID/reference params.** Every command that takes a UUID or saved-user-data reference as a positional param MUST set ``uuidSource`` on that param in the ``@command()`` decorator's ``params`` metadata. The ``uuidSource`` prefix is used by the frontend ``getDataCompletionsFromCache()`` in ``commandEngine.js`` to fetch matching items from the popup data cache. When adding a new domain with UUID params:
+    - Add a data-fetch call in ``HomeTab.svelte``'s ``refreshDataCache()``
+    - Add a ``uuidSource`` prefix → extractor mapping in ``getDataCompletionsFromCache()``
+    - Add the new cache key to ``popupStore.svelte.js``
+    - Add the command path to the ``_COMMANDS_REQUIRING_UUID_SOURCE`` set in ``tests/test_server/test_command_uuid_source.py``
+    - Valid ``uuidSource`` prefixes (checked at test time): ``email.*``, ``calendar.events`` / ``calendar.*``, ``contacts.*``, ``todo.*``, ``journal.*``, ``user.*``, ``letters.*``
+    - The test ``test_command_uuid_source.py`` cross-references all backend ``uuidSource`` values against the frontend extractor function and will fail if a new prefix is not handled.
+
 ## List Tab Standard Feature Set
 
 All list tab components (`EmailListTab`, `JournalListTab`, `SieveListTab`, `ContactsListTab`, `TodoListTab`, `CalendarEventsListTab`, `LetterListTab`) must implement the following standard feature set:

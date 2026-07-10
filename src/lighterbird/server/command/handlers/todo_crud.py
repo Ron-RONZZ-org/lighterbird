@@ -166,7 +166,8 @@ def _attach_file(svc: TodoService, todo_uuid: str, path_or_url: str) -> None:
         )
 
 
-@command("todo.view", permission_level=PermissionLevel.READ)
+@command("todo.view", permission_level=PermissionLevel.READ,
+         params=[{"name": "uuid", "type": "string", "help": "Todo UUID", "required": True, "uuidSource": "todo.todos"}])
 def todo_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!todo view <uuid>"""
     if not remaining:
@@ -189,7 +190,8 @@ def todo_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("todo.done")
+@command("todo.done",
+         params=[{"name": "uuid", "type": "string", "help": "Todo UUID(s)", "required": True, "uuidSource": "todo.todos", "repeatable": True}])
 def todo_done(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!todo done <uuid> [uuid...]"""
     if not remaining:
@@ -207,7 +209,8 @@ def todo_done(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "status", "title": "Todo(s) Done", "data": {"done": done}}
 
 
-@command("todo.modify", interactive=True)
+@command("todo.modify", interactive=True,
+         params=[{"name": "uuid", "type": "string", "help": "Todo UUID", "required": True, "uuidSource": "todo.todos"}])
 def todo_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!todo modify <uuid> [--title TITLE] [--description DESC]
                            [--priority N] [--due DATE] [--status STATE]
@@ -270,7 +273,8 @@ def todo_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("todo.delete", permission_level=PermissionLevel.DESTRUCTIVE, interactive=True)
+@command("todo.delete", permission_level=PermissionLevel.DESTRUCTIVE, interactive=True,
+         params=[{"name": "uuid", "type": "string", "help": "Todo UUID(s)", "required": True, "uuidSource": "todo.todos", "repeatable": True}])
 def todo_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!todo delete <uuid> [uuid...]"""
     if not remaining:

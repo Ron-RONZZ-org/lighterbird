@@ -8,7 +8,7 @@
   import ChatMessage from "./ChatMessage.svelte";
   import ResetConfirmDialog from "./ResetConfirmDialog.svelte";
   import ConfirmToolDialog from "./ConfirmToolDialog.svelte";
-  import { email as emailApi, calendar, contacts, todo, journal } from "./api.js";
+  import { email as emailApi, calendar, contacts, todo, journal, letters, profiles } from "./api.js";
   import { parseCommand } from "./parser.js";
   import { commandTree, findNode } from "./commandTree.js";
   import { shouldIntercept } from "./commandRouter.js";
@@ -370,13 +370,19 @@
 
   async function refreshDataCache() {
     try {
-      const [accts, cals, conts, tds, jrnl, fldrs] = await Promise.all([
+      // Use a 3-month window for events (30 days ago → 60 days ahead)
+      const eventStart = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+      const eventEnd = new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10);
+      const [accts, cals, conts, tds, jrnl, fldrs, evts, ltrs, profs] = await Promise.all([
         emailApi.listAccounts().catch(() => null),
         calendar.listCalendars().catch(() => null),
         contacts.list({ limit: 50 }).catch(() => null),
         todo.list({ limit: 50 }).catch(() => null),
         journal.list({ limit: 50 }).catch(() => null),
         emailApi.listFolders().catch(() => null),
+        calendar.listEvents({ start: eventStart, end: eventEnd }).catch(() => null),
+        letters.list({ limit: 50 }).catch(() => null),
+        profiles.list({ limit: 50 }).catch(() => null),
       ]);
       popup.updateCache({
         accounts: accts?.accounts ?? [],
@@ -385,6 +391,9 @@
         todos: tds?.todos ?? [],
         journal: jrnl?.entries ?? [],
         folders: fldrs?.folders ?? [],
+        events: evts?.events ?? [],
+        letters: ltrs?.letters ?? [],
+        profiles: profs?.profiles ?? [],
       });
     } catch { /* ignore */ }
   }

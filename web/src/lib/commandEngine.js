@@ -276,10 +276,14 @@ export function getDataCompletionsFromCache(cachedData, uuidSource) {
   }
 
   if (uuidSource.startsWith("email.")) addAccounts(cachedData, result);
+  // calendar.events must be checked BEFORE calendar.* (which matches calendars/accounts)
+  if (uuidSource.startsWith("calendar.events")) addEvents(cachedData, result);
   if (uuidSource.startsWith("calendar.")) addCalendars(cachedData, result);
   if (uuidSource.startsWith("contacts.")) addContacts(cachedData, result);
   if (uuidSource.startsWith("todo.")) addTodos(cachedData, result);
   if (uuidSource.startsWith("journal.")) addJournal(cachedData, result);
+  if (uuidSource.startsWith("user.")) addProfiles(cachedData, result);
+  if (uuidSource.startsWith("letters.")) addLetters(cachedData, result);
   if (uuidSource === "email.folders") addFolders(cachedData, result);
 
   return result;
@@ -340,6 +344,31 @@ function addFolders(cache, result) {
         label: f.label || `${f.account_email}/${f.folder_name}`,
         value: f.label || `${f.account_email}/${f.folder_name}`,
       });
+    }
+  }
+}
+
+function addEvents(cache, result) {
+  if (cache.events) {
+    for (const e of cache.events) {
+      result.push({ uuid: e.uuid, label: `${e.title || "(untitled)"} (${e.start || ""})` });
+    }
+  }
+}
+
+function addProfiles(cache, result) {
+  if (cache.profiles) {
+    for (const p of cache.profiles) {
+      const name = p.profile_name || p.full_name || "(unnamed)";
+      result.push({ uuid: p.uuid, label: name });
+    }
+  }
+}
+
+function addLetters(cache, result) {
+  if (cache.letters) {
+    for (const l of cache.letters) {
+      result.push({ uuid: l.uuid, label: l.object || l.subject || "(untitled)" });
     }
   }
 }

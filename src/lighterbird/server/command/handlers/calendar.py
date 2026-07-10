@@ -133,7 +133,7 @@ def event_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         "start": remaining[1],
         "end": remaining[2],
         "location": remaining[3] if len(remaining) > 3 else "",
-        "description": "",
+        "description": remaining[4] if len(remaining) > 4 else "",
         "category": "",
         "rrule": rrule_str,
     }
@@ -141,7 +141,8 @@ def event_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "status", "title": "Event Created", "data": {"uuid": evt["uuid"], "title": evt["title"], "rrule": evt.get("rrule", "") or "(none)"}}
 
 
-@command("calendar.event.view", permission_level=PermissionLevel.READ)
+@command("calendar.event.view", permission_level=PermissionLevel.READ,
+         params=[{"name": "uuid", "type": "string", "help": "Event UUID", "required": True, "uuidSource": "calendar.events"}])
 def event_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar event view <uuid>"""
     if not remaining:
@@ -153,7 +154,8 @@ def event_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "events", "title": evt.get("title", "(untitled)"), "data": dict(evt)}
 
 
-@command("calendar.event.modify")
+@command("calendar.event.modify",
+         params=[{"name": "uuid", "type": "string", "help": "Event UUID", "required": True, "uuidSource": "calendar.events"}])
 def event_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar event modify <uuid> [--title TITLE] [--start ISO] [--end ISO] [--location LOC] [--description DESC]"""
     if not remaining:
@@ -180,7 +182,8 @@ def event_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "status", "title": "Event Modified", "data": {"uuid": uuid}}
 
 
-@command("calendar.event.delete", permission_level=PermissionLevel.DESTRUCTIVE, interactive=True)
+@command("calendar.event.delete", permission_level=PermissionLevel.DESTRUCTIVE, interactive=True,
+         params=[{"name": "uuid", "type": "string", "help": "Event UUID(s)", "required": True, "uuidSource": "calendar.events", "repeatable": True}])
 def event_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar event delete <uuid> [uuid...]"""
     if not remaining:
@@ -196,7 +199,8 @@ def event_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "status", "title": "Event(s) Deleted", "data": {"removed": removed}}
 
 
-@command("calendar.event.export.ics", permission_level=PermissionLevel.READ)
+@command("calendar.event.export.ics", permission_level=PermissionLevel.READ,
+         params=[{"name": "uuid", "type": "string", "help": "Event UUID(s)", "required": True, "uuidSource": "calendar.events", "repeatable": True}])
 def event_export_ics(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar event export ics <uuid> [<uuid>...]"""
     if not remaining:
@@ -312,7 +316,9 @@ def event_rrule_root(remaining: list[str], flags: dict[str, str]) -> dict[str, A
     }
 
 
-@command("calendar.event.rrule.set")
+@command("calendar.event.rrule.set",
+         params=[{"name": "uuid", "type": "string", "help": "Event UUID", "required": True, "uuidSource": "calendar.events"},
+                 {"name": "rrule", "type": "string", "help": "RRULE string (e.g. FREQ=WEEKLY;BYDAY=MO)", "required": True}])
 def event_rrule_set(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar event rrule set <uuid> <rrule>
 
@@ -339,7 +345,8 @@ def event_rrule_set(remaining: list[str], flags: dict[str, str]) -> dict[str, An
     return {"type": "status", "title": "RRULE Set", "data": {"uuid": uuid[:8], "rrule": rrule_str}}
 
 
-@command("calendar.event.rrule.clear")
+@command("calendar.event.rrule.clear",
+         params=[{"name": "uuid", "type": "string", "help": "Event UUID", "required": True, "uuidSource": "calendar.events"}])
 def event_rrule_clear(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar event rrule clear <uuid> — Remove recurrence from an event."""
     if not remaining:
@@ -356,7 +363,8 @@ def event_rrule_clear(remaining: list[str], flags: dict[str, str]) -> dict[str, 
     return {"type": "status", "title": "RRULE Cleared", "data": {"uuid": uuid[:8]}}
 
 
-@command("calendar.event.rrule.show", permission_level=PermissionLevel.READ)
+@command("calendar.event.rrule.show", permission_level=PermissionLevel.READ,
+         params=[{"name": "uuid", "type": "string", "help": "Event UUID", "required": True, "uuidSource": "calendar.events"}])
 def event_rrule_show(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar event rrule show <uuid> [--limit N]
 
@@ -446,7 +454,8 @@ def cal_account_add(remaining: list[str], flags: dict[str, str]) -> dict[str, An
     return {"type": "status", "title": "Calendar Added", "data": {"uuid": cal["uuid"], "url": url}}
 
 
-@command("calendar.account.modify", interactive=True)
+@command("calendar.account.modify", interactive=True,
+         params=[{"name": "uuid", "type": "string", "help": "Calendar UUID", "required": True, "uuidSource": "calendar.accounts"}])
 def cal_account_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar account modify <uuid> [--url URL] [--username USER] [--password PW]"""
     if not remaining:
@@ -466,7 +475,8 @@ def cal_account_modify(remaining: list[str], flags: dict[str, str]) -> dict[str,
     return {"type": "status", "title": "Calendar Modified", "data": {"uuid": uuid[:8]}}
 
 
-@command("calendar.account.delete", permission_level=PermissionLevel.DESTRUCTIVE, interactive=True)
+@command("calendar.account.delete", permission_level=PermissionLevel.DESTRUCTIVE, interactive=True,
+         params=[{"name": "uuid", "type": "string", "help": "Calendar UUID(s)", "required": True, "uuidSource": "calendar.accounts", "repeatable": True}])
 def cal_account_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!calendar account delete <uuid> [uuid...]"""
     if not remaining:

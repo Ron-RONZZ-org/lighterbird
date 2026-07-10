@@ -36,7 +36,8 @@ def todo_export_root(remaining: list[str],
     }
 
 
-@command("todo.export.md", permission_level=PermissionLevel.READ)
+@command("todo.export.md", permission_level=PermissionLevel.READ,
+         params=[{"name": "uuid", "type": "string", "help": "Todo UUID (or --all)", "required": False, "uuidSource": "todo.todos"}])
 def todo_export_md(remaining: list[str],
                    flags: dict[str, str]) -> dict[str, Any]:
     """!todo export md <uuid> | !todo export md --all"""

@@ -12,6 +12,7 @@
   let start = $state(_initial.start || "");
   let end = $state(_initial.end || "");
   let location = $state(_initial.location || "");
+  let description = $state(_initial.description || "");
   let creating = $state(false);
   let savingDraft = $state(false);
   let draftSaved = $state(false);
@@ -27,7 +28,7 @@
       const result = await draftsApi.save(
         "calendar-event",
         title || "(untitled)",
-        { calendar_uuid: calendarUuid, title, start, end, location },
+        { calendar_uuid: calendarUuid, title, start, end, location, description },
         draftUuid,
       );
       draftUuid = result.uuid;
@@ -55,6 +56,7 @@
     || start !== (_initial.start || "")
     || end !== (_initial.end || "")
     || location !== (_initial.location || "")
+    || description !== (_initial.description || "")
   );
   $effect(() => { onDirtyChange(dirty); });
 
@@ -81,7 +83,7 @@
       await onsubmit({
         tokens: ["calendar", "event", "add"],
         flags: { calendar: calendarUuid },
-        remaining: [title, toIso(start), toIso(end), location].filter(Boolean),
+        remaining: [title, toIso(start), toIso(end), location, description].filter(Boolean),
       });
       onDirtyChange(false);
     } finally {
@@ -115,6 +117,10 @@
     <label for="location">Location</label>
     <input id="location" type="text" bind:value={location} placeholder="(optional)" />
   </div>
+  <div class="field">
+    <label for="description">Description</label>
+    <textarea id="description" bind:value={description} placeholder="(optional)" rows="4"></textarea>
+  </div>
   <div class="actions">
     <button type="button" class="draft-btn" onclick={saveDraft} disabled={savingDraft || !title && !start && !end}>
       {#if savingDraft}
@@ -137,10 +143,11 @@
   .event-form { padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
   .field { display: flex; flex-direction: column; gap: 0.25rem; }
   .field label { font-size: 0.8rem; color: #7c7c9a; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-  .field input, .field select {
+  .field input, .field select, .field textarea {
     background: #16213e; border: 1px solid #333; color: #e0e0e0;
     padding: 0.5rem; border-radius: 4px; font-family: inherit; font-size: 0.9rem;
   }
+  .field textarea { resize: vertical; min-height: 4rem; }
   .actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
   .actions button {
     background: #0f3460; color: #e0e0e0; border: none; padding: 0.5rem 1.5rem;

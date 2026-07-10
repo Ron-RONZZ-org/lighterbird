@@ -160,7 +160,8 @@ def contact_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "status", "title": "Contact Added", "data": {"uuid": contact["uuid"], "name": display_name}}
 
 
-@command("contact.view", permission_level=PermissionLevel.READ)
+@command("contact.view", permission_level=PermissionLevel.READ,
+         params=[{"name": "uuid", "type": "string", "help": "Contact UUID or email", "required": True, "uuidSource": "contacts.contacts"}])
 def contact_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!contact view <uuid-or-email>"""
     if not remaining:
@@ -175,7 +176,8 @@ def contact_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {"type": "status", "title": contact.get("given_name", "(unnamed)"), "data": dict(contact)}
 
 
-@command("contact.modify", interactive=True, form_type="contacts-modify")
+@command("contact.modify", interactive=True, form_type="contacts-modify",
+         params=[{"name": "uuid", "type": "string", "help": "Contact UUID", "required": True, "uuidSource": "contacts.contacts"}])
 def contact_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!contact modify <uuid> [--first-name GIVEN] [--last-name FAMILY]
     [--email tag:value,...] [--phone tag:value,...] [--organization ORG]
@@ -217,7 +219,8 @@ def contact_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     return {"type": "status", "title": "Contact Modified", "data": {"uuid": uuid}}
 
 
-@command("contact.delete", permission_level=PermissionLevel.DESTRUCTIVE)
+@command("contact.delete", permission_level=PermissionLevel.DESTRUCTIVE,
+         params=[{"name": "uuid", "type": "string", "help": "Contact UUID(s)", "required": True, "uuidSource": "contacts.contacts", "repeatable": True}])
 def contact_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!contact delete <uuid> [uuid...]"""
     if not remaining:
@@ -242,7 +245,8 @@ def contact_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     return {"type": "contacts-list", "title": "Contact Search", "data": {"contacts": contacts}}
 
 
-@command("contact.export.vcf", permission_level=PermissionLevel.READ)
+@command("contact.export.vcf", permission_level=PermissionLevel.READ,
+         params=[{"name": "uuid", "type": "string", "help": "Contact UUID", "required": False, "uuidSource": "contacts.contacts"}])
 def contact_export_vcf(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!contact export vcf <uuid> [--all]"""
     svc: ContactService = get_contact_service()
@@ -277,7 +281,9 @@ def contact_clean(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     }
 
 
-@command("contact.merge", permission_level=PermissionLevel.DESTRUCTIVE)
+@command("contact.merge", permission_level=PermissionLevel.DESTRUCTIVE,
+         params=[{"name": "keep-uuid", "type": "string", "help": "Contact UUID to keep", "required": True, "uuidSource": "contacts.contacts"},
+                 {"name": "remove-uuid", "type": "string", "help": "Contact UUID(s) to merge and remove", "required": True, "uuidSource": "contacts.contacts", "repeatable": True}])
 def contact_merge(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!contact merge <keep-uuid> <remove-uuid> [remove-uuid...]
 
@@ -360,7 +366,9 @@ def contact_category_list(remaining: list[str], flags: dict[str, str]) -> dict[s
     return {"type": "status", "title": "Contact Categories", "data": {"categories": sorted_cats, "count": len(sorted_cats)}}
 
 
-@command("contact.category.set")
+@command("contact.category.set",
+         params=[{"name": "uuid", "type": "string", "help": "Contact UUID", "required": True, "uuidSource": "contacts.contacts"},
+                 {"name": "category", "type": "string", "help": "Category name(s), comma-separated", "required": True}])
 def contact_category_set(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!contact category set <uuid> <category>
 
@@ -378,7 +386,9 @@ def contact_category_set(remaining: list[str], flags: dict[str, str]) -> dict[st
     return {"type": "status", "title": "Category Set", "data": {"uuid": uuid[:8], "category": category}}
 
 
-@command("contact.category.add")
+@command("contact.category.add",
+         params=[{"name": "uuid", "type": "string", "help": "Contact UUID", "required": True, "uuidSource": "contacts.contacts"},
+                 {"name": "category", "type": "string", "help": "Category name to add", "required": True}])
 def contact_category_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!contact category add <uuid> <category>
 
@@ -403,7 +413,9 @@ def contact_category_add(remaining: list[str], flags: dict[str, str]) -> dict[st
     return {"type": "status", "title": "Category Added", "data": {"uuid": uuid[:8], "category": category}}
 
 
-@command("contact.category.remove")
+@command("contact.category.remove",
+         params=[{"name": "uuid", "type": "string", "help": "Contact UUID", "required": True, "uuidSource": "contacts.contacts"},
+                 {"name": "category", "type": "string", "help": "Category name to remove", "required": True}])
 def contact_category_remove(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!contact category remove <uuid> <category>
 

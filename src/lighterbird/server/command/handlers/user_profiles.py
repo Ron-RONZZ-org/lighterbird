@@ -220,7 +220,8 @@ def user_info_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     }
 
 
-@command("user.info.view", permission_level=PermissionLevel.READ)
+@command("user.info.view", permission_level=PermissionLevel.READ,
+         params=[{"name": "uuid", "type": "string", "help": "Profile UUID", "required": True, "uuidSource": "user.profiles"}])
 def user_info_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!user info view <uuid> — View profile details."""
     if not remaining:
@@ -249,7 +250,8 @@ def user_info_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     }
 
 
-@command("user.info.modify", interactive=True)
+@command("user.info.modify", interactive=True,
+         params=[{"name": "uuid", "type": "string", "help": "Profile UUID", "required": True, "uuidSource": "user.profiles"}])
 def user_info_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!user info modify <uuid> [--first-name ...] [--last-name ...] ...
 
@@ -315,7 +317,8 @@ def _resolve_uuid(svc: ProfileService, raw: str) -> str | None:
     return None
 
 
-@command("user.info.delete", permission_level=PermissionLevel.DESTRUCTIVE)
+@command("user.info.delete", permission_level=PermissionLevel.DESTRUCTIVE,
+         params=[{"name": "uuid", "type": "string", "help": "Profile UUID or name", "required": True, "uuidSource": "user.profiles", "repeatable": True}])
 def user_info_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!user info delete <uuid-or-name> [uuid-or-name...] — Delete one or more profiles.
 
