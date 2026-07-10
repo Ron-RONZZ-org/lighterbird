@@ -51,6 +51,22 @@ def account_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     from lighterbird.email.server_detect import detect_servers
 
     detected = detect_servers(email_addr, imap_server=imap_server, smtp_server=smtp_server)
+
+    # Validate that the detected IMAP hostname actually resolves in DNS.
+    # If it doesn't, still create the account but warn the user, since
+    # the hostname may be a private/custom server not in public DNS.
+    if not imap_server and detected.get("method") == "fallback":
+        import socket
+        try:
+            socket.getaddrinfo(detected["imap"], detected.get("imap_port", 993))
+        except socket.gaierror:
+            # DNS lookup failed for auto-detected fallback — user should
+            # specify --imap manually or check the server name.
+            raise CommandValidationError(
+                f"Auto-detected IMAP server '{detected['imap']}' does not resolve in DNS. "
+                f"The server for {email_addr} could not be determined automatically. "
+                f"Please specify --imap and --smtp manually.",
+            )
     acct_data = {
         "name": name or email_addr.split("@")[0],
         "email": email_addr.lower().strip(),
@@ -75,19 +91,30 @@ def account_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("email.account.modify", interactive=True)
+@command("email.account.modify", interactive=True,
+         flags=[
+             {"name": "name", "type": "string", "help": "Display name"},
+             {"name": "imap-server", "type": "string", "help": "IMAP server hostname"},
+             {"name": "smtp-server", "type": "string", "help": "SMTP server hostname"},
+             {"name": "password", "type": "string", "help": "Account password"},
+             {"name": "signature", "type": "string", "help": "Email signature text"},
+             {"name": "redetect", "type": "bool",
+              "help": "Re-detect IMAP/SMTP servers from MX records"},
+         ])
 def account_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email account modify <email> [--name NAME] [--password PW]
                     [--imap-server HOST] [--smtp-server HOST]
-                    [--signature TEXT]
+                    [--signature TEXT] [--redetect]
 
     Modify an existing email account.
     Use ``--signature`` to set or update the account's email signature.
+    Use ``--redetect`` to re-detect IMAP/SMTP servers from MX records
+    (useful when servers were mis-detected during account creation).
     """
     if not remaining:
         raise CommandValidationError(
             "Missing account email.",
-            "Usage: !email account modify <email> [--name ...] [--password ...]",
+            "Usage: !email account modify <email> [--name ...] [--password ...] [--redetect]",
         )
     email = remaining[0]
     svc: EmailService = get_email_service()
@@ -96,12 +123,21 @@ def account_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
         raise CommandValidationError(f"Account not found: {email}")
 
     updates = {}
+    if "redetect" in flags:
+        from lighterbird.email.server_detect import detect_servers
+        detected = detect_servers(email)
+        updates["imap_server"] = detected["imap"]
+        updates["smtp_server"] = detected["smtp"]
+        if "managesieve_host" in detected:
+            updates["managesieve_host"] = detected["managesieve_host"]
+        if "managesieve_port" in detected:
+            updates["managesieve_port"] = detected["managesieve_port"]
     if "name" in flags:
         updates["name"] = flags["name"]
-    if "imap_server" in flags:
-        updates["imap_server"] = flags["imap_server"]
-    if "smtp_server" in flags:
-        updates["smtp_server"] = flags["smtp_server"]
+    if "imap-server" in flags or "imap_server" in flags:
+        updates["imap_server"] = flags.get("imap-server", flags.get("imap_server", ""))
+    if "smtp-server" in flags or "smtp_server" in flags:
+        updates["smtp_server"] = flags.get("smtp-server", flags.get("smtp_server", ""))
     if "managesieve_host" in flags:
         updates["managesieve_host"] = flags["managesieve_host"]
     if "managesieve_port" in flags:
