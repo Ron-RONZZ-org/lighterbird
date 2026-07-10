@@ -288,7 +288,8 @@ export function getDataCompletionsFromCache(cachedData, uuidSource) {
 function addAccounts(cache, result) {
   if (cache.accounts) {
     for (const a of cache.accounts) {
-      result.push({ uuid: a.uuid, label: `${a.email} (${a.name || ""})` });
+      // Accounts are keyed by email (not uuid), so use email as uuid
+      result.push({ uuid: a.email || a.uuid, label: `${a.email} (${a.name || ""})` });
     }
   }
 }

@@ -110,7 +110,7 @@ def account_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
          params=[
              {"name": "email", "type": "string",
               "help": "Email address to modify",
-              "required": True, "autocompleteSource": "email/account"},
+              "required": True, "uuidSource": "email.accounts"},
          ],
          flags=[
              {"name": "name", "type": "string", "help": "Display name"},

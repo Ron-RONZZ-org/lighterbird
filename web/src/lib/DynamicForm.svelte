@@ -241,8 +241,6 @@
     for (const src of sources) {
       if (src === "contact/org") {
         _fetchAutocompleteData("/api/v1/contacts/autocomplete/organization", src);
-      } else if (src === "email/account") {
-        _fetchAutocompleteData("/api/v1/email/autocomplete/account", src);
       }
     }
   });
