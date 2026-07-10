@@ -13,6 +13,7 @@
   import { commandTree, findNode } from "./commandTree.js";
   import { shouldIntercept } from "./commandRouter.js";
   import { detectPersistentType } from "./persistentTypes.js";
+  import { splitCommands, isMultiCommand } from "@lightercore/ui/multiCommand.js";
 
   let hasSentLlmMessage = $state(false);
   let showLlmSetup = $state(false);
@@ -57,7 +58,46 @@
     hasSentLlmMessage = true;
 
     if (trimmed.startsWith("!")) {
-      // ── Smart add-command routing ─────────────────────────────────
+      // ── Multi-command batch execution ─────────────────────────────
+      // If the input contains multiple !-commands (e.g. "!email list !todo list"),
+      // execute them sequentially, continue on error, and skip interactive
+      // commands (those that require form input).
+      if (isMultiCommand(trimmed)) {
+        const commands = splitCommands(trimmed);
+        for (const cmd of commands) {
+          try {
+            const routing = shouldIntercept(cmd);
+            if (routing.intercept) {
+              tabStore.open("error", "Skipped", {
+                message: `Command "${cmd}" requires an interactive form. Run it separately.`,
+              });
+              continue;
+            }
+            const result = await execute(cmd);
+            if (result.type === "form-required") {
+              tabStore.open("error", "Skipped", {
+                message: `Command "${cmd}" requires interactive input. Run it separately.`,
+              });
+              continue;
+            }
+            const dataType = detectPersistentType(cmd);
+            if (dataType) {
+              popup.showPersistent(result.type, result.title, result.data, dataType);
+            } else {
+              popup.show(result.type, result.title, result.data);
+            }
+          } catch (err) {
+            tabStore.open("error", "Command Failed", {
+              message: err.message || String(err),
+              suggestion: err.suggestion || "",
+            });
+          }
+        }
+        scrollToBottom();
+        return;
+      }
+
+      // ── Smart add-command routing (single command) ────────────────
       const routing = shouldIntercept(trimmed);
       if (routing.intercept) {
         try {

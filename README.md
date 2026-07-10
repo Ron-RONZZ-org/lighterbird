@@ -28,6 +28,7 @@ Traditional PIM apps drown you in sidebars, nested menus, and feature flags. Lig
 - `!email/!todo/!journal/!contact/!calendar/!letter import` — import items from standard file formats
 - `!reset <path.7z>` — backup all data to a 7z archive, then reset to a fresh state
 - `!reset --no-backup` — reset WITHOUT backup (requires GUI confirmation)
+- **Multi-command input** — chain multiple `!` commands in one message: `!email account modify a@x.com --redetect !email account modify b@x.com --redetect`. Commands execute sequentially; `!` inside quoted strings is ignored.
 - Just type naturally → ask the built-in LLM to do things on your behalf
 - As-you-type command suggestions with UUID/entity completion — no memorisation needed
 
