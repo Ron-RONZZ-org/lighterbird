@@ -147,13 +147,45 @@ def sync_account(
         )
 
         for folder_name in sorted_folders:
-            ok, uidvalidity, highest_modseq = client.select_folder_ex(
-                folder_name, readonly=True,
-                condstore=client.capabilities.has_condstore,
-            )
-            if not ok:
-                result.errors.append(f"Cannot select folder: {folder_name}")
-                continue
+            # CONDSTORE optimization: if server modseq hasn't changed since
+            # last sync, skip this folder entirely (no new messages).
+            if not force and client.capabilities.has_condstore:
+                stored = db_store.db.execute_one(
+                    "SELECT highest_modseq FROM folders "
+                    "WHERE account_email = ? AND name = ?",
+                    (account_email, folder_name),
+                )
+                if stored and stored["highest_modseq"] > 0:
+                    ok, _uidvalidity, server_modseq = client.select_folder_ex(
+                        folder_name, readonly=True, condstore=True,
+                    )
+                    if ok and server_modseq is not None:
+                        if server_modseq <= stored["highest_modseq"]:
+                            logger.debug(
+                                "[sync] Skipping %s/%s (modseq %d unchanged)",
+                                account_email, folder_name, server_modseq,
+                            )
+                            continue  # No new messages — skip entirely
+                        # Modseq changed, proceed with sync below
+                        uidvalidity = _uidvalidity
+                        highest_modseq = server_modseq
+                    else:
+                        # CONDSTORE SELECT failed — fall through to normal path
+                        uidvalidity = None
+                        highest_modseq = None
+                else:
+                    # First sync or no stored modseq — normal path
+                    uidvalidity = None
+                    highest_modseq = None
+            else:
+                # No CONDSTORE — normal SELECT
+                ok, uidvalidity, highest_modseq = client.select_folder_ex(
+                    folder_name, readonly=True,
+                    condstore=client.capabilities.has_condstore,
+                )
+                if not ok:
+                    result.errors.append(f"Cannot select folder: {folder_name}")
+                    continue
 
             if uidvalidity is not None:
                 try:
