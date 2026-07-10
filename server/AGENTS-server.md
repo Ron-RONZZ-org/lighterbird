@@ -8,7 +8,7 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 
 `src/lighterbird/server/` provides:
 
-- **`app.py`** — FastAPI application factory, startup/shutdown lifecycle.  On startup the ``lifespan`` handler calls :func:`~lighterbird.core.config_defaults.seed_config_defaults` to create any missing config files (``system_prompt.md``, ``cowrite_style.md``) with their shipped defaults.
+- **`app.py`** — FastAPI application factory, startup/shutdown lifecycle.  On startup the ``lifespan`` handler calls :func:`~lighterbird.core.config_defaults.seed_config_defaults` to create any missing config files (``system_prompt.md``, ``cowrite_style.md``, ``cowrite_style_email.md``, ``cowrite_style_journal.md``, ``cowrite_style_todo.md``, ``cowrite_style_letter.md``) with their shipped defaults.
 - **`routes/`** — API route handlers organized by domain (email, email_sync, email_actions, email_sieve, calendar, contacts, journal, todo, letter, profiles, chat, admin, cowrite)
 - **`sync_progress.py`** — Thread-safe in-memory sync progress tracker used by the async sync endpoints. Provides ``SyncProgressTracker`` class and ``get_sync_progress_tracker()`` singleton.
 - **`command/`** — `!` command system: tree definition, parser, registry, response models, per-domain handlers
@@ -27,7 +27,7 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 - **REST API for everything else** — messages, contacts, calendar, todo, journal, letters, profiles CRUD
 - **Command system (`!` commands)** — the primary user interaction model. Defined in `command/tree.py`, dispatched by `command/registry.py`, handled by per-domain handlers in `command/handlers/`
 - **Backup scheduler** — automatic timestamped backups of all domain databases on configurable schedule
-- **Cowrite API** — AI-assisted writing via `POST /api/v1/cowrite`, used by form editors (ComposeEmail, TodoAddForm, JournalWrite)
+- **Cowrite API** — AI-assisted writing via `POST /api/v1/cowrite`, used by form editors (ComposeEmail, TodoAddForm, JournalWrite, LetterForm).  Uses a **cascade style model**: a general ``cowrite_style.md`` file (cross-cutting rules) is loaded first, then a domain-specific file (``cowrite_style_email.md``, etc.) is appended based on the ``form_type`` parameter.
 - **API version prefix**: `/api/v1/...`
 
 ## Input/Output Expectations

@@ -92,15 +92,25 @@ The `lighterbird-dev` CLI also respects `LIGHTERBIRD_PORT`. The `--port` CLI fla
 
 ### Customising the LLM
 
-Two user-editable config files are auto-created on first server start:
+User-editable config files are auto-created on first server start:
 
 - **`~/.config/lighterbird/system_prompt.md`** — the LLM agent's system prompt.
   Edit to change how the AI behaves (tone, rules, constraints).
-- **`~/.config/lighterbird/cowrite_style.md`** — co-writing style guide.
-  Edit to control tone, language, and formatting for AI-assisted writing.
+- **`~/.config/lighterbird/cowrite_style.md`** — co-writing style guide (general).
+  Cross-cutting rules: tone, language, active voice.
+- **`~/.config/lighterbird/cowrite_style_email.md`** — email-specific style.
+- **`~/.config/lighterbird/cowrite_style_journal.md`** — journal-specific style.
+- **`~/.config/lighterbird/cowrite_style_todo.md`** — todo-specific style.
+- **`~/.config/lighterbird/cowrite_style_letter.md`** — letter-specific style.
 
-Both files are seeded with sensible defaults and can be edited freely.
-Changes take effect after the next LLM request (no server restart needed
+Co-writing uses a **cascade model**: the general style (`cowrite_style.md`) is
+always loaded first, and the domain-specific file is appended under a
+``## Domain-specific Guide`` heading when you trigger co-writing for that
+domain (e.g. composing an email loads ``cowrite_style.md`` +
+``cowrite_style_email.md``).
+
+All files are seeded with sensible defaults and can be edited freely.
+Changes take effect on the next co-writing request (no server restart needed
 for the system prompt — call ``POST /api/v1/llm/reload-prompt`` to apply
 immediately).
 
