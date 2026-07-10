@@ -266,7 +266,7 @@ def todo_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     return {
         "type": "status",
         "title": "Todo Modified",
-        "data": {"uuid": uuid_[:8]},
+        "data": {"uuid": uuid_},
     }
 
 

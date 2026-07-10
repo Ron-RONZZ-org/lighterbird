@@ -214,7 +214,7 @@ def contact_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     if not updates:
         raise CommandValidationError("No fields to modify.", "Usage: !contact modify <uuid> [--first-name ...] [--email ...] ...")
     svc.update(uuid, updates)
-    return {"type": "status", "title": "Contact Modified", "data": {"uuid": uuid[:8]}}
+    return {"type": "status", "title": "Contact Modified", "data": {"uuid": uuid}}
 
 
 @command("contact.delete", permission_level=PermissionLevel.DESTRUCTIVE)

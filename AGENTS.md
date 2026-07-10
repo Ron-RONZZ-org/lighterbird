@@ -359,9 +359,13 @@ Export and import use two shared dialog components:
 
 Backend format conversion lives in domain services (not a unified `export/` module). A shared YAML frontmatter utility exists in `core/yaml_frontmatter.py` for `.md` export/import across todo, journal, and letter domains.
 
+The `LIST_REFRESHERS` map (keyed by persistent idKey) was extracted from `FormTab.svelte` into `mutationToTab.js` so both the form-interception path (FormTab) and direct-execution path (App.svelte) share the same API-caller mapping.
+
 ### Shared Helpers
 
-Common logic lives in `web/src/lib/listTabShared.svelte.js`:
+Common logic lives in shared modules:
+
+### `web/src/lib/listTabShared.svelte.js`
 
 | Export | Purpose |
 |--------|---------|
@@ -370,6 +374,20 @@ Common logic lives in `web/src/lib/listTabShared.svelte.js`:
 | `formatListItemDate(iso)` | Context-aware date formatting (today=time, this year=month+day, older=full) |
 | `truncate(s, max)` | String truncation with ellipsis |
 | `preview(s, max)` | First line, stripped of markdown, truncated |
+
+### `web/src/lib/mutationToTab.js`
+
+Post-mutation navigation: after a successful `!xxx add/modify/delete` command, the frontend redirects to the corresponding list tab and briefly highlights the affected entry.
+
+| Export | Purpose |
+|--------|---------|
+| `isMutationCommand(tokens)` | Returns mutation config (listTokens, listIdKey, isDelete) for a command token path, or null |
+| `extractHighlightUuid(result, isDelete)` | Extracts UUID from result data; returns null for deletes |
+| `LIST_REFRESHERS` | Map of persistent idKey → API fetcher that accepts a `highlight` UUID parameter |
+| `persistentIdKey(listIdKey)` | Converts `"todo-list"` → `"persistent-todo-list"` |
+| `MUTATION_MAP` | Static mapping table: action-verb token paths → list metadata |
+
+The redirect is handled in `App.svelte`'s `handleCommand()` after the `form-required` check. Uses a **hybrid** refresh strategy: inject highlight into existing list tabs for add/modify (no loading flicker), always re-fetch for delete. Previously a special case for `!email send`; now generalized to all domains (todo, contact, journal, calendar event, letter, sieve, email send/trash/archive).
 
 ### Shared Form Components
 
