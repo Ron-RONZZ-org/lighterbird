@@ -60,7 +60,8 @@ class EmailService:
     # ── Sync ─────────────────────────────────────────────────────────────
 
     def sync_account(self, email: str, force: bool = False,
-                     progress_tracker=None, task_id: str | None = None):
+                     progress_tracker=None, task_id: str | None = None,
+                     manage_progress: bool = True):
         """Sync messages for a single account by email.
 
         Always returns a SyncResult (never raises). Pending flag syncs
@@ -69,6 +70,8 @@ class EmailService:
 
         If *progress_tracker* and *task_id* are provided, folder-level
         progress is reported via ``progress_tracker.update_folder()``.
+        When *manage_progress* is True (default), the tracker is also
+        configured with the folder count and marked complete at the end.
         """
         from lighterbird.email.imap import sync_account as _sync
         from lighterbird.email.imap.sync import SyncResult
@@ -95,6 +98,7 @@ class EmailService:
                     force=force,
                     progress_tracker=progress_tracker,
                     task_id=task_id,
+                    manage_progress=manage_progress,
                 )
             except ConnectionError as e:
                 result = SyncResult()
@@ -114,9 +118,10 @@ class EmailService:
                  progress_tracker=None, task_id: str | None = None) -> dict[str, dict]:
         """Sync messages for all accounts.
 
-        When *progress_tracker* is provided, reports progress at the account
-        level (not per-folder).  Folder-level granularity is only available
-        when calling :meth:`sync_account` directly.
+        When *progress_tracker* is provided, progress is reported at the
+        folder level as each account is synced in turn.  The total number
+        of accounts is used as the denominator so the user sees which
+        account is currently being processed.
         """
         accounts = self.accounts.list_accounts()
         if progress_tracker is not None and task_id:
@@ -127,9 +132,12 @@ class EmailService:
             if progress_tracker is not None and task_id:
                 progress_tracker.update_folder(task_id, idx, email)
             try:
-                # Don't pass tracker to sync_account — sync_all owns the
-                # progress reporting at the account level.
-                sr = self.sync_account(email, force=force)
+                sr = self.sync_account(
+                    email, force=force,
+                    progress_tracker=progress_tracker,
+                    task_id=task_id,
+                    manage_progress=False,
+                )
                 results[email] = sr.to_dict()
             except Exception as e:
                 results[email] = {"total": 0, "new": 0, "errors": [str(e)]}
