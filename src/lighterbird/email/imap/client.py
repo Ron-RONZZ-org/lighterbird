@@ -52,6 +52,17 @@ _LIST_RE = re.compile(
 _IMAP_UID_RE = re.compile(rb"UID (\d+)")
 
 
+def _imap_quote_folder(name: str) -> str:
+    """Quote a folder name for use in IMAP commands.
+
+    Python 3.13's imaplib does not always quote folder names containing
+    special characters (``&``, spaces) in ``_simple_command``, causing
+    SELECT/EXAMINE to fail.  This helper ensures the name is quoted.
+    """
+    escaped = name.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
 def _to_imap_date(iso_date: str) -> str:
     """Convert ISO date (``YYYY-MM-DD``) to IMAP date format (``DD-Mon-YYYY``).
 
@@ -290,7 +301,7 @@ class IMAPClient:
 
     def _select_folder(self, folder: str) -> bool:
         """Select a folder for write operations. Returns True on success."""
-        typ, data = self.conn.select(folder, readonly=False)
+        typ, data = self.conn.select(_imap_quote_folder(folder), readonly=False)
         return typ == "OK"
 
     def select_folder_ex(self, folder: str, readonly: bool = True,
@@ -311,13 +322,16 @@ class IMAPClient:
             Values may be None if not advertised by the server.
         """
         try:
-            # Build SELECT command with optional CONDSTORE parameter
+            # Build SELECT command with optional CONDSTORE parameter.
+            # Quote folder name explicitly — Python 3.13's imaplib does
+            # not always quote names with special chars (&, spaces).
+            quoted = _imap_quote_folder(folder)
             if condstore and self.capabilities.has_condstore:
                 typ, data = self.conn._simple_command(
-                    "SELECT", folder, b"(CONDSTORE)"
+                    "SELECT", quoted, b"(CONDSTORE)"
                 )
             else:
-                typ, data = self.conn.select(folder, readonly=readonly)
+                typ, data = self.conn.select(quoted, readonly=readonly)
 
             if typ != "OK":
                 return False, None, None
@@ -465,7 +479,7 @@ class IMAPClient:
         """
         result: dict[str, Any] = {"total": 0, "new": 0, "errors": []}
         try:
-            typ, data = self.conn.select(folder, readonly=True)
+            typ, data = self.conn.select(_imap_quote_folder(folder), readonly=True)
             if typ != "OK":
                 result["errors"].append(f"Cannot select folder: {folder}")
                 return result
@@ -607,6 +621,15 @@ class IMAPClient:
             The updated message dict, or ``None`` on failure.
         """
         try:
+            # Must SELECT the folder first before fetching
+            typ, _ = self.conn.select(_imap_quote_folder(folder_name), readonly=True)
+            if typ != "OK":
+                logger.warning(
+                    "fetch_message_body: cannot select %s/%s",
+                    account_email, folder_name,
+                )
+                return None
+
             typ, fetch_data = self.conn.uid(
                 "fetch", str(imap_uid), "(FLAGS BODY.PEEK[] UID)",
             )
@@ -701,7 +724,7 @@ class IMAPClient:
             ConnectionError: If the IMAP connection fails.
         """
         try:
-            self.conn.select(folder, readonly=True)
+            self.conn.select(_imap_quote_folder(folder), readonly=True)
         except Exception as exc:
             raise ConnectionError(
                 f"Cannot select folder {folder!r} for search: {exc}"

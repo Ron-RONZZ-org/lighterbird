@@ -10,6 +10,7 @@ from lighterbird.email.imap.client import (
     IMAPClient,
     _parse_list_response,
     _to_imap_date,
+    _imap_quote_folder,
 )
 from lighterbird.email.imap.storage import store_message
 
@@ -364,7 +365,7 @@ class TestIMAPClientSelectFolder:
         client._conn = mock_conn
         mock_conn.select.return_value = ("OK", [b"3"])
         assert client._select_folder("INBOX") is True
-        mock_conn.select.assert_called_with("INBOX", readonly=False)
+        mock_conn.select.assert_called_with('"INBOX"', readonly=False)
 
     def test_select_failure(self):
         client = IMAPClient("imap.example.com")
@@ -657,6 +658,26 @@ class TestToImapDate:
         assert _to_imap_date(None) is None
 
 
+# ── _imap_quote_folder ──────────────────────────────────────────────────────
+
+
+class TestImapQuoteFolder:
+    def test_plain_name(self):
+        assert _imap_quote_folder("INBOX") == '"INBOX"'
+
+    def test_name_with_spaces(self):
+        assert _imap_quote_folder("My Folder") == '"My Folder"'
+
+    def test_name_with_ampersand(self):
+        assert _imap_quote_folder("Int&AOk-gration") == '"Int&AOk-gration"'
+
+    def test_name_with_special_chars(self):
+        assert _imap_quote_folder('Folder "Special"') == '"Folder \\"Special\\""'
+
+    def test_folder_with_backslash(self):
+        assert _imap_quote_folder('Folder\\Name') == '"Folder\\\\Name"'
+
+
 # ── IMAPClient.search_remote ──────────────────────────────────────────────────
 
 
@@ -676,7 +697,7 @@ class TestIMAPClientSearchRemote:
         mock_conn.uid.return_value = ("OK", [b"1 2 3"])
         result = client.search_remote("INBOX", "meeting")
         assert result == [1, 2, 3]
-        mock_conn.select.assert_called_with("INBOX", readonly=True)
+        mock_conn.select.assert_called_with('"INBOX"', readonly=True)
         mock_conn.uid.assert_called_once()
 
     def test_search_remote_with_criteria(self):
