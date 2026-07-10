@@ -53,8 +53,9 @@ def account_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     detected = detect_servers(email_addr, imap_server=imap_server, smtp_server=smtp_server)
 
     # Validate that the detected IMAP hostname actually resolves in DNS.
-    # If it doesn't, redirect to the interactive form with pre-filled data
-    # so the user can enter the correct IMAP/SMTP servers manually.
+    # If it doesn't, redirect to the interactive form so the user can
+    # enter the correct IMAP/SMTP servers manually.  Only the values the
+    # user explicitly provided (email, password, name) are pre-filled.
     if not imap_server and detected.get("method") == "fallback":
         import socket
         try:
@@ -69,12 +70,14 @@ def account_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                         "email": email_addr,
                         "password": password,
                         "name": name,
-                        "imap_server": detected["imap"],
-                        "smtp_server": detected["smtp"],
+                        # IMAP/SMTP intentionally omitted — we detected
+                        # wrong values, so pre-filling them would be
+                        # misleading. The user must enter the correct
+                        # servers manually.
                     },
                     "error": (
                         f"Could not auto-detect the IMAP server for {email_addr}. "
-                        f"The server '{detected['imap']}' does not resolve in DNS. "
+                        "The auto-detected server does not resolve in DNS. "
                         "Please enter the correct IMAP and SMTP server addresses manually."
                     ),
                 },
