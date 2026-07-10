@@ -83,6 +83,25 @@ The canonical implementation lives in ``lightercore.prompt_commands``; the light
 
 See ``core/AGENTS-core.md`` and ``lightcore/docs/AGENTS-prompt-commands.md`` for details.
 
+## Default Config File Seeding
+
+On server startup, the ``lifespan`` handler in ``server/app.py`` calls
+:func:`~lighterbird.core.config_defaults.seed_config_defaults`, which
+creates any missing config files with their shipped defaults:
+
+| File | Default Source | Purpose |
+|------|---------------|---------|
+| ``system_prompt.md`` | :data:`~lighterbird.core.system_prompt.DEFAULT_SYSTEM_PROMPT` | LLM agent system prompt (user-editable) |
+| ``cowrite_style.md`` | :data:`~lighterbird.core.cowrite_style.DEFAULT_COWRITE_STYLE` | Co-writing style guide (user-editable) |
+
+Files that already exist with non-empty content are never overwritten —
+the seeding respects existing user edits.  Write failures are logged as
+warnings and silently swallowed (the corresponding ``load_*`` functions
+fall back to lazy seeding on first access).
+
+Add a new entry to ``_CONFIG_DEFAULTS`` in ``core/config_defaults.py``
+when introducing a new user-editable config file with a shipped default.
+
 ## Source Tree Structure
 
 ```

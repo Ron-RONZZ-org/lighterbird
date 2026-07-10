@@ -8,7 +8,7 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 
 `src/lighterbird/server/` provides:
 
-- **`app.py`** — FastAPI application factory, startup/shutdown lifecycle
+- **`app.py`** — FastAPI application factory, startup/shutdown lifecycle.  On startup the ``lifespan`` handler calls :func:`~lighterbird.core.config_defaults.seed_config_defaults` to create any missing config files (``system_prompt.md``, ``cowrite_style.md``) with their shipped defaults.
 - **`routes/`** — API route handlers organized by domain (email, calendar, contacts, journal, todo, letter, profiles, chat, admin, cowrite)
 - **`command/`** — `!` command system: tree definition, parser, registry, response models, per-domain handlers
 - **`llm/`** — LLM integration: chat sessions, provider resolution, and the shared **tool_loop** module (multi-round tool-calling loop with human-in-the-loop support)

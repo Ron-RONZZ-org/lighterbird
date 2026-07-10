@@ -15,6 +15,7 @@ Re-exports from [lightercore](../../lightercore) for database (``LighterbirdDB``
 - ``ai.py`` — LLM provider abstraction (local, wraps openai library)
 - ``system_prompt.py`` — User-editable system prompt management (local)
 - ``cowrite_style.py`` — Co-writing style configuration (local)
+- ``config_defaults.py`` — Startup seeding of default config files from ``_CONFIG_DEFAULTS`` registry (``system_prompt.md``, ``cowrite_style.md``). Called once from ``server/app.py:lifespan``.
 
 ## Key Behavior
 
