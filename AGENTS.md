@@ -326,6 +326,8 @@ Existing ``.mjs`` scripts (``tests/playwright_e2e.mjs``, ``tests/e2e_comprehensi
 9. **Use `tr()` or `tr_multi()` for i18n** — but only once i18n infrastructure is in place. For initial development, plain English strings are acceptable.
 10. **Missing CLI args → GUI redirect (default behaviour).** When a CLI command is invoked with missing required options and the command has an interactive form registered, the system shall redirect the user to the GUI with any already-specified options pre-filled. This is handled by the `_INTERACTIVE_FORMS` dict in `server/command/handlers/__init__.py` and the `form-required` response type. All interactive commands must be registered in `tree.py` (backend) with `interactive: true` — the frontend fetches this metadata dynamically.
 
+11. **Multi-command input support.** The input box supports multiple `!` commands in a single message. If the first character is `!`, the input is split on `!` boundaries (ignoring `!` inside single/double-quoted strings). Each command executes sequentially via the existing `execute()` pipeline. Interactive/form commands are skipped with an error in batch mode. The shared parsing utility lives in `lightercore/web/src/lib/multiCommand.js` (`splitCommands()` / `isMultiCommand()`), re-exported via `@lightercore/ui`. This is a frontend-only feature — the backend `POST /api/v1/command` receives individual commands as always.
+
 ## List Tab Standard Feature Set
 
 All list tab components (`EmailListTab`, `JournalListTab`, `SieveListTab`, `ContactsListTab`, `TodoListTab`, `CalendarEventsListTab`, `LetterListTab`) must implement the following standard feature set:

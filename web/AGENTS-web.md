@@ -16,6 +16,7 @@ The web frontend provides:
   - `!` prefix → execute a structured command (`!email list`, `!new`, `!search`)
   - `/*` prefix → execute a file-based prompt command (`/*weekly INBOX`, `/*summarize`)
   - no `!` or `/*` prefix → send as LLM chat message
+  - **Multi-command input**: when first char is `!`, multiple commands separated by `!` boundary are accepted: `!email list !todo list`. Commands execute sequentially, continue-on-error. Interactive/form commands are skipped. `!` inside quoted strings is not treated as a boundary.
   - As-you-type autocomplete with UUID and label-based suggestion dropdown
   - `/*` autocomplete shows prompt command names and descriptions
   - Arrow key history navigation (up/down through command history)
@@ -135,6 +136,7 @@ The HTML/plain text toggle in `EmailViewTab.svelte` is persisted across emails v
 15. **Preview buttons show key hints.** All preview buttons (`DynamicForm`, `JournalWrite`, `ComposeEmail`) display a visible `<kbd>Ctrl+Shift+P</kbd>` badge in the button label, matching the existing `<kbd>` pattern used for `Ctrl+S` and `Ctrl+Enter` hints.
 16. **Form error preservation.** `FormTab.handleFormSubmit()` keeps the form tab open on submission failure (HTTP error or network error). An inline red error banner is shown above the form content, and a temporary `banner.show(msg, "error")` notification also fires. The user can correct their input and retry without losing data. On success, the form closes and navigates to the appropriate list tab (existing behavior).
 17. **Signature format dropdown.** Email signatures support `--format` (plain/html/markdown). `DynamicForm.svelte` renders a `<select>` for flags that include a `values` array in their tree metadata (e.g., `{"values": ["plain", "html", "markdown"]}`).
+18. **Multi-command input is frontend-only.** `HomeTab.svelte` handles multi-command detection (`isMultiCommand`) and batch execution. The shared parsing utility (`splitCommands` / `isMultiCommand`) lives in `@lightercore/ui/multiCommand.js`. Interactive commands (forms) are skipped with an error in batch mode. No backend changes needed — each command is sent as a separate `POST /api/v1/command` call.
 
 ## GUI Style — Imitate Existing Components
 
