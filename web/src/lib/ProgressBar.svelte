@@ -26,9 +26,18 @@
     status === "complete" ? "var(--clr-success, #5cb85c)" :
     "var(--clr-primary, #7c9bff)"
   );
+
+  let statusIcon = $derived(
+    status === "error" ? "⚠" :
+    status === "complete" ? "✓" :
+    ""
+  );
 </script>
 
 <div class="progress-bar-wrapper" class:compact>
+  {#if statusIcon}
+    <span class="progress-icon">{statusIcon}</span>
+  {/if}
   {#if label}
     <span class="progress-label">{label}</span>
   {/if}
@@ -52,6 +61,10 @@
   .progress-bar-wrapper.compact {
     padding: 0;
     gap: 0.3rem;
+  }
+  .progress-icon {
+    font-size: 0.9rem;
+    line-height: 1;
   }
   .progress-label {
     white-space: nowrap;
