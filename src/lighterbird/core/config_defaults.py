@@ -17,7 +17,13 @@ import logging
 
 from lightercore.paths import config_dir
 
-from lighterbird.core.cowrite_style import DEFAULT_COWRITE_STYLE
+from lighterbird.core.cowrite_style import (
+    DEFAULT_COWRITE_STYLE,
+    DEFAULT_COWRITE_STYLE_EMAIL,
+    DEFAULT_COWRITE_STYLE_JOURNAL,
+    DEFAULT_COWRITE_STYLE_LETTER,
+    DEFAULT_COWRITE_STYLE_TODO,
+)
 from lighterbird.core.system_prompt import DEFAULT_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
@@ -27,6 +33,10 @@ logger = logging.getLogger(__name__)
 _CONFIG_DEFAULTS: dict[str, str] = {
     "system_prompt.md": DEFAULT_SYSTEM_PROMPT,
     "cowrite_style.md": DEFAULT_COWRITE_STYLE,
+    "cowrite_style_email.md": DEFAULT_COWRITE_STYLE_EMAIL,
+    "cowrite_style_journal.md": DEFAULT_COWRITE_STYLE_JOURNAL,
+    "cowrite_style_todo.md": DEFAULT_COWRITE_STYLE_TODO,
+    "cowrite_style_letter.md": DEFAULT_COWRITE_STYLE_LETTER,
 }
 """Registry of config filenames → default content.
 

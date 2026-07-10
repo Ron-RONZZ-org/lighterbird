@@ -14,8 +14,8 @@ Re-exports from [lightercore](../../lightercore) for database (``LighterbirdDB``
 - ``keyring.py`` — System keyring password management (local)
 - ``ai.py`` — LLM provider abstraction (local, wraps openai library)
 - ``system_prompt.py`` — User-editable system prompt management (local)
-- ``cowrite_style.py`` — Co-writing style configuration (local)
-- ``config_defaults.py`` — Startup seeding of default config files from ``_CONFIG_DEFAULTS`` registry (``system_prompt.md``, ``cowrite_style.md``). Called once from ``server/app.py:lifespan``.
+- ``cowrite_style.py`` — Co-writing style configuration (local).  Uses a **cascade model**: a general ``cowrite_style.md`` file for cross-cutting rules + per-domain files (``cowrite_style_email.md``, etc.) loaded by ``form_type``.
+- ``config_defaults.py`` — Startup seeding of default config files from ``_CONFIG_DEFAULTS`` registry (``system_prompt.md``, ``cowrite_style.md``, ``cowrite_style_email.md``, etc.). Called once from ``server/app.py:lifespan``.
 
 ## Key Behavior
 

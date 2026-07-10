@@ -92,7 +92,16 @@ creates any missing config files with their shipped defaults:
 | File | Default Source | Purpose |
 |------|---------------|---------|
 | ``system_prompt.md`` | :data:`~lighterbird.core.system_prompt.DEFAULT_SYSTEM_PROMPT` | LLM agent system prompt (user-editable) |
-| ``cowrite_style.md`` | :data:`~lighterbird.core.cowrite_style.DEFAULT_COWRITE_STYLE` | Co-writing style guide (user-editable) |
+| ``cowrite_style.md`` | :data:`~lighterbird.core.cowrite_style.DEFAULT_COWRITE_STYLE` | Co-writing style guide — **general** (tone, language, cross-cutting) |
+| ``cowrite_style_email.md`` | :data:`~lighterbird.core.cowrite_style.DEFAULT_COWRITE_STYLE_EMAIL` | Co-writing style — email-specific |
+| ``cowrite_style_journal.md`` | :data:`~lighterbird.core.cowrite_style.DEFAULT_COWRITE_STYLE_JOURNAL` | Co-writing style — journal-specific |
+| ``cowrite_style_todo.md`` | :data:`~lighterbird.core.cowrite_style.DEFAULT_COWRITE_STYLE_TODO` | Co-writing style — todo-specific |
+| ``cowrite_style_letter.md`` | :data:`~lighterbird.core.cowrite_style.DEFAULT_COWRITE_STYLE_LETTER` | Co-writing style — letter-specific |
+
+The general file is always loaded first; the domain-specific file is
+appended under a ``## Domain-specific Guide`` heading when the
+user triggers co-writing for that domain (e.g. editing an email loads
+``cowrite_style.md`` + ``cowrite_style_email.md``).
 
 Files that already exist with non-empty content are never overwritten —
 the seeding respects existing user edits.  Write failures are logged as

@@ -273,8 +273,8 @@ async def cowrite(
             "models": context.get("models", []),
         }
 
-    # Build system prompt: protocol + optional style
-    style_prompt = load_cowrite_style()
+    # Build system prompt: protocol + optional style (general + per-domain cascade)
+    style_prompt = load_cowrite_style(form_type)
     system_content = COWRITE_PROTOCOL_PROMPT
     if style_prompt:
         system_content += "\n\n## User Style Guide\n\n" + style_prompt
