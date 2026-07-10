@@ -288,8 +288,10 @@ export function getDataCompletionsFromCache(cachedData, uuidSource) {
 function addAccounts(cache, result) {
   if (cache.accounts) {
     for (const a of cache.accounts) {
-      // Accounts are keyed by email (not uuid), so use email as uuid
-      result.push({ uuid: a.email || a.uuid, label: `${a.email} (${a.name || ""})` });
+      // Accounts are keyed by email (not uuid), so use email as both
+      // uuid and value to avoid .slice(0, 8) truncation in the UI.
+      const email = a.email || a.uuid || "";
+      result.push({ uuid: email, value: email, label: `${email} (${a.name || ""})` });
     }
   }
 }
