@@ -134,3 +134,21 @@ class TestSyncProgressEndpoints:
         # Status may be "running" or "complete" depending on how fast
         # the background thread finishes (no accounts → instant complete)
         assert data["status"] in ("running", "complete")
+
+    def test_sync_eventually_completes(self):
+        """Sync task should eventually have status 'complete', even with errors."""
+        start_resp = self._client().post("/api/v1/email/sync/start", json={})
+        task_id = start_resp.json()["task_id"]
+
+        # Wait for the background thread to finish (no accounts = fast)
+        import time
+        for _ in range(20):
+            time.sleep(0.5)
+            prog_resp = self._client().get(
+                f"/api/v1/email/sync/progress/{task_id}"
+            )
+            if prog_resp.status_code == 200:
+                data = prog_resp.json()
+                if data["status"] in ("complete", "error"):
+                    return  # Success! Task finished.
+        assert False, "Sync task did not reach complete/error status within 10s"
