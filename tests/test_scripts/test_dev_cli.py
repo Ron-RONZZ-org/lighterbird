@@ -1,6 +1,7 @@
 """Tests for scripts/dev_cli.py — dev_main using lightercore.dev_helpers."""
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -24,6 +25,7 @@ class TestDevMain:
         "port": None,
         "keep_data": False,
         "quiet": True,
+        "local_config": None,
     }
 
     def _make_args(self, **overrides: object) -> MagicMock:
@@ -187,6 +189,48 @@ class TestDevMain:
 
             with pytest.raises(SystemExit):
                 dev_main()
+
+    # ── --local-config + seeding ─────────────────────────────────────────
+
+    @patch("uvicorn.run")
+    def test_local_config_preserved_after_prod_seed(self, mock_uvicorn, tmp_path: Path, monkeypatch) -> None:
+        """--local-config should NOT be overwritten by seed_data_dir's env override."""
+        local_cfg = tmp_path / "my-config"
+        local_cfg.mkdir()
+        with (
+            patch("lighterbird.scripts.dev_cli.standard_dev_parser") as mock_parser_factory,
+            patch("lighterbird.scripts.dev_cli.setup_data_dir") as mock_setup,
+            patch("lighterbird.scripts.dev_cli.is_seeded", return_value=False),
+            patch("lighterbird.scripts.dev_cli.find_dot_prod") as mock_find_prod,
+            patch("lighterbird.scripts.seed.seed_data_dir") as mock_seed,
+        ):
+            dot_prod = tmp_path / ".prod"
+            dot_prod.write_text("KEY=val\n")
+            mock_find_prod.return_value = dot_prod
+
+            mock_parser = MagicMock()
+            mock_parser.parse_args.return_value = self._make_args(
+                prod="auto", local_config=str(local_cfg),
+            )
+            mock_parser_factory.return_value = mock_parser
+            mock_setup.return_value = (tmp_path, tmp_path / "data", tmp_path / "config", True)
+
+            # seed_data_dir will set LIGHTERBIRD_CONFIG_DIR to data/config
+            def _seed_side_effect(*a, **kw):
+                monkeypatch.setenv("LIGHTERBIRD_CONFIG_DIR", str(tmp_path / "data" / "config"))
+            mock_seed.side_effect = _seed_side_effect
+
+            from lighterbird.scripts.dev_cli import dev_main
+
+            try:
+                dev_main()
+            except SystemExit:
+                pass
+            except Exception:
+                pass
+
+            # After dev_main, the env var should point back to the local config
+            assert os.environ.get("LIGHTERBIRD_CONFIG_DIR") == str(local_cfg)
 
     # ── Validation ────────────────────────────────────────────────────────
 

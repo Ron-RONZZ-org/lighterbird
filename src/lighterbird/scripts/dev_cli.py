@@ -163,6 +163,10 @@ def dev_main() -> None:
                 seed_data_dir(data_dir, dot_prod)
                 _log("Seed data generated successfully from .prod.")
 
+    # ── Restore --local-config override if seeding changed it ────────────
+    if args.local_config:
+        os.environ["LIGHTERBIRD_CONFIG_DIR"] = str(local_config)
+
     # ── Start server ─────────────────────────────────────────────────────
     _log(f"Starting server on http://127.0.0.1:{port}")
     _log("Press Ctrl+C to stop.")
