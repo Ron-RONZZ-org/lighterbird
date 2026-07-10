@@ -72,6 +72,10 @@ npm install
 npm run dev
 ```
 
+> **Note**: `python -m lighterbird` starts the **production** server using the real XDG data
+> directory (``~/.local/share/lighterbird/``). For an isolated temp instance with test data,
+> use ``lighterbird-dev --seed`` instead (see [Development Server](#development-server)).
+
 Open http://localhost:6005 — the Vite dev server proxies API calls to the Python backend (default port 6006).
 
 **Custom backend port**: Set `LIGHTERBIRD_PORT` to run the backend on a different port:
@@ -158,6 +162,12 @@ uv run lighterbird-dev --data-dir ~/lighterbird-data --prod
 
 # Start with persistent dir, reseed from .dev if empty
 uv run lighterbird-dev --data-dir ~/lighterbird-data --seed
+
+# Preserve the temp data directory after exit (for debugging)
+uv run lighterbird-dev --seed --keep-data
+
+# Suppress info output (errors still shown)
+uv run lighterbird-dev --seed --quiet
 ```
 
 The seed data includes:
@@ -170,6 +180,19 @@ The seed data includes:
 Use ``--seed-from <archive.7z>`` to restore from a backup archive. For persistent development, use ``--data-dir <path>`` instead of the default temp directory — data inside the directory will survive server restarts.
 
 Both ``.dev`` and ``.prod`` files use the same ``KEY="VALUE"`` format and are placed in the project root. The ``.prod`` file is gitignored — it's intended for your real credentials, while ``.dev`` holds shared test credentials for CI or teammate use.
+
+### First sync performance
+
+The first sync fetches message headers for all folders (body text and attachments are downloaded on demand when you open a message). For an account with 30 folders and ~1,850 messages the first sync takes ~95 seconds over a typical broadband connection. Subsequent syncs are much faster — ~7 seconds — because folders with no new messages are skipped via CONDSTORE (RFC 4551).
+
+| Metric | First sync | Subsequent syncs |
+|--------|-----------|-----------------|
+| Folders | 31 (30 server + 1 seed) | 31 |
+| Messages | 1,849 header-only | ~19 new |
+| Time | ~95s | ~7s |
+| Body download | On-demand only | On-demand only |
+
+The first sync is slower because every folder must be scanned for UIDs and every new message's header must be downloaded. On subsequent runs, CONDSTORE skips folders whose modification sequence number hasn't changed, eliminating SELECT/SEARCH/FETCH round-trips for folders with no new activity.
 
 ## Status
 
