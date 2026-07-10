@@ -190,8 +190,6 @@ def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     title_suffix = f" ({folder_filter})" if folder_filter else ""
     if not_folder_filter:
         title_suffix += f" (excl. {not_folder_filter})"
-    if not folder_filter and not include_all:
-        title_suffix = "" if title_suffix else " (no trash)"
 
     frontend_filters = {}
     if "account" in filters:
