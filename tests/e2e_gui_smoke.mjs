@@ -915,6 +915,163 @@ async function runTests(page) {
     assert(hasSelect, "Email list tab should have toolbar with action buttons");
   });
 
+  await test("!email list renders message rows", async () => {
+    await typeCommand("!email list");
+    await pressEnter();
+    const tabBar = page.locator('[role="tablist"]');
+    await tabBar.waitFor({ state: "visible", timeout: 4000 });
+    const panel = page.locator('[aria-label="Tab content"]');
+    await panel.waitFor({ state: "visible", timeout: 3000 });
+    await sleep(500);
+
+    // Look for message rows in the list div
+    const rows = panel.locator('[role="option"], .row, .email-row');
+    const rowCount = await rows.count().catch(() => 0);
+    console.log(`    Email message rows: ${rowCount}`);
+    // We may have 0 messages if sync hasn't run, but the list div must exist
+    const listDiv = panel.locator('.list');
+    const listExists = await listDiv.count().catch(() => 0);
+    assert(listExists > 0, "Email list should have a .list container div");
+  });
+
+  await test("F key opens folder panel in email list", async () => {
+    await typeCommand("!email list");
+    await pressEnter();
+    await sleep(500);
+
+    // Press F to toggle folder tree
+    await page.keyboard.press("f");
+    await sleep(400);
+
+    // The folder panel should appear as a dropdown
+    const panel = page.locator('[aria-label="Tab content"]');
+    const folderPanel = panel.locator('.folder-panel, .dropdown-panel');
+    const folderVisible = await folderPanel.isVisible().catch(() => false);
+    if (!folderVisible) {
+      // Try locating by the folder search input
+      const folderSearch = panel.locator('input[placeholder*="folder" i]');
+      const searchCount = await folderSearch.count().catch(() => 0);
+      assert(searchCount > 0, "F key should open folder panel with search input");
+    }
+    // Close with Escape
+    await page.keyboard.press("Escape");
+    await sleep(200);
+  });
+
+  await test("S key opens sort overlay in email list", async () => {
+    await typeCommand("!email list");
+    await pressEnter();
+    await sleep(500);
+
+    // Press S to toggle sort dropdown
+    await page.keyboard.press("s");
+    await sleep(400);
+
+    // The sort overlay should appear as a dropdown panel
+    const panel = page.locator('[aria-label="Tab content"]');
+    const sortPanel = panel.locator('.sort-panel, .dropdown-panel');
+    const sortVisible = await sortPanel.isVisible().catch(() => false);
+    if (!sortVisible) {
+      // Try locating by the sort radio/checkbox options
+      const sortOptions = panel.locator('[type="radio"], [type="checkbox"], label:has-text("Oldest"), label:has-text("Newest")');
+      const optCount = await sortOptions.count().catch(() => 0);
+      assert(optCount > 0, "S key should open sort overlay with sort options");
+    }
+    // Close with Escape
+    await page.keyboard.press("Escape");
+    await sleep(200);
+  });
+
+  await test("P key opens params dialog in email list", async () => {
+    await typeCommand("!email list");
+    await pressEnter();
+    await sleep(500);
+
+    // Press P to toggle params dialog
+    await page.keyboard.press("p");
+    await sleep(400);
+
+    // The params dialog should appear
+    const panel = page.locator('[aria-label="Tab content"]');
+    const paramsPanel = panel.locator('.params-panel, .dropdown-panel');
+    const paramsVisible = await paramsPanel.isVisible().catch(() => false);
+    if (!paramsVisible) {
+      // Try locating by the params header text
+      const paramsHeader = panel.locator('h4:has-text("Parameters"), h5:has-text("Config")');
+      const headerCount = await paramsHeader.count().catch(() => 0);
+      assert(headerCount > 0, "P key should open params dialog with Parameters header");
+    }
+    // Close with Escape
+    await page.keyboard.press("Escape");
+    await sleep(200);
+  });
+
+  await test("Fldrs toolbar button opens folder panel", async () => {
+    await typeCommand("!email list");
+    await pressEnter();
+    await sleep(500);
+
+    // Click the Fldrs button
+    const panel = page.locator('[aria-label="Tab content"]');
+    const fldrsBtn = panel.locator('button:has-text("Fldrs")');
+    const btnExists = await fldrsBtn.count().catch(() => 0);
+    assert(btnExists > 0, "Fldrs button should be in toolbar");
+    await fldrsBtn.click();
+    await sleep(400);
+
+    // Folder panel should appear
+    const folderSearch = panel.locator('input[placeholder*="folder" i]');
+    const searchCount = await folderSearch.count().catch(() => 0);
+    assert(searchCount > 0, "Fldrs button click should open folder panel with search input");
+    // Close with Escape
+    await page.keyboard.press("Escape");
+    await sleep(200);
+  });
+
+  await test("Sort toolbar button opens sort overlay", async () => {
+    await typeCommand("!email list");
+    await pressEnter();
+    await sleep(500);
+
+    // Click the Sort button
+    const panel = page.locator('[aria-label="Tab content"]');
+    const sortBtn = panel.locator('button:has-text("Sort")');
+    const btnExists = await sortBtn.count().catch(() => 0);
+    assert(btnExists > 0, "Sort button should be in toolbar");
+    await sortBtn.click();
+    await sleep(400);
+
+    // Sort panel should appear
+    const sortOptions = panel.locator('[type="radio"], [type="checkbox"], label:has-text("Oldest"), label:has-text("Newest")');
+    const optCount = await sortOptions.count().catch(() => 0);
+    assert(optCount > 0, "Sort button click should open sort overlay with sort options");
+    // Close with Escape
+    await page.keyboard.press("Escape");
+    await sleep(200);
+  });
+
+  await test("Params toolbar button opens params dialog", async () => {
+    await typeCommand("!email list");
+    await pressEnter();
+    await sleep(500);
+
+    // Click the Params button
+    const panel = page.locator('[aria-label="Tab content"]');
+    const paramsBtn = panel.locator('button:has-text("Params")');
+    const btnExists = await paramsBtn.count().catch(() => 0);
+    assert(btnExists > 0, "Params button should be in toolbar");
+    await paramsBtn.click();
+    await sleep(400);
+
+    // Params dialog should appear (has Parameters header)
+    const paramsHeader = panel.locator('h4:has-text("Parameters"), h5:has-text("Config")');
+    const headerCount = await paramsHeader.count().catch(() => 0);
+    assert(headerCount > 0, "Params button click should open params dialog with Parameters header");
+    // Close with Escape
+    await page.keyboard.press("Escape");
+    await sleep(200);
+  });
+
   // ════════════════════════════════════════════
   // 21. BANNER DISPLAY
   // ════════════════════════════════════════════

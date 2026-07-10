@@ -470,6 +470,61 @@
   />
 </div>
 
+  <!-- Folder tree panel -->
+  <EmailFolderPanel
+    folderTree={folders}
+    bind:folderVisibility
+    bind:expandedFolders
+    bind:show={showFolderTree}
+    onRefresh={applyFolderFilter}
+    onCreateFolder={handleCreateFolder}
+    onClose={() => { showFolderTree = false; }}
+  />
+
+  <!-- Sort dropdown overlay -->
+  <EmailSortOverlay
+    bind:sort
+    bind:groupByConversation
+    bind:groupBySender
+    bind:show={showSortDropdown}
+    onRefresh={applyFolderFilter}
+    onClose={() => { showSortDropdown = false; }}
+  />
+
+  <!-- Params dialog -->
+  <DropdownPanel show={showParamsDialog} onClose={() => { showParamsDialog = false; }}>
+    <EmailParamsDialog
+      {config}
+      onSave={handleSaveConfig}
+      onActivate={handleActivateConfig}
+      onDelete={handleDeleteConfig}
+      onClose={() => { showParamsDialog = false; }}
+    />
+  </DropdownPanel>
+
+  <!-- Message list -->
+  <div class="list" role="listbox" aria-label="Email messages" aria-multiselectable="true">
+    {#each messages as msg, i (msg.uuid)}
+      <EmailListRow
+        {msg}
+        index={i}
+        isSelected={sel.isSelected(msg.uuid)}
+        isFocused={i === sel.focusedIndex}
+        selectionMode={sel.selectionMode}
+        {uuidCopy}
+        {emailCopy}
+        onRowClick={(e, msg) => handleRowClick(e, msg, sel)}
+      />
+    {:else}
+      <p class="empty">No messages.</p>
+    {/each}
+    {#if hasMore}
+      <button class="load-more" onclick={loadMore} disabled={loadingMore}>
+        {loadingMore ? "Loading…" : "Load more"}
+      </button>
+    {/if}
+  </div>
+
 {#if sel.confirmDelete}
     <ConfirmDialog
       message="Delete {sel.numSelected} message{sel.numSelected !== 1 ? 's' : ''}?"
