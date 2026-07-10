@@ -269,6 +269,12 @@
             banner.show("Message sent.", "success");
           }
 
+          // Delete mutations: show confirmation banner so the user knows
+          // the operation succeeded (the deleted entry is no longer visible).
+          if (isDelete && result.title) {
+            banner.show(result.title, "success");
+          }
+
           isLoading = false;
           return;
         }
