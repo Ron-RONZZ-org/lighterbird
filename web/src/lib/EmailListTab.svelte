@@ -367,6 +367,11 @@
     } catch { /* silent */ }
   }
 
+  function syncErrorMsg(errors) {
+    if (!errors || errors.length === 0) return "";
+    return errors.join("; ");
+  }
+
   function pollSyncProgress() {
     if (!syncTaskId) return;
     const poll = async () => {
@@ -378,10 +383,16 @@
           syncProgress = prog;
           syncing = false;
           syncTaskId = null;
+          if (prog.errors && prog.errors.length > 0) {
+            console.warn("Sync completed with errors:", prog.errors.join("; "));
+          }
           await refreshList();
         } else if (prog.status === "error") {
+          syncProgress = prog;
           syncing = false;
           syncTaskId = null;
+          const err = syncErrorMsg(prog.errors);
+          console.warn("Sync failed:", err || "Unknown error");
         } else {
           syncPollTimer = setTimeout(poll, 1500);
         }
