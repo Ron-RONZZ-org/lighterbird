@@ -248,12 +248,10 @@ class MessageOpsService(MsgSendQueueMixin):
         client = IMAPClient(
             host=acct.get("imap_server", ""),
             port=acct.get("imap_port", 993),
-            username=account_email,
-            password=acct["password"],
             use_ssl=bool(acct.get("imap_use_ssl", 1)),
         )
-        client.connect()
         try:
+            client.connect(account_email, acct["password"])
             ok = client.delete_message_by_uid(folder_name, str(imap_uid).encode())
             if not ok:
                 raise RuntimeError(
