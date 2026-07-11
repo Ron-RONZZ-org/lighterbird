@@ -159,4 +159,5 @@ The HTML/plain text toggle in `EmailViewTab.svelte` is persisted across emails v
 - All interactive elements must be keyboard-reachable
 - Animations: keep under 150ms; no keyframe animations on structural elements
 - **Never duplicate CSS patterns** — import shared components (`ListSearchBar.svelte`, `PreviewDialog.svelte`, `ConfirmDialog.svelte`) instead of re-creating them
+- **LLM tool approval dialog**: `ConfirmToolDialog.svelte` is a thin re-export of `@lightercore/ui/ConfirmDialog.svelte`. The shared dialog provides approve/reject per item, per-item + global feedback, and an approve-all toggle. Backward-compatible: accepts both `onConfirm(decisions)` and `onSubmit(decisions, feedback)` callbacks.
 - If you need a new component, model it after the closest existing component above
