@@ -144,7 +144,7 @@
   }
 
   async function refreshList() {
-    const tabId = tabStore.active.id;
+    const tabId = tabStore.findByKey("persistent-todo-list") || tabStore.active.id;
     try {
       const result = await todoApi.list(buildListParams());
       tabStore.safeUpdate(tabId, result);
@@ -158,7 +158,7 @@
   }
 
   function performSearch(query) {
-    const tabId = tabStore.active.id;
+    const tabId = tabStore.findByKey("persistent-todo-list") || tabStore.active.id;
     if (abortController) abortController.abort();
     abortController = new AbortController();
     const params = buildListParams();

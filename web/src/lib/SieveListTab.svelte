@@ -148,7 +148,7 @@
   }
 
   async function refreshList() {
-    const tabId = tabStore.active.id;
+    const tabId = tabStore.findByKey("persistent-sieve-list") || tabStore.active.id;
     try {
       const params = accountFilter ? { account_email: accountFilter } : {};
       const result = await sieveApi.list(params);
