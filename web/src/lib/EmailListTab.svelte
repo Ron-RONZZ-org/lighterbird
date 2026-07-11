@@ -653,7 +653,6 @@
   .email-list {
     display: flex;
     flex-direction: column;
-    height: 100%;
     font-family: monospace;
     font-size: 0.85rem;
     position: relative;
