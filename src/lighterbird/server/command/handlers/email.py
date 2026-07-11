@@ -615,6 +615,16 @@ def email_folders(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
 # (EML export/import moved to email_eml.py)
 
 # ── Backward-compat aliases ────────────────────────────────────────
-# Registered at module load so they are available on first dispatch.
-from lighterbird.server.command.registry import alias
-alias(["email", "trash"], ["email", "delete"])
+# The prefix-matching alias ``["email", "trash"] → ["email", "delete"]``
+# would also capture ``["email", "trash", "list"]`` (rewriting it to
+# ``email.delete list`` → dispatched as ``email_delete(["list"], {})``
+# → erroneously returning "Trashed").  To avoid this, ``email.trash``
+# is kept as a hidden command that delegates to ``email_delete``.
+from lighterbird.server.command.registry import command
+
+@command("email.trash", hidden=True,
+          flags=[{"name": "hard", "type": "bool",
+                   "help": "Permanently delete from IMAP server and local DB"}])
+def email_trash(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """Deprecated.  Use ``!email delete`` instead."""
+    return email_delete(remaining, flags)
