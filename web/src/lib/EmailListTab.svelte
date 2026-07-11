@@ -45,7 +45,11 @@
   let syncProgress = $state(null);
   let syncPollTimer = $state(null);
   let syncError = $state("");
-  let isTrashView = $state(false);
+  // isTrashView is set ONCE from initial data so it survives safeUpdate
+  // (which overwrites data without _isTrashView).  The component is
+  // destroyed/recreated on tab switch, so a fresh non-trash tab starts
+  // with isTrashView=false.
+  let isTrashView = $state(!!data?._isTrashView);
 
   // When data prop changes (new query / new tab data), reset pagination
   $effect(() => {
@@ -53,7 +57,6 @@
       messages = data.messages;
       hasMore = !!data.has_more;
       nextCursor = data.next_cursor || "";
-      isTrashView = !!data?._isTrashView;
     }
   });
 
@@ -137,6 +140,14 @@
         }
         if ((e.ctrlKey || e.metaKey) && e.key === "r") { e.preventDefault(); handleSync(); return true; }
         if ((e.ctrlKey || e.metaKey) && e.key === "m") { e.preventDefault(); if (sel.numSelected > 0) showMoveDialog = true; return true; }
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "Delete" || e.key === "Del")) {
+          // Ctrl+Shift+Delete: clear entire trash (only in trash view)
+          e.preventDefault();
+          if (isTrashView) {
+            confirmClearTrash = true;
+          }
+          return true;
+        }
         if ((e.ctrlKey || e.metaKey) && (e.key === "Delete" || e.key === "Del")) {
           e.preventDefault();
           if (sel.numSelected > 0) {
@@ -158,8 +169,9 @@
   let showExportDialog = $state(false);
   let showAdvancedSearch = $state(false);
   let advancedSearchFilters = $state({});
-  let confirmHardDelete = $state(false);
   let searchKey = $state(0); // increment to trigger re-search
+  let confirmHardDelete = $state(false);
+  let confirmClearTrash = $state(false);
 
   let exportItems = $derived(messages.filter(m => sel.selectedKeys.has(m.uuid)));
 
@@ -432,6 +444,18 @@
     syncPollTimer = setTimeout(poll, 500);
   }
 
+  async function handleClearTrash() {
+    confirmClearTrash = false;
+    try {
+      await emailApi.clearTrash();
+      await refreshList();
+    } catch (err) {
+      tabStore.open("error", "Clear Trash Failed", {
+        message: err.message || "Failed to clear trash",
+      });
+    }
+  }
+
   function stopSync() {
     syncing = false;
     syncTaskId = null;
@@ -635,6 +659,14 @@
         await hardDeleteSelected(uuids, () => refreshList());
       }}
       onDismiss={() => { confirmHardDelete = false; }}
+    />
+  {/if}
+
+  {#if confirmClearTrash}
+    <ConfirmDialog
+      message="Empty Trash? This permanently deletes ALL messages in Trash folders from both IMAP server and local DB. This cannot be undone."
+      onConfirm={handleClearTrash}
+      onDismiss={() => { confirmClearTrash = false; }}
     />
   {/if}
 

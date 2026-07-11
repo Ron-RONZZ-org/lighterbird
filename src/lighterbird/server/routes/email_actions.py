@@ -77,6 +77,23 @@ def batch_delete(
     )
 
 
+@router.post("/trash/clear")
+def clear_trash(
+    email_svc: EmailService = Depends(get_email_service),
+):
+    """Permanently delete ALL messages in Trash folders."""
+    # Query all messages in Trash folders
+    rows = list(email_svc.db.execute(
+        "SELECT uuid FROM messages WHERE folder_name = ? AND is_deleted = 0",
+        ("Trash",),
+    ))
+    uuids = [r["uuid"] for r in rows]
+    if uuids:
+        result = email_svc.msg_ops.batch_hard_delete_messages(uuids)
+        return {"status": "ok", "count": result["count"]}
+    return {"status": "ok", "count": 0}
+
+
 @router.post("/messages/batch-delete-hard", response_model=BatchResultResponse)
 def batch_delete_hard(
     req: BatchDeleteRequest,

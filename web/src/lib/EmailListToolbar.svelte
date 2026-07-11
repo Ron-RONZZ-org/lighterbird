@@ -48,8 +48,10 @@
       {#snippet actions()}
         <div class="left">
           <button class="tool-btn" title="Toggle selection mode (V)" onclick={onToggleMode}>Select <kbd>V</kbd></button>
-          <button class="tool-btn" title="Folders (F)" onclick={onToggleFolderTree}
-            class:active={showFolderTree}>Fldrs <kbd>F</kbd></button>
+          {#if !isTrashView}
+            <button class="tool-btn" title="Folders (F)" onclick={onToggleFolderTree}
+              class:active={showFolderTree}>Fldrs <kbd>F</kbd></button>
+          {/if}
           <button class="tool-btn" title="Sort (S)" onclick={onToggleSortDropdown}
             class:active={showSortDropdown}>Sort <kbd>S</kbd></button>
           <button class="tool-btn" title="Parameters (P)" onclick={onToggleParamsDialog}
@@ -93,15 +95,21 @@
     <!-- View mode: expanded toolbar with actions + nav -->
     <div class="left">
       <button class="tool-btn" title="Toggle selection mode (V)" onclick={onToggleMode}>Select <kbd>V</kbd></button>
-      <button class="tool-btn" title="Folders (F)" onclick={onToggleFolderTree}
-        class:active={showFolderTree}>Fldrs <kbd>F</kbd></button>
+      {#if !isTrashView}
+        <button class="tool-btn" title="Folders (F)" onclick={onToggleFolderTree}
+          class:active={showFolderTree}>Fldrs <kbd>F</kbd></button>
+      {/if}
       <button class="tool-btn" title="Sort (S)" onclick={onToggleSortDropdown}
         class:active={showSortDropdown}>Sort <kbd>S</kbd></button>
       <button class="tool-btn" title="Parameters (P)" onclick={onToggleParamsDialog}
         class:active={showParamsDialog}>Params <kbd>P</kbd></button>
     </div>
     <div class="center">
-      <span class="search-hint"><kbd>/</kbd> search</span>
+      {#if isTrashView}
+        <span class="search-hint"><kbd>⌃⇧Del</kbd> clear trash</span>
+      {:else}
+        <span class="search-hint"><kbd>/</kbd> search</span>
+      {/if}
     </div>
     <div class="right">
       <button class="tool-btn" title="Advanced search (A)" onclick={onToggleAdvancedSearch}>Adv srch <kbd>A</kbd></button>
