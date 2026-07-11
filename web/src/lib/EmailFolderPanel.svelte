@@ -60,6 +60,26 @@
       ? expandedFolders.filter((p) => p !== path)
       : [...expandedFolders, path];
   }
+
+  function handleSelectAll() {
+    const next = { ...folderVisibility };
+    for (const f of folderTree) {
+      const path = f.label || `${f.account_email}/${f.folder_name}`;
+      next[path] = true;
+    }
+    folderVisibility = next;
+    onRefresh();
+  }
+
+  function handleDeselectAll() {
+    const next = { ...folderVisibility };
+    for (const f of folderTree) {
+      const path = f.label || `${f.account_email}/${f.folder_name}`;
+      next[path] = false;
+    }
+    folderVisibility = next;
+    onRefresh();
+  }
 </script>
 
 <DropdownPanel {show} {onClose}>
@@ -72,6 +92,10 @@
         bind:value={folderSearch}
         onkeydown={(e) => e.stopPropagation()}
       />
+    </div>
+    <div class="folder-actions">
+      <button class="folder-action-btn" onclick={handleSelectAll} title="Show all folders">All</button>
+      <button class="folder-action-btn" onclick={handleDeselectAll} title="Hide all folders">None</button>
     </div>
     <EmailFolderTree
       folders={filteredFolders}
@@ -109,5 +133,25 @@
   }
   .folder-search-input::placeholder {
     color: #555;
+  }
+  .folder-actions {
+    display: flex;
+    gap: 0.3rem;
+    margin-bottom: 0.4rem;
+  }
+  .folder-action-btn {
+    padding: 0.15rem 0.5rem;
+    border: 1px solid #444;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--clr-muted, #888);
+    font-family: monospace;
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+  }
+  .folder-action-btn:hover {
+    background: #2a2a44;
+    color: #e0e0e0;
   }
 </style>
