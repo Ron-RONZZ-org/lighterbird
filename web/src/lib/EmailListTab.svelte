@@ -1,7 +1,7 @@
 <script>
   import { tabStore } from "./tabStore.svelte.js";
   import { email as emailApi } from "./api.js";
-  import { openMessage, openMessageInNewTab, handleRowClick, deleteSelected, moveSelected } from "./emailMessageOps.svelte.js";
+  import { openMessage, openMessageInNewTab, handleRowClick, deleteSelected, hardDeleteSelected, moveSelected } from "./emailMessageOps.svelte.js";
   import EmailListToolbar from "./EmailListToolbar.svelte";
   import EmailFolderPanel from "./EmailFolderPanel.svelte";
   import AdvancedSearchDialog from "./AdvancedSearchDialog.svelte";
@@ -45,6 +45,7 @@
   let syncProgress = $state(null);
   let syncPollTimer = $state(null);
   let syncError = $state("");
+  let isTrashView = $state(false);
 
   // When data prop changes (new query / new tab data), reset pagination
   $effect(() => {
@@ -52,6 +53,7 @@
       messages = data.messages;
       hasMore = !!data.has_more;
       nextCursor = data.next_cursor || "";
+      isTrashView = !!data?._isTrashView;
     }
   });
 
@@ -135,6 +137,13 @@
         }
         if ((e.ctrlKey || e.metaKey) && e.key === "r") { e.preventDefault(); handleSync(); return true; }
         if ((e.ctrlKey || e.metaKey) && e.key === "m") { e.preventDefault(); if (sel.numSelected > 0) showMoveDialog = true; return true; }
+        if ((e.ctrlKey || e.metaKey) && (e.key === "Delete" || e.key === "Del")) {
+          e.preventDefault();
+          if (sel.numSelected > 0) {
+            confirmHardDelete = true;
+          }
+          return true;
+        }
         return false;
       },
     }
@@ -149,6 +158,7 @@
   let showExportDialog = $state(false);
   let showAdvancedSearch = $state(false);
   let advancedSearchFilters = $state({});
+  let confirmHardDelete = $state(false);
   let searchKey = $state(0); // increment to trigger re-search
 
   let exportItems = $derived(messages.filter(m => sel.selectedKeys.has(m.uuid)));
@@ -525,6 +535,8 @@
       sel.toggleSelectionMode();
     }}
     onDelete={() => { if (sel.numSelected > 0) sel.confirmDelete = true; }}
+    onHardDelete={() => { if (sel.numSelected > 0) confirmHardDelete = true; }}
+    {isTrashView}
     onMove={() => { if (sel.numSelected > 0) showMoveDialog = true; }}
     onNew={handleNew}
     onToggleSearch={() => { showSearch = !showSearch; if (showSearch) requestAnimationFrame(() => document.querySelector(".search-input")?.focus()); }}
@@ -611,6 +623,18 @@
       message="Delete {sel.numSelected} message{sel.numSelected !== 1 ? 's' : ''}?"
       onConfirm={async () => { await sel.deleteSelected(); sel.confirmDelete = false; }}
       onDismiss={() => { sel.confirmDelete = false; }}
+    />
+  {/if}
+
+  {#if confirmHardDelete}
+    <ConfirmDialog
+      message="Permanently delete {sel.numSelected} message{sel.numSelected !== 1 ? 's' : ''} from IMAP server and local DB? This cannot be undone."
+      onConfirm={async () => {
+        const uuids = [...sel.selectedKeys];
+        confirmHardDelete = false;
+        await hardDeleteSelected(uuids, () => refreshList());
+      }}
+      onDismiss={() => { confirmHardDelete = false; }}
     />
   {/if}
 

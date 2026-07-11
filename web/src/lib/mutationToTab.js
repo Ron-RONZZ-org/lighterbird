@@ -128,7 +128,7 @@ const MUTATION_MAP = {
     isDelete: false,
     title: "Inbox",
   },
-  "email trash": {
+  "email delete": {
     listTokens: ["email", "list"],
     listIdKey: "email-list",
     type: "email-list",

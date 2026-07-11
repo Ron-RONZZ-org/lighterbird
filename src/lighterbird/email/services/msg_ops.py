@@ -205,6 +205,84 @@ class MessageOpsService(MsgSendQueueMixin):
 
         return {"count": trashed, "queued": queued}
 
+    # ── Hard-delete (permanent) operations ────────────────────────────────
+
+    def hard_delete_message(self, msg_uuid: str) -> None:
+        """Permanently delete a message from the local DB and IMAP server.
+
+        Removes the message row from the local database immediately.
+        If the message has an associated IMAP UID, queues a deferred
+        IMAP ``STORE +FLAGS (\\Deleted)`` to also remove it from the
+        server (processed by the background sync worker).
+        """
+        msg = self.db.execute_one(
+            "SELECT * FROM messages WHERE uuid = ?", (msg_uuid,)
+        )
+        if not msg:
+            return
+
+        imap_uid = msg.get("imap_uid")
+        account_email = msg.get("account_email", "")
+        folder_name = msg.get("folder_name", "")
+
+        # Remove from local DB permanently
+        self.db.execute("DELETE FROM messages WHERE uuid = ?", (msg_uuid,))
+
+        # Queue IMAP deletion if the message exists on the server
+        if imap_uid is not None and account_email and folder_name:
+            self.backlog.enqueue(
+                msg_uuid=msg_uuid,
+                account_email=account_email,
+                folder_name=folder_name,
+                imap_uid=imap_uid,
+                is_deleted=1,
+                is_read=1,
+            )
+
+    def batch_hard_delete_messages(self, uuids: list[str]) -> dict[str, Any]:
+        """Permanently delete multiple messages from local DB and IMAP.
+
+        Args:
+            uuids: List of message UUIDs to permanently delete.
+
+        Returns:
+            Dict with ``count`` of deleted messages and ``queued``
+            count for background IMAP sync.
+        """
+        queued = 0
+        deleted = 0
+
+        for msg_uuid in uuids:
+            msg = self.db.execute_one(
+                "SELECT * FROM messages WHERE uuid = ?", (msg_uuid,)
+            )
+            if not msg:
+                continue
+
+            imap_uid = msg.get("imap_uid")
+            account_email = msg.get("account_email", "")
+            folder_name = msg.get("folder_name", "")
+
+            # Remove from local DB permanently
+            self.db.execute(
+                "DELETE FROM messages WHERE uuid = ?", (msg_uuid,)
+            )
+            deleted += 1
+
+            # Queue IMAP deletion
+            if imap_uid is not None and account_email and folder_name:
+                self.backlog.enqueue(
+                    msg_uuid=msg_uuid,
+                    account_email=account_email,
+                    folder_name=folder_name,
+                    imap_uid=imap_uid,
+                    is_deleted=1,
+                    is_read=1,
+                )
+                queued += 1
+
+        return {"count": deleted, "queued": queued}
+
     def move_message(self, msg_uuid: str, destination_folder_name: str) -> None:
         """Move a message to a different folder (by folder name)."""
         now = datetime.now(UTC).isoformat()

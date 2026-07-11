@@ -12,6 +12,8 @@
     showParamsDialog = false,
     onToggleMode = () => {},
     onDelete = () => {},
+    isTrashView = false,
+    onHardDelete = () => {},
     onMove = () => {},
     onNew = null,
     onToggleSearch = () => {},
@@ -82,7 +84,10 @@
     <div class="right">
       <button class="tool-btn" disabled={numSelected === 0} onclick={onExport} title="Export selected (E)">Export <kbd>E</kbd></button>
       <button class="tool-btn" disabled={numSelected === 0} onclick={onMove} title="Move selected (Ctrl+M)">Move <kbd>⌃M</kbd></button>
-      <button class="tool-btn danger" disabled={numSelected === 0} onclick={onDelete} title="Delete selected (Delete key)">Delete <kbd>Del</kbd></button>
+      {#if !isTrashView}
+        <button class="tool-btn danger" disabled={numSelected === 0} onclick={onDelete} title="Delete selected (Delete key)">Delete <kbd>Del</kbd></button>
+      {/if}
+      <button class="tool-btn danger" disabled={numSelected === 0} onclick={onHardDelete} title="Permanently delete from server (Ctrl+Delete)">Hard Del <kbd>⌃Del</kbd></button>
     </div>
   {:else}
     <!-- View mode: expanded toolbar with actions + nav -->

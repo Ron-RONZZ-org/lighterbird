@@ -170,6 +170,7 @@ export const email = {
   },
 
   batchDelete: (uuids) => request("POST", "/email/messages/batch-delete", { uuids }),
+  batchDeleteHard: (uuids) => request("POST", "/email/messages/batch-delete-hard", { uuids }),
 
   batchMove: (uuids, destinationFolder) =>
     request("POST", "/email/messages/batch-move", { uuids, destination_folder: destinationFolder }),

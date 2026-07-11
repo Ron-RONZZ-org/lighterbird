@@ -77,6 +77,19 @@ def batch_delete(
     )
 
 
+@router.post("/messages/batch-delete-hard", response_model=BatchResultResponse)
+def batch_delete_hard(
+    req: BatchDeleteRequest,
+    email_svc: EmailService = Depends(get_email_service),
+):
+    """Permanently delete multiple messages from local DB and IMAP server."""
+    result = email_svc.msg_ops.batch_hard_delete_messages(req.uuids)
+    return BatchResultResponse(
+        status="ok",
+        count=result["count"],
+    )
+
+
 @router.post("/messages/batch-move", response_model=BatchResultResponse)
 def batch_move(
     req: BatchMoveRequest,

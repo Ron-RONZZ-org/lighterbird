@@ -87,8 +87,8 @@ describe("isMutationCommand", () => {
     expect(cfg.isDelete).toBe(false);
   });
 
-  it("returns config for email trash", () => {
-    const cfg = isMutationCommand(["email", "trash"]);
+  it("returns config for email delete", () => {
+    const cfg = isMutationCommand(["email", "delete"]);
     expect(cfg).not.toBeNull();
     expect(cfg.isDelete).toBe(true);
   });

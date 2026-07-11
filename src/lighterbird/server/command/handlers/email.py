@@ -503,14 +503,29 @@ def email_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("email.trash")
-def email_trash(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email trash <uuid>"""
+@command("email.delete",
+          flags=[
+              {"name": "hard", "type": "bool",
+               "help": "Permanently delete from IMAP server and local DB"},
+          ])
+def email_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!email delete <uuid> [--hard]
+
+    Default (soft): move to Trash folder on IMAP server.
+    With ``--hard``: permanently remove from IMAP server and local DB.
+    """
     if not remaining:
-        raise CommandValidationError("Missing message UUID.", "Usage: !email trash <uuid>")
+        raise CommandValidationError(
+            "Missing message UUID.",
+            "Usage: !email delete <uuid> [--hard]",
+        )
     svc: EmailService = get_email_service()
-    svc.trash_message(remaining[0])
-    return {"type": "status", "title": "Trashed", "data": {"uuid": remaining[0][:8]}}
+    uuid = remaining[0]
+    if "hard" in flags:
+        svc.msg_ops.hard_delete_message(uuid)
+        return {"type": "status", "title": "Permanently Deleted", "data": {"uuid": uuid[:8]}}
+    svc.trash_message(uuid)
+    return {"type": "status", "title": "Trashed", "data": {"uuid": uuid[:8]}}
 
 
 @command("email.archive")
@@ -526,6 +541,25 @@ def email_archive(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     folder = flags.get("folder", "Archive")
     svc.move_message(remaining[0], folder)
     return {"type": "status", "title": "Archived", "data": {"uuid": remaining[0][:8], "folder": folder}}
+
+
+@command("email.trash.list",
+          permission_level=PermissionLevel.READ)
+def email_trash_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!email trash list
+
+    Show messages in Trash folders.  Reuses the email list pane with
+    only Trash folders selected.  No soft-delete on selection (messages
+    are already in trash); only ``Ctrl+Delete`` / ``--hard`` for
+    permanent deletion.
+    """
+    # Delegate to email_list with folder=Trash, adding a flag so the
+    # frontend can identify this as a trash-only view.
+    result = email_list(remaining, {"folder": "Trash", **flags})
+    result["data"] = dict(result.get("data", {}))
+    result["data"]["_isTrashView"] = True
+    result["idKey"] = "email-trash-list"
+    return result
 
 
 @command("email.move")
@@ -579,3 +613,8 @@ def email_folders(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
 # (Account sub-commands moved to email_account.py)
 # (Send moved to email_send.py)
 # (EML export/import moved to email_eml.py)
+
+# ── Backward-compat aliases ────────────────────────────────────────
+# Registered at module load so they are available on first dispatch.
+from lighterbird.server.command.registry import alias
+alias(["email", "trash"], ["email", "delete"])

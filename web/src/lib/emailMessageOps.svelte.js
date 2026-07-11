@@ -63,6 +63,23 @@ export async function deleteSelected(uuids, refreshList) {
 }
 
 /**
+ * Permanently delete messages from local DB and IMAP server.
+ * @param {string[]} uuids - UUIDs to permanently delete
+ * @param {Function} refreshList - callback to refresh after deletion
+ */
+export async function hardDeleteSelected(uuids, refreshList) {
+  if (uuids.length === 0) return;
+  try {
+    await emailApi.batchDeleteHard(uuids);
+    await refreshList();
+  } catch (err) {
+    tabStore.open("error", "Hard Delete Failed", {
+      message: err.message || "Failed to permanently delete messages",
+    });
+  }
+}
+
+/**
  * Batch-move messages to a destination folder and refresh the list.
  * @param {string[]} uuids - UUIDs to move
  * @param {string} destinationFolderUuid

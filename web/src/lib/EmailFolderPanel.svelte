@@ -80,6 +80,21 @@
     folderVisibility = next;
     onRefresh();
   }
+
+  function _isTrashName(f) {
+    const name = f.folder_name || "";
+    return name.toLowerCase() === "trash";
+  }
+
+  function handleSelectAllButTrash() {
+    const next = { ...folderVisibility };
+    for (const f of folderTree) {
+      const path = f.label || `${f.account_email}/${f.folder_name}`;
+      next[path] = !_isTrashName(f);
+    }
+    folderVisibility = next;
+    onRefresh();
+  }
 </script>
 
 <DropdownPanel {show} {onClose}>
@@ -95,6 +110,7 @@
     </div>
     <div class="folder-actions">
       <button class="folder-action-btn" onclick={handleSelectAll} title="Show all folders">All</button>
+      <button class="folder-action-btn" onclick={handleSelectAllButTrash} title="Show all folders except Trash">No Trash</button>
       <button class="folder-action-btn" onclick={handleDeselectAll} title="Hide all folders">None</button>
     </div>
     <EmailFolderTree
