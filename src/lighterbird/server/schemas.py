@@ -143,6 +143,8 @@ class BatchMoveRequest(BaseModel):
 class BatchResultResponse(BaseModel):
     status: str = "ok"
     count: int
+    errors: list[str] = Field(default_factory=list,
+                              description="Per-UUID error messages for failed operations")
 
 
 # ── Calendar ─────────────────────────────────────────────────────────────
