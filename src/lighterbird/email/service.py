@@ -348,6 +348,100 @@ class EmailService:
                                        in_reply_to=in_reply_to,
                                        save_as_sample=save_as_sample)
 
+    def save_draft_to_imap(self, draft: dict[str, Any]) -> None:
+        """Best-effort save of an email draft to the IMAP DRAFTS folder.
+
+        Builds a minimal RFC 2822 message from the draft data and appends
+        it to the account's IMAP DRAFTS folder with the ``\\Draft`` flag.
+
+        If the same draft UUID already exists in DRAFTS (matched via
+        ``X-Draft-UUID`` header), it is removed first so the folder
+        always has at most one copy per draft.
+
+        All failures are logged and silently swallowed — the local draft
+        save is the authoritative storage.
+        """
+        import uuid as _uuid
+        from email.message import EmailMessage
+
+        from lighterbird.email.imap.client import IMAPClient
+
+        data = draft.get("data", {})
+        account_email = (data or {}).get("account", "")
+        draft_uuid = draft.get("uuid", "")
+
+        if not account_email or not draft_uuid:
+            logger.warning(
+                "Cannot sync draft to IMAP: missing account_email or uuid. "
+                "Draft data: %s", draft,
+            )
+            return
+
+        acct = self.accounts.get_account_with_password(account_email)
+        if not acct or not acct.get("password"):
+            logger.warning(
+                "Cannot sync draft to IMAP for %s: account not found or no password",
+                account_email,
+            )
+            return
+
+        to_str = (data or {}).get("to", "")
+        subject = (data or {}).get("subject", "") or "(no subject)"
+        body = (data or {}).get("body", "")
+        cc_str = (data or {}).get("cc", "")
+        bcc_str = (data or {}).get("bcc", "")
+
+        sender_email = acct.get("email", "") or acct.get("smtp_username", "")
+
+        # Build a minimal RFC 2822 message for the draft
+        msg = EmailMessage()
+        msg["From"] = sender_email
+        msg["To"] = to_str
+        if cc_str:
+            msg["Cc"] = cc_str
+        if bcc_str:
+            msg["Bcc"] = bcc_str
+        msg["Subject"] = subject
+        msg["Message-ID"] = f"<{_uuid.uuid4()!s}>"
+        msg["X-Draft-UUID"] = draft_uuid
+        msg["Date"] = datetime.now(UTC).strftime("%a, %d %b %Y %H:%M:%S %z")
+        msg.set_content(body or "")
+
+        message_bytes = msg.as_bytes()
+
+        client = IMAPClient(
+            host=acct.get("imap_server", ""),
+            port=acct.get("imap_port", 993),
+            use_ssl=acct.get("imap_use_ssl", 1) == 1,
+        )
+        try:
+            client.connect(
+                username=acct.get("imap_username", "") or acct.get("email", ""),
+                password=acct["password"],
+            )
+
+            # Ensure DRAFTS folder exists
+            client.ensure_folder(account_email, "Drafts", self, "\\\\Drafts")
+
+            # Remove any existing IMAP draft with the same X-Draft-UUID
+            existing = client.search_by_header("Drafts", "X-Draft-UUID", draft_uuid)
+            for uid in existing:
+                client.delete_message_by_uid("Drafts", uid)
+
+            # Append the new draft
+            client.append_message("Drafts", message_bytes, flags=["\\Draft"])
+            logger.debug(
+                "Draft %s synced to IMAP DRAFTS for %s",
+                draft_uuid[:8], account_email,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to sync draft %s to IMAP DRAFTS for %s (best-effort)",
+                draft_uuid[:8], account_email,
+            )
+        finally:
+            client.disconnect()
+
     def process_send_queue(self, limit: int = 50) -> dict:
         """Process pending send-queue entries with exponential backoff.
 

@@ -297,6 +297,93 @@ class IMAPClient:
         typ, _data = self.conn.create(folder_name)
         return typ == "OK"
 
+    def append_message(self, folder: str, message: bytes,
+                       flags: list[str] | None = None) -> bool:
+        """Append a message to an IMAP folder.
+
+        Uses ``imaplib.IMAP4.append()``.  The *message* must be a
+        valid RFC 2822 byte string.  Optional *flags* (e.g. ``["\\Draft"]``)
+        are set on the appended message.
+
+        Args:
+            folder: Target folder name (e.g. ``"Drafts"``).
+            message: RFC 2822 message bytes.
+            flags: Optional list of IMAP flag strings (e.g. ``["\\Seen"]``).
+                   Note that backslashes must be escaped in Python string
+                   literals.
+
+        Returns:
+            True if the message was appended successfully.
+        """
+        from imaplib import Time2Internaldate
+
+        flag_str = " ".join(flags) if flags else ""
+        now = datetime.now(UTC)
+        internal_date = Time2Internaldate(now.timetuple())
+        try:
+            typ, _data = self.conn.append(
+                _imap_quote_folder(folder),
+                flag_str,
+                internal_date,
+                message,
+            )
+            if typ != "OK":
+                logger.warning(
+                    "IMAP APPEND to %r returned typ=%r", folder, typ,
+                )
+                return False
+            return True
+        except imaplib.IMAP4.error as e:
+            logger.warning("IMAP APPEND failed for folder %r: %s", folder, e)
+            return False
+
+    def search_by_header(self, folder: str, header_name: str,
+                         header_value: str) -> list[bytes]:
+        """Search for messages in a folder by a header value.
+
+        Uses ``UID SEARCH HEADER <name> <value>``.
+
+        Args:
+            folder: Folder to search in.
+            header_name: Header name (e.g. ``"X-Draft-UUID"``).
+            header_value: Value to match.
+
+        Returns:
+            List of matching UIDs as bytes (empty if none).
+        """
+        try:
+            self._select_folder(folder)
+            typ, data = self.conn.uid("SEARCH", "HEADER", header_name, header_value)
+            if typ != "OK" or not data or not data[0]:
+                return []
+            return data[0].split()
+        except Exception as e:
+            logger.warning("IMAP SEARCH for header %r failed: %s", header_name, e)
+            return []
+
+    def delete_message_by_uid(self, folder: str, uid: bytes) -> bool:
+        """Delete a message by UID using STORE +EXPUNGE.
+
+        Args:
+            folder: Folder name.
+            uid: UID of the message to delete (as returned by ``UID SEARCH``).
+
+        Returns:
+            True if the message was deleted.
+        """
+        try:
+            self._select_folder(folder)
+            # STORE +FLAGS.SILENT (\\Deleted)
+            typ, _data = self.conn.uid("STORE", uid, "+FLAGS.SILENT", "(\\Deleted)")
+            if typ != "OK":
+                return False
+            # EXPUNGE to permanently remove
+            self.conn.expunge()
+            return True
+        except Exception as e:
+            logger.warning("IMAP delete by UID failed for %r: %s", uid, e)
+            return False
+
     # ── Folder selection ───────────────────────────────────────────────
 
     def _select_folder(self, folder: str) -> bool:

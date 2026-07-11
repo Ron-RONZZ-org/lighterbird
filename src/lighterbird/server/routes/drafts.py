@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from lighterbird.core.drafts import delete_draft, get_draft, list_drafts, save_draft
+from lighterbird.server.deps import get_email_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/drafts", tags=["drafts"])
 
@@ -36,9 +41,16 @@ class DraftListResponse(BaseModel):
 
 
 @router.post("", response_model=DraftSaveResponse)
-def save_draft_endpoint(body: DraftSaveRequest) -> DraftSaveResponse:
+def save_draft_endpoint(body: DraftSaveRequest,
+                        email_svc=Depends(get_email_service)) -> DraftSaveResponse:
     """Save (create or update) a draft."""
     draft = save_draft(body.domain, body.title, body.data, draft_uuid=body.uuid)
+    # Best-effort sync of email drafts to IMAP DRAFTS folder
+    if body.domain == "email":
+        try:
+            email_svc.save_draft_to_imap(draft)
+        except Exception:
+            logger.exception("Failed to sync email draft %s to IMAP DRAFTS", draft.get("uuid", "?")[:8])
     return DraftSaveResponse(
         uuid=draft["uuid"],
         title=draft.get("title", ""),
