@@ -95,7 +95,7 @@
   }
 
   function performSearch(query) {
-    const tabId = tabStore.active.id;
+    const tabId = tabStore.findByKey("persistent-letter-list") || tabStore.active.id;
     if (abortController) abortController.abort();
     abortController = new AbortController();
 
@@ -133,7 +133,7 @@
   }
 
   async function refreshList() {
-    const tabId = tabStore.active.id;
+    const tabId = tabStore.findByKey("persistent-letter-list") || tabStore.active.id;
     try {
       const params = { ...currentFilters, limit: 50 };
       if (searchQuery && searchQuery.length >= 2) {

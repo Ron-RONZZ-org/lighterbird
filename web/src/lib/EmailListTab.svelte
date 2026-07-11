@@ -45,7 +45,6 @@
   let syncProgress = $state(null);
   let syncPollTimer = $state(null);
   let syncError = $state("");
-  let syncEmailTabId = $state(null);
 
   // When data prop changes (new query / new tab data), reset pagination
   $effect(() => {
@@ -242,7 +241,7 @@
   });
 
   function performSearch(query, extraFilters) {
-    const tabId = tabStore.active.id;
+    const tabId = tabStore.findByKey("persistent-email-list") || tabStore.active.id;
     if (abortController) abortController.abort();
     abortController = new AbortController();
     const signal = abortController.signal;
@@ -332,9 +331,11 @@
   }
 
   async function refreshList() {
-    // Use the tab ID captured at sync start if available; fall back to the
-    // currently active tab for non-sync callers (delete, move).
-    const tabId = syncEmailTabId || tabStore.active.id;
+    // Resolve the email list tab by its persistent idKey so the update
+    // lands on the correct tab even if the user switched away during an
+    // async operation (sync, search, pagination).  Fall back to the
+    // currently active tab for non-list callers (delete, move).
+    const tabId = tabStore.findByKey("persistent-email-list") || tabStore.active.id;
     try {
       const params = { ...currentFilters, limit: 50 };
       if (searchQuery && searchQuery.length >= 2) {
@@ -364,10 +365,6 @@
 
   async function handleSync() {
     if (syncing) return;
-    // Capture the tab ID at sync START, not at completion — the user may
-    // switch tabs during the long sync, and refreshList would otherwise
-    // update the wrong tab (or silently do nothing).
-    syncEmailTabId = tabStore.active.id;
     syncing = true;
     syncProgress = null;
     syncTaskId = null;
@@ -409,12 +406,10 @@
             clearSyncError();
           }
           await refreshList();
-          syncEmailTabId = null;
         } else if (prog.status === "error") {
           syncProgress = prog;
           syncing = false;
           syncTaskId = null;
-          syncEmailTabId = null;
           syncError = `Sync failed: ${syncErrorMsg(prog.errors) || "Unknown error"}`;
           clearSyncError();
         } else {
@@ -431,7 +426,6 @@
     syncing = false;
     syncTaskId = null;
     syncProgress = null;
-    syncEmailTabId = null;
     if (syncPollTimer) { clearTimeout(syncPollTimer); syncPollTimer = null; }
   }
 
@@ -475,7 +469,7 @@
     if (searchQuery && searchQuery.length >= 2) {
       params.query = searchQuery;
     }
-    const tabId = tabStore.active.id;
+    const tabId = tabStore.findByKey("persistent-email-list") || tabStore.active.id;
     emailApi.listMessages(params)
       .then((result) => {
         tabStore.safeUpdate(tabId, result);
@@ -513,12 +507,6 @@
       if (syncPollTimer) { clearTimeout(syncPollTimer); syncPollTimer = null; }
     };
   });
-  // ⚠ The effect above is the component CLEANUP (returned function runs on
-  //    destroy).  The sync-state fields (syncEmailTabId, syncProgress, …)
-  //    persist in module scope and are NOT cleared here — they survive
-  //    component destroy/recreate (e.g. when switching tabs) so that
-  //    pollSyncProgress / refreshList can still update the tab data.
-  //    They are cleared explicitly in stopSync().
 </script>
 
 <svelte:window onkeydown={handleWindowKeydown} />
