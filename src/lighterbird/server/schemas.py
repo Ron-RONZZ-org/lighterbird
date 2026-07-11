@@ -116,7 +116,7 @@ class SendRequest(BaseModel):
     bcc: list[str] = []
     priority: int = 3
     body_format: str = "markdown"  # "markdown" | "html" | "plain"
-    attachments: list[str] = []  # base64-encoded file content strings
+    attachments: list[dict] = []  # list of {"name": ..., "data": base64} dicts
     signature: str | None = None  # override signature; None = use account default
     save_as_sample: bool = True  # save as writing sample for LLM style learning
 
