@@ -193,17 +193,32 @@ class TestEmailHandlers:
         assert result["type"] == "email"
         assert result["title"] == "Hello"
 
-    def test_email_trash_missing_uuid(self):
-        """email trash without uuid raises."""
+    def test_email_delete_missing_uuid(self):
+        """email delete without uuid raises."""
         with pytest.raises(CommandValidationError, match="Missing message UUID"):
-            dispatch(["email", "trash"], {})
+            dispatch(["email", "delete"], {})
 
-    def test_email_trash_success(self, mock_email_svc):
-        """email trash calls trash_message and returns status."""
-        result = dispatch(["email", "trash", "abc123"], {})
+    def test_email_delete_success(self, mock_email_svc):
+        """email delete calls trash_message and returns status."""
+        result = dispatch(["email", "delete", "abc123"], {})
         assert result["type"] == "status"
         assert result["title"] == "Trashed"
         mock_email_svc.trash_message.assert_called_once_with("abc123")
+
+    def test_email_delete_hard_success(self, mock_email_svc):
+        """email delete --hard calls hard_delete_message and returns status."""
+        result = dispatch(["email", "delete", "abc123"], {"hard": ""})
+        assert result["type"] == "status"
+        assert result["title"] == "Permanently Deleted"
+        mock_email_svc.msg_ops.hard_delete_message.assert_called_once_with("abc123")
+
+    def test_email_trash_list_opens_trash_view(self):
+        """email trash list returns email-list with isTrashView and Trash filter."""
+        result = dispatch(["email", "trash", "list"], {})
+        assert result["type"] == "email-list"
+        assert result.get("idKey") == "email-trash-list"
+        assert result["data"].get("_isTrashView") is True
+        assert result["data"].get("filters", {}).get("folder") == "Trash"
 
     def test_email_archive_success(self, mock_email_svc):
         """email archive calls move_message to Archive folder and returns status."""

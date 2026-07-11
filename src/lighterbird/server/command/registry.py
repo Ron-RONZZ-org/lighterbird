@@ -193,32 +193,20 @@ def alias(old_tokens: list[str], new_tokens: list[str]) -> None:
 
 
 def _resolve_aliases(tokens: list[str]) -> list[str]:
-    """Resolve backward-compat aliases.
-
-    Supports both exact and prefix matching: if ``["email", "trash"]``
-    is aliased to ``["email", "delete"]``, then ``["email", "trash", "<uuid>"]``
-    will also resolve (the alias rewrites the prefix and preserves any
-    remaining tokens).
+    """Resolve backward-compat aliases (exact match only).
 
     Uses a visited-set guard to detect circular alias chains
     (e.g. a → b → a) and break the loop.
     """
     seen: set[str] = set()
-    # Try progressively shorter prefixes so that
-    # ["email", "trash", "<uuid>"] matches alias "email.trash".
-    for i in range(len(tokens), 0, -1):
-        prefix = ".".join(tokens[:i])
-        if prefix in _aliases and prefix not in seen:
-            seen.add(prefix)
-            new_tokens = list(_aliases[prefix])
-            suffix = tokens[i:]
-            resolved = _resolve_aliases(new_tokens + suffix)
-            # Guard against infinite recursion
-            key = ".".join(resolved)
-            if key in seen:
-                logger.error("Circular alias detected: %s is already in the resolution chain", key)
-                return tokens
-            return resolved
+    key = ".".join(tokens)
+    while key in _aliases:
+        if key in seen:
+            logger.error("Circular alias detected: %s is already in the resolution chain", key)
+            break
+        seen.add(key)
+        tokens = _aliases[key]
+        key = ".".join(tokens)
     return tokens
 
 
