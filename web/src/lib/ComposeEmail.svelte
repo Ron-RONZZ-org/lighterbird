@@ -5,6 +5,7 @@
   import EmbedInstallDialog from "./EmbedInstallDialog.svelte";
   import FormField from "./FormField.svelte";
   import PreviewDialog from "./PreviewDialog.svelte";
+  import { banner } from "./bannerStore.svelte.js";
   import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
   import MultiEntryField from "./MultiEntryField.svelte";
 
@@ -186,6 +187,9 @@
       );
       draftUuid = result.uuid;
       draftSaved = true;
+      if (result.imap_error) {
+        banner.show(`Draft saved locally, but IMAP sync failed: ${result.imap_error}`, "warn", 8000);
+      }
       setTimeout(() => { draftSaved = false; }, 2000);
     } catch { /* silent */ }
     finally { savingDraft = false; }

@@ -315,16 +315,16 @@ class IMAPClient:
         Returns:
             True if the message was appended successfully.
         """
-        from imaplib import Time2Internaldate
-
         flag_str = " ".join(flags) if flags else ""
+        # Pass the datetime object directly — Python 3.13+ imaplib.append()
+        # no longer accepts string date_time values and calls
+        # Time2Internaldate internally for datetime/struct_time types.
         now = datetime.now(UTC)
-        internal_date = Time2Internaldate(now.timetuple())
         try:
             typ, _data = self.conn.append(
                 _imap_quote_folder(folder),
                 flag_str,
-                internal_date,
+                now,
                 message,
             )
             if typ != "OK":

@@ -6,8 +6,12 @@ Composes AccountService, MessageService, and MessageOpsService.
 from __future__ import annotations
 
 import email.parser
+import logging
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from lighterbird.core.drafts import save_draft
 from lighterbird.email.db import get_db
@@ -348,7 +352,7 @@ class EmailService:
                                        in_reply_to=in_reply_to,
                                        save_as_sample=save_as_sample)
 
-    def save_draft_to_imap(self, draft: dict[str, Any]) -> None:
+    def save_draft_to_imap(self, draft: dict[str, Any]) -> str | None:
         """Best-effort save of an email draft to the IMAP DRAFTS folder.
 
         Builds a minimal RFC 2822 message from the draft data and appends
@@ -358,8 +362,8 @@ class EmailService:
         ``X-Draft-UUID`` header), it is removed first so the folder
         always has at most one copy per draft.
 
-        All failures are logged and silently swallowed — the local draft
-        save is the authoritative storage.
+        Returns:
+            ``None`` on success, or an error message string on failure.
         """
         import uuid as _uuid
         from email.message import EmailMessage
@@ -371,19 +375,15 @@ class EmailService:
         draft_uuid = draft.get("uuid", "")
 
         if not account_email or not draft_uuid:
-            logger.warning(
-                "Cannot sync draft to IMAP: missing account_email or uuid. "
-                "Draft data: %s", draft,
-            )
-            return
+            msg = "Draft missing account_email or uuid"
+            logger.warning("Cannot sync draft to IMAP: %s. Draft: %s", msg, draft)
+            return msg
 
         acct = self.accounts.get_account_with_password(account_email)
         if not acct or not acct.get("password"):
-            logger.warning(
-                "Cannot sync draft to IMAP for %s: account not found or no password",
-                account_email,
-            )
-            return
+            msg = f"Account {account_email} not found or no password configured"
+            logger.warning("Cannot sync draft to IMAP: %s", msg)
+            return msg
 
         to_str = (data or {}).get("to", "")
         subject = (data or {}).get("subject", "") or "(no subject)"
@@ -430,15 +430,18 @@ class EmailService:
 
             # Append the new draft
             client.append_message("Drafts", message_bytes, flags=["\\Draft"])
-            logger.debug(
+            logger.info(
                 "Draft %s synced to IMAP DRAFTS for %s",
                 draft_uuid[:8], account_email,
             )
-        except Exception:
+            return None
+        except Exception as exc:
+            err = f"IMAP sync failed for {account_email}: {exc}"
             logger.exception(
-                "Failed to sync draft %s to IMAP DRAFTS for %s (best-effort)",
-                draft_uuid[:8], account_email,
+                "Failed to sync draft %s to IMAP DRAFTS for %s: %s",
+                draft_uuid[:8], account_email, exc,
             )
+            return err
         finally:
             client.disconnect()
 
