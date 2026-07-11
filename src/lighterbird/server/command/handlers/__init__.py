@@ -14,6 +14,7 @@ try:
         backup,  # noqa: F401
         calendar,  # noqa: F401
         contacts,  # noqa: F401
+        debug,  # noqa: F401
         drafts,  # noqa: F401
         email,  # noqa: F401
         email_account,  # noqa: F401

@@ -29,6 +29,15 @@
   } = $props();
 
   let d = $derived(data || {});
+
+  // ── Sync-log clipboard copy ──────────────────────────────────────
+  let logPathCopied = $state(false);
+  function copyLogPath(path) {
+    navigator.clipboard.writeText(path).then(() => {
+      logPathCopied = true;
+      setTimeout(() => { logPathCopied = false; }, 1200);
+    }).catch(() => {});
+  }
 </script>
 
 <div class="status">
@@ -222,6 +231,20 @@
       <p class="empty">No sieve scripts.</p>
     {/each}
 
+  {:else if d.log_path && d.entries !== undefined}
+    <div class="sync-log">
+      <div class="log-path-row">
+        <span class="key">Log file</span>
+        <span class="log-path-clickable" onclick={() => copyLogPath(d.log_path)} title="Click to copy path">
+          {d.log_path}
+        </span>
+        <span class="copy-indicator">{logPathCopied ? "Copied!" : ""}</span>
+      </div>
+      {#each d.entries as entry}
+        <div class="log-entry">{entry}</div>
+      {/each}
+    </div>
+
   {:else}
     {#each Object.entries(d) as [key, val]}
       {#if typeof val === "string" && val}
@@ -353,5 +376,43 @@
     color: #e0e0e0;
     white-space: pre-wrap;
     padding: 0.75rem;
+  }
+  .sync-log {
+    font-family: monospace;
+    font-size: 0.75rem;
+    line-height: 1.5;
+  }
+  .log-path-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #2a2a3e;
+    background: #1a1a2e;
+  }
+  .log-path-clickable {
+    color: #8ab0d0;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    word-break: break-all;
+  }
+  .log-path-clickable:hover {
+    color: #b0d0e0;
+  }
+  .copy-indicator {
+    color: #6a9a6a;
+    font-size: 0.7rem;
+    white-space: nowrap;
+  }
+  .log-entry {
+    padding: 0.1rem 0.75rem;
+    border-bottom: 1px solid #1e1e30;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: #c0c0d0;
+  }
+  .log-entry:hover {
+    background: #1a1a2e;
   }
 </style>

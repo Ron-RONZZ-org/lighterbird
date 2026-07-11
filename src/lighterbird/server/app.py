@@ -45,10 +45,22 @@ async def lifespan(app: FastAPI):
         seed_config_defaults()
     except Exception:
         logger.warning("Config defaults seeding failed (non-fatal)")
+    # Initialise the dedicated sync log file
+    try:
+        from lighterbird.core.sync_logger import init_sync_logger
+        init_sync_logger()
+    except Exception:
+        logger.warning("Sync log initialisation failed (non-fatal)")
     workers = init_workers()
     app.state.worker_pool = workers
     yield
     shutdown_workers(timeout=5.0)
+    # Clean up sync log handler
+    try:
+        from lighterbird.core.sync_logger import finalize as finalize_sync_logger
+        finalize_sync_logger()
+    except Exception:
+        pass
 
 
 def create_app(static_dir: str | Path | None = None) -> FastAPI:

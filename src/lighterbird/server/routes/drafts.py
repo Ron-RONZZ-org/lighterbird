@@ -27,6 +27,7 @@ class DraftSaveResponse(BaseModel):
     title: str
     domain: str
     updated_at: str
+    imap_error: str | None = None  # populated when IMAP DRAFTS sync fails
 
 
 class DraftListItem(BaseModel):
@@ -46,16 +47,19 @@ def save_draft_endpoint(body: DraftSaveRequest,
     """Save (create or update) a draft."""
     draft = save_draft(body.domain, body.title, body.data, draft_uuid=body.uuid)
     # Best-effort sync of email drafts to IMAP DRAFTS folder
+    imap_error = None
     if body.domain == "email":
         try:
-            email_svc.save_draft_to_imap(draft)
-        except Exception:
+            imap_error = email_svc.save_draft_to_imap(draft)
+        except Exception as exc:
+            imap_error = str(exc)
             logger.exception("Failed to sync email draft %s to IMAP DRAFTS", draft.get("uuid", "?")[:8])
     return DraftSaveResponse(
         uuid=draft["uuid"],
         title=draft.get("title", ""),
         domain=draft["domain"],
         updated_at=draft.get("updated_at", ""),
+        imap_error=imap_error,
     )
 
 
