@@ -538,14 +538,7 @@
     color: #e0e0e0; border-radius: 4px; font-family: monospace; font-size: 0.78rem;
     cursor: pointer;
   }
-  .preview-btn {
-    padding: 0.25rem 0.5rem; border: 1px solid #444; border-radius: 4px;
-    background: transparent; color: #b0b0c0; font-family: monospace;
-    font-size: 0.72rem; cursor: pointer; transition: background 0.1s, color 0.1s;
-    white-space: nowrap;
-  }
-  .preview-btn:hover:not(:disabled) { background: #2a2a44; color: #e0e0e0; }
-  .preview-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
   .attachment-area { display: flex; flex-direction: column; gap: 0.4rem; }
   .file-input {
     font-family: monospace; font-size: 0.8rem; color: #ccc;

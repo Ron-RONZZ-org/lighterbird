@@ -18,6 +18,7 @@
     onSearchEnter = () => {},
     onSearchEscape = () => {},
     onSearchClear = () => {},
+    actions = null,
   } = $props();
 
   let searchFocused = $state(false);
@@ -71,9 +72,8 @@
       <button class="search-clear" onclick={onSearchClear} aria-label="Clear search">✕</button>
     {/if}
   </div>
-  {#if !searchFocused}
-    <!-- Actions slot: rendered when search is confirmed (not focused) -->
-    <slot name="actions" />
+  {#if !searchFocused && actions}
+    {@render actions()}
   {/if}
 {/if}
 

@@ -104,7 +104,7 @@
     }
   });
 
-  let overlay;
+  let overlay = $state(null);
 </script>
 
 {#if show}

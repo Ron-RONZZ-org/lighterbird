@@ -206,7 +206,7 @@
         onSearchEscape={closeSearch}
         onSearchClear={() => { searchQuery = ""; performSearch(""); }}
       >
-        <svelte:fragment slot="actions">
+        {#snippet actions()}
           <div class="toolbar-left">
             <button class="tool-btn" title="Toggle selection mode (V)" onclick={() => sel.toggleSelectionMode()}>Select <kbd>V</kbd></button>
             <button class="tool-btn primary" onclick={handleNew} title="Write new journal entry">+ New <kbd>N</kbd></button>
@@ -214,7 +214,7 @@
           <div class="toolbar-right">
             <button class="tool-btn" onclick={openImportDialog} title="Import journal entries">Import</button>
           </div>
-        </svelte:fragment>
+        {/snippet}
       </ListSearchBar>
     {:else if sel.selectionMode}
       <div class="toolbar-left">

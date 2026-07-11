@@ -49,7 +49,7 @@
       {onSearchEscape}
       onSearchClear={onClearSearch}
     >
-      <svelte:fragment slot="actions">
+      {#snippet actions()}
         <div class="toolbar-left">
           <button class="tool-btn" title="Toggle selection mode (V)" onclick={onToggleSelectionMode}>Select <kbd>V</kbd></button>
           <button class="tool-btn" title="Toggle sort (S)" onclick={onToggleSort}>Sort <kbd>S</kbd></button>
@@ -60,7 +60,7 @@
           <button class="tool-btn" onclick={onImport} title="Import letters">Import</button>
           <button class="tool-btn primary" onclick={onSend} title="Send a letter">Send <kbd>S</kbd></button>
         </div>
-      </svelte:fragment>
+      {/snippet}
     </ListSearchBar>
   {:else if selectionMode}
     <div class="toolbar-left">

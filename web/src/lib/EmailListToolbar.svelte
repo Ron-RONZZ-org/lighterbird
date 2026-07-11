@@ -43,7 +43,7 @@
       onSearchEscape={onSearchEscape}
       onSearchClear={onSearchClear}
     >
-      <svelte:fragment slot="actions">
+      {#snippet actions()}
         <div class="left">
           <button class="tool-btn" title="Toggle selection mode (V)" onclick={onToggleMode}>Select <kbd>V</kbd></button>
           <button class="tool-btn" title="Folders (F)" onclick={onToggleFolderTree}
@@ -63,7 +63,7 @@
             {syncing ? "Syncing…" : "Sync"} <kbd>Ctrl+R</kbd>
           </button>
         </div>
-      </svelte:fragment>
+      {/snippet}
     </ListSearchBar>
   {:else if selectionMode}
     <!-- Selection mode: action toolbar -->

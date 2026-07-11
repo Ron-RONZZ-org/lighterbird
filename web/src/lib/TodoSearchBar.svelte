@@ -36,7 +36,7 @@
       onSearchEscape={onSearchEscape}
       onSearchClear={onClearSearch}
     >
-      <svelte:fragment slot="actions">
+      {#snippet actions()}
         <div class="left">
           <button class="tool-btn" title="Toggle selection mode (V)" onclick={onToggleSelectionMode}>Select <kbd>V</kbd></button>
           <button class="tool-btn" title="Toggle tree/flat view" onclick={onToggleMode}>
@@ -55,7 +55,7 @@
           <button class="tool-btn primary" onclick={onNew} title="Add new todo">+ New <kbd>N</kbd></button>
           <button class="tool-btn" onclick={onImport} title="Import todos">Import</button>
         </div>
-      </svelte:fragment>
+      {/snippet}
     </ListSearchBar>
   {:else if selectionMode}
     <div class="left">

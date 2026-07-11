@@ -28,7 +28,11 @@
   let initialData = $derived(data?.initialData || {});
   let commandPath = $derived(data?.commandPath || _inferCommandPath(formType));
   let formDirty = $state(false);
-  let formError = $state(data?.error || ""); // non-field-level error displayed as banner
+  let formError = $state(""); // non-field-level error displayed as banner
+  // Sync from prop on initial load or prop change
+  $effect(() => {
+    if (data?.error) formError = data.error;
+  });
 
   function handleDirtyChange(dirty) {
     formDirty = dirty;
