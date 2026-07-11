@@ -14,6 +14,7 @@
     onDelete = () => {},
     isTrashView = false,
     onHardDelete = () => {},
+    onClearTrash = () => {},
     onMove = () => {},
     onNew = null,
     onToggleSearch = () => {},
@@ -48,7 +49,9 @@
       {#snippet actions()}
         <div class="left">
           <button class="tool-btn" title="Toggle selection mode (V)" onclick={onToggleMode}>Select <kbd>V</kbd></button>
-          {#if !isTrashView}
+          {#if isTrashView}
+            <button class="tool-btn" onclick={onClearTrash} title="Empty Trash (Ctrl+Shift+Delete)">Clear Trash <kbd>⌃⇧Del</kbd></button>
+          {:else}
             <button class="tool-btn" title="Folders (F)" onclick={onToggleFolderTree}
               class:active={showFolderTree}>Fldrs <kbd>F</kbd></button>
           {/if}
@@ -95,7 +98,9 @@
     <!-- View mode: expanded toolbar with actions + nav -->
     <div class="left">
       <button class="tool-btn" title="Toggle selection mode (V)" onclick={onToggleMode}>Select <kbd>V</kbd></button>
-      {#if !isTrashView}
+      {#if isTrashView}
+        <button class="tool-btn" onclick={onClearTrash} title="Empty Trash (Ctrl+Shift+Delete)">Clear Trash <kbd>⌃⇧Del</kbd></button>
+      {:else}
         <button class="tool-btn" title="Folders (F)" onclick={onToggleFolderTree}
           class:active={showFolderTree}>Fldrs <kbd>F</kbd></button>
       {/if}
@@ -105,11 +110,7 @@
         class:active={showParamsDialog}>Params <kbd>P</kbd></button>
     </div>
     <div class="center">
-      {#if isTrashView}
-        <span class="search-hint"><kbd>⌃⇧Del</kbd> clear trash</span>
-      {:else}
-        <span class="search-hint"><kbd>/</kbd> search</span>
-      {/if}
+      <span class="search-hint"><kbd>/</kbd> search</span>
     </div>
     <div class="right">
       <button class="tool-btn" title="Advanced search (A)" onclick={onToggleAdvancedSearch}>Adv srch <kbd>A</kbd></button>

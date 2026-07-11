@@ -206,14 +206,68 @@ class MessageOpsService(MsgSendQueueMixin):
         return {"count": trashed, "queued": queued}
 
     # ── Hard-delete (permanent) operations ────────────────────────────────
+    # Hard delete MUST purge from the remote IMAP server, not just mark
+    # locally.  The sync worker compares IMAP UIDs against known_uids in
+    # the local DB; if we only soft-delete (is_deleted=1) or delete the
+    # row and rely on the async backlog, the next sync re-imports the UID.
+    #
+    # Strategy: connect to IMAP synchronously, UID STORE +FLAGS (\Deleted)
+    # + EXPUNGE (removes the UID from the folder permanently).  If IMAP
+    # is unreachable, fall back to keeping the row with is_deleted=1
+    # (hidden from list, UID stays in known_uids → no re-import).
+
+    def _imap_delete_uuid(self, msg: dict) -> bool:
+        """Synchronously delete a message UID from the IMAP server.
+
+        Connects to IMAP, selects the folder, marks the UID as
+        ``\\Deleted``, and EXPUNGEs the folder to permanently remove it.
+        Returns ``True`` if the IMAP deletion succeeded, ``False`` if
+        the message has no UID or the IMAP operation failed.
+        """
+        imap_uid = msg.get("imap_uid")
+        account_email = msg.get("account_email", "")
+        folder_name = msg.get("folder_name", "")
+        if imap_uid is None or not account_email or not folder_name:
+            return False
+
+        acct = self._account_service.get_account_with_password(account_email)
+        if not acct or not acct.get("password"):
+            logger.warning("[hard-delete] No password for %s, cannot delete from IMAP", account_email)
+            return False
+
+        try:
+            from lighterbird.email.imap.client import IMAPClient
+            client = IMAPClient(
+                host=acct.get("imap_server", ""),
+                port=acct.get("imap_port", 993),
+                username=account_email,
+                password=acct["password"],
+                use_ssl=bool(acct.get("imap_use_ssl", 1)),
+            )
+            client.connect()
+            ok = client.delete_message_by_uid(folder_name, str(imap_uid).encode())
+            client.disconnect()
+            if ok:
+                logger.info("[hard-delete] IMAP purge OK for %s UID %s", account_email, imap_uid)
+            else:
+                logger.warning("[hard-delete] IMAP delete_message_by_uid returned False for %s UID %s", account_email, imap_uid)
+            return ok
+        except Exception as exc:
+            logger.warning(
+                "[hard-delete] IMAP connection/delete failed for %s UID %s: %s",
+                account_email, imap_uid, exc,
+            )
+            return False
 
     def hard_delete_message(self, msg_uuid: str) -> None:
         """Permanently delete a message from the local DB and IMAP server.
 
-        Removes the message row from the local database immediately.
-        If the message has an associated IMAP UID, queues a deferred
-        IMAP ``STORE +FLAGS (\\Deleted)`` to also remove it from the
-        server (processed by the background sync worker).
+        1. Connects to IMAP and performs ``STORE +FLAGS (\\Deleted)``
+           + ``EXPUNGE`` to remove the message from the server.
+        2. If IMAP succeeds, removes the local DB row permanently.
+        3. If IMAP fails, keeps the row with ``is_deleted=1`` so the
+           sync worker does not re-import the UID (the UID stays in
+           ``known_uids`` and the message stays hidden from the list).
         """
         msg = self.db.execute_one(
             "SELECT * FROM messages WHERE uuid = ?", (msg_uuid,)
@@ -221,35 +275,39 @@ class MessageOpsService(MsgSendQueueMixin):
         if not msg:
             return
 
-        imap_uid = msg.get("imap_uid")
-        account_email = msg.get("account_email", "")
-        folder_name = msg.get("folder_name", "")
+        # Try synchronous IMAP deletion
+        imap_ok = self._imap_delete_uuid(msg)
+        now = datetime.now(UTC).isoformat()
 
-        # Remove from local DB permanently
-        self.db.execute("DELETE FROM messages WHERE uuid = ?", (msg_uuid,))
-
-        # Queue IMAP deletion if the message exists on the server
-        if imap_uid is not None and account_email and folder_name:
-            self.backlog.enqueue(
-                msg_uuid=msg_uuid,
-                account_email=account_email,
-                folder_name=folder_name,
-                imap_uid=imap_uid,
-                is_deleted=1,
-                is_read=1,
+        if imap_ok:
+            # IMAP confirmed deleted — safe to remove local row
+            self.db.execute("DELETE FROM messages WHERE uuid = ?", (msg_uuid,))
+            logger.info("[hard-delete] Local row deleted for %s", msg_uuid[:8])
+        else:
+            # IMAP unreachable — keep local row with is_deleted=1 so the
+            # message stays hidden from the list and the sync worker does
+            # not re-import the UID.
+            self.db.execute(
+                "UPDATE messages SET is_deleted = 1, updated_at = ? WHERE uuid = ?",
+                (now, msg_uuid),
+            )
+            logger.warning(
+                "[hard-delete] IMAP delete failed for %s — kept local row with is_deleted=1",
+                msg_uuid[:8],
             )
 
     def batch_hard_delete_messages(self, uuids: list[str]) -> dict[str, Any]:
         """Permanently delete multiple messages from local DB and IMAP.
 
-        Args:
-            uuids: List of message UUIDs to permanently delete.
+        For each message, attempts synchronous IMAP ``STORE +FLAGS (\\Deleted)``
+        + ``EXPUNGE``.  Deletes the local row only if IMAP confirms.  Falls
+        back to ``is_deleted=1`` if IMAP is unreachable (prevents re-import).
 
         Returns:
-            Dict with ``count`` of deleted messages and ``queued``
-            count for background IMAP sync.
+            Dict with ``count`` of locally deleted (hidden) messages.
+            ``queued`` is always 0 — hard delete is synchronous.
         """
-        queued = 0
+        now = datetime.now(UTC).isoformat()
         deleted = 0
 
         for msg_uuid in uuids:
@@ -259,29 +317,21 @@ class MessageOpsService(MsgSendQueueMixin):
             if not msg:
                 continue
 
-            imap_uid = msg.get("imap_uid")
-            account_email = msg.get("account_email", "")
-            folder_name = msg.get("folder_name", "")
+            # Try synchronous IMAP deletion
+            imap_ok = self._imap_delete_uuid(msg)
 
-            # Remove from local DB permanently
-            self.db.execute(
-                "DELETE FROM messages WHERE uuid = ?", (msg_uuid,)
-            )
-            deleted += 1
-
-            # Queue IMAP deletion
-            if imap_uid is not None and account_email and folder_name:
-                self.backlog.enqueue(
-                    msg_uuid=msg_uuid,
-                    account_email=account_email,
-                    folder_name=folder_name,
-                    imap_uid=imap_uid,
-                    is_deleted=1,
-                    is_read=1,
+            if imap_ok:
+                self.db.execute("DELETE FROM messages WHERE uuid = ?", (msg_uuid,))
+                deleted += 1
+            else:
+                # Keep row hidden — prevents re-import on next sync
+                self.db.execute(
+                    "UPDATE messages SET is_deleted = 1, updated_at = ? WHERE uuid = ?",
+                    (now, msg_uuid),
                 )
-                queued += 1
+                deleted += 1
 
-        return {"count": deleted, "queued": queued}
+        return {"count": deleted, "queued": 0}
 
     def move_message(self, msg_uuid: str, destination_folder_name: str) -> None:
         """Move a message to a different folder (by folder name)."""

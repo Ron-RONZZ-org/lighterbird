@@ -49,6 +49,7 @@
   // (which overwrites data without _isTrashView).  The component is
   // destroyed/recreated on tab switch, so a fresh non-trash tab starts
   // with isTrashView=false.
+  // svelte-ignore state_referenced_locally — intentional, see above
   let isTrashView = $state(!!data?._isTrashView);
 
   // When data prop changes (new query / new tab data), reset pagination
@@ -560,6 +561,7 @@
     }}
     onDelete={() => { if (sel.numSelected > 0) sel.confirmDelete = true; }}
     onHardDelete={() => { if (sel.numSelected > 0) confirmHardDelete = true; }}
+    onClearTrash={() => { if (isTrashView) confirmClearTrash = true; }}
     {isTrashView}
     onMove={() => { if (sel.numSelected > 0) showMoveDialog = true; }}
     onNew={handleNew}
