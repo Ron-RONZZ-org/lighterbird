@@ -334,8 +334,9 @@ class EmailService:
                    body: str = "", cc: list[str] | None = None,
                    bcc: list[str] | None = None, priority: int = 3,
                    body_format: str = "markdown",
-                   attachments: list[str] | None = None,
+                   attachments: list[dict[str, Any]] | None = None,
                    signature: str | None = None,
+                   signature_format: str = "plain",
                    in_reply_to: str | None = None,
                    save_as_sample: bool = True) -> dict:
         return self.msg_ops.send_email(account_email, to, subject, body, cc=cc,
@@ -343,6 +344,7 @@ class EmailService:
                                        body_format=body_format,
                                        attachments=attachments,
                                        signature=signature,
+                                       signature_format=signature_format,
                                        in_reply_to=in_reply_to,
                                        save_as_sample=save_as_sample)
 

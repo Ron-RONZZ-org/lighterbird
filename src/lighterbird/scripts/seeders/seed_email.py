@@ -82,6 +82,20 @@ def _seed_email(data_dir: Path, creds: dict[str, str]) -> None:
     pw2 = creds.get("TEST_EMAIL_2_PASS", "")
     _create_account(db, email2, pw2, 1, creds, now)
 
+    # ── Default email signature for testing ───────────────────────────────
+    sig_uuid = _gen_uuid()
+    db.execute(
+        """INSERT OR IGNORE INTO email_signatures
+           (uuid, name, signature_text, signature_format, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (sig_uuid, "default", "regards,\nRon", "plain", now, now),
+    )
+    # Link the first account to this signature as default
+    db.execute(
+        "UPDATE accounts SET default_signature_uuid = ? WHERE email = ?",
+        (sig_uuid, email1),
+    )
+
     # NOTE: Email messages are NOT seeded. Seeded messages have imap_uid=NULL,
     # which breaks read-status sync (backlog entries can't be processed) and
     # trash sync (_retry_pending_trash requires imap_uid IS NOT NULL).
