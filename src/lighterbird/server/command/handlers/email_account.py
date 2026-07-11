@@ -13,6 +13,32 @@ from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_email_service
 
+import socket
+
+
+def _validate_imap_dns(detected: dict) -> str | None:
+    """Check that the detected IMAP server hostname resolves in DNS.
+
+    Returns an error message string if validation fails, or ``None`` if
+    the hostname resolves successfully.  Used by both ``account_add``
+    and ``account_modify --redetect`` to prevent silently persisting
+    unresolvable server addresses.
+
+    Covers all detection methods (known provider, MX-based, fallback).
+    """
+    host = detected.get("imap", "")
+    port = detected.get("imap_port", 993)
+    if not host:
+        return "Auto-detection did not produce an IMAP server hostname."
+    try:
+        socket.getaddrinfo(host, port)
+    except socket.gaierror:
+        return (
+            f"The detected IMAP server '{host}' does not resolve in DNS. "
+            "Please specify --imap and --smtp manually."
+        )
+    return None
+
 
 @command("email.account.list", permission_level=PermissionLevel.READ)
 def account_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
@@ -53,35 +79,27 @@ def account_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     detected = detect_servers(email_addr, imap_server=imap_server, smtp_server=smtp_server)
 
     # Validate that the detected IMAP hostname actually resolves in DNS.
-    # If it doesn't, redirect to the interactive form so the user can
-    # enter the correct IMAP/SMTP servers manually.  Only the values the
-    # user explicitly provided (email, password, name) are pre-filled.
-    if not imap_server and detected.get("method") == "fallback":
-        import socket
-        try:
-            socket.getaddrinfo(detected["imap"], detected.get("imap_port", 993))
-        except socket.gaierror:
-            return {
-                "type": "form-required",
-                "title": "Add Email Account",
-                "data": {
-                    "form": "email-account-add",
-                    "initialData": {
-                        "email": email_addr,
-                        "password": password,
-                        "name": name,
-                        # IMAP/SMTP intentionally omitted — we detected
-                        # wrong values, so pre-filling them would be
-                        # misleading. The user must enter the correct
-                        # servers manually.
-                    },
-                    "error": (
-                        f"Could not auto-detect the IMAP server for {email_addr}. "
-                        "The auto-detected server does not resolve in DNS. "
-                        "Please enter the correct IMAP and SMTP server addresses manually."
-                    ),
+    # Covers all detection methods (not just "fallback"): even MX-based
+    # detection can return a server that doesn't respond on the IMAP port.
+    dns_error = _validate_imap_dns(detected)
+    if dns_error:
+        return {
+            "type": "form-required",
+            "title": "Add Email Account",
+            "data": {
+                "form": "email-account-add",
+                "initialData": {
+                    "email": email_addr,
+                    "password": password,
+                    "name": name,
+                    # IMAP/SMTP intentionally omitted — we detected
+                    # wrong values, so pre-filling them would be
+                    # misleading. The user must enter the correct
+                    # servers manually.
                 },
-            }
+                "error": dns_error,
+            },
+        }
     acct_data = {
         "name": name or email_addr.split("@")[0],
         "email": email_addr.lower().strip(),
@@ -148,6 +166,9 @@ def account_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
     if "redetect" in flags:
         from lighterbird.email.server_detect import detect_servers
         detected = detect_servers(email)
+        dns_error = _validate_imap_dns(detected)
+        if dns_error:
+            raise CommandValidationError(dns_error)
         updates["imap_server"] = detected["imap"]
         updates["smtp_server"] = detected["smtp"]
         if "managesieve_host" in detected:
