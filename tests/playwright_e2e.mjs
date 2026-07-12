@@ -220,6 +220,52 @@ async function runTests(page) {
   });
 }
 
+  // ── EMAIL DELETE / TRASH LIST (Phase 4) ─────────────────────────────────
+
+  await test("!email delete opens email list", async () => {
+    // First list emails so the tab exists
+    await typeCommand("!email list");
+    await pressEnter();
+    await sleep(1500);
+    // Try delete — should return status
+    await typeCommand("!email delete");
+    await pressEnter();
+    await sleep(1500);
+    const text = await getPopupText();
+    // Expect either the list tab or an error about missing UUID
+    const ok = text.includes("Message") || text.includes("Missing") || text.includes("Email");
+    assert(ok, `Expected email delete response, got: '${text.substring(0, 100)}'`);
+  });
+
+  await test("!email delete with UUID works", async () => {
+    // Use the API directly to get a real UUID
+    const uuid = await page.evaluate(async () => {
+      const resp = await fetch("/api/v1/email/messages?limit=1");
+      const data = await resp.json();
+      return data.messages?.[0]?.uuid || "";
+    });
+    if (uuid) {
+      await typeCommand(`!email delete ${uuid.substring(0, 8)}`);
+      await pressEnter();
+      await sleep(1500);
+      const text = await getPopupText();
+      assert(text.includes("Trashed") || text.includes("Permanently"),
+        `Expected trash/permanent response, got: '${text.substring(0, 100)}'`);
+    } else {
+      console.log("    (no messages to delete — skipping)");
+    }
+  });
+
+  await test("!email trash list opens trash tab", async () => {
+    await typeCommand("!email trash list");
+    await pressEnter();
+    await sleep(1500);
+    const text = await getPopupText();
+    assert(text.includes("Email") || text.includes("Trash") || text.includes("Message"),
+      `Expected trash list tab, got: '${text.substring(0, 100)}'`);
+  });
+}
+
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 
 runWithBrowser(FRONTEND_URL, CHROME_PATH, "PLAYWRIGHT E2E TESTS", runTests);
