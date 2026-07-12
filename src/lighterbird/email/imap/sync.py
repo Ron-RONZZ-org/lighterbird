@@ -232,6 +232,7 @@ def sync_account(
                         account_email, folder_name, exc_info=True,
                     )
 
+            # Sync new messages
             fr = client.sync_folder(
                 folder_name, account_email,
                 folder_name=folder_name,
