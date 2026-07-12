@@ -7,11 +7,75 @@ from __future__ import annotations
 
 import email.parser
 import logging
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# ── Per-account IMAP connection lock ───────────────────────────────────
+#
+# Prevents concurrent IMAP connections for the same account.  Multiple
+# paths can open IMAP connections independently:
+#
+#   * ``EmailSyncWorker._do_sync()``    (background worker thread)
+#   * ``EmailSyncWorker._do_process_trash()``  (background worker thread)
+#   * ``POST /api/v1/sync/start``       (dedicated thread, not the worker)
+#   * ``!sync`` command handler          (request thread, synchronous)
+#   * ``POST /api/v1/email/trash/clear`` (request thread)
+#
+# Without coordination these concurrent connections can race on the same
+# IMAP folder (one thread scanning UIDs while another EXPUNGEs), causing
+# missed or duplicated messages.
+#
+# The ``_account_imap_locks`` dict provides a ``threading.Lock`` per
+# account email.  Code that opens an IMAP connection for an account MUST
+# call ``acquire_account_imap_lock(email)`` before connecting and
+# ``release_account_imap_lock(email)`` after disconnecting.
+#
+# Lock acquisition has a 30-second timeout.  If the lock cannot be
+# acquired, the caller should skip the IMAP operation gracefully and
+# log a warning rather than block indefinitely.
+
+_account_imap_locks: dict[str, threading.Lock] = {}
+_account_imap_locks_lock = threading.Lock()
+
+
+def acquire_account_imap_lock(account_email: str, timeout: float = 30.0) -> bool:
+    """Acquire the per-account IMAP lock for *account_email*.
+
+    Returns True if the lock was acquired, False on timeout.
+
+    Creating the lock lazily on first access avoids memory for accounts
+    that never have IMAP operations.
+    """
+    global _account_imap_locks
+    with _account_imap_locks_lock:
+        if account_email not in _account_imap_locks:
+            _account_imap_locks[account_email] = threading.Lock()
+        lock = _account_imap_locks[account_email]
+    acquired = lock.acquire(timeout=timeout)
+    if not acquired:
+        logger.warning(
+            "[imap_lock] Could not acquire IMAP lock for %s within %.1fs timeout — "
+            "another IMAP operation is in progress for this account",
+            account_email, timeout,
+        )
+    return acquired
+
+
+def release_account_imap_lock(account_email: str) -> None:
+    """Release the per-account IMAP lock for *account_email*."""
+    global _account_imap_locks
+    with _account_imap_locks_lock:
+        lock = _account_imap_locks.get(account_email)
+    if lock:
+        try:
+            lock.release()
+        except RuntimeError:
+            pass  # Lock not held by this thread — ignore
+
 
 from lighterbird.core.drafts import save_draft
 from lighterbird.email.db import get_db
@@ -94,27 +158,40 @@ class EmailService:
                 f"Set it with: !email account modify {email} --password <pw>"
             )
         else:
-            try:
-                result = _sync(
-                    host=acct.get("imap_server", ""),
-                    port=acct.get("imap_port", 993),
-                    use_ssl=acct.get("imap_use_ssl", 1) == 1,
-                    username=acct.get("imap_username", "") or acct.get("email", ""),
-                    password=acct["password"],
-                    account_email=email,
-                    db_store=self,
-                    force=force,
-                    progress_tracker=progress_tracker,
-                    task_id=task_id,
-                    manage_progress=manage_progress,
-                    folder_offset=folder_offset,
+            # Acquire per-account IMAP lock to prevent concurrent
+            # connections to the same account (e.g. from background
+            # backlog processing).  If the lock is busy, skip IMAP
+            # and let the backlog processor handle it later.
+            if not acquire_account_imap_lock(email):
+                result.errors.append(
+                    f"IMAP operation already in progress for {email}. "
+                    "Sync skipped — pending flag/trash syncs will be "
+                    "processed when the current operation completes."
                 )
-            except ConnectionError as e:
-                result = SyncResult()
-                result.errors.append(str(e))
-            except Exception as e:
-                result = SyncResult()
-                result.errors.append(f"Sync error: {e}")
+            else:
+                try:
+                    result = _sync(
+                        host=acct.get("imap_server", ""),
+                        port=acct.get("imap_port", 993),
+                        use_ssl=acct.get("imap_use_ssl", 1) == 1,
+                        username=acct.get("imap_username", "") or acct.get("email", ""),
+                        password=acct["password"],
+                        account_email=email,
+                        db_store=self,
+                        force=force,
+                        progress_tracker=progress_tracker,
+                        task_id=task_id,
+                        manage_progress=manage_progress,
+                        folder_offset=folder_offset,
+                    )
+                except ConnectionError as e:
+                    result = SyncResult()
+                    result.errors.append(str(e))
+                except Exception as e:
+                    result = SyncResult()
+                    result.errors.append(f"Sync error: {e}")
+                finally:
+                    release_account_imap_lock(email)
         # ALWAYS drain the flag sync backlog, even on sync failure.
         # This ensures \\Seen and \\Deleted flags pushed by mark_read
         # and trash_message are eventually sent to the IMAP server.
@@ -324,6 +401,20 @@ class EmailService:
         return self.msg_ops.dead_letter
 
     # ── Message operations ───────────────────────────────────────────────
+
+
+    # ── Per-account IMAP lock (convenience wrappers) ───────────────────────
+
+    def acquire_imap_lock(self, account_email: str, timeout: float = 30.0) -> bool:
+        """Acquire the per-account IMAP lock for *account_email*.
+
+        Returns True if the lock was acquired, False on timeout.
+        """
+        return acquire_account_imap_lock(account_email, timeout=timeout)
+
+    def release_imap_lock(self, account_email: str) -> None:
+        """Release the per-account IMAP lock for *account_email*."""
+        release_account_imap_lock(account_email)
 
     def mark_read(self, msg_uuid: str, is_read: bool = True):
         self.msg_ops.mark_read(msg_uuid, is_read)

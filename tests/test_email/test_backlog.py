@@ -80,6 +80,14 @@ class TestSchema:
         cols = {row["name"] for row in db.execute("PRAGMA table_info(folders)")}
         assert "special_use" in cols
 
+    def test_sync_backlog_has_operation(self, db):
+        cols = {row["name"] for row in db.execute("PRAGMA table_info(_sync_backlog)")}
+        assert "operation" in cols
+
+    def test_dead_letters_has_operation(self, db):
+        cols = {row["name"] for row in db.execute("PRAGMA table_info(_dead_letters)")}
+        assert "operation" in cols
+
 
 class TestDeadLetterService:
     """Test DeadLetterService CRUD operations."""
@@ -220,6 +228,21 @@ class TestBacklogService:
         entry = backlog.list_pending()[0]
         assert entry["is_deleted"] == 1
         assert entry["is_read"] == 1
+        assert entry["operation"] == "trash"
+
+    def test_enqueue_expunge(self, db, backlog):
+        backlog.enqueue_expunge(
+            msg_uuid="msg-003",
+            account_email="test@example.com",
+            folder_name="INBOX",
+            imap_uid=44,
+        )
+        entry = backlog.list_pending()[0]
+        assert entry["operation"] == "expunge"
+        assert entry["is_deleted"] == 1
+        assert entry["is_read"] == 1
+        assert entry["imap_uid"] == 44
+        assert backlog.count_pending() == 1
 
     def test_enqueue_duplicate(self, db, backlog):
         """INSERT OR REPLACE should update existing entry."""

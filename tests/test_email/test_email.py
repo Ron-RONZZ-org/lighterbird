@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from datetime import UTC
 from pathlib import Path
 
@@ -9,7 +10,11 @@ import pytest
 
 from lighterbird.email.db import get_db
 from lighterbird.email.keyring import delete_password, get_password, set_password
-from lighterbird.email.service import EmailService
+from lighterbird.email.service import (
+    EmailService,
+    acquire_account_imap_lock,
+    release_account_imap_lock,
+)
 from lighterbird.email.services import AccountService, MessageService
 
 
@@ -342,3 +347,42 @@ class TestParser:
         )
         # Inline images without filename/attachment disposition are skipped
         assert "_attachments_meta" not in data or len(data.get("_attachments_meta", [])) == 0
+
+
+# ── Per-account IMAP lock tests ────────────────────────────────────────────
+
+
+class TestAccountImapLock:
+    """Tests for per-account IMAP connection lock."""
+
+    def test_acquire_release(self):
+        """Acquire and release should work."""
+        assert acquire_account_imap_lock("test@example.com") is True
+        release_account_imap_lock("test@example.com")
+
+    def test_double_acquire_blocks(self):
+        """Second acquire on same account from different thread should timeout."""
+        assert acquire_account_imap_lock("block-test@example.com") is True
+        lock_acquired = [False]
+
+        def try_lock():
+            lock_acquired[0] = acquire_account_imap_lock(
+                "block-test@example.com", timeout=1.0,
+            )
+
+        t = threading.Thread(target=try_lock)
+        t.start()
+        t.join(timeout=3)
+        assert lock_acquired[0] is False, "Second lock should have timed out"
+        release_account_imap_lock("block-test@example.com")
+
+    def test_independent_accounts_dont_block(self):
+        """Locks for different accounts should be independent."""
+        assert acquire_account_imap_lock("alice@example.com") is True
+        assert acquire_account_imap_lock("bob@example.com") is True
+        release_account_imap_lock("alice@example.com")
+        release_account_imap_lock("bob@example.com")
+
+    def test_release_unheld_lock(self):
+        """Releasing a lock not held by this thread should not raise."""
+        release_account_imap_lock("unheld@example.com")  # Should not raise

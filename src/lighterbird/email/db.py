@@ -153,6 +153,7 @@ CREATE TABLE IF NOT EXISTS _sync_backlog (
     imap_uid        INTEGER,
     is_read         INTEGER NOT NULL DEFAULT 0,
     is_deleted      INTEGER NOT NULL DEFAULT 0,
+    operation       TEXT NOT NULL DEFAULT 'sync',
     created_at      TEXT NOT NULL,
     last_attempt    TEXT,
     retries         INTEGER NOT NULL DEFAULT 0
@@ -217,6 +218,7 @@ CREATE TABLE IF NOT EXISTS _dead_letters (
     imap_uid        INTEGER,
     is_read         INTEGER NOT NULL DEFAULT 0,
     is_deleted      INTEGER NOT NULL DEFAULT 0,
+    operation       TEXT NOT NULL DEFAULT 'sync',
     created_at      TEXT NOT NULL,
     last_attempt    TEXT NOT NULL,
     retries         INTEGER NOT NULL DEFAULT 0,
@@ -250,6 +252,13 @@ ALTER TABLE folders ADD COLUMN highest_modseq INTEGER NOT NULL DEFAULT 0;
 _MIGRATE_FOLDERS_SPECIAL_USE = """
 ALTER TABLE folders ADD COLUMN special_use TEXT;
 """
+_MIGRATE_SYNC_BACKLOG_OPERATION = """
+ALTER TABLE _sync_backlog ADD COLUMN operation TEXT NOT NULL DEFAULT 'sync';
+"""
+_MIGRATE_DEAD_LETTERS_OPERATION = """
+ALTER TABLE _dead_letters ADD COLUMN operation TEXT NOT NULL DEFAULT 'sync';
+"""
+
 _SEND_QUEUE_TABLE = """
 CREATE TABLE IF NOT EXISTS send_queue (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -307,6 +316,8 @@ _SCHEMA_STATEMENTS: list[str] = [
     _IDX_MESSAGES_MODSEQ,
     _IDX_MESSAGES_DATE,
     _IDX_ATTACHMENTS_MESSAGE,
+    _MIGRATE_SYNC_BACKLOG_OPERATION,
+    _MIGRATE_DEAD_LETTERS_OPERATION,
     _IDX_SYNC_BACKLOG_MSG,
     _IDX_DEAD_LETTERS_ACCOUNT,
     _IDX_SIEVE_ACTIVATIONS_ACCOUNT,

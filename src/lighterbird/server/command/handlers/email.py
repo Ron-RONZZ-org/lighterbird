@@ -522,8 +522,16 @@ def email_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     svc: EmailService = get_email_service()
     uuid = remaining[0]
     if "hard" in flags:
-        svc.msg_ops.hard_delete_message(uuid)
-        return {"type": "status", "title": "Permanently Deleted", "data": {"uuid": uuid[:8]}}
+        result = svc.msg_ops.hard_delete_message(uuid)
+        return {
+            "type": "status",
+            "title": "Permanently Deleted",
+            "data": {
+                "uuid": uuid[:8],
+                "count": result["count"],
+                "queued": result["queued"],
+            },
+        }
     svc.trash_message(uuid)
     return {"type": "status", "title": "Trashed", "data": {"uuid": uuid[:8]}}
 
