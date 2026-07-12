@@ -30,6 +30,14 @@ vi.mock("../lib/api.js", () => {
   };
 });
 
+// ── Mock banner store ────────────────────────────────────────────────────
+vi.mock("../lib/bannerStore.svelte.js", () => ({
+  banner: { show: vi.fn() },
+}));
+
+// ── Mock EmbedInstallDialog ─────────────────────────────────────────────
+vi.mock("../lib/EmbedInstallDialog.svelte", () => ({ default: () => {} }));
+
 vi.mock("../lib/dirtyFormStore.svelte.js", () => ({
   dirtyFormStore: { register: vi.fn(), unregister: vi.fn() },
 }));
@@ -186,5 +194,246 @@ describe("ComposeEmail", () => {
     // Just verify the component rendered without errors
     const bodyText = document.body.textContent || "";
     expect(bodyText).toContain("Hi");
+  });
+});
+
+// ── Validation and interaction tests (new behavior from email-send fixes) ─────
+
+describe("ComposeEmail — validation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("shows banner when submitting without To and Subject", async () => {
+    const ComposeEmail = (await import("../lib/ComposeEmail.svelte")).default;
+    const { banner } = await import("../lib/bannerStore.svelte.js");
+    const onSubmit = vi.fn();
+
+    render(ComposeEmail, { onsubmit: onSubmit });
+    await new Promise((r) => setTimeout(r, 80));
+    flushEffects();
+
+    // Submit the form with empty To and Subject
+    const form = document.querySelector("form");
+    expect(form).toBeTruthy();
+    form.dispatchEvent(new Event("submit"));
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Should show banner about missing fields
+    expect(banner.show).toHaveBeenCalledWith(
+      expect.stringContaining("To and Subject"),
+      "warn",
+      expect.any(Number),
+    );
+    // Should NOT call onsubmit (prevented by validation)
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("shows banner when submitting without Subject only", async () => {
+    const ComposeEmail = (await import("../lib/ComposeEmail.svelte")).default;
+    const { banner } = await import("../lib/bannerStore.svelte.js");
+    const onSubmit = vi.fn();
+
+    render(ComposeEmail, {
+      initialData: { to: "test@example.com" },
+      onsubmit: onSubmit,
+    });
+    await new Promise((r) => setTimeout(r, 80));
+    flushEffects();
+
+    // Submit form
+    const form = document.querySelector("form");
+    form.dispatchEvent(new Event("submit"));
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(banner.show).toHaveBeenCalledWith(
+      expect.stringContaining("Subject"),
+      "warn",
+      expect.any(Number),
+    );
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("does not show banner when To and Subject are pre-filled", async () => {
+    const ComposeEmail = (await import("../lib/ComposeEmail.svelte")).default;
+    const { banner } = await import("../lib/bannerStore.svelte.js");
+    const onSubmit = vi.fn();
+
+    render(ComposeEmail, {
+      initialData: { to: "test@example.com", subject: "Hello", body: "World" },
+      onsubmit: onSubmit,
+    });
+    await new Promise((r) => setTimeout(r, 80));
+    flushEffects();
+
+    // Submit form
+    const form = document.querySelector("form");
+    form.dispatchEvent(new Event("submit"));
+    await new Promise((r) => setTimeout(r, 100));
+
+    // Should not show validation banner
+    expect(banner.show).not.toHaveBeenCalled();
+  });
+
+  it("Send button is disabled when To and Subject are empty", async () => {
+    const ComposeEmail = (await import("../lib/ComposeEmail.svelte")).default;
+    render(ComposeEmail, {});
+    await new Promise((r) => setTimeout(r, 50));
+    flushEffects();
+
+    const sendBtn = screen.queryByText("Send");
+    expect(sendBtn).toBeTruthy();
+    expect(sendBtn.hasAttribute("disabled")).toBe(true);
+  });
+
+  it("Send button is enabled when To and Subject are pre-filled", async () => {
+    const ComposeEmail = (await import("../lib/ComposeEmail.svelte")).default;
+    render(ComposeEmail, {
+      initialData: { to: "test@example.com", subject: "Hello" },
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    flushEffects();
+
+    const sendBtn = screen.queryByText("Send");
+    expect(sendBtn).toBeTruthy();
+    expect(sendBtn.hasAttribute("disabled")).toBe(false);
+  });
+});
+
+describe("ComposeEmail — keyboard shortcuts", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("Ctrl+Enter submits the form", async () => {
+    const ComposeEmail = (await import("../lib/ComposeEmail.svelte")).default;
+    const onSubmit = vi.fn();
+
+    render(ComposeEmail, {
+      initialData: { to: "test@example.com", subject: "Hello", body: "World" },
+      onsubmit: onSubmit,
+    });
+    await new Promise((r) => setTimeout(r, 80));
+    flushEffects();
+
+    // Simulate Ctrl+Enter keydown
+    window.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "Enter",
+      ctrlKey: true,
+      bubbles: true,
+    }));
+    await new Promise((r) => setTimeout(r, 100));
+
+    // onSubmit should have been called with the correct data
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tokens: ["email", "send"],
+        remaining: expect.arrayContaining(["test@example.com", "Hello", "World"]),
+      }),
+    );
+  });
+
+  it("Ctrl+Enter without data does not submit (validation blocks)", async () => {
+    const ComposeEmail = (await import("../lib/ComposeEmail.svelte")).default;
+    const { banner } = await import("../lib/bannerStore.svelte.js");
+    const onSubmit = vi.fn();
+
+    render(ComposeEmail, { onsubmit: onSubmit });
+    await new Promise((r) => setTimeout(r, 80));
+    flushEffects();
+
+    // Ctrl+Enter with empty To/Subject
+    window.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "Enter",
+      ctrlKey: true,
+      bubbles: true,
+    }));
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(banner.show).toHaveBeenCalled();
+  });
+
+  it("Ctrl+S triggers save draft", async () => {
+    const ComposeEmail = (await import("../lib/ComposeEmail.svelte")).default;
+    render(ComposeEmail, {
+      initialData: { to: "test@example.com", subject: "Hello" },
+    });
+    await new Promise((r) => setTimeout(r, 80));
+    flushEffects();
+
+    // Ctrl+S keydown — verify no crash
+    window.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "s",
+      ctrlKey: true,
+      bubbles: true,
+    }));
+    await new Promise((r) => setTimeout(r, 100));
+    // Should not throw — draft save is async, just verify no crash
+    const drafts = await import("../lib/api.js").then((m) => m.drafts);
+    expect(drafts.save).toHaveBeenCalled();
+  });
+});
+
+describe("ComposeEmail — attachments", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("serializes attachment files as JSON in submit flags", async () => {
+    const ComposeEmail = (await import("../lib/ComposeEmail.svelte")).default;
+    const onSubmit = vi.fn();
+
+    render(ComposeEmail, {
+      initialData: {
+        to: "test@example.com",
+        subject: "Hello",
+        body: "World",
+        files: [
+          { name: "report.pdf", data: "dGVzdA==" },
+          { name: "photo.jpg", data: "cGhvdG8=" },
+        ],
+      },
+      onsubmit: onSubmit,
+    });
+    await new Promise((r) => setTimeout(r, 80));
+    flushEffects();
+
+    // Submit the form
+    const form = document.querySelector("form");
+    form.dispatchEvent(new Event("submit"));
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const callArg = onSubmit.mock.calls[0][0];
+    // The file flag should be a JSON string containing attachment data
+    expect(callArg.flags.file).toBe(
+      JSON.stringify([
+        { name: "report.pdf", data: "dGVzdA==" },
+        { name: "photo.jpg", data: "cGhvdG8=" },
+      ]),
+    );
+  });
+
+  it("does not include file flag when no attachments", async () => {
+    const ComposeEmail = (await import("../lib/ComposeEmail.svelte")).default;
+    const onSubmit = vi.fn();
+
+    render(ComposeEmail, {
+      initialData: { to: "test@example.com", subject: "Hello" },
+      onsubmit: onSubmit,
+    });
+    await new Promise((r) => setTimeout(r, 80));
+    flushEffects();
+
+    const form = document.querySelector("form");
+    form.dispatchEvent(new Event("submit"));
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const callArg = onSubmit.mock.calls[0][0];
+    // No file flag when no attachments
+    expect(callArg.flags.file).toBeUndefined();
   });
 });
