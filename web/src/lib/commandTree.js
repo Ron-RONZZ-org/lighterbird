@@ -4,8 +4,10 @@
  * ``GET /api/v1/command/tree``. This file starts empty and fetches the
  * live tree on startup via :func:`initCommandTree`.
  *
- * ``/*`` prompt commands are also fetched from the backend and appended as
- * a virtual root node with children. See :func:`initPromptCommands`.
+ * ``/*`` prompt commands are handled separately by ``getPromptCompletions``
+ * in ``commandEngine.js`` and are NOT appended to the command tree —
+ * the virtual ``/*`` node was removed to prevent ``!/*`` from appearing
+ * in ``!``-mode autocomplete.
  *
  * There is NO hardcoded fallback — the only source of truth is the backend.
  * See ``src/lighterbird/server/command/tree.py``.
@@ -54,7 +56,9 @@ export async function initCommandTree() {
 
 /**
  * Fetch prompt commands from the backend and populate the ``promptCommands``
- * list. Also appends a virtual ``/*`` node to ``commandTree`` for autocomplete.
+ * list. Does NOT append a virtual ``/*`` node to ``commandTree`` — prompt
+ * command autocomplete is handled entirely by ``getPromptCompletions`` in
+ * ``commandEngine.js``.
  *
  * Call this alongside :func:`initCommandTree` on app startup.
  */
@@ -62,23 +66,7 @@ export async function initPromptCommands() {
   try {
     const resp = await fetch("/api/v1/prompt-commands/list");
     if (resp.ok) {
-      const cmds = await resp.json();
-      promptCommands = cmds;
-
-      // Append virtual /* root node to the command tree
-      if (cmds.length > 0) {
-        const existing = commandTree.find((n) => n.name === "/*");
-        if (!existing) {
-          commandTree.push({
-            name: "/*",
-            description: "Prompt commands",
-            children: cmds.map((c) => ({
-              name: c.name,
-              description: c.description,
-            })),
-          });
-        }
-      }
+      promptCommands = await resp.json();
     }
   } catch {
     // Fetch failed — degrade gracefully: no prompt command autocomplete,
