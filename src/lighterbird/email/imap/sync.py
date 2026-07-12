@@ -232,7 +232,6 @@ def sync_account(
                         account_email, folder_name, exc_info=True,
                     )
 
-            # Sync new messages
             fr = client.sync_folder(
                 folder_name, account_email,
                 folder_name=folder_name,
@@ -242,6 +241,13 @@ def sync_account(
             result.total += fr["total"]
             result.new += fr["new"]
             result.errors.extend(fr["errors"])
+
+        # ── Phase 2b: Selective body fetch (single connection, post-header) ──
+        # For messages that were synced header-only, download full bodies.
+        # This runs *after* Phase 2a so the message list is already available.
+        _sync_pending_bodies(
+            client, db_store, account_email,
+        )
 
         # Retry moving previously soft-deleted messages to IMAP Trash
         _retry_pending_trash(client, db_store, account_email)
@@ -276,6 +282,59 @@ def _get_sorted_folders(
         folder_names,
         key=lambda n: (prio_map.get(n, 10), n),
     )
+
+
+def _sync_pending_bodies(
+    client: IMAPClient, db_store: Any, account_email: str,
+) -> int:
+    """Download full message bodies for messages synced header-only.
+
+    Queries the DB for messages with ``body_fetched=0``, groups them by
+    folder, and fetches each folder's pending messages using the client's
+    ``sync_folder`` in full-body mode.
+
+    Returns:
+        Number of messages updated with full bodies.
+    """
+    pending = list(db_store.db.execute(
+        "SELECT imap_uid, folder_name FROM messages "
+        "WHERE account_email = ? AND body_fetched = 0 AND imap_uid IS NOT NULL "
+        "ORDER BY folder_name, imap_uid",
+        (account_email,),
+    ))
+    if not pending:
+        return 0
+
+    updated = 0
+    # Group by folder
+    by_folder: dict[str, list[int]] = {}
+    for row in pending:
+        by_folder.setdefault(row["folder_name"], []).append(row["imap_uid"])
+
+    for folder_name, uid_list in by_folder.items():
+        # Process in chunks of 100
+        for start in range(0, len(uid_list), 100):
+            chunk = uid_list[start:start + 100]
+            for uid in chunk:
+                try:
+                    # Select folder, fetch full body for this single message
+                    client.conn.select(folder_name, readonly=True)
+                    data = client.fetch_message_body(
+                        account_email, folder_name, uid, db_store,
+                    )
+                    if data is not None:
+                        updated += 1
+                except Exception as exc:
+                    logger.warning(
+                        "[sync] Body fetch failed for UID %s in %s/%s: %s",
+                        uid, account_email, folder_name, exc,
+                    )
+    if updated:
+        logger.info(
+            "[sync] Fetched full bodies for %d message(s) on %s",
+            updated, account_email,
+        )
+    return updated
 
 
 def _check_uidvalidity(db: Any, account_email: str,

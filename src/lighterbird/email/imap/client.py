@@ -716,7 +716,6 @@ class IMAPClient:
                     account_email, folder_name,
                 )
                 return None
-
             typ, fetch_data = self.conn.uid(
                 "fetch", str(imap_uid), "(FLAGS BODY.PEEK[] UID)",
             )
@@ -869,6 +868,5 @@ class IMAPClient:
             return []
 
         return [int(uid) for uid in data[0].split()]
-
 
 # store_message and _insert_message moved to storage.py
