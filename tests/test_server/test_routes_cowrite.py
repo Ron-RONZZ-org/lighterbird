@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from lighterbird.server.app import create_app
+import lighterbird.server.llm.provider as llm_provider_mod
 
 
 class TestCowriteAPI:
@@ -54,6 +55,9 @@ class TestCowriteAPI:
 
     def test_valid_request_no_llm(self):
         """POST /api/v1/cowrite with valid fields but no LLM returns 502."""
+        # Reset the provider singleton so no LLM is configured,
+        # regardless of test execution order.
+        llm_provider_mod._provider = None
         resp = self._client().post(
             "/api/v1/cowrite",
             json={
