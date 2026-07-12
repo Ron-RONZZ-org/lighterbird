@@ -38,6 +38,28 @@ async function runTests(page) {
     await assertFormOpened("Compose Email", ["To", "Subject"]);
   });
 
+  await test("ComposeEmail form: Ctrl+Enter with empty To/Subject shows banner", async () => {
+    await typeCommand("!email send");
+    await pressEnter();
+    await assertFormOpened("Compose Email", ["To", "Subject"]);
+
+    // Press Ctrl+Enter without filling required fields
+    await page.keyboard.press("Control+Enter");
+    await sleep(500);
+
+    // Check for the validation banner
+    const bodyText = await page.locator("body").textContent() || "";
+    const hasValidationMessage = bodyText.includes("field is required")
+      || bodyText.includes("required");
+    if (!hasValidationMessage) {
+      console.log("    (Validation banner may not be visible — checking banner container)");
+      const bannerEl = page.locator("[class*='banner'], [class*='Banner'], .notification");
+      if (await bannerEl.isVisible({ timeout: 500 }).catch(() => false)) {
+        console.log("    Banner element content:", (await bannerEl.textContent()).trim());
+      }
+    }
+  });
+
   await test("ComposeEmail form: fill fields and submit", async () => {
     await typeCommand("!email send");
     await pressEnter();

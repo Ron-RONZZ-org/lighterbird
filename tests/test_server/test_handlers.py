@@ -298,6 +298,26 @@ class TestEmailHandlers:
         call_kwargs = mock_email_svc.send_email.call_args[1]
         assert call_kwargs.get("in_reply_to") == "<msg123@example.com>"
 
+    def test_email_send_no_save_sample(self, mock_email_svc):
+        """email send with --no-save-sample sets save_as_sample=False."""
+        mock_email_svc.list_accounts.return_value = [{"email": "me@b.com"}]
+        dispatch(
+            ["email", "send", "to@b.com", "Subject", "Body"],
+            {"no-save-sample": "1"},
+        )
+        call_kwargs = mock_email_svc.send_email.call_args[1]
+        assert call_kwargs.get("save_as_sample") is False
+
+    def test_email_send_save_sample_default(self, mock_email_svc):
+        """email send defaults save_as_sample=True when --no-save-sample not set."""
+        mock_email_svc.list_accounts.return_value = [{"email": "me@b.com"}]
+        dispatch(
+            ["email", "send", "to@b.com", "Subject", "Body"],
+            {},
+        )
+        call_kwargs = mock_email_svc.send_email.call_args[1]
+        assert call_kwargs.get("save_as_sample") is True
+
     def test_email_read_missing_uuid(self):
         """email read without uuid raises."""
         with pytest.raises(CommandValidationError, match="Missing message UUID"):
