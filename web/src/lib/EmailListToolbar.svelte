@@ -70,18 +70,7 @@
             {syncing ? "Syncing…" : "Sync"} <kbd>Ctrl+R</kbd>
           </button>
         </div>
-<<<<<<< HEAD
       {/snippet}
-=======
-            <button class="tool-btn primary" onclick={onNew} title="New message">+ New <kbd>N</kbd></button>
-          {/if}
-          <button class="tool-btn" onclick={onImport} title="Import messages">Import</button>
-          <button class="tool-btn" onclick={onSync} disabled={syncing} title="Sync (Ctrl+R)">
-            {syncing ? "Syncing…" : "Sync"} <kbd>Ctrl+R</kbd>
-          </button>
-        </div>
-      </svelte:fragment>
->>>>>>> origin/feat/adv-search-ux
     </ListSearchBar>
   {:else if selectionMode}
     <!-- Selection mode: action toolbar -->
@@ -125,12 +114,6 @@
     </div>
     <div class="right">
       <button class="tool-btn" title="Advanced search (A)" onclick={onToggleAdvancedSearch}>Adv srch <kbd>A</kbd></button>
-<<<<<<< HEAD
-=======
-      {#if onNew}
-    </div>
-    <div class="right">
->>>>>>> origin/feat/adv-search-ux
       {#if onNew}
         <button class="tool-btn primary" onclick={onNew} title="New message">+ New <kbd>N</kbd></button>
       {/if}
