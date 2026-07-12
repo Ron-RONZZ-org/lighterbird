@@ -401,7 +401,7 @@
   }
   .tab-content {
     flex: 1;
-    overflow: hidden;
+    overflow-y: auto;
     display: none;
     flex-direction: column;
     background: #1a1a2e;

@@ -6,7 +6,6 @@ from ``.dev`` if present and no provider is configured yet.
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 
@@ -29,10 +28,14 @@ def _auto_configure_from_dev() -> None:
         return
     _auto_configured = True
 
-    from lighterbird.core.keyring import get_password, set_password
+    from lightercore.llm.config import (
+        ProviderConfig,
+        load_active_config,
+        save_active_config,
+    )
 
-    configured = get_password("lighterbird-llm", "active-provider")
-    if configured:
+    configured = load_active_config("lighterbird-llm")
+    if configured is not None and configured.is_available():
         return  # already configured
 
     dev_path = Path(__file__).resolve().parent.parent.parent / ".dev"
@@ -49,15 +52,15 @@ def _auto_configure_from_dev() -> None:
 
     api_key = dev_vars.get("TEST_DEEPSEEK_APIKEY", "")
     if api_key:
-        config = {
-            "provider_type": "openai",
-            "api_key": api_key,
-            "base_url": "https://api.deepseek.com",
-            "model": "deepseek-chat",
-            "temperature": 0.7,
-            "max_tokens": 4096,
-        }
-        set_password("lighterbird-llm", "active-provider", json.dumps(config))
+        cfg = ProviderConfig(
+            provider_type="openai",
+            api_key=api_key,
+            base_url="https://api.deepseek.com",
+            model="deepseek-chat",
+            temperature=0.7,
+            max_tokens=4096,
+        )
+        save_active_config("lighterbird-llm", cfg)
         logger.info("[lighterbird] Auto-configured LLM provider from .dev (DeepSeek)")
 
 
