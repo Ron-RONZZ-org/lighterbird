@@ -271,7 +271,6 @@ class TestSyncAccount:
         # With folder_offset=10 and 2 folders, last update_folder should be idx 12
         assert progress["current_folder"] == 12
 
-
 class TestRetryPendingTrash:
     def test_no_pending(self):
         client = MagicMock()
