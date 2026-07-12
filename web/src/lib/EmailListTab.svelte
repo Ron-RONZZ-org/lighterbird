@@ -237,6 +237,45 @@
     });
   }
 
+  /**
+   * Handle click on a draft message — opens the compose form (email-send)
+   * with the draft's fields pre-filled, instead of the read-only viewer.
+   */
+  function handleDraftClick(e, msg, sel) {
+    if (sel.selectionMode) {
+      sel.handleRowClick(e, msg.uuid);
+      return;
+    }
+    // Parse to_recipients (JSON array) into a comma-separated string
+    let toStr = "";
+    try {
+      const toArr = JSON.parse(msg.to_recipients || "[]");
+      toStr = toArr.map((r) => r.email || r).join(", ");
+    } catch { toStr = msg.to_recipients || ""; }
+    let ccStr = "";
+    try {
+      const ccArr = JSON.parse(msg.cc_recipients || "[]");
+      ccStr = ccArr.map((r) => r.email || r).join(", ");
+    } catch { ccStr = msg.cc_recipients || ""; }
+
+    tabStore.open(
+      "form",
+      "Compose Draft: " + (msg.subject || "(no subject)"),
+      {
+        form: "email-send",
+        initialData: {
+          account: msg.account_email || "",
+          to: toStr,
+          cc: ccStr,
+          subject: msg.subject || "",
+          body: msg.body || "",
+          _returnIdKey: "persistent-email-list",
+        },
+      },
+      { idKey: "email-compose" },
+    );
+  }
+
   $effect(() => {
     function handler() { showShortcutHelp = !showShortcutHelp; }
     window.addEventListener("help-toggle", handler);
@@ -633,7 +672,7 @@
         selectionMode={sel.selectionMode}
         {uuidCopy}
         {emailCopy}
-        onRowClick={(e, msg) => handleRowClick(e, msg, sel)}
+        onRowClick={(e, msg) => isDraftView ? handleDraftClick(e, msg, sel) : handleRowClick(e, msg, sel)}
       />
     {:else}
       <p class="empty">No messages.</p>
