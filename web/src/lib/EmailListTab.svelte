@@ -51,6 +51,7 @@
   // non-draft tab starts with both=false.
   // svelte-ignore state_referenced_locally — intentional, see above
   let isTrashView = $state(!!data?._isTrashView);
+  // svelte-ignore state_referenced_locally — intentional, see above
   let isDraftView = $state(!!data?._isDraftView);
 
   // When data prop changes (new query / new tab data), reset pagination
