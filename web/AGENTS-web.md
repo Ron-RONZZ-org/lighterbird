@@ -138,6 +138,7 @@ The HTML/plain text toggle in `EmailViewTab.svelte` is persisted across emails v
 17. **Signature format dropdown.** Email signatures support `--format` (plain/html/markdown). `DynamicForm.svelte` renders a `<select>` for flags that include a `values` array in their tree metadata (e.g., `{"values": ["plain", "html", "markdown"]}`).
 18. **Multi-command input is frontend-only.** `HomeTab.svelte` handles multi-command detection (`isMultiCommand`) and batch execution. The shared parsing utility (`splitCommands` / `isMultiCommand`) lives in `@lightercore/ui/multiCommand.js`. Interactive commands (forms) are skipped with an error in batch mode. No backend changes needed — each command is sent as a separate `POST /api/v1/command` call.
 
+<<<<<<< HEAD
 19. **Mutation redirect with highlight.** After a successful `!xxx add/modify/delete` command (direct execution, all required params provided), `App.svelte` redirects to the corresponding list tab instead of showing a transient popup. The affected entry is briefly highlighted with a 2s CSS fade animation (except on delete, where the entry is gone). Uses a hybrid refresh strategy: inject highlight into existing list tabs for add/modify (no loading flicker), always re-fetch for delete. The routing logic and mapping table live in `web/src/lib/mutationToTab.js`. The same pattern was previously a special case only for `!email send`; it now covers all domains: todo, contact, journal, calendar event, letter, sieve, and email send/trash/archive.
 
 ## GUI Style — Imitate Existing Components
@@ -153,11 +154,29 @@ The HTML/plain text toggle in `EmailViewTab.svelte` is persisted across emails v
 | Forms | `DynamicForm.svelte` | Field layout, label/input spacing, validation errors |
 | Colors | Any `.svelte` file in `web/src/lib/` | Dark theme: `#1a1a2e` bg, `#e0e0e0` text, `#444` borders |
 
+=======
+## GUI Style — Imitate Existing Components
+
+**Do not write custom CSS from scratch.** All new UI components must imitate the styling patterns found in these canonical source files:
+
+| Pattern | Reference file | Key elements to imitate |
+|---------|---------------|------------------------|
+| Toolbar buttons | `EmailListToolbar.svelte` | `.tool-btn` class, `<kbd>` shortcuts, `left/center/right` flex layout |
+| List views | `EmailListTab.svelte` | Monospace font, row layout, selection mode, empty state |
+| Dialogs/overlays | `AdvancedSearchDialog.svelte` | `.overlay` + `.dialog` pattern, close on backdrop click |
+| Filter/search tiles | `SearchTileBar.svelte` | Tile layout, removable `✕` button, "Clear all" |
+| Forms | `DynamicForm.svelte` | Field layout, label/input spacing, validation errors |
+| Colors | Any `.svelte` file in `web/src/lib/` | Dark theme: `#1a1a2e` bg, `#e0e0e0` text, `#444` borders |
+
+>>>>>>> origin/feat/adv-search-ux
 **Rules to follow:**
 - Use `font-family: monospace` on all structural elements
 - Use `border-radius: 4px` for buttons/inputs, `10px` for dialogs
 - All interactive elements must be keyboard-reachable
 - Animations: keep under 150ms; no keyframe animations on structural elements
 - **Never duplicate CSS patterns** — import shared components (`ListSearchBar.svelte`, `PreviewDialog.svelte`, `ConfirmDialog.svelte`) instead of re-creating them
+<<<<<<< HEAD
 - **LLM tool approval dialog**: `ConfirmToolDialog.svelte` is a thin re-export of `@lightercore/ui/ConfirmDialog.svelte`. The shared dialog provides approve/reject per item, per-item + global feedback, and an approve-all toggle. Backward-compatible: accepts both `onConfirm(decisions)` and `onSubmit(decisions, feedback)` callbacks.
+=======
+>>>>>>> origin/feat/adv-search-ux
 - If you need a new component, model it after the closest existing component above
