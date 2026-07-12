@@ -260,10 +260,16 @@
     if (!files || files.length === 0) return;
     const newAttachments = [];
     for (const file of files) {
-      const data = await fileToBase64(file);
-      newAttachments.push({ name: file.name, data });
+      try {
+        const data = await fileToBase64(file);
+        newAttachments.push({ name: file.name, data });
+      } catch (err) {
+        banner.show(`Failed to read file ${file.name}: ${err.message}`, "error", 5000);
+      }
     }
-    attachmentFiles = [...attachmentFiles, ...newAttachments];
+    if (newAttachments.length > 0) {
+      attachmentFiles = [...attachmentFiles, ...newAttachments];
+    }
     e.target.value = ""; // reset so same file can be re-selected
   }
 
