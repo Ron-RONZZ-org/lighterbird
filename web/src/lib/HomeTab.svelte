@@ -475,7 +475,7 @@
 
   {#if clearConfirm}
     <div class="clear-overlay" role="alertdialog" aria-label="Clear conversation"
-         onclick={() => { clearConfirm = false; }}
+        onclick={() => { clearConfirm = false; }}
          onkeydown={(e) => { if (e.key === 'Escape') clearConfirm = false; }}
          tabindex="-1">
       <div class="clear-box" role="presentation" onclick={(e) => e.stopPropagation()}>
