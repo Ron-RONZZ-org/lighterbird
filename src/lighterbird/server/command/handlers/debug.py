@@ -13,7 +13,7 @@ from lighterbird.server.command.registry import command
 
 
 @command("debug.sync.log",
-         description="Show the most recent sync log entries (IMAP / CalDAV)")
+         description="Show the most recent synchronization activity log")
 def debug_sync_log(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!debug sync log [<lines>]
 
