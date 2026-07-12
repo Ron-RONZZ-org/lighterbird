@@ -298,25 +298,79 @@ class TestEmailHandlers:
         call_kwargs = mock_email_svc.send_email.call_args[1]
         assert call_kwargs.get("in_reply_to") == "<msg123@example.com>"
 
-    def test_email_send_no_save_sample(self, mock_email_svc):
-        """email send with --no-save-sample sets save_as_sample=False."""
+    def test_email_send_no_signature(self, mock_email_svc):
+        """email send passes signature='' when --no-signature is set."""
         mock_email_svc.list_accounts.return_value = [{"email": "me@b.com"}]
         dispatch(
             ["email", "send", "to@b.com", "Subject", "Body"],
-            {"no-save-sample": "1"},
+            {"no-signature": "true"},
         )
         call_kwargs = mock_email_svc.send_email.call_args[1]
-        assert call_kwargs.get("save_as_sample") is False
+        # --no-signature should set signature to empty string
+        assert call_kwargs.get("signature") == ""
 
-    def test_email_send_save_sample_default(self, mock_email_svc):
-        """email send defaults save_as_sample=True when --no-save-sample not set."""
+    def test_email_send_signature_name(self, mock_email_svc):
+        """email send resolves named signature via svc.signatures.resolve()."""
+        mock_sigs = MagicMock()
+        mock_sigs.resolve.return_value = {
+            "signature_text": "Best,\nJohn",
+            "signature_format": "html",
+        }
+        mock_email_svc.signatures = mock_sigs
         mock_email_svc.list_accounts.return_value = [{"email": "me@b.com"}]
         dispatch(
             ["email", "send", "to@b.com", "Subject", "Body"],
-            {},
+            {"signature-name": "sig1"},
+        )
+        mock_sigs.resolve.assert_called_once()
+        call_kwargs = mock_email_svc.send_email.call_args[1]
+        assert call_kwargs.get("signature") == "Best,\nJohn"
+        assert call_kwargs.get("signature_format") == "html"
+
+    def test_email_send_attachment_empty_json_array(self, mock_email_svc):
+        """email send accepts empty JSON array [] as --file."""
+        mock_email_svc.list_accounts.return_value = [{"email": "me@b.com"}]
+        dispatch(
+            ["email", "send", "to@b.com", "Subject", "Body"],
+            {"file": "[]"},
         )
         call_kwargs = mock_email_svc.send_email.call_args[1]
-        assert call_kwargs.get("save_as_sample") is True
+        assert call_kwargs.get("attachments") == []
+
+    def test_email_send_attachment_json_non_list(self, mock_email_svc):
+        """Valid JSON that is not a list leaves attachments=None (no fallback)."""
+        mock_email_svc.list_accounts.return_value = [{"email": "me@b.com"}]
+        # JSON object (not list) does NOT match isinstance(parsed, list)
+        # and does NOT raise JSONDecodeError, so attachments stays None
+        dispatch(
+            ["email", "send", "to@b.com", "Subject", "Body"],
+            {"file": '{"name":"test","data":"dGVzdA=="}'},
+        )
+        call_kwargs = mock_email_svc.send_email.call_args[1]
+        assert call_kwargs.get("attachments") is None
+
+    def test_email_send_attachment_malformed_json(self, mock_email_svc):
+        """Malformed --file value falls back to legacy CSV format."""
+        mock_email_svc.list_accounts.return_value = [{"email": "me@b.com"}]
+        dispatch(
+            ["email", "send", "to@b.com", "Subject", "Body"],
+            {"file": "readme.txt:dGV4dA==,archive.zip:emlw"},
+        )
+        call_kwargs = mock_email_svc.send_email.call_args[1]
+        atts = call_kwargs.get("attachments")
+        assert atts == [
+            {"name": "readme.txt", "data": "dGV4dA=="},
+            {"name": "archive.zip", "data": "emlw"},
+        ]
+
+    def test_email_send_invalid_body_format(self, mock_email_svc):
+        """email send with invalid body-format raises CommandValidationError."""
+        mock_email_svc.list_accounts.return_value = [{"email": "me@b.com"}]
+        with pytest.raises(CommandValidationError, match="Invalid body-format"):
+            dispatch(
+                ["email", "send", "to@b.com", "Subject", "Body"],
+                {"body-format": "docx"},
+            )
 
     def test_email_read_missing_uuid(self):
         """email read without uuid raises."""
@@ -358,21 +412,13 @@ class TestEmailHandlers:
         assert result["title"] == "Permanently Deleted"
         mock_email_svc.msg_ops.hard_delete_message.assert_called_once_with("abc123")
 
-    def test_email_trash_opens_trash_view(self):
-        """email trash returns email-list with isTrashView and Trash filter."""
-        result = dispatch(["email", "trash"], {})
+    def test_email_trash_list_opens_trash_view(self):
+        """email trash list returns email-list with isTrashView and Trash filter."""
+        result = dispatch(["email", "trash", "list"], {})
         assert result["type"] == "email-list"
         assert result.get("idKey") == "email-trash-list"
         assert result["data"].get("_isTrashView") is True
         assert result["data"].get("filters", {}).get("folder") == "Trash"
-
-    def test_email_draft_opens_draft_view(self, mock_email_svc):
-        """email draft returns email-list with isDraftView and Drafts filter."""
-        result = dispatch(["email", "draft"], {})
-        assert result["type"] == "email-list"
-        assert result.get("idKey") == "email-draft-list"
-        assert result["data"].get("_isDraftView") is True
-        assert result["data"].get("filters", {}).get("folder") == "Drafts"
 
     def test_email_archive_success(self, mock_email_svc):
         """email archive calls move_message to Archive folder and returns status."""
@@ -933,16 +979,16 @@ class TestUserProfilesHandlers:
 
 
 class TestDraftsHandlers:
-    def test_email_draft_recall_list(self):
-        """email draft recall (no uuid) lists saved drafts."""
-        result = dispatch(["email", "draft", "recall"], {})
+    def test_email_draft_list(self):
+        """email draft (no args) lists drafts."""
+        result = dispatch(["email", "draft"], {})
         assert isinstance(result, dict)
         assert "type" in result
 
-    def test_email_draft_recall_not_found(self):
-        """email draft recall <uuid> with non-existent draft raises."""
+    def test_email_draft_not_found(self):
+        """email draft <uuid> with non-existent draft raises."""
         with pytest.raises(CommandValidationError, match="Draft not found"):
-            dispatch(["email", "draft", "recall", "nonexistent-uuid"], {})
+            dispatch(["email", "draft", "nonexistent-uuid"], {})
 
 
 # ── Letter handlers ──────────────────────────────────────────────────────────
