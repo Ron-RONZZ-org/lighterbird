@@ -288,7 +288,12 @@
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (toList.length === 0 || !subject) return;
+    if (toList.length === 0 || !subject) {
+      const missing = !toList.length && !subject ? "To and Subject"
+                      : !toList.length ? "To" : "Subject";
+      if (missing) banner.show(`${missing} field is required.`, "warn", 4000);
+      return;
+    }
     sending = true;
     try {
       if (accountEmail) saveLastUsedAccount(accountEmail);
@@ -303,8 +308,8 @@
         // Signature: pass --signature-name, or --no-signature if disabled
         ...(!useSignature ? { "no-signature": "true" } : {}),
         ...(useSignature && selectedSignatureName ? { "signature-name": selectedSignatureName } : {}),
-        // File attachments as proper --file flag (never in remaining/body)
-        ...(attachmentFiles.length > 0 ? { file: attachmentFiles.map((att) => `${att.name}:${att.data}`).join(",") } : {}),
+        // File attachments as JSON-encoded array (avoids fragility with commas/colons in filenames)
+        ...(attachmentFiles.length > 0 ? { file: JSON.stringify(attachmentFiles.map((att) => ({name: att.name, data: att.data}))) } : {}),
       };
       const toStr = toList.join(",");
       const remaining = [toStr, subject, body];

@@ -37,6 +37,8 @@ def send_email(
             cc=req.cc, bcc=req.bcc, priority=req.priority,
             body_format=req.body_format, attachments=req.attachments,
             signature=req.signature,
+            signature_format=req.signature_format,
+            in_reply_to=req.in_reply_to,
             save_as_sample=req.save_as_sample,
         )
     except ValueError as e:

@@ -31,7 +31,7 @@ from lighterbird.server.deps import get_email_service
              {"name": "signature-format", "type": "string", "help": "Signature format when using --signature: plain, html, or markdown",
               "values": ["plain", "html", "markdown"]},
              {"name": "no-signature", "type": "bool", "help": "Send without any signature"},
-             {"name": "file", "type": "string", "help": "Attachment (name:base64)"},
+             {"name": "file", "type": "string", "help": "Attachment JSON array [{\"name\":...,\"data\":base64}] or legacy name:base64,..."},
              {"name": "no-save-sample", "type": "bool", "help": "Do not save as writing sample"},
          ])
 def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
@@ -98,17 +98,24 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     cc_list = [t.strip() for t in cc_str.split(",") if t.strip()] if cc_str else None
     bcc_list = [t.strip() for t in bcc_str.split(",") if t.strip()] if bcc_str else None
 
-    # Parse --file flags: "name:base64,..." or multiple --file occurrences
+    # Parse --file flag: JSON array of {name, data} objects (robust against special chars in filenames)
     attachments = None
     if file_flags:
-        attachments = []
-        for item in file_flags.split(","):
-            item = item.strip()
-            if ":" in item:
-                name, data = item.split(":", 1)
-                attachments.append({"name": name, "data": data})
-            else:
-                attachments.append({"name": item, "data": ""})
+        import json as _json
+        try:
+            parsed = _json.loads(file_flags)
+            if isinstance(parsed, list):
+                attachments = parsed
+        except (_json.JSONDecodeError, TypeError):
+            # Fallback: legacy comma-separated "name:base64,..." format
+            attachments = []
+            for item in file_flags.split(","):
+                item = item.strip()
+                if ":" in item:
+                    name, data = item.split(":", 1)
+                    attachments.append({"name": name, "data": data})
+                else:
+                    attachments.append({"name": item, "data": ""})
 
     # Resolve signature override
     signature_value: str | None = None
@@ -125,14 +132,20 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         # Inline override defaults to plain
         signature_format = flags.get("signature-format", "plain")
 
-    result = svc.send_email(account_email, to_list, subject, body,
-                            cc=cc_list, bcc=bcc_list, priority=priority,
-                            body_format=body_format,
-                            attachments=attachments,
-                            signature=signature_value,
-                            signature_format=signature_format,
-                            in_reply_to=in_reply_to or None,
-                            save_as_sample=save_as_sample)
+    try:
+        result = svc.send_email(account_email, to_list, subject, body,
+                                cc=cc_list, bcc=bcc_list, priority=priority,
+                                body_format=body_format,
+                                attachments=attachments,
+                                signature=signature_value,
+                                signature_format=signature_format,
+                                in_reply_to=in_reply_to or None,
+                                save_as_sample=save_as_sample)
+    except ValueError as e:
+        raise CommandValidationError(
+            str(e),
+            suggestion="Check the account exists and has a password configured.",
+        )
     if result.get("status") == "queued":
         return {"type": "status", "title": "Queued for Delivery",
                 "data": {"to": to_str, "subject": subject, "folder": "Outbox",
