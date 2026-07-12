@@ -428,6 +428,65 @@ class TestIMAPClientMoveMessage:
         assert client.move_message(42, "INBOX", "Trash") is False
 
 
+class TestIMAPClientAppendMessage:
+    def test_append_success_with_appenduids(self):
+        """Returns (True, uid) when APPENDUID is present in response."""
+        client = IMAPClient("imap.example.com")
+        mock_conn = MagicMock()
+        client._conn = mock_conn
+        mock_conn.append.return_value = (
+            "OK", [b"OK [APPENDUID 1710342765 42] APPEND completed"],
+        )
+        success, uid = client.append_message("Drafts", b"test message", flags=["\\Draft"])
+        assert success is True
+        assert uid == 42
+        mock_conn.append.assert_called_once()
+
+    def test_append_success_without_appenduids(self):
+        """Returns (True, None) when server doesn't return APPENDUID."""
+        client = IMAPClient("imap.example.com")
+        mock_conn = MagicMock()
+        client._conn = mock_conn
+        mock_conn.append.return_value = ("OK", [])
+        success, uid = client.append_message("INBOX", b"test")
+        assert success is True
+        assert uid is None
+
+    def test_append_failure(self):
+        """Returns (False, None) on IMAP error."""
+        client = IMAPClient("imap.example.com")
+        mock_conn = MagicMock()
+        client._conn = mock_conn
+        mock_conn.append.return_value = ("NO", [])
+        success, uid = client.append_message("INBOX", b"test")
+        assert success is False
+        assert uid is None
+
+    def test_append_imap_error_exception(self):
+        """Returns (False, None) when imaplib raises an error."""
+        from imaplib import IMAP4
+        client = IMAPClient("imap.example.com")
+        mock_conn = MagicMock()
+        client._conn = mock_conn
+        mock_conn.append.side_effect = IMAP4.error("Server rejected")
+        success, uid = client.append_message("Drafts", b"test")
+        assert success is False
+        assert uid is None
+
+    def test_append_parses_correct_uid_from_multi_line_response(self):
+        """Parses APPENDUID correctly from multi-line APPEND response."""
+        client = IMAPClient("imap.example.com")
+        mock_conn = MagicMock()
+        client._conn = mock_conn
+        mock_conn.append.return_value = (
+            "OK",
+            [b"* OK [APPENDUID 1710342765 99] APPEND completed"],
+        )
+        success, uid = client.append_message("Drafts", b"test", flags=["\\Draft"])
+        assert success is True
+        assert uid == 99
+
+
 class TestIMAPClientDeleteMessage:
     def test_delete_success(self):
         client = IMAPClient("imap.example.com")

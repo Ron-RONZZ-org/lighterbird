@@ -79,6 +79,7 @@ def release_account_imap_lock(account_email: str) -> None:
 
 from lighterbird.core.drafts import save_draft
 from lighterbird.email.db import get_db
+from lighterbird.email.imap.connpool import IMAPConnectionPool
 from lighterbird.email.services import (
     AccountService,
     MessageOpsService,
@@ -86,6 +87,7 @@ from lighterbird.email.services import (
     SieveService,
     SignatureService,
 )
+from lighterbird.email.sync.folder_mapper import FolderMapper
 
 
 class EmailService:
@@ -98,6 +100,8 @@ class EmailService:
         self.msg_ops = MessageOpsService(self._db, self.accounts)
         self.sieve = SieveService(self._db)
         self.signatures = SignatureService(self._db)
+        self.imap_pool = IMAPConnectionPool()
+        self.folder_mapper = FolderMapper(self._db)
 
     # ── Account operations ───────────────────────────────────────────────
 
@@ -183,6 +187,7 @@ class EmailService:
                         task_id=task_id,
                         manage_progress=manage_progress,
                         folder_offset=folder_offset,
+                        folder_mapper=self.folder_mapper,
                     )
                 except ConnectionError as e:
                     result = SyncResult()
@@ -449,9 +454,13 @@ class EmailService:
         Builds a minimal RFC 2822 message from the draft data and appends
         it to the account's IMAP DRAFTS folder with the ``\\Draft`` flag.
 
-        If the same draft UUID already exists in DRAFTS (matched via
-        ``X-Draft-UUID`` header), it is removed first so the folder
-        always has at most one copy per draft.
+        Uses ``IMAPConnectionPool`` for connection reuse and the per-account
+        IMAP lock to avoid races with sync/backlog operations.
+
+        If the same draft UUID already exists in DRAFTS (tracked via
+        ``email_draft_uid_map`` table), it is replaced rather than appended
+        a second copy.  The ``APPENDUID`` response is parsed to populate
+        the UID map on first save, so subsequent saves avoid SEARCH HEADER.
 
         Returns:
             ``None`` on success, or an error message string on failure.
@@ -459,7 +468,7 @@ class EmailService:
         import uuid as _uuid
         from email.message import EmailMessage
 
-        from lighterbird.email.imap.client import IMAPClient
+        from lighterbird.email.imap.connpool import IMAPConnectionError
 
         data = draft.get("data", {})
         account_email = (data or {}).get("account", "")
@@ -500,30 +509,68 @@ class EmailService:
 
         message_bytes = msg.as_bytes()
 
-        client = IMAPClient(
-            host=acct.get("imap_server", ""),
-            port=acct.get("imap_port", 993),
-            use_ssl=acct.get("imap_use_ssl", 1) == 1,
-        )
-        try:
-            client.connect(
-                username=acct.get("imap_username", "") or acct.get("email", ""),
-                password=acct["password"],
+        # Acquire per-account IMAP lock before connecting
+        if not acquire_account_imap_lock(account_email):
+            return (
+                f"Draft saved locally but IMAP sync deferred for {account_email} "
+                f"— another IMAP operation is in progress. "
+                f"The draft will sync on the next save."
             )
 
-            # Ensure DRAFTS folder exists
-            client.ensure_folder(account_email, "Drafts", self, "\\\\Drafts")
+        try:
+            # Get connection from pool
+            try:
+                client = self.imap_pool.acquire(
+                    account_email=account_email,
+                    host=acct.get("imap_server", ""),
+                    port=acct.get("imap_port", 993),
+                    use_ssl=acct.get("imap_use_ssl", 1) == 1,
+                    username=acct.get("imap_username", "") or acct.get("email", ""),
+                    password=acct["password"],
+                )
+            except IMAPConnectionError as exc:
+                return f"IMAP connection failed for {account_email}: {exc}"
 
-            # Remove any existing IMAP draft with the same X-Draft-UUID
-            existing = client.search_by_header("Drafts", "X-Draft-UUID", draft_uuid)
-            for uid in existing:
-                client.delete_message_by_uid("Drafts", uid)
+            # Resolve localized Drafts folder name via FolderMapper
+            folder_name = self.folder_mapper.resolve_drafts(account_email)
+            client.ensure_folder(account_email, folder_name, self, "\\Drafts")
+
+            # Check UID map for existing IMAP draft with this draft UUID
+            existing_row = self._db.execute_one(
+                "SELECT imap_uid, folder_name FROM email_draft_uid_map "
+                "WHERE account_email = ? AND draft_uuid = ?",
+                (account_email, draft_uuid),
+            )
+
+            if existing_row and existing_row["imap_uid"] is not None:
+                # Known UID — delete by UID (no SEARCH needed)
+                uid_bytes = str(existing_row["imap_uid"]).encode()
+                client.delete_message_by_uid(existing_row["folder_name"], uid_bytes)
+            else:
+                # Unknown UID — fall back to SEARCH HEADER
+                existing_uids = client.search_by_header(folder_name, "X-Draft-UUID", draft_uuid)
+                for uid in existing_uids:
+                    client.delete_message_by_uid(folder_name, uid)
 
             # Append the new draft
-            client.append_message("Drafts", message_bytes, flags=["\\Draft"])
+            success, imap_uid = client.append_message(folder_name, message_bytes, flags=["\\Draft"])
+            if not success:
+                return f"IMAP APPEND failed for draft {draft_uuid[:8]} in {folder_name}"
+
+            # Update or insert into UID map
+            now = datetime.now(UTC).isoformat()
+            self._db.execute(
+                "INSERT OR REPLACE INTO email_draft_uid_map "
+                "(account_email, folder_name, draft_uuid, imap_uid, message_id, "
+                " created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (account_email, folder_name, draft_uuid,
+                 imap_uid, msg.get("Message-ID", ""), now, now),
+            )
+
             logger.info(
-                "Draft %s synced to IMAP DRAFTS for %s",
-                draft_uuid[:8], account_email,
+                "Draft %s synced to IMAP %s for %s (UID=%s)",
+                draft_uuid[:8], folder_name, account_email, imap_uid,
             )
             return None
         except Exception as exc:
@@ -534,7 +581,8 @@ class EmailService:
             )
             return err
         finally:
-            client.disconnect()
+            self.imap_pool.release(account_email)
+            release_account_imap_lock(account_email)
 
     def process_send_queue(self, limit: int = 50) -> dict:
         """Process pending send-queue entries with exponential backoff.

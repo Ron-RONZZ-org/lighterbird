@@ -45,12 +45,13 @@
   let syncProgress = $state(null);
   let syncPollTimer = $state(null);
   let syncError = $state("");
-  // isTrashView is set ONCE from initial data so it survives safeUpdate
-  // (which overwrites data without _isTrashView).  The component is
-  // destroyed/recreated on tab switch, so a fresh non-trash tab starts
-  // with isTrashView=false.
+  // isTrashView / isDraftView are set ONCE from initial data so they survive
+  // safeUpdate (which overwrites data without _isTrashView / _isDraftView).
+  // The component is destroyed/recreated on tab switch, so a fresh non-trash
+  // non-draft tab starts with both=false.
   // svelte-ignore state_referenced_locally — intentional, see above
   let isTrashView = $state(!!data?._isTrashView);
+  let isDraftView = $state(!!data?._isDraftView);
 
   // When data prop changes (new query / new tab data), reset pagination
   $effect(() => {

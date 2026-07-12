@@ -283,6 +283,25 @@ _IDX_SEND_QUEUE_STATUS = "CREATE INDEX IF NOT EXISTS idx_send_queue_status ON se
 _IDX_MESSAGES_DATE = "CREATE INDEX IF NOT EXISTS idx_messages_date ON messages(received_at);"
 _IDX_ATTACHMENTS_MESSAGE = "CREATE INDEX IF NOT EXISTS idx_email_attachments_message ON email_attachments(message_uuid);"
 
+# ── Email Draft UID Map (Phase 0: IMAP draft sync) ─────────────────────
+_EMAIL_DRAFT_UID_MAP_TABLE = """
+CREATE TABLE IF NOT EXISTS email_draft_uid_map (
+    account_email  TEXT NOT NULL,
+    folder_name    TEXT NOT NULL,
+    draft_uuid     TEXT NOT NULL,
+    imap_uid       INTEGER,
+    message_id     TEXT,
+    sent_local     INTEGER NOT NULL DEFAULT 0,
+    created_at     TEXT NOT NULL,
+    updated_at     TEXT NOT NULL,
+    PRIMARY KEY (account_email, folder_name, draft_uuid)
+);
+"""
+_IDX_DRAFT_UID_MAP_IMAP_UID = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_draft_uid_map_imap_uid
+    ON email_draft_uid_map(account_email, folder_name, imap_uid);
+"""
+
 _SCHEMA_STATEMENTS: list[str] = [
     _CREATE_ACCOUNTS,
     _CREATE_FOLDERS,
@@ -321,6 +340,9 @@ _SCHEMA_STATEMENTS: list[str] = [
     _IDX_SYNC_BACKLOG_MSG,
     _IDX_DEAD_LETTERS_ACCOUNT,
     _IDX_SIEVE_ACTIVATIONS_ACCOUNT,
+    # Draft UID mapping (Phase 0: IMAP draft sync)
+    _EMAIL_DRAFT_UID_MAP_TABLE,
+    _IDX_DRAFT_UID_MAP_IMAP_UID,
     # Multi-signature (Phase 2: decoupled from accounts)
     _MIGRATE_ACCOUNTS_DEFAULT_SIGNATURE,
     _MIGRATE_SIGNATURE_FORMAT,

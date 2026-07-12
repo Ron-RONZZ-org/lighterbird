@@ -386,3 +386,131 @@ class TestAccountImapLock:
     def test_release_unheld_lock(self):
         """Releasing a lock not held by this thread should not raise."""
         release_account_imap_lock("unheld@example.com")  # Should not raise
+
+
+# ── Email Draft UID Map / save_draft_to_imap tests ─────────────────────
+
+
+class TestEmailDraftUidMap:
+    """Tests for the email_draft_uid_map table and related operations."""
+
+    def test_uid_map_table_exists(self, db):
+        """The email_draft_uid_map table should be created on DB init."""
+        assert db.table_exists("email_draft_uid_map")
+
+    def test_uid_map_insert_and_query(self, db):
+        """Insert a draft UID mapping and retrieve it."""
+        from datetime import UTC, datetime
+        now = datetime.now(UTC).isoformat()
+        db.execute(
+            "INSERT INTO email_draft_uid_map "
+            "(account_email, folder_name, draft_uuid, imap_uid, message_id, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("user@example.com", "Drafts", "abc123def456", 42, "<msg@id>", now, now),
+        )
+        row = db.execute_one(
+            "SELECT * FROM email_draft_uid_map WHERE draft_uuid = ?",
+            ("abc123def456",),
+        )
+        assert row is not None
+        assert row["account_email"] == "user@example.com"
+        assert row["imap_uid"] == 42
+
+    def test_uid_map_insert_or_replace(self, db):
+        """INSERT OR REPLACE should update existing entries."""
+        from datetime import UTC, datetime
+        now = datetime.now(UTC).isoformat()
+        # Insert initial
+        db.execute(
+            "INSERT INTO email_draft_uid_map "
+            "(account_email, folder_name, draft_uuid, imap_uid, message_id, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("u@e.com", "Drafts", "draft1", 10, "<id1>", now, now),
+        )
+        # Replace with same PK
+        db.execute(
+            "INSERT OR REPLACE INTO email_draft_uid_map "
+            "(account_email, folder_name, draft_uuid, imap_uid, message_id, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("u@e.com", "Drafts", "draft1", 20, "<id2>", now, now),
+        )
+        row = db.execute_one(
+            "SELECT imap_uid FROM email_draft_uid_map WHERE draft_uuid = ?",
+            ("draft1",),
+        )
+        assert row["imap_uid"] == 20
+
+    def test_uid_map_max_uid_query(self, db):
+        """MAX(imap_uid) query should return the highest UID."""
+        from datetime import UTC, datetime
+        now = datetime.now(UTC).isoformat()
+        for uid in [10, 20, 30]:
+            db.execute(
+                "INSERT OR IGNORE INTO email_draft_uid_map "
+                "(account_email, folder_name, draft_uuid, imap_uid, message_id, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                ("u@e.com", "Drafts", f"draft-{uid}", uid, "", now, now),
+            )
+        row = db.execute_one(
+            "SELECT MAX(imap_uid) AS max_uid FROM email_draft_uid_map "
+            "WHERE account_email = ? AND folder_name = ?",
+            ("u@e.com", "Drafts"),
+        )
+        assert row["max_uid"] == 30
+
+
+class TestSaveDraftToImap:
+    """Tests for EmailService.save_draft_to_imap()."""
+
+    @pytest.fixture
+    def svc(self, db):
+        """EmailService with a real DB and mocked IMAP pool."""
+        svc = EmailService(db)
+        # Add an account (FK requirement)
+        from datetime import UTC, datetime
+        now = datetime.now(UTC).isoformat()
+        db.execute(
+            "INSERT OR IGNORE INTO accounts "
+            "(email, name, imap_server, smtp_server, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            ("test@example.com", "Test", "imap.example.com", "smtp.example.com", now, now),
+        )
+        return svc
+
+    def test_returns_error_for_missing_account(self, svc):
+        """Draft with no account should return error message."""
+        draft = {"uuid": "draft123", "data": {"account": ""}}
+        error = svc.save_draft_to_imap(draft)
+        assert error is not None
+        assert "missing" in error.lower()
+
+    def test_returns_error_for_missing_uuid(self, svc):
+        """Draft with no uuid should return error message."""
+        draft = {"uuid": "", "data": {"account": "test@example.com"}}
+        error = svc.save_draft_to_imap(draft)
+        assert error is not None
+        assert "missing" in error.lower()
+
+    def test_returns_error_for_no_password(self, svc):
+        """Draft with account that has no password should return error."""
+        draft = {"uuid": "draft123", "data": {"account": "test@example.com"}}
+        error = svc.save_draft_to_imap(draft)
+        assert error is not None
+        # Account exists but no password set in keyring
+        assert "no password configured" in error.lower() or "not found" in error.lower()
+
+    def test_imap_lock_busy_returns_deferred_message(self, svc):
+        """When the IMAP lock is held, returns a deferral message."""
+        # Set a password first so we pass the password check and reach the lock
+        from lighterbird.email.keyring import set_password
+        set_password("test@example.com", "fakepassword")
+        from lighterbird.email.service import acquire_account_imap_lock
+        acquire_account_imap_lock("test@example.com")
+        try:
+            draft = {"uuid": "draft123", "data": {"account": "test@example.com"}}
+            error = svc.save_draft_to_imap(draft)
+            assert error is not None
+            assert "deferred" in error.lower()
+        finally:
+            from lighterbird.email.service import release_account_imap_lock
+            release_account_imap_lock("test@example.com")

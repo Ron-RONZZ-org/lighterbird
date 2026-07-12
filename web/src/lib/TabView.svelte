@@ -78,6 +78,7 @@
     error: ErrorPopup,
     "email-list": EmailListTab,
     "email-trash-list": EmailListTab,
+    "email-draft-list": EmailListTab,
     "journal-list": JournalListTab,
     "journal-view": JournalViewTab,
     "contacts-list": ContactsListTab,
@@ -232,7 +233,7 @@
         <EventsPopup data={tabStore.active.data} />
       {:else if tabStore.active.type === "error"}
         <ErrorPopup data={tabStore.active.data} />
-      {:else if tabStore.active.type === "email-list" || tabStore.active.type === "email-trash-list"}
+      {:else if tabStore.active.type === "email-list" || tabStore.active.type === "email-trash-list" || tabStore.active.type === "email-draft-list"}
         <EmailListTab data={tabStore.active.data} tabId={tabStore.active.id} />
       {:else if tabStore.active.type === "journal-list"}
         <JournalListTab data={tabStore.active.data} tabId={tabStore.active.id} />
@@ -362,6 +363,7 @@
       email: "✉",
       "email-list": "✉",
       "email-trash-list": "🗑",
+      "email-draft-list": "✎",
       "journal-list": "📓",
       "journal-view": "📓",
       "contacts-list": "👤",

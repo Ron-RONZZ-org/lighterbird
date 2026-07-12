@@ -395,7 +395,7 @@ Post-mutation navigation: after a successful `!xxx add/modify/delete` command, t
 | `persistentIdKey(listIdKey)` | Converts `"todo-list"` → `"persistent-todo-list"` |
 | `MUTATION_MAP` | Static mapping table: action-verb token paths → list metadata |
 
-The redirect is handled in `App.svelte`'s `handleCommand()` after the `form-required` check. Uses a **hybrid** refresh strategy: inject highlight into existing list tabs for add/modify (no loading flicker), always re-fetch for delete. Previously a special case for `!email send`; now generalized to all domains (todo, contact, journal, calendar event, letter, sieve, email send/trash/archive).
+The redirect is handled in `App.svelte`'s `handleCommand()` after the `form-required` check. Uses a **hybrid** refresh strategy: inject highlight into existing list tabs for add/modify (no loading flicker), always re-fetch for delete. Previously a special case for `!email send`; now generalized to all domains (todo, contact, journal, calendar event, letter, sieve, email send/trash/archive, draft recall).
 
 ### Shared Form Components
 
@@ -417,6 +417,8 @@ Backend list commands return typed responses that map to frontend components:
 | Command | Backend Response Type | Frontend Component |
 |---------|----------------------|--------------------|
 | `!email list` / `!email search` | `email-list` | EmailListTab |
+| `!email trash` | `email-list` (with `_isTrashView`) | EmailListTab (trash-only) |
+| `!email draft` | `email-list` (with `_isDraftView`) | EmailListTab (drafts-only) |
 | `!email export eml <uuid>` | download .eml | ExportDialog / direct download |
 | `!email import eml <path>` | `status` | ImportDialog |
 | `!journal list` / `!journal search` | `journal-list` | JournalListTab |
