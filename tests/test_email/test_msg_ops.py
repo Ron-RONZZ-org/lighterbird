@@ -202,6 +202,128 @@ class TestBatchTrashMessages:
         assert result["queued"] == 0
 
 
+# ── hard_delete_message ───────────────────────────────────────────────────────
+
+
+class TestHardDeleteMessage:
+    @patch(IMAP_PATCH)
+    def test_hard_delete_no_msg(self, mock_imap_class, msg_ops):
+        """hard_delete_message with non-existent UUID does nothing."""
+        msg_ops.db.execute_one.return_value = None
+        msg_ops.hard_delete_message("nonexistent")
+        mock_imap_class.assert_not_called()
+
+    @patch(IMAP_PATCH)
+    def test_hard_delete_local_only(self, mock_imap_class, msg_ops):
+        """hard_delete_message with no IMAP UID raises ValueError."""
+        msg_ops.db.execute_one.return_value = {
+            "uuid": "msg-1", "account_email": "", "folder_name": "",
+            "imap_uid": None,
+        }
+        with pytest.raises(ValueError, match="no IMAP UID"):
+            msg_ops.hard_delete_message("msg-1")
+
+    @patch(IMAP_PATCH)
+    def test_hard_delete_success(self, mock_imap_class, msg_ops, mock_account_service):
+        """hard_delete_message connects to IMAP, deletes, and removes local row."""
+        msg_ops.db.execute_one.return_value = {
+            "uuid": "msg-1", "account_email": "user@example.com",
+            "imap_uid": 42, "folder_name": "INBOX",
+        }
+        mock_imap = MagicMock()
+        mock_imap.delete_message_by_uid.return_value = True
+        mock_imap_class.return_value = mock_imap
+
+        msg_ops.hard_delete_message("msg-1")
+
+        # Should connect to IMAP and delete
+        mock_imap.connect.assert_called_once_with("user@example.com", "secret")
+        mock_imap.delete_message_by_uid.assert_called_once_with("INBOX", b"42")
+        mock_imap.disconnect.assert_called_once()
+        # Should delete local row
+        msg_ops.db.execute.assert_any_call(
+            "DELETE FROM messages WHERE uuid = ?", ("msg-1",)
+        )
+
+    @patch(IMAP_PATCH)
+    def test_hard_delete_imap_fails(self, mock_imap_class, msg_ops):
+        """hard_delete_message raises RuntimeError if IMAP delete fails."""
+        msg_ops.db.execute_one.return_value = {
+            "uuid": "msg-1", "account_email": "user@example.com",
+            "imap_uid": 42, "folder_name": "INBOX",
+        }
+        mock_imap = MagicMock()
+        mock_imap.delete_message_by_uid.return_value = False
+        mock_imap_class.return_value = mock_imap
+
+        with pytest.raises(RuntimeError, match="returned failure"):
+            msg_ops.hard_delete_message("msg-1")
+
+    @patch(IMAP_PATCH)
+    def test_hard_delete_imap_unreachable(self, mock_imap_class, msg_ops):
+        """hard_delete_message raises if IMAP connection fails."""
+        msg_ops.db.execute_one.return_value = {
+            "uuid": "msg-1", "account_email": "user@example.com",
+            "imap_uid": 42, "folder_name": "INBOX",
+        }
+        mock_imap = MagicMock()
+        mock_imap.connect.side_effect = ConnectionError("IMAP timeout")
+        mock_imap_class.return_value = mock_imap
+
+        with pytest.raises(ConnectionError):
+            msg_ops.hard_delete_message("msg-1")
+
+
+# ── batch_hard_delete_messages ────────────────────────────────────────────────
+
+
+class TestBatchHardDeleteMessages:
+    @patch(IMAP_PATCH)
+    def test_batch_empty(self, mock_imap_class, msg_ops):
+        """batch_hard_delete_messages with empty list returns zero."""
+        result = msg_ops.batch_hard_delete_messages([])
+        assert result["count"] == 0
+        assert result["errors"] == []
+
+    @patch(IMAP_PATCH)
+    def test_batch_one_success(self, mock_imap_class, msg_ops):
+        """batch_hard_delete_messages deletes one message and returns count."""
+        msg_ops.db.execute_one.return_value = {
+            "uuid": "msg-1", "account_email": "user@example.com",
+            "imap_uid": 42, "folder_name": "INBOX",
+        }
+        mock_imap = MagicMock()
+        mock_imap.delete_message_by_uid.return_value = True
+        mock_imap_class.return_value = mock_imap
+
+        result = msg_ops.batch_hard_delete_messages(["msg-1"])
+        assert result["count"] == 1
+        assert result["errors"] == []
+
+    @patch(IMAP_PATCH)
+    def test_batch_one_failure(self, mock_imap_class, msg_ops):
+        """batch_hard_delete_messages collects error on failure."""
+        msg_ops.db.execute_one.return_value = {
+            "uuid": "msg-1", "account_email": "user@example.com",
+            "imap_uid": 42, "folder_name": "INBOX",
+        }
+        mock_imap = MagicMock()
+        mock_imap.delete_message_by_uid.return_value = False
+        mock_imap_class.return_value = mock_imap
+
+        result = msg_ops.batch_hard_delete_messages(["msg-1"])
+        assert result["count"] == 0
+        assert len(result["errors"]) == 1
+
+    @patch(IMAP_PATCH)
+    def test_batch_skips_not_found(self, mock_imap_class, msg_ops):
+        """batch_hard_delete_messages skips messages not in DB."""
+        msg_ops.db.execute_one.return_value = None
+        result = msg_ops.batch_hard_delete_messages(["nonexistent"])
+        assert result["count"] == 0
+        assert len(result["errors"]) == 1  # "message not found"
+
+
 # ── send_email (high-level) ──────────────────────────────────────────────────
 
 
