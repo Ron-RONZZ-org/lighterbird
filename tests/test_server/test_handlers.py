@@ -421,6 +421,183 @@ class TestEmailHandlers:
         assert files[0]["name"] == "doc.pdf"
         assert files[0]["data"] == base64.b64encode(b"fake_pdf_content").decode("ascii")
 
+# ── Email account handlers ────────────────────────────────────────────────────
+
+
+class TestEmailAccountHandlers:
+    def test_account_list(self, mock_email_svc):
+        """email account list returns accounts."""
+        mock_email_svc.list_accounts.return_value = [
+            {"email": "a@b.com", "imap_server": "imap.b.com"},
+        ]
+        result = dispatch(["email", "account", "list"], {})
+        assert result["type"] == "status"
+        assert result["title"] == "Email Accounts"
+        assert len(result["data"]["accounts"]) == 1
+
+    def test_account_add_missing_email(self):
+        """email account add without email raises."""
+        with pytest.raises(CommandValidationError, match="Missing email"):
+            dispatch(["email", "account", "add"], {})
+
+    def test_account_add_success(self, mock_email_svc, monkeypatch):
+        """email account add with valid email creates account."""
+        from lighterbird.server import deps
+        # Mock detect_servers to return known values
+        import lighterbird.email.server_detect as sd
+        monkeypatch.setattr(sd, "detect_servers", lambda email, **kw: {
+            "imap": "imap.migadu.com", "smtp": "smtp.migadu.com",
+            "managesieve_host": "imap.migadu.com", "managesieve_port": 4190,
+            "method": "mx_provider",
+        })
+        mock_email_svc.create_account.return_value = {"email": "test@ronzz.org"}
+        result = dispatch(["email", "account", "add", "test@ronzz.org"],
+                          {"password": "secret", "name": "Test"})
+        assert result["type"] == "status"
+        assert result["title"] == "Account Added"
+        assert result["data"]["email"] == "test@ronzz.org"
+
+    def test_account_add_dns_fallback(self, mock_email_svc, monkeypatch):
+        """email account add with unresolvable fallback returns form-required."""
+        import socket
+        def bad_dns(host, port):
+            raise socket.gaierror("No address")
+        monkeypatch.setattr(socket, "getaddrinfo", bad_dns)
+        import lighterbird.email.server_detect as sd
+        monkeypatch.setattr(sd, "detect_servers", lambda email, **kw: {
+            "imap": "imap.unknown.domain", "smtp": "smtp.unknown.domain",
+            "method": "fallback",
+        })
+        mock_email_svc.create_account.return_value = {"email": "x@y.com"}
+        result = dispatch(["email", "account", "add", "x@y.com"], {})
+        assert result["type"] == "form-required"
+        assert result["data"]["form"] == "email-account-add"
+        assert "does not resolve" in result["data"]["error"] or "DNS" in result["data"]["error"]
+
+    def test_account_modify_missing_email(self):
+        """email account modify without email raises."""
+        with pytest.raises(CommandValidationError, match="Missing account email"):
+            dispatch(["email", "account", "modify"], {})
+
+    def test_account_modify_not_found(self, mock_email_svc):
+        """email account modify for non-existent account raises."""
+        mock_email_svc.get_account.return_value = None
+        with pytest.raises(CommandValidationError, match="Account not found"):
+            dispatch(["email", "account", "modify", "x@y.com"], {})
+
+    def test_account_modify_name(self, mock_email_svc):
+        """email account modify --name updates the account name."""
+        mock_email_svc.get_account.return_value = {"email": "x@y.com"}
+        mock_accounts = MagicMock()
+        mock_email_svc.accounts = mock_accounts
+        result = dispatch(["email", "account", "modify", "x@y.com"], {"name": "NewName"})
+        assert result["type"] == "status"
+        assert result["title"] == "Account Modified"
+        mock_accounts.update.assert_called_once()
+        args = mock_accounts.update.call_args[0]
+        assert args[1].get("name") == "NewName"
+
+    def test_account_modify_redetect(self, mock_email_svc, monkeypatch):
+        """email account modify --redetect re-detects IMAP/SMTP."""
+        import lighterbird.email.server_detect as sd
+        monkeypatch.setattr(sd, "detect_servers", lambda email, **kw: {
+            "imap": "imap.migadu.com", "smtp": "smtp.migadu.com",
+            "managesieve_host": "imap.migadu.com", "managesieve_port": 4190,
+            "method": "mx_provider",
+        })
+        mock_email_svc.get_account.return_value = {"email": "test@ronzz.org"}
+        mock_accounts = MagicMock()
+        mock_email_svc.accounts = mock_accounts
+        result = dispatch(["email", "account", "modify", "test@ronzz.org"], {"redetect": ""})
+        assert result["type"] == "status"
+        mock_accounts.update.assert_called_once()
+        args = mock_accounts.update.call_args[0]
+        assert args[1]["imap_server"] == "imap.migadu.com"
+        assert args[1]["smtp_server"] == "smtp.migadu.com"
+
+    def test_account_modify_redetect_dns_fail(self, mock_email_svc, monkeypatch):
+        """email account modify --redetect raises if detected server fails DNS."""
+        import socket
+        def bad_dns(host, port):
+            raise socket.gaierror("No address")
+        monkeypatch.setattr(socket, "getaddrinfo", bad_dns)
+        import lighterbird.email.server_detect as sd
+        monkeypatch.setattr(sd, "detect_servers", lambda email, **kw: {
+            "imap": "imap.bad.domain", "smtp": "smtp.bad.domain",
+            "method": "fallback",
+        })
+        mock_email_svc.get_account.return_value = {"email": "x@y.com"}
+        with pytest.raises(CommandValidationError, match="does not resolve"):
+            dispatch(["email", "account", "modify", "x@y.com"], {"redetect": ""})
+
+    def test_account_delete_missing_email(self):
+        """email account delete without email raises."""
+        with pytest.raises(CommandValidationError, match="Missing email"):
+            dispatch(["email", "account", "delete"], {})
+
+    def test_account_delete_success(self, mock_email_svc):
+        """email account delete removes the account."""
+        mock_email_svc.delete_account = MagicMock()
+        result = dispatch(["email", "account", "delete", "x@y.com"], {})
+        assert result["type"] == "status"
+        assert result["title"] == "Account(s) Deleted"
+        mock_email_svc.delete_account.assert_called_once_with("x@y.com")
+
+
+# ── Email signature handlers ──────────────────────────────────────────────────
+
+
+class TestEmailSignatureHandlers:
+    def test_signature_list(self, mock_email_svc):
+        """email signature list returns signatures."""
+        mock_sigs = MagicMock()
+        mock_sigs.list_signatures.return_value = [
+            {"uuid": "sig-1", "name": "sig1", "body": "Hello"},
+        ]
+        mock_sigs.get_account_default_uuid.return_value = None
+        mock_email_svc.signatures = mock_sigs
+        result = dispatch(["email", "signature", "list"], {})
+        assert result["type"] == "status"
+        assert "Signatures" in result["title"]
+        assert len(result["data"]["signatures"]) == 1
+
+    def test_signature_add_missing_name(self, mock_email_svc):
+        """email signature add without --name raises."""
+        with pytest.raises(CommandValidationError, match="Missing"):
+            dispatch(["email", "signature", "add"], {})
+
+    def test_signature_add_success(self, mock_email_svc):
+        """email signature add creates a new signature."""
+        mock_sigs = MagicMock()
+        mock_sigs.create.return_value = {"uuid": "sig-1", "name": "sig1"}
+        mock_email_svc.signatures = mock_sigs
+        result = dispatch(["email", "signature", "add", "sig1", "Best regards"],
+                          {"format": "plain"})
+        assert result["type"] == "status"
+        mock_sigs.create.assert_called_once_with("sig1", "Best regards", signature_format="plain")
+
+    def test_signature_modify_success(self, mock_email_svc):
+        """email signature modify updates an existing signature."""
+        mock_sigs = MagicMock()
+        mock_sigs.get_by_name.return_value = {"uuid": "sig-1", "name": "sig1"}
+        mock_sigs.update.return_value = {"uuid": "sig-1", "name": "sig1"}
+        mock_email_svc.signatures = mock_sigs
+        result = dispatch(["email", "signature", "modify", "sig1"],
+                          {"body": "Updated"})
+        assert result["type"] == "status"
+        mock_sigs.update.assert_called_once()
+
+    def test_signature_delete_success(self, mock_email_svc):
+        """email signature delete removes a signature."""
+        mock_sigs = MagicMock()
+        mock_sigs.get_by_name.return_value = {"uuid": "sig-1", "name": "sig1"}
+        mock_sigs.delete.return_value = True
+        mock_email_svc.signatures = mock_sigs
+        result = dispatch(["email", "signature", "delete", "sig1"], {})
+        assert result["type"] == "status"
+        mock_sigs.delete.assert_called_once()
+
+
 # ── Calendar handlers ────────────────────────────────────────────────────────
 
 
@@ -458,6 +635,42 @@ class TestContactsHandlers:
         """contact add without flags raises CommandValidationError."""
         with pytest.raises(CommandValidationError, match="Missing contact name"):
             dispatch(["contact", "add"], {})
+
+    def test_contacts_add_success(self, mock_contact_svc):
+        """contact add with name creates contact."""
+        mock_contact_svc.create.return_value = {"uuid": "abc123"}
+        result = dispatch(["contact", "add", "Jane"],
+                          {"last-name": "Doe", "email": "jane@test.com"})
+        assert result["type"] == "status"
+        assert result["title"] == "Contact Added"
+        mock_contact_svc.create.assert_called_once()
+
+    def test_contacts_modify_success(self, mock_contact_svc):
+        """contact modify updates a contact."""
+        mock_contact_svc.get.return_value = {"uuid": "abc123"}
+        mock_contact_svc.update = MagicMock()
+        result = dispatch(["contact", "modify", "abc123"], {"first-name": "Jane2"})
+        assert result["type"] == "status"
+        assert result["title"] == "Contact Modified"
+        mock_contact_svc.update.assert_called_once()
+
+    def test_contacts_delete_success(self, mock_contact_svc):
+        """contact delete removes a contact."""
+        mock_contact_svc.delete = MagicMock()
+        result = dispatch(["contact", "delete", "abc123"], {})
+        assert result["type"] == "status"
+        assert "Deleted" in result["title"]
+        mock_contact_svc.delete.assert_called_once_with("abc123")
+
+    def test_contacts_search(self, mock_contact_svc):
+        """contact search returns matching contacts."""
+        mock_contact_svc.search.return_value = [
+            {"uuid": "abc", "first_name": "Jane", "last_name": "Doe"},
+        ]
+        result = dispatch(["contact", "search", "Jane"], {})
+        assert result["type"] == "contacts-list"
+        # The backend returns messages list, the frontend parses it
+        assert "data" in result
 
 
 # ── Todo handlers ────────────────────────────────────────────────────────────
