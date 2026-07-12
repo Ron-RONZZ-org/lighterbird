@@ -235,9 +235,9 @@
     <div class="sync-log">
       <div class="log-path-row">
         <span class="key">Log file</span>
-        <span class="log-path-clickable" onclick={() => copyLogPath(d.log_path)} title="Click to copy path">
-          {d.log_path}
-        </span>
+          <button class="log-path-clickable" onclick={() => copyLogPath(d.log_path)} title="Click to copy path" type="button">
+            {d.log_path}
+          </button>
         <span class="copy-indicator">{logPathCopied ? "Copied!" : ""}</span>
       </div>
       {#each d.entries as entry}
@@ -396,6 +396,10 @@
     text-decoration: underline;
     text-decoration-style: dotted;
     word-break: break-all;
+    font: inherit;
+    background: none;
+    border: none;
+    padding: 0;
   }
   .log-path-clickable:hover {
     color: #b0d0e0;
