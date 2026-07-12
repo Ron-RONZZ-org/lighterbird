@@ -57,7 +57,13 @@ def mock_calendar_svc(monkeypatch):
         list_calendars=[],
         list_events=[],
         get_event=None,
+        create_event=None,
+        delete_event=None,
+        import_ics=None,
+        export_ics=None,
     )
+    svc.calendars = MagicMock()
+    svc.events = MagicMock()
     deps._services["calendar"] = svc
     return svc
 
@@ -70,6 +76,9 @@ def mock_contact_svc(monkeypatch):
         list_contacts=[],
         search_contacts=[],
         get_contact=None,
+        create=None,
+        update=None,
+        delete=None,
     )
     deps._services["contact"] = svc
     return svc
@@ -83,6 +92,12 @@ def mock_todo_svc(monkeypatch):
         list_todos=[],
         search_todos=[],
         get_todo=None,
+        create=None,
+        update=None,
+        delete=None,
+        mark_done=None,
+        get_with_children=None,
+        flatten_tree=None,
     )
     deps._services["todo"] = svc
     return svc
@@ -96,6 +111,10 @@ def mock_journal_svc(monkeypatch):
         list_entries=[],
         search_entries=[],
         get_entry=None,
+        create=None,
+        delete=None,
+        export_md=None,
+        import_md=None,
     )
     deps._services["journal"] = svc
     return svc
@@ -109,8 +128,30 @@ def mock_letter_svc(monkeypatch):
         list_letters=[],
         search_letters=[],
         get_letter=None,
+        create=None,
+        export_md=None,
+        import_md=None,
     )
+    svc.normalize_tags = MagicMock(return_value=[])
+    svc.set_tags = MagicMock()
+    svc.convert_to_html = MagicMock(return_value="<p>body</p>")
+    svc.store_body = MagicMock()
     deps._services["letter"] = svc
+    return svc
+
+
+@pytest.fixture
+def mock_tag_svc(monkeypatch):
+    """Inject a mock tag service."""
+    from lighterbird.server import deps
+    svc = _mock_svc(
+        list_tags=[],
+        list_tags_for_domain=[],
+        create_tag=None,
+        rename_tag=None,
+        delete_tag=None,
+    )
+    deps._services["tag"] = svc
     return svc
 
 
@@ -614,7 +655,7 @@ class TestCalendarHandlers:
     def test_calendar_event_add_no_args(self, mock_calendar_svc):
         """event add with no calendars raises."""
         with pytest.raises(CommandValidationError, match="No calendars configured"):
-            dispatch(["calendar", "event", "add"], {})
+            dispatch(["calendar", "event", "add", "Title", "2026-07-12T10:00", "2026-07-12T11:00"], {})
 
 
 # ── Contacts handlers ────────────────────────────────────────────────────────
@@ -813,6 +854,328 @@ class TestSyncHandlers:
         result = dispatch(["sync"], {})
         assert isinstance(result, dict)
         assert "type" in result
+
+
+# ── Calendar event handlers (Phase 2) ──────────────────────────────────────────
+
+
+class TestCalendarEventHandlers:
+    def test_event_add_no_calendars(self, mock_calendar_svc):
+        """event add with no calendars raises."""
+        with pytest.raises(CommandValidationError, match="No calendars configured"):
+            dispatch(["calendar", "event", "add", "Title", "2026-07-12T10:00", "2026-07-12T11:00"], {})
+
+    def test_event_add_success(self, mock_calendar_svc):
+        """event add with summary creates event."""
+        mock_calendar_svc.list_calendars.return_value = [{"uuid": "cal-1"}]
+        mock_calendar_svc.create_event.return_value = {"uuid": "evt-1", "title": "Test event"}
+        result = dispatch(["calendar", "event", "add",
+                          "Test event", "2026-07-12T10:00", "2026-07-12T11:00"], {})
+        assert result["type"] == "status"
+        assert result["title"] == "Event Created"
+        mock_calendar_svc.create_event.assert_called_once()
+
+    def test_event_modify_success(self, mock_calendar_svc):
+        """event modify updates an event."""
+        mock_calendar_svc.get_event.return_value = {"uuid": "evt-1"}
+        result = dispatch(["calendar", "event", "modify", "evt-1"],
+                          {"title": "Updated"})
+        assert result["type"] == "status"
+        assert result["title"] == "Event Modified"
+        mock_calendar_svc.events.update.assert_called_once()
+
+    def test_event_delete_success(self, mock_calendar_svc):
+        """event delete removes an event."""
+        mock_calendar_svc.delete_event = MagicMock()
+        result = dispatch(["calendar", "event", "delete", "evt-1"], {})
+        assert result["type"] == "status"
+        mock_calendar_svc.delete_event.assert_called_once_with("evt-1")
+
+    def test_event_view_success(self, mock_calendar_svc):
+        """event view returns event details."""
+        mock_calendar_svc.get_event.return_value = {
+            "uuid": "evt-1", "title": "Meeting",
+        }
+        result = dispatch(["calendar", "event", "view", "evt-1"], {})
+        assert result["type"] == "events"
+        assert result["title"] == "Meeting"
+
+    def test_event_search(self, mock_calendar_svc):
+        """event search finds matching events."""
+        mock_calendar_svc.list_events.return_value = [
+            {"uuid": "evt-1", "summary": "Team sync"},
+        ]
+        result = dispatch(["calendar", "event", "search", "team"], {})
+        assert result["type"] == "calendar-events"
+        assert "data" in result
+
+    def test_event_rrule_set(self, mock_calendar_svc):
+        """event rrule set adds recurrence."""
+        mock_calendar_svc.get_event.return_value = {"uuid": "evt-1"}
+        result = dispatch(["calendar", "event", "rrule", "set", "evt-1", "FREQ=WEEKLY"],
+                          {})
+        assert result["type"] == "status"
+        mock_calendar_svc.events.update.assert_called_once()
+
+    def test_account_add_success(self, mock_calendar_svc):
+        """calendar account add creates a calendar."""
+        mock_calendar_svc.create_calendar.return_value = {"uuid": "cal-1"}
+        result = dispatch(["calendar", "account", "add", "https://cal.example.com"],
+                          {"username": "u", "password": "p"})
+        assert result["type"] == "status"
+        assert result["title"] == "Calendar Added"
+        mock_calendar_svc.create_calendar.assert_called_once()
+
+    def test_account_list(self, mock_calendar_svc):
+        """calendar account list shows calendars."""
+        mock_calendar_svc.list_calendars.return_value = [
+            {"uuid": "cal-1", "url": "https://cal.example.com"},
+        ]
+        result = dispatch(["calendar", "account", "list"], {})
+        assert result["type"] == "status"
+        assert "Calendars" in result["title"]
+        assert len(result["data"]["calendars"]) == 1
+
+    def test_account_modify_success(self, mock_calendar_svc):
+        """calendar account modify updates a calendar."""
+        mock_calendar_svc.calendars.update = MagicMock()
+        result = dispatch(["calendar", "account", "modify", "cal-1"],
+                          {"url": "https://new-url.example.com"})
+        assert result["type"] == "status"
+        mock_calendar_svc.calendars.update.assert_called_once()
+
+    def test_account_delete_success(self, mock_calendar_svc):
+        """calendar account delete removes a calendar."""
+        mock_calendar_svc.delete_calendar = MagicMock()
+        result = dispatch(["calendar", "account", "delete", "cal-1"], {})
+        assert result["type"] == "status"
+        mock_calendar_svc.delete_calendar.assert_called_once_with("cal-1")
+
+
+# ── Todo handlers (Phase 2) ──────────────────────────────────────────────────
+
+
+class TestTodoHandlersPhase2:
+    def test_todo_add_success(self, mock_todo_svc):
+        """todo add creates a todo."""
+        mock_todo_svc.create.return_value = {"uuid": "todo-1", "title": "Buy milk"}
+        result = dispatch(["todo", "add", "Buy milk"], {})
+        assert result["type"] == "status"
+        assert result["title"] == "Todo Added"
+        mock_todo_svc.create.assert_called_once()
+
+    def test_todo_view(self, mock_todo_svc):
+        """todo view returns todo details."""
+        mock_todo_svc.get_with_children.return_value = {"uuid": "todo-1", "title": "Test"}
+        result = dispatch(["todo", "view", "todo-1"], {})
+        assert result["type"] == "status"
+        assert result["title"] == "Test"
+
+    def test_todo_done_success(self, mock_todo_svc):
+        """todo done marks a todo as completed."""
+        mock_todo_svc.mark_done = MagicMock()
+        result = dispatch(["todo", "done", "todo-1"], {})
+        assert result["type"] == "status"
+        assert "Done" in result["title"]
+        mock_todo_svc.mark_done.assert_called_once_with("todo-1")
+
+    def test_todo_modify_success(self, mock_todo_svc):
+        """todo modify updates a todo."""
+        mock_todo_svc.update = MagicMock()
+        result = dispatch(["todo", "modify", "todo-1"], {"title": "Updated"})
+        assert result["type"] == "status"
+        assert result["title"] == "Todo Modified"
+        mock_todo_svc.update.assert_called_once()
+
+    def test_todo_delete_success(self, mock_todo_svc):
+        """todo delete removes a todo."""
+        mock_todo_svc.delete = MagicMock()
+        result = dispatch(["todo", "delete", "todo-1"], {})
+        assert result["type"] == "status"
+        assert "Deleted" in result["title"]
+        mock_todo_svc.delete.assert_called_once_with("todo-1")
+
+    def test_todo_search(self, mock_todo_svc):
+        """todo search finds matching todos."""
+        mock_todo_svc.search.return_value = [{"uuid": "t1", "title": "Buy milk"}]
+        result = dispatch(["todo", "search", "milk"], {})
+        assert result["type"] == "todo-list"
+        assert "data" in result
+
+    def test_todo_tree(self, mock_todo_svc):
+        """todo tree returns tree view."""
+        mock_todo_svc.list.return_value = [{"uuid": "t1", "title": "Root"}]
+        mock_todo_svc.flatten_tree.return_value = [{"uuid": "t1", "title": "Root"}]
+        result = dispatch(["todo", "tree"], {})
+        assert result["type"] == "todo-list"
+
+    def test_todo_export_md(self, mock_todo_svc):
+        """todo export md exports todos."""
+        mock_todo_svc.export_md.return_value = "# Todos\n- item"
+        result = dispatch(["todo", "export", "md"], {"all": ""})
+        assert result["type"] == "status"
+        assert "Exported" in result["title"]
+
+    def test_todo_import_md_missing_path(self):
+        """todo import md without path raises."""
+        with pytest.raises(CommandValidationError, match="Missing file path"):
+            dispatch(["todo", "import", "md"], {})
+
+
+# ── Journal handlers (Phase 2) ────────────────────────────────────────────────
+
+
+class TestJournalHandlersPhase2:
+    def test_journal_write_success(self, mock_journal_svc):
+        """journal write creates an entry."""
+        mock_journal_svc.create.return_value = {"uuid": "entry-1"}
+        result = dispatch(["journal", "write", "My title", "My body"], {})
+        assert result["type"] == "status"
+        assert result["title"] == "Journal Entry Written"
+        mock_journal_svc.create.assert_called_once()
+
+    def test_journal_view(self, mock_journal_svc):
+        """journal view returns entry."""
+        mock_journal_svc.get.return_value = {"uuid": "entry-1", "title": "Day 1"}
+        result = dispatch(["journal", "view", "entry-1"], {})
+        assert result["type"] == "status"
+        assert result["title"] == "Day 1"
+
+    def test_journal_search(self, mock_journal_svc):
+        """journal search finds entries."""
+        mock_journal_svc.search.return_value = [{"uuid": "e1", "title": "Found"}]
+        result = dispatch(["journal", "search", "query"], {})
+        assert result["type"] == "journal-list"
+
+    def test_journal_delete_success(self, mock_journal_svc):
+        """journal delete removes an entry."""
+        mock_journal_svc.get.return_value = {"uuid": "entry-1"}
+        mock_journal_svc.delete = MagicMock()
+        result = dispatch(["journal", "delete", "entry-1"], {})
+        assert result["type"] == "status"
+        assert "Deleted" in result["title"]
+        mock_journal_svc.delete.assert_called_once()
+
+    def test_journal_export_md(self, mock_journal_svc):
+        """journal export md exports entries."""
+        mock_journal_svc.export_md.return_value = "# Journal\n- entry"
+        result = dispatch(["journal", "export", "md", "--all"], {})
+        assert result["type"] == "markdown"
+
+    def test_journal_import_md_missing_path(self):
+        """journal import md without path raises."""
+        with pytest.raises(CommandValidationError, match="Missing file path"):
+            dispatch(["journal", "import", "md"], {})
+
+
+# ── Letter handlers (Phase 2) ────────────────────────────────────────────────
+
+
+class TestLetterHandlersPhase2:
+    def test_letter_add_success(self, mock_letter_svc):
+        """letter add creates a letter."""
+        mock_letter_svc.create.return_value = {"uuid": "ltr-1"}
+        result = dispatch(["letter", "add", "John Doe"],
+                          {"direction": "received"})
+        assert result["type"] == "status"
+        assert result["title"] == "Letter Added"
+        mock_letter_svc.create.assert_called_once()
+
+    def test_letter_view(self, mock_letter_svc):
+        """letter view returns letter details."""
+        mock_letter_svc.get_with_thread.return_value = {"uuid": "ltr-1"}
+        result = dispatch(["letter", "view", "ltr-1"], {})
+        assert result["type"] == "letter-view"
+
+    def test_letter_export_md(self, mock_letter_svc):
+        """letter export md exports a letter."""
+        mock_letter_svc.get.return_value = {"uuid": "ltr-1"}
+        mock_letter_svc.export_md.return_value = "# Letter"
+        result = dispatch(["letter", "export", "md", "ltr-1"], {})
+        assert result["type"] == "status"
+        assert "Exported" in result["title"]
+
+    def test_letter_import_md_missing_path(self):
+        """letter import md without path raises."""
+        with pytest.raises(CommandValidationError, match="Missing file path"):
+            dispatch(["letter", "import", "md"], {})
+
+
+# ── Tags handlers (Phase 2) ────────────────────────────────────────────────────
+
+
+class TestTagHandlers:
+    def test_tag_root(self):
+        """tag root shows help."""
+        result = dispatch(["tag"], {})
+        assert isinstance(result, dict)
+        assert "type" in result
+
+    def test_tag_list(self, mock_tag_svc):
+        """tag list returns tags."""
+        mock_tag_svc.list_tags.return_value = [
+            {"name": "work", "color": "blue"},
+        ]
+        result = dispatch(["tag", "list"], {})
+        assert result["type"] == "status"
+        assert "Tags" in result["title"]
+        assert len(result["data"]["tags"]) == 1
+
+    def test_tag_create_success(self, mock_tag_svc):
+        """tag create adds a tag."""
+        mock_tag_svc.create_tag.return_value = {"name": "work", "color": "blue"}
+        result = dispatch(["tag", "create", "work"], {"color": "blue"})
+        assert result["type"] == "status"
+        mock_tag_svc.create_tag.assert_called_once_with("work", color="blue")
+
+    def test_tag_rename_success(self, mock_tag_svc):
+        """tag rename renames a tag."""
+        mock_tag_svc.rename_tag.return_value = {"name": "new"}
+        result = dispatch(["tag", "rename", "old", "new"], {})
+        assert result["type"] == "status"
+        mock_tag_svc.rename_tag.assert_called_once_with("old", "new")
+
+    def test_tag_delete_success(self, mock_tag_svc):
+        """tag delete removes a tag."""
+        result = dispatch(["tag", "delete", "work"], {})
+        assert result["type"] == "status"
+        mock_tag_svc.delete_tag.assert_called_once_with("work")
+
+
+# ── Backup handlers (Phase 2) ─────────────────────────────────────────────────
+
+
+class TestBackupHandlersPhase2:
+    def test_backup_now(self, monkeypatch):
+        """backup now triggers a new backup."""
+        def fake_backup_all():
+            yield {"kind": "data", "path": "/tmp/test", "size": 100}
+        monkeypatch.setattr("lighterbird.server.command.handlers.backup_actions.backup_all_strategies",
+                          fake_backup_all)
+        monkeypatch.setattr("lighterbird.server.command.handlers.backup_actions.backup_config_files",
+                          lambda: [])
+        monkeypatch.setattr("lighterbird.server.command.handlers.backup_actions.load_config",
+                          lambda: {"strategies": []})
+        result = dispatch(["backup", "now"], {})
+        assert result["type"] == "status"
+        assert "Backup" in result["title"]
+
+
+# ── Sync handlers (Phase 2) ───────────────────────────────────────────────────
+
+
+class TestSyncHandlersPhase2:
+    def test_sync_cmd(self, mock_email_svc, monkeypatch):
+        """sync triggers email and calendar sync."""
+        mock_email_svc.sync_all = MagicMock()
+        mock_email_svc.sync_account = MagicMock()
+        monkeypatch.setattr("lighterbird.server.command.handlers.sync.get_calendar_service",
+                          lambda: MagicMock())
+        monkeypatch.setattr("lighterbird.server.command.handlers.sync.get_todo_service",
+                          lambda: MagicMock())
+        result = dispatch(["sync"], {})
+        assert result["type"] == "status"
+        assert "Sync" in result["title"]
 
 
 # ── Alias resolution ─────────────────────────────────────────────────────────
