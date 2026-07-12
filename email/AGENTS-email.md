@@ -54,19 +54,34 @@ The IMAP sync engine was overhauled in phases addressing 10 identified gaps:
 | 4 | Connection Pool | `IMAPConnectionPool` maintains per-account connections with idle timeout. Reused by backlog processing to avoid per-operation connection overhead. |
 | 5 | IMAP IDLE | `IMAPIdleThread` runs a per-account IDLE loop with reconnection. `IMAPIdleManager` manages thread lifecycle. Callbacks trigger incremental sync on EXISTS/FLAGS events. |
 
-### Sync Backlog (IMAP Flag Sync)
+### Sync Backlog (IMAP Operations)
 
-Flag changes (read/delete) are synced back to the IMAP server via a backlog queue:
+Backend IMAP operations (flag sync, trash move, permanent deletion) are deferred via a backlog queue:
 
-1. **`BacklogService.enqueue()`** — Queues a pending flag change with INSERT OR REPLACE
-2. **`_sync_backlog` table** — Stores pending flag changes with account, folder, IMAP UID, desired flag state, and retry count
-3. **`BacklogService.process_all()`** — Acquires threading lock, processes entries per account, connects via pool, sends STORE ±FLAGS.SILENT or UID MOVE. Escalates to dead-letter after `MAX_RETRIES` (10).
-4. **`DeadLetterService`** — Stores entries that exhausted retries for manual review. Supports list, clear, and retry-back-to-backlog operations.
+1. **`BacklogService.enqueue()`** — Queues a pending operation with INSERT OR REPLACE
+2. **`_sync_backlog` table** — Stores pending operations with account, folder, IMAP UID, desired flag state, retry count, and **operation type**:
+   - `'sync'` — flag sync (\\Seen, \\Deleted) — the original/default
+   - `'trash'` — move message to IMAP Trash folder (UID MOVE / COPY+EXPUNGE)
+   - `'expunge'` — permanent deletion from IMAP (STORE +FLAGS.SILENT (\\Deleted) + EXPUNGE). No local DB update (calling code already deleted the row).
+3. **`BacklogService.process_all()`** — Acquires threading lock, processes entries per account, connects via pool, sends STORE ±FLAGS.SILENT, UID MOVE, or EXPUNGE depending on operation type. Escalates to dead-letter after `MAX_RETRIES` (10).
+4. **`DeadLetterService`** — Stores entries that exhausted retries for manual review. Supports list, clear, and retry-back-to-backlog operations. The `operation` column is preserved through dead-letter cycles.
 5. **`FlagSyncService`** — Orchestrates push (backlog drain) and pull (CONDSTORE flag sync)
 
-### Locking
+Key rule: **hard-delete (`!email delete --hard`, batch-delete-hard, clear-trash) deletes the local DB row immediately** and enqueues an `'expunge'` backlog entry. The IMAP EXPUNGE happens asynchronously, giving instant UX — same contract as soft delete. `hard_delete_message()` returns a dict with `count`, `queued`, and `errors` — no longer raises on IMAP failure.
 
-Backlog processing uses `threading.Lock` with a 5-second timeout. If the lock is held by another thread (e.g., manual sync triggering backlog drain while background worker is processing), the second caller returns 0 gracefully.
+### Locking (Two Levels)
+
+Backlog processing uses two levels of locking for thread safety:
+
+1. **BacklogService lock** (`threading.Lock`, 5s timeout) — Serializes backlog table processing. If the lock is held by another thread (e.g., manual sync triggering backlog drain while background worker is processing), the second caller returns 0 gracefully.
+
+2. **Per-account IMAP lock** (`threading.Lock` per account email, 30s timeout) — Prevents concurrent IMAP connections for the same account. Multiple paths can open IMAP connections independently (background worker `_do_sync`, `_do_process_trash`, user-initiated `!email sync`, `POST /api/v1/sync/start`). Without coordination, these connections can race on the same IMAP folder (one thread scanning UIDs while another EXPUNGEs), causing missed or duplicated messages.
+
+   Lock acquisition flow:
+   - `EmailService.sync_account()` — acquires before IMAP connect, releases in `finally`
+   - `BacklogService._process_account()` — acquires before IMAP connect for backlog processing, releases in `finally`
+   
+   If the lock cannot be acquired within the timeout, the caller logs a warning and gracefully skips the IMAP operation (entries remain in backlog for next cycle, or sync returns with an appropriate error message).
 
 ### Dead-Letter Limits
 

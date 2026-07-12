@@ -46,9 +46,10 @@ class DeadLetterService:
         self.db.execute(
             "INSERT INTO _dead_letters "
             "(msg_uuid, account_email, folder_name, imap_uid, "
-            " is_read, is_deleted, created_at, last_attempt, retries,"
+            " is_read, is_deleted, operation,"
+            " created_at, last_attempt, retries,"
             " dead_at, reason) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 entry.get("msg_uuid", ""),
                 entry.get("account_email", ""),
@@ -56,6 +57,7 @@ class DeadLetterService:
                 entry.get("imap_uid"),
                 entry.get("is_read", 0),
                 entry.get("is_deleted", 0),
+                entry.get("operation", "sync"),
                 entry.get("created_at", now),
                 entry.get("last_attempt") or now,
                 entry.get("retries", 0),
@@ -146,8 +148,8 @@ class DeadLetterService:
         self.db.execute(
             "INSERT INTO _sync_backlog "
             "(msg_uuid, account_email, folder_name, imap_uid, "
-            " is_read, is_deleted, created_at, last_attempt, retries) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
+            " is_read, is_deleted, operation, created_at, last_attempt, retries) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
             (
                 entry.get("msg_uuid", ""),
                 entry.get("account_email", ""),
@@ -155,6 +157,7 @@ class DeadLetterService:
                 entry.get("imap_uid"),
                 entry.get("is_read", 0),
                 entry.get("is_deleted", 0),
+                entry.get("operation", "sync"),
                 entry.get("created_at", now_str),
                 now_str,
             ),

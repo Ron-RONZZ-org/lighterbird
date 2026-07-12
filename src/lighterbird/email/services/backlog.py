@@ -11,9 +11,12 @@ import logging
 import threading
 from collections import defaultdict
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
+
+# Backlog operation types
+BacklogOperation = Literal["sync", "trash", "expunge"]
 
 
 class BacklogLockError(Exception):
@@ -21,9 +24,18 @@ class BacklogLockError(Exception):
 
 
 class BacklogService:
-    """Manage the _sync_backlog table for deferred IMAP flag sync.
+    """Manage the _sync_backlog table for deferred IMAP operations.
 
-    Thread-safe: uses a threading.Lock to serialize backlog processing.
+    Supports three operation types:
+
+    * ``sync`` — flag sync (\\Seen, \\Deleted) — the original/default.
+    * ``trash`` — move message to the IMAP Trash folder (UID MOVE / COPY+EXPUNGE).
+    * ``expunge`` — permanently delete from the IMAP server
+      (STORE +FLAGS.SILENT (\\Deleted) + EXPUNGE).  No local DB update
+      because the calling code (e.g. ``hard_delete_message``) already
+      removed the local row before enqueuing.
+
+    Thread-safe: uses a ``threading.Lock`` to serialize backlog processing.
     Lock acquisition has a timeout; if busy, the caller should retry
     rather than block.
 
@@ -66,23 +78,35 @@ class BacklogService:
         imap_uid: int | None,
         is_read: int,
         is_deleted: int,
+        operation: BacklogOperation = "sync",
     ) -> None:
-        """Queue a message flag sync request for later processing.
+        """Queue a message operation for later processing.
 
         Uses INSERT OR REPLACE so that re-enqueueing the same msg_uuid
         updates the existing entry rather than creating a duplicate.
+
+        Args:
+            msg_uuid: Message UUID.
+            account_email: Account email.
+            folder_name: Folder name on the IMAP server.
+            imap_uid: IMAP UID of the message.
+            is_read: 1 if the message is read / \\Seen.
+            is_deleted: 1 if the message is flagged \\Deleted.
+            operation: Operation type — ``"sync"`` (flag sync, default),
+                ``"trash"`` (move to Trash folder), or ``"expunge"``
+                (permanent IMAP deletion).
         """
         now = datetime.now(UTC).isoformat()
         self.db.execute(
             "INSERT OR REPLACE INTO _sync_backlog "
             "(id, msg_uuid, account_email, folder_name, imap_uid, "
-            " is_read, is_deleted, created_at, last_attempt, retries) "
+            " is_read, is_deleted, operation, created_at, last_attempt, retries) "
             "VALUES ("
             "  COALESCE((SELECT id FROM _sync_backlog WHERE msg_uuid = ?), NULL),"
-            "  ?, ?, ?, ?, ?, ?, ?, NULL, 0"
+            "  ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0"
             ")",
             (msg_uuid, msg_uuid, account_email, folder_name, imap_uid,
-             is_read, is_deleted, now),
+             is_read, is_deleted, operation, now),
         )
 
     def enqueue_trash(
@@ -94,11 +118,30 @@ class BacklogService:
     ) -> None:
         """Queue a message for deferred IMAP trash move.
 
-        Shortcut for enqueue with is_read=1, is_deleted=1 (the flag
-        combination represents a trash operation).
+        Shortcut for :meth:`enqueue` with ``operation='trash'``.
         """
         self.enqueue(msg_uuid, account_email, folder_name, imap_uid,
-                     is_read=1, is_deleted=1)
+                     is_read=1, is_deleted=1, operation="trash")
+
+    def enqueue_expunge(
+        self,
+        msg_uuid: str,
+        account_email: str,
+        folder_name: str | None,
+        imap_uid: int | None,
+    ) -> None:
+        """Queue a message for deferred IMAP permanent deletion (EXPUNGE).
+
+        The calling code (e.g. ``hard_delete_message``) MUST remove the
+        local DB row **before** calling this method.  The backlog
+        processor will connect to IMAP, mark the UID as \\Deleted, and
+        EXPUNGE the folder, then delete the backlog entry.  No local DB
+        update is performed because the row no longer exists.
+
+        Shortcut for :meth:`enqueue` with ``operation='expunge'``.
+        """
+        self.enqueue(msg_uuid, account_email, folder_name, imap_uid,
+                     is_read=1, is_deleted=1, operation="expunge")
 
     # ── Queries ───────────────────────────────────────────────────────────
 
@@ -138,7 +181,7 @@ class BacklogService:
     # ── Processing ────────────────────────────────────────────────────────
 
     def process_all(self, account_email: str | None = None) -> int:
-        """Process pending flag sync backlog entries.
+        """Process pending backlog entries.
 
         Acquires a threading lock (timeout 5s).  If another thread is
         already processing, returns 0 immediately.
@@ -151,7 +194,7 @@ class BacklogService:
             account_email: If set, only process backlog for this account.
 
         Returns:
-            Number of backlog entries successfully synced.
+            Number of backlog entries successfully processed.
         """
         if not self._lock.acquire(timeout=5):
             logger.warning("[backlog] Lock timeout — another thread is processing")
@@ -208,6 +251,10 @@ class BacklogService:
 
         Dead entries (exceeded MAX_RETRIES) are escalated to the
         dead-letter table before any IMAP connection is attempted.
+
+        Acquires the per-account IMAP lock before connecting to prevent
+        concurrent IMAP operations on the same account (e.g. a user-initiated
+        sync running at the same time as backlog processing).
         """
         # First: filter out dead entries (regardless of account state)
         live_items: list[dict] = []
@@ -230,6 +277,21 @@ class BacklogService:
                 "[backlog] No account or password for %s, skipping", account_email,
             )
             # Increment retries for live items
+            now = datetime.now(UTC).isoformat()
+            for item in live_items:
+                self._increment_retry(item, now)
+            return 0
+
+        # Acquire per-account IMAP lock to prevent concurrent connections
+        from lighterbird.email.service import (
+            acquire_account_imap_lock,
+            release_account_imap_lock,
+        )
+        if not acquire_account_imap_lock(account_email):
+            logger.warning(
+                "[backlog] IMAP lock busy for %s — entries will retry on next pass",
+                account_email,
+            )
             now = datetime.now(UTC).isoformat()
             for item in live_items:
                 self._increment_retry(item, now)
@@ -263,11 +325,20 @@ class BacklogService:
             return 0
         finally:
             client.disconnect()
+            release_account_imap_lock(account_email)
 
     def _process_item(self, client: Any, item: dict,
                       account_email: str) -> bool:
         """Process a single backlog entry. Returns True on success.
-        
+
+        Handles three operation types:
+
+        * ``expunge`` — STORE +FLAGS.SILENT (\\Deleted) + EXPUNGE.
+          No local DB row update (message already deleted from local DB).
+        * ``trash`` — UID MOVE message to Trash folder; fallback to
+          COPY + STORE \\Deleted + EXPUNGE.
+        * ``sync`` — Set/unset \\Seen and/or \\Deleted flags.
+
         Note: retry limit check and NULL imap_uid cleanup are handled
         by ``_process_account`` before this is called.
         """
@@ -278,13 +349,24 @@ class BacklogService:
 
         folder = item.get("folder_name") or "INBOX"
         now = datetime.now(UTC).isoformat()
+        operation = item.get("operation", "sync")
 
         try:
-            # Resolve trash folder name
-            trash_folder = self._resolve_trash_if_available(account_email)
+            # ── expunge: permanent deletion from IMAP ─────────────────
+            if operation == "expunge":
+                ok = client.delete_message_by_uid(folder, str(imap_uid).encode())
+                if ok:
+                    self.db.execute(
+                        "DELETE FROM _sync_backlog WHERE id = ?", (item["id"],),
+                    )
+                    return True
+                # EXPUNGE failed — retry later
+                self._increment_retry(item, now)
+                return False
 
-            # If this is a trash entry (is_deleted) and not already in trash, try UID MOVE
-            if item.get("is_deleted") and folder != trash_folder:
+            # ── trash: move message to IMAP Trash folder ──────────────
+            trash_folder = self._resolve_trash_if_available(account_email)
+            if operation == "trash" and folder != trash_folder:
                 ok = client.move_message(int(imap_uid), folder, trash_folder)
                 if ok:
                     self.db.execute(
@@ -297,18 +379,8 @@ class BacklogService:
                     )
                     return True
                 # Move failed — fall through to flag-only STORE
-            elif item.get("is_deleted") and folder == trash_folder:
-                # Already in trash — just update state
-                self.db.execute(
-                    "UPDATE messages SET is_deleted = 0, updated_at = ? WHERE uuid = ?",
-                    (now, item["msg_uuid"]),
-                )
-                self.db.execute(
-                    "DELETE FROM _sync_backlog WHERE id = ?", (item["id"],),
-                )
-                return True
 
-            # Set flags
+            # ── sync: set/unset IMAP flags ────────────────────────────
             add: list[str] = []
             remove: list[str] = []
             if item.get("is_read"):
@@ -374,4 +446,4 @@ class BacklogService:
         return AccountService(self.db)
 
 
-__all__ = ["BacklogLockError", "BacklogService"]
+__all__ = ["BacklogLockError", "BacklogOperation", "BacklogService"]

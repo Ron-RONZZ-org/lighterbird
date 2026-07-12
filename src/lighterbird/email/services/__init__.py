@@ -1,7 +1,11 @@
 """Email service classes."""
 
 from lighterbird.email.services.accounts import AccountService
-from lighterbird.email.services.backlog import BacklogLockError, BacklogService
+from lighterbird.email.services.backlog import (
+    BacklogLockError,
+    BacklogOperation,
+    BacklogService,
+)
 from lighterbird.email.services.dead_letter import DeadLetterService
 from lighterbird.email.services.flag_sync import FlagSyncService
 from lighterbird.email.services.messages import MessageService

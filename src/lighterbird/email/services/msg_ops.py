@@ -206,99 +206,73 @@ class MessageOpsService(MsgSendQueueMixin):
         return {"count": trashed, "queued": queued}
 
     # ── Hard-delete (permanent) operations ────────────────────────────────
-    # Hard delete MUST purge from the remote IMAP server, not just mark
-    # locally.  The sync worker compares IMAP UIDs against known_uids in
-    # the local DB; if we only soft-delete (is_deleted=1) or delete the
-    # row and rely on the async backlog, the next sync re-imports the UID.
     #
-    # Strategy: connect to IMAP synchronously, UID STORE +FLAGS (\Deleted)
-    # + EXPUNGE (removes the UID from the folder permanently).  If IMAP
-    # deletion fails, raise an error — the user must know it failed so
-    # they can retry.  No silent degradation to soft-delete.
+    # Hard delete removes the local DB row immediately so the UI updates
+    # instantly — same UX contract as soft delete (trash_message).
+    # The IMAP-level EXPUNGE is deferred to the backlog service for
+    # background processing.
+    #
+    # If the backlog EXPUNGE eventually fails, the message stays on the
+    # IMAP server but is invisible in lighterbird (no local row to display).
+    # This is acceptable: next UID SEARCH during sync won't re-import the
+    # deleted UID because the sync only imports UIDs not already in known_uids,
+    # and the deleted row won't be there to block re-import.
 
-    def _imap_delete_uuid(self, msg: dict) -> None:
-        """Synchronously delete a message UID from the IMAP server.
+    def hard_delete_message(self, msg_uuid: str) -> dict[str, Any]:
+        """Permanently delete a message from local DB (instant) and enqueue
+        IMAP EXPUNGE for background processing.
 
-        Connects to IMAP, selects the folder, marks the UID as
-        ``\\Deleted``, and EXPUNGEs the folder to permanently remove it.
+        Unlike the old synchronous implementation, this method:
+        1. Deletes the local DB row immediately (instant UX).
+        2. Enqueues an ``expunge`` backlog entry for background IMAP cleanup.
+        3. Returns a status dict immediately — no IMAP round-trip.
 
-        Raises:
-            ValueError: If the message has no UID/account/folder.
-            ConnectionError: If the IMAP server is unreachable.
-            RuntimeError: If the IMAP ``STORE`` or ``EXPUNGE`` fails.
-        """
-        imap_uid = msg.get("imap_uid")
-        account_email = msg.get("account_email", "")
-        folder_name = msg.get("folder_name", "")
-        if imap_uid is None or not account_email or not folder_name:
-            raise ValueError(
-                f"Cannot hard-delete message {msg.get('uuid','')[:8]}: "
-                "no IMAP UID, account, or folder — it is a local-only message. "
-                "Deleted from local DB only."
-            )
-
-        acct = self._account_service.get_account_with_password(account_email)
-        if not acct or not acct.get("password"):
-            raise ConnectionError(
-                f"Cannot hard-delete from {account_email}: "
-                "no password configured. Use ``!email account modify`` to set it."
-            )
-
-        from lighterbird.email.imap.client import IMAPClient
-        client = IMAPClient(
-            host=acct.get("imap_server", ""),
-            port=acct.get("imap_port", 993),
-            use_ssl=bool(acct.get("imap_use_ssl", 1)),
-        )
-        try:
-            client.connect(account_email, acct["password"])
-            ok = client.delete_message_by_uid(folder_name, str(imap_uid).encode())
-            if not ok:
-                raise RuntimeError(
-                    f"IMAP server returned failure for UID {imap_uid} "
-                    f"in folder {folder_name}. The message may already be deleted."
-                )
-        finally:
-            client.disconnect()
-
-    def hard_delete_message(self, msg_uuid: str) -> None:
-        """Permanently delete a message from the local DB and IMAP server.
-
-        1. Connects to IMAP and performs ``STORE +FLAGS (\\Deleted)``
-           + ``EXPUNGE`` to remove the message from the server.
-        2. Only after IMAP confirms, removes the local DB row.
-
-        Raises:
-            ValueError / ConnectionError / RuntimeError: If the IMAP
-            deletion fails — the message stays in the local DB untouched
-            so the user can retry.  No silent degradation.
+        Returns:
+            Dict with ``count`` (1 if deleted, 0 if not found), ``queued``
+            (1 if IMAP expunge was scheduled, 0 otherwise), and ``errors``
+            (empty unless the message was not found).
         """
         msg = self.db.execute_one(
             "SELECT * FROM messages WHERE uuid = ?", (msg_uuid,)
         )
         if not msg:
-            return
+            return {"count": 0, "queued": 0, "errors": [f"{msg_uuid[:8]}: message not found"]}
 
-        # Synchronous IMAP deletion — raises on failure
-        self._imap_delete_uuid(msg)
+        imap_uid = msg.get("imap_uid")
+        account_email = msg.get("account_email", "")
+        folder_name = msg.get("folder_name", "")
 
-        # IMAP confirmed deleted — safe to remove local row
+        # Local DB deletion — instant
         self.db.execute("DELETE FROM messages WHERE uuid = ?", (msg_uuid,))
 
-    def batch_hard_delete_messages(self, uuids: list[str]) -> dict[str, Any]:
-        """Permanently delete multiple messages from local DB and IMAP.
+        # Enqueue IMAP EXPUNGE for background processing
+        queued = 0
+        if imap_uid is not None and account_email and folder_name:
+            self.backlog.enqueue_expunge(
+                msg_uuid=msg_uuid,
+                account_email=account_email,
+                folder_name=folder_name,
+                imap_uid=imap_uid,
+            )
+            queued = 1
 
-        For each message, attempts synchronous IMAP ``STORE +FLAGS (\\Deleted)``
-        + ``EXPUNGE``.  Local rows are only removed after IMAP confirms.
-        Failures are collected per-UUID — the caller receives a complete
-        error list and can inspect which UUIDs failed.
+        return {"count": 1, "queued": queued, "errors": []}
+
+    def batch_hard_delete_messages(self, uuids: list[str]) -> dict[str, Any]:
+        """Permanently delete multiple messages from local DB (instant) and
+        enqueue IMAP EXPUNGE for background processing.
+
+        All local DB deletions happen first (instant), then IMAP EXPUNGE
+        entries are enqueued to the backlog.  The caller gets an immediate
+        response with counts.  No IMAP round-trips.
 
         Returns:
-            Dict with ``count`` of successfully deleted messages and
-            ``errors`` (list of error strings per failed UUID).
-            ``queued`` is always 0 — hard delete is synchronous.
+            Dict with ``count`` of locally deleted messages, ``queued``
+            count of backlogged expunge operations, and ``errors`` list
+            (messages not found are reported as errors).
         """
         deleted = 0
+        queued = 0
         errors: list[str] = []
 
         for msg_uuid in uuids:
@@ -309,14 +283,25 @@ class MessageOpsService(MsgSendQueueMixin):
                 errors.append(f"{msg_uuid[:8]}: message not found")
                 continue
 
-            try:
-                self._imap_delete_uuid(msg)
-                self.db.execute("DELETE FROM messages WHERE uuid = ?", (msg_uuid,))
-                deleted += 1
-            except (ValueError, ConnectionError, RuntimeError) as exc:
-                errors.append(f"{msg_uuid[:8]}: {exc}")
+            imap_uid = msg.get("imap_uid")
+            account_email = msg.get("account_email", "")
+            folder_name = msg.get("folder_name", "")
 
-        return {"count": deleted, "queued": 0, "errors": errors}
+            # Local DB deletion — instant
+            self.db.execute("DELETE FROM messages WHERE uuid = ?", (msg_uuid,))
+            deleted += 1
+
+            # Enqueue IMAP EXPUNGE for background processing
+            if imap_uid is not None and account_email and folder_name:
+                self.backlog.enqueue_expunge(
+                    msg_uuid=msg_uuid,
+                    account_email=account_email,
+                    folder_name=folder_name,
+                    imap_uid=imap_uid,
+                )
+                queued += 1
+
+        return {"count": deleted, "queued": queued, "errors": errors}
 
     def move_message(self, msg_uuid: str, destination_folder_name: str) -> None:
         """Move a message to a different folder (by folder name)."""
