@@ -128,6 +128,13 @@ const MUTATION_MAP = {
     isDelete: false,
     title: "Inbox",
   },
+  "email draft recall": {
+    listTokens: ["email", "list"],
+    listIdKey: "email-list",
+    type: "email-list",
+    isDelete: false,
+    title: "Inbox",
+  },
   "email delete": {
     listTokens: ["email", "list"],
     listIdKey: "email-list",

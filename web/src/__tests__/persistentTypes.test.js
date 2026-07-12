@@ -18,8 +18,16 @@ describe("detectPersistentType", () => {
     expect(detectPersistentType("!email search hello")).toBe("email-list");
   });
 
-  it('returns "email-trash-list" for !email trash list', () => {
+  it('returns "email-trash-list" for !email trash', () => {
+    expect(detectPersistentType("!email trash")).toBe("email-trash-list");
+  });
+
+  it('returns "email-trash-list" for !email trash list (backward compat)', () => {
     expect(detectPersistentType("!email trash list")).toBe("email-trash-list");
+  });
+
+  it('returns "email-draft-list" for !email draft', () => {
+    expect(detectPersistentType("!email draft")).toBe("email-draft-list");
   });
 
   it('returns "todo-list" for !todo list', () => {
@@ -82,8 +90,16 @@ describe("resolveListIdKey", () => {
     expect(resolveListIdKey(["email", "list"])).toBe("email-list");
   });
 
-  it('returns "email-trash-list" for email trash list tokens', () => {
+  it('returns "email-trash-list" for email trash tokens', () => {
+    expect(resolveListIdKey(["email", "trash"])).toBe("email-trash-list");
+  });
+
+  it('returns "email-trash-list" for email trash list tokens (backward compat)', () => {
     expect(resolveListIdKey(["email", "trash", "list"])).toBe("email-trash-list");
+  });
+
+  it('returns "email-draft-list" for email draft tokens', () => {
+    expect(resolveListIdKey(["email", "draft"])).toBe("email-draft-list");
   });
 
   it('returns "todo-list" for todo list tokens', () => {

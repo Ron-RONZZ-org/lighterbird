@@ -8,7 +8,9 @@ Three sync strategies implemented:
 
 from __future__ import annotations
 
+import email as email_lib
 import logging
+import uuid as _uuid
 from datetime import UTC, datetime
 from typing import Any
 
@@ -74,6 +76,7 @@ def sync_account(
     task_id: str | None = None,
     manage_progress: bool = True,
     folder_offset: int = 0,
+    folder_mapper: Any | None = None,
 ) -> SyncResult:
     """Sync messages from an IMAP account.
 
@@ -244,6 +247,21 @@ def sync_account(
 
         # Retry moving previously soft-deleted messages to IMAP Trash
         _retry_pending_trash(client, db_store, account_email)
+
+        # Phase 2b: Inverse sync — import new IMAP drafts as local drafts
+        try:
+            _sync_imap_drafts_to_local(
+                client, db_store, account_email, folder_mapper=folder_mapper,
+            )
+        except Exception:
+            logger.warning(
+                "[sync] Inverse draft sync failed for %s",
+                account_email, exc_info=True,
+            )
+            result.errors.append(
+                "Inverse draft sync (IMAP→local) failed for %s" % account_email,
+            )
+
         if progress_tracker is not None and task_id and manage_progress:
             progress_tracker.complete(
                 task_id,
@@ -369,3 +387,178 @@ def _retry_pending_trash(client: IMAPClient, db_store: Any, account_email: str) 
                 )
         except Exception:
             pass  # will retry on next sync
+
+
+# Maximum number of new IMAP drafts to import per sync cycle (rate-limit).
+_IMAP_DRAFT_SYNC_LIMIT = 50
+
+
+def _sync_imap_drafts_to_local(
+    client: IMAPClient, db_store: Any, account_email: str,
+    folder_mapper: Any | None = None,
+) -> None:
+    """Import new IMAP DRAFTS folder messages as local composition drafts.
+
+    Uses UIDNEXT-based incremental detection: queries
+    ``email_draft_uid_map`` for the maximum known UID for this
+    account+folder, then only processes UIDs greater than that value.
+    Each imported draft is recorded in the UID map so subsequent syncs
+    skip it.
+
+    Args:
+        client: Connected IMAPClient instance.
+        db_store: Object with ``.db`` (LighterbirdDB) attribute.
+        account_email: The account to process.
+        folder_mapper: Optional FolderMapper for localized folder name
+            resolution.  Falls back to ``"Drafts"`` if not provided.
+    """
+    from lighterbird.core.drafts import save_draft
+
+    # Resolve Drafts folder name
+    drafts_folder = "Drafts"
+    if folder_mapper is not None:
+        try:
+            drafts_folder = folder_mapper.resolve_drafts(account_email)
+        except Exception:
+            logger.debug(
+                "[draft-sync] FolderMapper.resolve_drafts() failed for %s, "
+                "falling back to 'Drafts'", account_email,
+            )
+
+    # Get max known UID from our map
+    row = db_store.db.execute_one(
+        "SELECT MAX(imap_uid) AS max_uid FROM email_draft_uid_map "
+        "WHERE account_email = ? AND folder_name = ?",
+        (account_email, drafts_folder),
+    )
+    known_max_uid: int = row["max_uid"] if row and row["max_uid"] is not None else 0
+
+    # SELECT the folder read-only to discover new UIDs
+    ok, _uidvalidity, _modseq = client.select_folder_ex(
+        drafts_folder, readonly=True,
+    )
+    if not ok:
+        logger.debug(
+            "[draft-sync] Cannot select %s for %s", drafts_folder, account_email,
+        )
+        return
+
+    # UID SEARCH for messages after known_max_uid
+    try:
+        typ, uid_data = client.conn.uid(
+            "search", None, f"UID {known_max_uid + 1}:*",
+        )
+    except Exception as exc:
+        logger.debug(
+            "[draft-sync] UID SEARCH failed for %s/%s: %s",
+            account_email, drafts_folder, exc,
+        )
+        return
+
+    if typ != "OK" or not uid_data or not uid_data[0]:
+        return
+
+    new_uids = [int(x) for x in uid_data[0].split()]
+    if not new_uids:
+        return
+
+    # Rate-limit to avoid importing hundreds of drafts at once
+    if len(new_uids) > _IMAP_DRAFT_SYNC_LIMIT:
+        logger.info(
+            "[draft-sync] Limiting import from %d to %d new drafts for %s",
+            len(new_uids), _IMAP_DRAFT_SYNC_LIMIT, account_email,
+        )
+        new_uids = new_uids[:_IMAP_DRAFT_SYNC_LIMIT]
+
+    now = datetime.now(UTC).isoformat()
+
+    for uid in new_uids:
+        try:
+            # Fetch the full message (header + body) for this UID
+            typ, fetch_data = client.conn.uid(
+                "fetch", str(uid), "(FLAGS BODY.PEEK[] UID)",
+            )
+            if typ != "OK" or not fetch_data:
+                continue
+
+            body_text = ""
+            subject = "(IMAP draft)"
+            to_addr = ""
+            cc_addr = ""
+            message_id = ""
+            draft_uuid = None
+
+            for item in fetch_data:
+                if not isinstance(item, tuple):
+                    continue
+                raw_data = item[1]
+                parsed = email_lib.message_from_bytes(raw_data)
+
+                subject = parsed.get("Subject", subject) or subject
+                to_addr = parsed.get("To", "")
+                cc_addr = parsed.get("Cc", "")
+                message_id = parsed.get("Message-ID", "")
+
+                # Extract X-Draft-UUID if the draft was originally created
+                # by lighterbird
+                x_uuid = parsed.get("X-Draft-UUID", "")
+                if x_uuid:
+                    draft_uuid = x_uuid
+
+                # Extract body text (prefer plain text)
+                if parsed.is_multipart():
+                    for part in parsed.walk():
+                        ctype = part.get_content_type()
+                        if ctype == "text/plain":
+                            payload = part.get_payload(decode=True)
+                            if payload:
+                                body_text = payload.decode("utf-8", errors="replace")
+                            break
+                else:
+                    payload = parsed.get_payload(decode=True)
+                    if payload:
+                        body_text = payload.decode("utf-8", errors="replace")
+
+            # Skip if already in the UID map (already known)
+            existing = db_store.db.execute_one(
+                "SELECT 1 FROM email_draft_uid_map "
+                "WHERE account_email = ? AND folder_name = ? AND imap_uid = ?",
+                (account_email, drafts_folder, uid),
+            )
+            if existing:
+                continue
+
+            # Create local draft
+            local_draft = save_draft(
+                domain="email",
+                title=subject or "(IMAP draft)",
+                data={
+                    "account": account_email,
+                    "to": to_addr,
+                    "subject": subject,
+                    "body": body_text,
+                    "cc": cc_addr or "",
+                },
+                draft_uuid=draft_uuid,
+            )
+
+            # Record in UID map
+            db_store.db.execute(
+                "INSERT OR IGNORE INTO email_draft_uid_map "
+                "(account_email, folder_name, draft_uuid, imap_uid, message_id, "
+                " created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (account_email, drafts_folder, local_draft["uuid"],
+                 uid, message_id, now, now),
+            )
+
+        except Exception as exc:
+            logger.warning(
+                "[draft-sync] Error importing draft UID %d for %s: %s",
+                uid, account_email, exc,
+            )
+
+    logger.info(
+        "[draft-sync] Imported %d new IMAP draft(s) from %s for %s",
+        len(new_uids), drafts_folder, account_email,
+    )

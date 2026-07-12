@@ -253,13 +253,21 @@ class TestEmailHandlers:
         assert result["title"] == "Permanently Deleted"
         mock_email_svc.msg_ops.hard_delete_message.assert_called_once_with("abc123")
 
-    def test_email_trash_list_opens_trash_view(self):
-        """email trash list returns email-list with isTrashView and Trash filter."""
-        result = dispatch(["email", "trash", "list"], {})
+    def test_email_trash_opens_trash_view(self):
+        """email trash returns email-list with isTrashView and Trash filter."""
+        result = dispatch(["email", "trash"], {})
         assert result["type"] == "email-list"
         assert result.get("idKey") == "email-trash-list"
         assert result["data"].get("_isTrashView") is True
         assert result["data"].get("filters", {}).get("folder") == "Trash"
+
+    def test_email_draft_opens_draft_view(self, mock_email_svc):
+        """email draft returns email-list with isDraftView and Drafts filter."""
+        result = dispatch(["email", "draft"], {})
+        assert result["type"] == "email-list"
+        assert result.get("idKey") == "email-draft-list"
+        assert result["data"].get("_isDraftView") is True
+        assert result["data"].get("filters", {}).get("folder") == "Drafts"
 
     def test_email_archive_success(self, mock_email_svc):
         """email archive calls move_message to Archive folder and returns status."""
@@ -820,16 +828,16 @@ class TestUserProfilesHandlers:
 
 
 class TestDraftsHandlers:
-    def test_email_draft_list(self):
-        """email draft (no args) lists drafts."""
-        result = dispatch(["email", "draft"], {})
+    def test_email_draft_recall_list(self):
+        """email draft recall (no uuid) lists saved drafts."""
+        result = dispatch(["email", "draft", "recall"], {})
         assert isinstance(result, dict)
         assert "type" in result
 
-    def test_email_draft_not_found(self):
-        """email draft <uuid> with non-existent draft raises."""
+    def test_email_draft_recall_not_found(self):
+        """email draft recall <uuid> with non-existent draft raises."""
         with pytest.raises(CommandValidationError, match="Draft not found"):
-            dispatch(["email", "draft", "nonexistent-uuid"], {})
+            dispatch(["email", "draft", "recall", "nonexistent-uuid"], {})
 
 
 # ── Letter handlers ──────────────────────────────────────────────────────────

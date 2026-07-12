@@ -53,6 +53,20 @@ _JUNK_ALIASES: frozenset[str] = frozenset({
     "Correo no deseado",
 })
 
+_DRAFTS_ALIASES: frozenset[str] = frozenset({
+    "Drafts",
+    "[Gmail]/Drafts",
+    "Draft",
+    "Entwürfe",        # German
+    "Brouillons",      # French
+    "Bozze",           # Italian
+    "Borradores",      # Spanish
+    "Concepten",       # Dutch
+    "Rascunhos",       # Portuguese
+    "Черновики",       # Russian
+    "Czekające",       # Polish
+})
+
 
 class FolderMapper:
     """Resolve canonical folder names to server-localized names.
@@ -88,6 +102,22 @@ class FolderMapper:
     def resolve_junk(self, account_email: str) -> str:
         """Resolve the Junk/Spam folder name (same priority scheme)."""
         return self._resolve_special(account_email, "\\Junk", _JUNK_ALIASES, "Junk")
+
+    def resolve_drafts(self, account_email: str) -> str:
+        """Resolve the Drafts folder name for an account.
+
+        Priority:
+        1. Folder with special_use='\\\\Drafts' in DB
+        2. Alias match from _DRAFTS_ALIASES
+        3. Literal 'Drafts'
+
+        Args:
+            account_email: The account to look up.
+
+        Returns:
+            The server-localized Drafts folder name.
+        """
+        return self._resolve_special(account_email, "\\Drafts", _DRAFTS_ALIASES, "Drafts")
 
     def _resolve_special(
         self, account_email: str,

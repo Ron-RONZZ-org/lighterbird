@@ -23,7 +23,7 @@ The web frontend provides:
   - Tab completion for command names, flags, and folder paths
   - Disabled with animated spinner while command is running
 - **Tab-based output** — each command result opens as a new tab in the tab bar (below the output area). Supported tab types:
-  - Status lists (messages, accounts, contacts, todos, journals)
+  - Status lists (messages, accounts, contacts, todos, journals, email drafts)
   - Rich HTML email body (fallback to plain text) with toolbar (Reply, Reply All, Forward, Mark Read, Trash, Thread sidebar)
   - Calendar events
   - Error reports with actionable suggestions

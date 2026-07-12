@@ -90,8 +90,42 @@ def get_draft_endpoint(draft_uuid: str):
 
 
 @router.delete("/{draft_uuid}")
-def delete_draft_endpoint(draft_uuid: str) -> dict:
-    """Delete a draft by UUID."""
-    if not delete_draft(draft_uuid):
+def delete_draft_endpoint(draft_uuid: str,
+                          email_svc=Depends(get_email_service)) -> dict:
+    """Delete a draft by UUID.
+
+    For email drafts with a known IMAP presence, enqueues an ``expunge``
+    backlog operation to remove the draft from the IMAP DRAFTS folder.
+    """
+    draft = get_draft(draft_uuid)
+    if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
+
+    # For email drafts, clean up IMAP presence
+    if draft.get("domain") == "email":
+        # Look up IMAP UID from the uid map
+        row = email_svc.db.execute_one(
+            "SELECT imap_uid, folder_name, account_email FROM email_draft_uid_map "
+            "WHERE draft_uuid = ?",
+            (draft_uuid,),
+        )
+        if row and row["imap_uid"] is not None:
+            # Enqueue IMAP deletion via backlog (soft-delete + expunge)
+            email_svc.msg_ops.backlog.enqueue(
+                msg_uuid=draft_uuid,
+                account_email=row["account_email"],
+                folder_name=row["folder_name"],
+                imap_uid=row["imap_uid"],
+                is_read=1,
+                is_deleted=1,
+                operation="expunge",
+            )
+
+        # Clean up UID map entry
+        email_svc.db.execute(
+            "DELETE FROM email_draft_uid_map WHERE draft_uuid = ?",
+            (draft_uuid,),
+        )
+
+    delete_draft(draft_uuid)
     return {"deleted": True}

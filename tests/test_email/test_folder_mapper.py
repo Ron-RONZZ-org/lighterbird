@@ -106,3 +106,34 @@ class TestFolderMapper:
     def test_detect_stale_folder_not_found(self, db_with_folders):
         mapper = FolderMapper(db_with_folders)
         assert mapper.detect_stale_folder("user@example.com", "NONEXISTENT") is True
+
+    # ── Drafts ────────────────────────────────────────────────────────
+
+    def test_resolve_drafts_via_special_use(self, db_with_folders):
+        """Should return localized name via SPECIAL-USE flag."""
+        from datetime import UTC, datetime
+        now = datetime.now(UTC).isoformat()
+        db_with_folders.execute(
+            "INSERT INTO folders (account_email, name, special_use, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("user@example.com", "[Gmail]/Drafts", "\\Drafts", now, now),
+        )
+        mapper = FolderMapper(db_with_folders)
+        assert mapper.resolve_drafts("user@example.com") == "[Gmail]/Drafts"
+
+    def test_resolve_drafts_alias(self, db_with_folders):
+        """Should find a Drafts alias (e.g. 'Entwürfe') by name."""
+        from datetime import UTC, datetime
+        now = datetime.now(UTC).isoformat()
+        db_with_folders.execute(
+            "INSERT INTO folders (account_email, name, special_use, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("simple@example.com", "Entwürfe", None, now, now),
+        )
+        mapper = FolderMapper(db_with_folders)
+        assert mapper.resolve_drafts("simple@example.com") == "Entwürfe"
+
+    def test_resolve_drafts_fallback(self, db_with_folders):
+        """Should return literal 'Drafts' as fallback."""
+        mapper = FolderMapper(db_with_folders)
+        assert mapper.resolve_drafts("empty@example.com") == "Drafts"

@@ -59,7 +59,8 @@ def email_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "  !email reply-all <uuid>  — Reply-all to a message\n"
                 "  !email forward <uuid>    — Forward a message\n"
                 "  !email search            — Search messages\n"
-                "  !email trash <uuid>      — Trash a message\n"
+                "  !email trash             — View trash\n"
+                "  !email delete <uuid>     — Trash a message\n"
                 "  !email archive <uuid>    — Archive a message\n"
                 "  !email move <uuid> --folder NAME  — Move to specific folder\n"
                 "  !email folders           — List IMAP folders\n"
@@ -78,7 +79,8 @@ def email_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
                 "  !email sieve delete      — Delete a Sieve script\n"
                 "  !email sieve activate    — Activate on an account\n"
                 "  !email sieve deactivate  — Deactivate on an account\n"
-                "  !email draft             — List / recall email drafts\n"
+                "  !email draft             — View drafts folder\n"
+                "  !email draft recall <uuid> — Recall a saved draft\n"
                 "  !email export eml <uuid> — Export message as .eml file\n"
                 "  !email import eml <path> — Import .eml file as draft"
             ),
@@ -551,10 +553,10 @@ def email_archive(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]
     return {"type": "status", "title": "Archived", "data": {"uuid": remaining[0][:8], "folder": folder}}
 
 
-@command("email.trash.list",
+@command("email.trash",
           permission_level=PermissionLevel.READ)
-def email_trash_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email trash list
+def email_trash(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!email trash
 
     Show messages in Trash folders.  Reuses the email list pane with
     only Trash folders selected.  No soft-delete on selection (messages
@@ -567,6 +569,22 @@ def email_trash_list(remaining: list[str], flags: dict[str, str]) -> dict[str, A
     result["data"] = dict(result.get("data", {}))
     result["data"]["_isTrashView"] = True
     result["idKey"] = "email-trash-list"
+    return result
+
+
+@command("email.draft",
+          permission_level=PermissionLevel.READ)
+def email_draft_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!email draft
+
+    Show messages in the Drafts folder.  Reuses the email list pane with
+    only Drafts folders selected.  Messages have the ``\\Draft`` flag on
+    the IMAP server.
+    """
+    result = email_list(remaining, {"folder": "Drafts", **flags})
+    result["data"] = dict(result.get("data", {}))
+    result["data"]["_isDraftView"] = True
+    result["idKey"] = "email-draft-list"
     return result
 
 

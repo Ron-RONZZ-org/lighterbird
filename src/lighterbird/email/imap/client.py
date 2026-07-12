@@ -297,8 +297,12 @@ class IMAPClient:
         typ, _data = self.conn.create(folder_name)
         return typ == "OK"
 
+    # Regex to extract APPENDUID from APPEND response
+    # Format: OK [APPENDUID <uidvalidity> <uid>] APPEND completed
+    _APPENDUID_RE = re.compile(rb"\[APPENDUID (\d+) (\d+)\]")
+
     def append_message(self, folder: str, message: bytes,
-                       flags: list[str] | None = None) -> bool:
+                       flags: list[str] | None = None) -> tuple[bool, int | None]:
         """Append a message to an IMAP folder.
 
         Uses ``imaplib.IMAP4.append()``.  The *message* must be a
@@ -313,7 +317,9 @@ class IMAPClient:
                    literals.
 
         Returns:
-            True if the message was appended successfully.
+            Tuple of (success, imap_uid).  *imap_uid* is the UID assigned
+            by the server (from APPENDUID response code), or ``None`` if
+            the server did not return an APPENDUID.
         """
         flag_str = " ".join(flags) if flags else ""
         # Pass the datetime object directly — Python 3.13+ imaplib.append()
@@ -321,7 +327,7 @@ class IMAPClient:
         # Time2Internaldate internally for datetime/struct_time types.
         now = datetime.now(UTC)
         try:
-            typ, _data = self.conn.append(
+            typ, data = self.conn.append(
                 _imap_quote_folder(folder),
                 flag_str,
                 now,
@@ -331,11 +337,22 @@ class IMAPClient:
                 logger.warning(
                     "IMAP APPEND to %r returned typ=%r", folder, typ,
                 )
-                return False
-            return True
+                return False, None
+
+            # Parse APPENDUID from response (RFC 3502)
+            imap_uid: int | None = None
+            if data:
+                for resp_line in data:
+                    if isinstance(resp_line, bytes):
+                        m = self._APPENDUID_RE.search(resp_line)
+                        if m:
+                            imap_uid = int(m.group(2))
+                            break
+
+            return True, imap_uid
         except imaplib.IMAP4.error as e:
             logger.warning("IMAP APPEND failed for folder %r: %s", folder, e)
-            return False
+            return False, None
 
     def search_by_header(self, folder: str, header_name: str,
                          header_value: str) -> list[bytes]:

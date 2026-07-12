@@ -72,9 +72,9 @@ def _handle_draft_list(domain: str, remaining: list[str]) -> dict[str, Any]:
     }
 
 
-@command("email.draft")
-def email_draft(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email draft [<uuid>]
+@command("email.draft.recall")
+def email_draft_recall(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!email draft recall [<uuid>]
 
     List saved email drafts or recall a specific draft by UUID.
     When recalled, opens the compose form with pre-filled data.
