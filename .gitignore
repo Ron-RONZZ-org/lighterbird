@@ -51,3 +51,6 @@ htmlcov/
 # Test data (individual files)
 /test-contact.toml
 /test-profile.toml
+
+# Generated export artifacts
+todo_export*.md
