@@ -213,6 +213,91 @@ class TestEmailHandlers:
         assert result["type"] == "status"
         assert result["title"] == "Sent"
 
+    def test_email_send_passes_signature_format(self, mock_email_svc):
+        """email send passes signature_format parameter to svc.send_email()."""
+        mock_email_svc.list_accounts.return_value = [{"email": "me@b.com"}]
+        dispatch(["email", "send", "to@b.com", "Subject", "Body"], {})
+        call_kwargs = mock_email_svc.send_email.call_args[1]
+        assert call_kwargs.get("signature_format") == "plain"
+
+    def test_email_send_passes_signature_format_explicit(self, mock_email_svc):
+        """email send passes explicit signature-format flag."""
+        mock_email_svc.list_accounts.return_value = [{"email": "me@b.com"}]
+        dispatch(
+            ["email", "send", "to@b.com", "Subject", "Body"],
+            {"signature": "Best,\nMe", "signature-format": "html"},
+        )
+        call_kwargs = mock_email_svc.send_email.call_args[1]
+        assert call_kwargs.get("signature_format") == "html"
+
+    def test_email_send_value_error(self, mock_email_svc):
+        """email send converts ValueError from svc to CommandValidationError."""
+        mock_email_svc.list_accounts.return_value = [{"email": "me@b.com"}]
+        mock_email_svc.send_email.side_effect = ValueError("No password configured")
+        with pytest.raises(CommandValidationError, match="No password configured"):
+            dispatch(["email", "send", "to@b.com", "Subject", "Body"], {})
+
+    def test_email_send_attachment_json(self, mock_email_svc):
+        """email send accepts JSON-encoded file attachments."""
+        import json
+        mock_email_svc.list_accounts.return_value = [{"email": "me@b.com"}]
+        attachments = json.dumps([
+            {"name": "report.pdf", "data": "dGVzdA=="},
+            {"name": "photo.jpg", "data": "cGhvdG8="},
+        ])
+        dispatch(
+            ["email", "send", "to@b.com", "Subject", "Body"],
+            {"file": attachments},
+        )
+        call_kwargs = mock_email_svc.send_email.call_args[1]
+        atts = call_kwargs.get("attachments")
+        assert atts == [
+            {"name": "report.pdf", "data": "dGVzdA=="},
+            {"name": "photo.jpg", "data": "cGhvdG8="},
+        ]
+
+    def test_email_send_attachment_with_special_chars(self, mock_email_svc):
+        """email send handles filenames with colons and commas via JSON."""
+        import json
+        mock_email_svc.list_accounts.return_value = [{"email": "me@b.com"}]
+        attachments = json.dumps([
+            {"name": "report:2024.pdf", "data": "dGVzdA=="},
+            {"name": "notes, final.txt", "data": "bm90ZXM="},
+        ])
+        dispatch(
+            ["email", "send", "to@b.com", "Subject", "Body"],
+            {"file": attachments},
+        )
+        call_kwargs = mock_email_svc.send_email.call_args[1]
+        atts = call_kwargs.get("attachments")
+        # Names with colons/commas are preserved intact with JSON encoding
+        assert atts[0]["name"] == "report:2024.pdf"
+        assert atts[1]["name"] == "notes, final.txt"
+
+    def test_email_send_attachment_legacy_fallback(self, mock_email_svc):
+        """email send falls back to legacy CSV format for backward compat."""
+        mock_email_svc.list_accounts.return_value = [{"email": "me@b.com"}]
+        dispatch(
+            ["email", "send", "to@b.com", "Subject", "Body"],
+            {"file": "readme.txt:dGV4dA==,archive.zip:emlw"},
+        )
+        call_kwargs = mock_email_svc.send_email.call_args[1]
+        atts = call_kwargs.get("attachments")
+        assert atts == [
+            {"name": "readme.txt", "data": "dGV4dA=="},
+            {"name": "archive.zip", "data": "emlw"},
+        ]
+
+    def test_email_send_in_reply_to(self, mock_email_svc):
+        """email send passes in-reply-to flag."""
+        mock_email_svc.list_accounts.return_value = [{"email": "me@b.com"}]
+        dispatch(
+            ["email", "send", "to@b.com", "Subject", "Body"],
+            {"in-reply-to": "<msg123@example.com>"},
+        )
+        call_kwargs = mock_email_svc.send_email.call_args[1]
+        assert call_kwargs.get("in_reply_to") == "<msg123@example.com>"
+
     def test_email_read_missing_uuid(self):
         """email read without uuid raises."""
         with pytest.raises(CommandValidationError, match="Missing message UUID"):

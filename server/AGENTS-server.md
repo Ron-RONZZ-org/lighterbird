@@ -39,7 +39,7 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 - `POST /api/v1/email/sync` — trigger IMAP sync (synchronous, returns result directly — used by CLI command handler)
 - `POST /api/v1/email/sync/start` — start async IMAP sync in background thread, returns `{ task_id }` immediately
 - `GET /api/v1/email/sync/progress/{task_id}` — poll sync progress (`status`, `current_folder`, `total_folders`, `folder_name`, `total_messages`, `new_messages`, `errors`)
-- `POST /api/v1/email/send` — send email (body: to, subject, body, cc, bcc, attachments)
+- `POST /api/v1/email/send` — send email (body: to, subject, body, cc, bcc, attachments, signature, signature_format, in_reply_to, save_as_sample)
 - `GET /api/v1/calendar/events` — list events (filter: date range, calendar)
 - `POST /api/v1/calendar/events` — create event
 - `GET /api/v1/contacts` — list/search contacts

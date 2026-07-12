@@ -40,6 +40,35 @@ class TestEmailActionsAPI:
         )
         assert resp.status_code == 422
 
+    def test_send_with_signature_format_accepted(self):
+        """POST /api/v1/email/send accepts signature_format field."""
+        resp = self._client().post(
+            "/api/v1/email/send",
+            json={
+                "account_email": "test@example.com",
+                "to": ["someone@example.com"],
+                "subject": "Test",
+                "body": "Hello",
+                "signature_format": "html",
+            },
+        )
+        # Should pass schema validation (actual send may fail for other reasons)
+        assert resp.status_code != 422
+
+    def test_send_with_in_reply_to_accepted(self):
+        """POST /api/v1/email/send accepts in_reply_to field."""
+        resp = self._client().post(
+            "/api/v1/email/send",
+            json={
+                "account_email": "test@example.com",
+                "to": ["someone@example.com"],
+                "subject": "Test",
+                "body": "Hello",
+                "in_reply_to": "<msg123@example.com>",
+            },
+        )
+        assert resp.status_code != 422
+
     def test_mark_read_nonexistent(self):
         """PATCH /api/v1/email/messages/{uuid}/read on unknown UUID."""
         resp = self._client().patch(

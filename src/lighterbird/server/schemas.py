@@ -118,6 +118,8 @@ class SendRequest(BaseModel):
     body_format: str = "markdown"  # "markdown" | "html" | "plain"
     attachments: list[dict] = []  # list of {"name": ..., "data": base64} dicts
     signature: str | None = None  # override signature; None = use account default
+    signature_format: str = "plain"  # signature format: plain, html, or markdown
+    in_reply_to: str | None = None  # Message-ID being replied to
     save_as_sample: bool = True  # save as writing sample for LLM style learning
 
     model_config = {"extra": "forbid"}
