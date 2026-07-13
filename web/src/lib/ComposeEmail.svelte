@@ -26,6 +26,20 @@
   let bccList = $state(_initial.bcc ? _initial.bcc.split(",").map((s) => s.trim()).filter(Boolean) : []);
   let priority = $state(_initial.priority || "3");
   let bodyFormat = $state(_initial["body-format"] || _initial.body_format || "markdown"); // "markdown" | "html" | "plain"
+
+  // ── Body cache with dirty-format invalidation ──────────────────────────
+  //
+  // bodyCache[fmt] = snapshot saved when user LAST left that format.
+  // bodyDirtyFormat = the format in which user LAST typed (not programmatic
+  // conversion).  On format switch:
+  //   - Save current body → cache[oldFormat]
+  //   - If cache[newFormat] exists AND the body was last EDITED in newFormat
+  //     (dirtyFormat === newFormat), restore the cache (preserves original).
+  //   - Otherwise the cache is stale (body was edited in an intermediate
+  //     format) → convert from current body text.
+  let bodyCache = $state({ markdown: "", html: "", plain: "" });
+  let bodyDirtyFormat = $state(bodyFormat); // tracks which format user last edited in
+
   // Lazy-init the TurndownService for HTML→markdown conversion
   let _turndown = null;
   function getTurndown() {
@@ -33,27 +47,47 @@
     return _turndown;
   }
 
-  /** Convert body text between markdown/html/plain formats.
-   *  Always converts from the CURRENT body text — no stale cache.
-   */
+  /** Convert body text between markdown/html/plain formats. */
   function convertBodyFormat(text, fromFmt, toFmt) {
     if (!text || fromFmt === toFmt) return text;
     if (fromFmt === "markdown" && toFmt === "html") return renderMarkdown(text);
     if (fromFmt === "markdown" && toFmt === "plain") return renderMarkdown(text).replace(/<[^>]+>/g, "");
     if (fromFmt === "html" && toFmt === "markdown") return getTurndown().turndown(text);
     if (fromFmt === "html" && toFmt === "plain") return text.replace(/<[^>]+>/g, "");
-    if (fromFmt === "plain" && toFmt === "markdown") return text; // plain → markdown is identity
+    if (fromFmt === "plain" && toFmt === "markdown") return text;
     if (fromFmt === "plain" && toFmt === "html") return `<p>${text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</p>`;
     return text;
   }
 
-  // Auto-convert body text when format changes
+  /** Return true if switching toFmt may lose formatting present in fromFmt. */
+  function isDestructiveSwitch(fromFmt, toFmt) {
+    const order = ["html", "markdown", "plain"];
+    return order.indexOf(fromFmt) < order.indexOf(toFmt);
+  }
+
+  // Auto-convert body text when format changes + warn on destructive switch
   let _prevFormat = $state(bodyFormat);
   $effect(() => {
     const newFmt = bodyFormat;
     const oldFmt = _prevFormat;
     if (newFmt === oldFmt || !body.trim()) return;
-    body = convertBodyFormat(body, oldFmt, newFmt);
+
+    // Warn if switching to a format that discards formatting
+    if (isDestructiveSwitch(oldFmt, newFmt)) {
+      banner.show(`Switching from ${oldFmt} to ${newFmt} — some formatting may be lost.`, "warn", 4000);
+    }
+
+    // Save current body under old format for possible restore
+    bodyCache[oldFmt] = body;
+
+    // Restore cache if valid (body was last EDITED in newFormat, not converted)
+    if (bodyCache[newFmt] && bodyDirtyFormat === newFmt) {
+      body = bodyCache[newFmt];
+    } else {
+      body = convertBodyFormat(body, oldFmt, newFmt);
+      bodyCache[newFmt] = body;
+    }
+    bodyDirtyFormat = newFmt;
     _prevFormat = newFmt;
   });
 
@@ -451,7 +485,8 @@
           <!-- Preview now handled by unified "Preview Email" button below -->
         </div>
         <textarea id="body" class="ff-textarea" bind:value={body} rows="8"
-          placeholder="Message body (Markdown supported)"></textarea>
+          placeholder="Message body (Markdown supported)"
+          oninput={() => { bodyDirtyFormat = bodyFormat; }}></textarea>
       </div>
     {/snippet}
   </FormField>
