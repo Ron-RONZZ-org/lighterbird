@@ -1,6 +1,6 @@
 <script>
   import PopupOverlay from "./lib/PopupOverlay.svelte";
-  import BannerContainer from "./lib/BannerContainer.svelte";
+  import BannerContainer from "@lightercore/ui/BannerContainer.svelte";
   import { popup } from "./lib/popupStore.svelte.js";
   import { tabStore } from "./lib/tabStore.svelte.js";
   import { dirtyFormStore } from "./lib/dirtyFormStore.svelte.js";
@@ -306,16 +306,18 @@
   }} />
 
 <main>
-  {#if noticeOffline && !noticeDismissed}
-    <div class="notice-banner notice-warning" role="alert">
-      <span class="notice-text">⚠ Server appears offline — some features may be unavailable</span>
-      <button class="notice-close" onclick={() => { noticeDismissed = true; }} aria-label="Dismiss notice">✕</button>
-    </div>
-  {:else if noticeMessage && !noticeDismissed}
-    <div class="notice-banner" role="alert">
-      <span class="notice-text">{noticeMessage}</span>
-      <button class="notice-close" onclick={() => { noticeDismissed = true; }} aria-label="Dismiss notice">✕</button>
-    </div>
+  {#if tabStore.isHome}
+    {#if noticeOffline && !noticeDismissed}
+      <div class="notice-banner notice-warning" role="alert">
+        <span class="notice-text">⚠ Server appears offline — some features may be unavailable</span>
+        <button class="notice-close" onclick={() => { noticeDismissed = true; }} aria-label="Dismiss notice">✕</button>
+      </div>
+    {:else if noticeMessage && !noticeDismissed}
+      <div class="notice-banner" role="alert">
+        <span class="notice-text">{noticeMessage}</span>
+        <button class="notice-close" onclick={() => { noticeDismissed = true; }} aria-label="Dismiss notice">✕</button>
+      </div>
+    {/if}
   {/if}
   <BannerContainer />
   {#if isLoading}

@@ -1,8 +1,11 @@
 <script>
   /**
-   * EmailFolderTree.svelte — Multi-level folder tree dropdown with
-   * checkbox visibility toggles, sort options, group-by toggle,
-   * and new folder creation.
+   * EmailFolderTree.svelte — Multi-level folder tree with checkbox visibility
+   * toggles, sort options, group-by toggle, and new folder creation.
+   *
+   * Shared by EmailFolderPanel (email list dropdown) and EmailFolderTab
+   * (full-screen folder management). New props marked [Tab] are only used
+   * by EmailFolderTab; the panel simply omits them.
    */
   import EmailTreeNode from "./EmailTreeNode.svelte";
 
@@ -19,6 +22,15 @@
     onGroupChange = () => {},
     onGroupBySenderChange = () => {},
     onCreateFolder = null,
+    // ── New props (pass-through to EmailTreeNode) ───────────────────
+    showCheckboxes = false,        // [Panel:true] [Tab:selectionMode]
+    activePath = "",               // [Tab only]  Active folder path
+    onActivate = () => {},         // [Tab only]  Click label to set active
+    onContextMenu = () => {},      // [Tab only]  Right-click menu
+    onDoubleClick = () => {},      // [Tab only]  Double-click rename
+    onDragStart = () => {},        // [Tab only]  DnD source
+    onDragOver = () => {},         // [Tab only]  DnD drop zone
+    onDrop = () => {},             // [Tab only]  DnD completion
   } = $props();
 
   let tree = $derived(buildTree(folders));
@@ -100,7 +112,20 @@
     </div>
     <div class="tree-scroll">
       {#each tree as node}
-        <EmailTreeNode {node} onToggle={handleToggle} onExpand={handleExpand} depth={0} />
+        <EmailTreeNode
+          {node}
+          onToggle={handleToggle}
+          onExpand={handleExpand}
+          depth={0}
+          {showCheckboxes}
+          {activePath}
+          {onActivate}
+          {onContextMenu}
+          {onDoubleClick}
+          {onDragStart}
+          {onDragOver}
+          {onDrop}
+        />
       {/each}
       {#if tree.length === 0}
         <p class="empty-tree">No folders found.</p>

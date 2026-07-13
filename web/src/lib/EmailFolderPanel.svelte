@@ -120,6 +120,7 @@
       onToggleFolder={handleToggleFolder}
       onToggleExpand={handleToggleExpand}
       {onCreateFolder}
+      showCheckboxes={true}
     />
   </div>
 </DropdownPanel>

@@ -16,6 +16,7 @@
   import ExportDialog from "./ExportDialog.svelte";
   import ImportDialog from "./ImportDialog.svelte";
   import ProgressBar from "./ProgressBar.svelte";
+  import SyncOverlay from "./SyncOverlay.svelte";
   import {
     createSelectionManager,
     createCopyState,
@@ -45,6 +46,53 @@
   let syncProgress = $state(null);
   let syncPollTimer = $state(null);
   let syncError = $state("");
+
+  // ── Blocking initial sync on mount ──────────────────────────────
+  let initialLoading = $state(true);
+
+  async function handleInitialSync() {
+    if (syncing) return;
+    syncing = true;
+    syncProgress = null;
+    syncTaskId = null;
+    syncError = "";
+
+    try {
+      const startResult = await emailApi.syncStart();
+      syncTaskId = startResult.task_id;
+      await pollUntilComplete();
+    } catch (err) {
+      syncError = `Sync failed: ${err?.message || "Unknown error"}`;
+    } finally {
+      syncing = false;
+      initialLoading = false;
+    }
+    await refreshList();
+  }
+
+  function pollUntilComplete() {
+    return new Promise((resolve) => {
+      const poll = async () => {
+        if (!syncTaskId) { resolve(); return; }
+        try {
+          const prog = await emailApi.getSyncProgress(syncTaskId);
+          if (!prog) { resolve(); return; }
+          syncProgress = prog;
+          if (prog.status === "complete" || prog.status === "error") {
+            if (prog.errors?.length > 0) {
+              syncError = prog.errors.join("; ");
+            }
+            resolve();
+          } else {
+            syncPollTimer = setTimeout(poll, 1500);
+          }
+        } catch {
+          resolve();
+        }
+      };
+      syncPollTimer = setTimeout(poll, 500);
+    });
+  }
   // isTrashView / isDraftView are set ONCE from initial data so they survive
   // safeUpdate (which overwrites data without _isTrashView / _isDraftView).
   // The component is destroyed/recreated on tab switch, so a fresh non-trash
@@ -576,17 +624,33 @@
     sel.handleKeydown(e);
   }
 
+  // ── Trigger blocking initial sync on mount ─────────────────────
+  $effect(() => {
+    if (initialLoading) {
+      handleInitialSync();
+    }
+    return () => {
+      if (syncPollTimer) { clearTimeout(syncPollTimer); syncPollTimer = null; }
+    };
+  });
+
   // Save config on tab close + stop sync polling
   $effect(() => {
     return () => {
       config.flush();
-      if (syncPollTimer) { clearTimeout(syncPollTimer); syncPollTimer = null; }
     };
   });
 </script>
 
 <svelte:window onkeydown={handleWindowKeydown} />
 
+{#if initialLoading && syncing}
+  <SyncOverlay
+    {syncProgress}
+    title="Syncing email…"
+    {syncError}
+  />
+{:else}
 <div class="email-list">
   <!-- Toolbar -->
   <EmailListToolbar
@@ -746,6 +810,8 @@
       onSearch={handleAdvancedSearch}
       onClose={() => showAdvancedSearch = false}
     />
+  {/if}
+    </div>
   {/if}
 
 <style>
