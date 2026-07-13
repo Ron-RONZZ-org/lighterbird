@@ -8,6 +8,8 @@
   import { banner } from "./bannerStore.svelte.js";
   import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
   import MultiEntryField from "./MultiEntryField.svelte";
+  import { renderMarkdown } from "./markdown.js";
+  import TurndownService from "turndown";
 
   let { initialData = {}, onsubmit, onDirtyChange = () => {} } = $props();
   // Snapshot of initial props for dirty-state comparison.
@@ -24,6 +26,45 @@
   let bccList = $state(_initial.bcc ? _initial.bcc.split(",").map((s) => s.trim()).filter(Boolean) : []);
   let priority = $state(_initial.priority || "3");
   let bodyFormat = $state(_initial["body-format"] || _initial.body_format || "markdown"); // "markdown" | "html" | "plain"
+  /** Cache of body text per format — preserves user's text when switching back. */
+  let bodyCache = $state({ markdown: "", html: "", plain: "" });
+  // Lazy-init the TurndownService for HTML→markdown conversion
+  let _turndown = null;
+  function getTurndown() {
+    if (!_turndown) { _turndown = new TurndownService(); }
+    return _turndown;
+  }
+
+  /** Convert body text between markdown/html/plain formats. */
+  function convertBodyFormat(text, fromFmt, toFmt) {
+    if (!text || fromFmt === toFmt) return text;
+    if (fromFmt === "markdown" && toFmt === "html") return renderMarkdown(text);
+    if (fromFmt === "markdown" && toFmt === "plain") return renderMarkdown(text).replace(/<[^>]+>/g, "");
+    if (fromFmt === "html" && toFmt === "markdown") return getTurndown().turndown(text);
+    if (fromFmt === "html" && toFmt === "plain") return text.replace(/<[^>]+>/g, "");
+    if (fromFmt === "plain" && toFmt === "markdown") return text; // plain → markdown is identity
+    if (fromFmt === "plain" && toFmt === "html") return `<p>${text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</p>`;
+    return text;
+  }
+
+  // Auto-convert body text when format changes
+  let _prevFormat = $state(bodyFormat);
+  $effect(() => {
+    const newFmt = bodyFormat;
+    const oldFmt = _prevFormat;
+    if (newFmt === oldFmt || !body.trim()) return;
+    // Save current text under old format
+    bodyCache[oldFmt] = body;
+    // Restore or convert to new format
+    if (bodyCache[newFmt]) {
+      body = bodyCache[newFmt];
+    } else {
+      body = convertBodyFormat(body, oldFmt, newFmt);
+      bodyCache[newFmt] = body;
+    }
+    _prevFormat = newFmt;
+  });
+
   let attachmentFiles = $state(_initial.files || []); // Array of {name, data} (base64)
   let saveAsSample = $state(true); // save as writing sample for LLM style learning
   let sending = $state(false);
