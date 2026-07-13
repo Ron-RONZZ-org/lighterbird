@@ -28,6 +28,14 @@
   let saveAsSample = $state(true); // save as writing sample for LLM style learning
   let sending = $state(false);
   let savingDraft = $state(false);
+
+  // Debug logging: tracks if `sending` gets stuck at true (button text
+  // stays "Sending..." even after the async operation completes).
+  $effect(() => {
+    if (sending) {
+      console.debug("[ComposeEmail] sending=true", { toListLength: toList.length, hasSubject: !!subject });
+    }
+  });
   let draftSaved = $state(false);
   let draftUuid = $state(_initial._draft_uuid || null);
   let accounts = $state([]);
@@ -288,6 +296,7 @@
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (sending) return; // prevent double-submit while async send is in flight
     if (toList.length === 0 || !subject) {
       const missing = !toList.length && !subject ? "To and Subject"
                       : !toList.length ? "To" : "Subject";
@@ -495,7 +504,7 @@
         Save Draft <kbd>Ctrl+S</kbd>
       {/if}
     </button>
-    <button type="submit" class="btn-primary" disabled={sending || toList.length === 0 || !subject}>
+    <button type="submit" class="btn-primary">
       {sending ? "Sending..." : "Send"} <kbd>Ctrl+Enter</kbd>
     </button>
   </div>
@@ -556,7 +565,9 @@
 
   .attachment-area { display: flex; flex-direction: column; gap: 0.4rem; }
   .file-input {
-    font-family: monospace; font-size: 0.8rem; color: #ccc;
+    font-family: monospace; font-size: 0.8rem;
+    color: transparent; /* hides the native "No file selected" label — files show in .attachment-list below */
+    width: auto;
   }
   .file-input::file-selector-button {
     background: #2a2a3e; border: 1px solid #444; border-radius: 4px;
