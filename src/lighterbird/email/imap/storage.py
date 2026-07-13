@@ -45,10 +45,14 @@ def store_message(
                     (is_read, is_starred, msg_uuid),
                 )
             else:
-                # Update folder and UID for existing message
+                # Update folder and UID for existing message.
+                # Reset is_deleted — a message found alive on the server
+                # in a new folder is not deleted, even if it was previously
+                # soft-deleted locally (e.g. trashed from INBOX and now
+                # rediscovered in the Trash folder during sync).
                 db.execute(
                     "UPDATE messages SET folder_name = ?, imap_uid = ?, "
-                    "updated_at = ? WHERE uuid = ?",
+                    "is_deleted = 0, updated_at = ? WHERE uuid = ?",
                     (folder_name, data.get("imap_uid"),
                      datetime.now(UTC).isoformat(), msg_uuid),
                 )

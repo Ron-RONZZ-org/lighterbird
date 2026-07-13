@@ -105,6 +105,14 @@
   // svelte-ignore state_referenced_locally — intentional, see above
   let isDraftView = $state(!!data?._isDraftView);
 
+  // Own idKey for tab targeting.  Derived from stable isTrashView/isDraftView
+  // so it survives safeUpdate (which strips _isTrashView/_isDraftView from data).
+  let ownIdKey = $derived(
+    isTrashView ? "persistent-email-trash-list"
+    : isDraftView ? "persistent-email-draft-list"
+    : "persistent-email-list"
+  );
+
   // When data prop changes (new query / new tab data), reset pagination
   $effect(() => {
     if (data?.messages) {
@@ -356,7 +364,7 @@
   });
 
   function performSearch(query, extraFilters) {
-    const tabId = tabStore.findByKey("persistent-email-list") || tabStore.active.id;
+    const tabId = tabStore.findByKey(ownIdKey) || tabStore.active.id;
     if (abortController) abortController.abort();
     abortController = new AbortController();
     const signal = abortController.signal;
@@ -446,11 +454,11 @@
   }
 
   async function refreshList() {
-    // Resolve the email list tab by its persistent idKey so the update
+    // Resolve the owning list tab by its persistent idKey so the update
     // lands on the correct tab even if the user switched away during an
     // async operation (sync, search, pagination).  Fall back to the
     // currently active tab for non-list callers (delete, move).
-    const tabId = tabStore.findByKey("persistent-email-list") || tabStore.active.id;
+    const tabId = tabStore.findByKey(ownIdKey) || tabStore.active.id;
     try {
       const params = { ...currentFilters, limit: 50 };
       if (searchQuery && searchQuery.length >= 2) {
@@ -596,7 +604,7 @@
     if (searchQuery && searchQuery.length >= 2) {
       params.query = searchQuery;
     }
-    const tabId = tabStore.findByKey("persistent-email-list") || tabStore.active.id;
+    const tabId = tabStore.findByKey(ownIdKey) || tabStore.active.id;
     emailApi.listMessages(params)
       .then((result) => {
         tabStore.safeUpdate(tabId, result);

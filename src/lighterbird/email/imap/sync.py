@@ -151,6 +151,15 @@ def sync_account(
             priority = _default_sync_priority(folder_name, special_use)
             _set_folder_priority(db_store.db, account_email, folder_name, priority)
 
+        # ── Phase 1b: Process pending trash BEFORE folder sync ────────────
+        # Moving soft-deleted messages to Trash first means that Phase 2a's
+        # Trash folder sync finds them already in the Trash folder in the DB
+        # (folder_name='Trash', is_deleted=0 via store_message F3 fix).
+        # Message-ID dedup in store_message then correctly matches them,
+        # preventing duplicate UUIDs and ensuring trashed messages appear
+        # in the trash view immediately after sync.
+        _retry_pending_trash(client, db_store, account_email)
+
         # ── Phase 2a: Header-only sync (priority-ordered) ─────────────────
         # Because IMAP connections are not thread-safe, we process folders
         # sequentially here.  The speed gain comes from fetching only headers
@@ -244,9 +253,6 @@ def sync_account(
             result.total += fr["total"]
             result.new += fr["new"]
             result.errors.extend(fr["errors"])
-
-        # Retry moving previously soft-deleted messages to IMAP Trash
-        _retry_pending_trash(client, db_store, account_email)
 
         # Phase 2b: Inverse sync — import new IMAP drafts as local drafts
         try:
@@ -358,11 +364,9 @@ def _retry_pending_trash(client: IMAPClient, db_store: Any, account_email: str) 
     """Find messages that are soft-deleted (is_deleted=1) but still in
     their original folder, and attempt to move them to the IMAP Trash folder.
 
-    Called after each sync pass to catch messages that were trashed while
+    Called during sync to catch messages that were trashed while
     offline or when the IMAP connection was unavailable on the first attempt.
     """
-    from datetime import datetime
-
     pending = list(db_store.db.execute(
         "SELECT uuid, imap_uid, folder_name FROM messages "
         "WHERE account_email = ? AND is_deleted = 1 AND folder_name != 'Trash' "
@@ -372,7 +376,6 @@ def _retry_pending_trash(client: IMAPClient, db_store: Any, account_email: str) 
     if not pending:
         return
 
-    now = datetime.now(UTC).isoformat()
     for msg in pending:
         uid = msg["imap_uid"]
         src_folder = msg["folder_name"]
@@ -380,11 +383,19 @@ def _retry_pending_trash(client: IMAPClient, db_store: Any, account_email: str) 
             continue
         try:
             if client.move_message(uid, src_folder, "Trash"):
-                db_store.db.execute(
-                    "UPDATE messages SET folder_name = 'Trash', is_deleted = 0, "
-                    "updated_at = ? WHERE uuid = ?",
-                    (now, msg["uuid"]),
-                )
+                # NOTE: DB is NOT updated here.  Phase 2a's Trash folder
+                # sync (which runs after _retry_pending_trash in the new
+                # ordering) picks up the moved message via IMAP UID SEARCH
+                # and updates the local DB row via store_message().
+                #   - For messages WITH Message-ID: store_message finds the
+                #     existing row by Message-ID, resets is_deleted=0 (F3),
+                #     and updates folder_name/imap_uid — no duplicate UUID.
+                #   - For messages WITHOUT Message-ID: store_message creates
+                #     a new UUID for the Trash copy; the old UUID stays
+                #     is_deleted=1 (orphaned but never shown).  This is
+                #     strictly better than the previous behaviour where both
+                #     UUIDs ended up in Trash (duplicate entries).
+                pass
         except Exception:
             pass  # will retry on next sync
 
