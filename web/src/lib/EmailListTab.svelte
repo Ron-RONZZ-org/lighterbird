@@ -344,11 +344,18 @@
     return () => window.removeEventListener("help-toggle", handler);
   });
 
+  // Internal chunk size for cursor-based pagination — not a user-facing page.
+  const _SEARCH_CHUNK = 100;
+
   let showSearch = $state(false);
   let searchQuery = $state("");
   let currentFilters = $state({});
   let searchTimeout;
   let abortController = null;
+  // Continuous search: auto-fetches all matching results in the background
+  // so the user can bulk-select/delete/move without pagination.
+  let searchFetchingAll = $state(false);
+  let searchFetchedTotal = $state(0);
 
   // handleRowClick, openMessage, openMessageInNewTab, deleteSelected
   // and moveSelected are imported from emailMessageOps.svelte.js
@@ -365,51 +372,104 @@
     }
   });
 
+  /**
+   * Append unique results to the local messages array, deduplicating by uuid.
+   * Updates hasMore / nextCursor for subsequent background fetches.
+   */
+  function appendUniqueResults(result) {
+    const seen = new Set(messages.map((m) => m.uuid));
+    const newMsgs = (result.messages || []).filter((m) => !seen.has(m.uuid));
+    if (newMsgs.length > 0) {
+      messages = [...messages, ...newMsgs];
+    }
+    hasMore = !!result.has_more;
+    nextCursor = result.next_cursor || "";
+    searchFetchedTotal = messages.length;
+  }
+
+  /**
+   * Background loop: fetches all remaining search pages until exhausted.
+   * Appends results silently — no user-facing pagination during search.
+   */
+  async function fetchAllSearchPages(query, extraFilters, signal) {
+    searchFetchingAll = true;
+    try {
+      // Exhaust header-only (local SQL) pages first — they're fast
+      while (nextCursor && !signal?.aborted) {
+        const params = {
+          ...currentFilters, ...filtersToApiParams(extraFilters || {}),
+          query, header: "true", limit: _SEARCH_CHUNK, cursor: nextCursor,
+        };
+        const result = await emailApi.listMessages(params, signal);
+        if (signal?.aborted) break;
+        appendUniqueResults(result);
+        if (!nextCursor) break;
+      }
+      // Single body-search shot (IMAP SEARCH, no cursor pagination)
+      if (!signal?.aborted && query) {
+        const bodyParams = {
+          ...currentFilters, ...filtersToApiParams(extraFilters || {}),
+          query, body: "true", limit: _SEARCH_CHUNK,
+        };
+        const bodyResult = await emailApi.listMessages(bodyParams, signal);
+        if (!signal?.aborted) {
+          appendUniqueResults(bodyResult);
+        }
+      }
+    } catch { /* background search failures are non-fatal */ }
+    finally { searchFetchingAll = false; }
+  }
+
   function performSearch(query, extraFilters) {
     const tabId = tabStore.findByKey(ownIdKey) || tabStore.active.id;
     if (abortController) abortController.abort();
     abortController = new AbortController();
     const signal = abortController.signal;
 
-    // Build params: start with advanced filters, then add search bar query
-    const params = { ...currentFilters, ...filtersToApiParams(extraFilters || {}), limit: 50 };
-
-    // Free-text from the search bar (/) — default: all fields
+    // Free-text search from the search bar (/)
     if (query && query.length >= 2) {
-      // Two-phase search:
-      // Phase 1: headers only (fast, local SQL) → show results immediately
-      // Phase 2: body search (IMAP SEARCH, slower) → append additional results
-      const headerParams = { ...params, query, header: "true", limit: 50 };
+      searchFetchingAll = false;
+      searchFetchedTotal = 0;
+
+      // Phase 1: headers only (fast, local SQL) — show results immediately
+      const headerParams = {
+        ...currentFilters, ...filtersToApiParams(extraFilters || {}),
+        query, header: "true", limit: _SEARCH_CHUNK,
+      };
       emailApi.listMessages(headerParams, signal)
         .then((result) => {
           if (signal.aborted) return;
           tabStore.safeUpdate(tabId, result);
-          // Phase 2: body search
-          const bodyParams = { ...params, query, body: "true", limit: 50 };
+
+          // Start background fetch for remaining header pages
+          if (result.has_more) {
+            fetchAllSearchPages(query, extraFilters, signal);
+          }
+
+          // Phase 2: body search (IMAP SEARCH, slower) — append additional
+          const bodyParams = {
+            ...currentFilters, ...filtersToApiParams(extraFilters || {}),
+            query, body: "true", limit: _SEARCH_CHUNK,
+          };
           emailApi.listMessages(bodyParams, signal)
             .then((bodyResult) => {
               if (signal.aborted) return;
               const merged = mergeSearchResults(result, bodyResult);
               tabStore.safeUpdate(tabId, merged);
             })
-            .catch((err) => {
-              if (err?.name === "AbortError") return;
-            });
+            .catch((err) => { if (err?.name !== "AbortError") throw err; });
         })
-        .catch((err) => {
-          if (err?.name === "AbortError") return;
-        });
+        .catch((err) => { if (err?.name !== "AbortError") throw err; });
     } else {
       // No free-text query: just send filters (advanced search case)
+      const params = { ...currentFilters, ...filtersToApiParams(extraFilters || {}), limit: _SEARCH_CHUNK };
       if (params.header_text || params.body_text || Object.keys(params).length > 1) {
         emailApi.listMessages(params, signal)
           .then((result) => {
             if (signal.aborted) return;
             tabStore.safeUpdate(tabId, result);
           })
-          .catch((err) => {
-            if (err?.name === "AbortError") return;
-          });
+          .catch((err) => { if (err?.name !== "AbortError") throw err; });
       }
     }
   }
@@ -480,6 +540,9 @@
     loadingMore = true;
     try {
       const params = { ...currentFilters, limit: 50, cursor: nextCursor };
+      if (searchQuery && searchQuery.length >= 2) {
+        params.query = searchQuery;
+      }
       const result = await emailApi.listMessages(params);
       messages = [...messages, ...(result.messages || [])];
       hasMore = !!result.has_more;
@@ -756,7 +819,17 @@
     {:else}
       <p class="empty">No messages.</p>
     {/each}
-    {#if hasMore}
+    {#if showSearch && searchQuery && searchFetchedTotal > 0}
+      <div class="search-progress" role="status">
+        {#if searchFetchingAll}
+          <span class="search-progress-spinner">⟳</span>
+          <span>Found {searchFetchedTotal} messages, searching for more…</span>
+        {:else}
+          <span class="search-progress-spinner" style="animation:none;">✓</span>
+          <span>Search complete: {searchFetchedTotal} result{searchFetchedTotal !== 1 ? 's' : ''}</span>
+        {/if}
+      </div>
+    {:else if hasMore}
       <button class="load-more" onclick={loadMore} disabled={loadingMore}>
         {loadingMore ? "Loading…" : "Load more"}
       </button>
@@ -868,6 +941,32 @@
   .load-more:disabled {
     color: var(--clr-muted, #888);
     cursor: default;
+  }
+
+  .search-progress {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: var(--clr-surface, #2a2a3e);
+    border-top: 1px solid var(--clr-border, #4a4a6a);
+    color: var(--clr-muted, #888);
+    font-family: monospace;
+    font-size: 0.78rem;
+    animation: searchProgressFadeIn 0.2s ease;
+  }
+  .search-progress-spinner {
+    display: inline-block;
+    animation: searchProgressSpin 1s linear infinite;
+  }
+  @keyframes searchProgressSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @keyframes searchProgressFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 
   .sync-error-banner {

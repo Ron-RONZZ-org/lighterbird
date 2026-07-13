@@ -48,7 +48,9 @@ class TestRetryPendingTrash:
         _retry_pending_trash(client, store, "test@example.com")
 
         client.move_message.assert_called_once_with(123, "INBOX", "Trash")
-        assert store.db.execute.call_count >= 2  # SELECT + UPDATE
+        # DB UPDATE was removed in F4 — _retry_pending_trash only does the
+        # IMAP MOVE; Phase 2a's folder sync handles DB state via store_message.
+        assert store.db.execute.call_count >= 1  # SELECT query
 
     def test_move_fails_silently(self):
         """If move_message raises an exception, should catch and continue."""
