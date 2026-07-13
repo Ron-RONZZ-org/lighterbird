@@ -60,7 +60,9 @@
     syncError = "";
 
     try {
-      const startResult = await emailApi.syncStart();
+      const syncOpts = {};
+      if (isTrashView) syncOpts.folderName = "Trash";
+      const startResult = await emailApi.syncStart(null, syncOpts);
       syncTaskId = startResult.task_id;
       await pollUntilComplete();
     } catch (err) {
@@ -494,7 +496,9 @@
     syncError = "";
 
     try {
-      const startResult = await emailApi.syncStart();
+      const syncOpts = {};
+      if (isTrashView) syncOpts.folderName = "Trash";
+      const startResult = await emailApi.syncStart(null, syncOpts);
       syncTaskId = startResult.task_id;
       pollSyncProgress();
     } catch (err) {

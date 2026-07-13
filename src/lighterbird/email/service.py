@@ -134,7 +134,9 @@ class EmailService:
     def sync_account(self, email: str, force: bool = False,
                      progress_tracker=None, task_id: str | None = None,
                      manage_progress: bool = True,
-                     folder_offset: int = 0):
+                     folder_offset: int = 0,
+                     folders: list[str] | None = None,
+                     folders_only: bool = False):
         """Sync messages for a single account by email.
 
         Always returns a SyncResult (never raises). Pending flag syncs
@@ -148,6 +150,11 @@ class EmailService:
         *folder_offset* is the global starting index for folder progress;
         used by ``sync_all`` for a smooth 0–100% progress bar across
         multiple accounts.
+
+        Args:
+            folders: If provided, only sync these folder(s).
+            folders_only: If True, only register folder hierarchy
+                (no message bodies, no trash processing, no draft sync).
         """
         from lighterbird.email.imap import sync_account as _sync
         from lighterbird.email.imap.sync import SyncResult
@@ -182,12 +189,14 @@ class EmailService:
                         password=acct["password"],
                         account_email=email,
                         db_store=self,
+                        folders=folders,
                         force=force,
                         progress_tracker=progress_tracker,
                         task_id=task_id,
                         manage_progress=manage_progress,
                         folder_offset=folder_offset,
                         folder_mapper=self.folder_mapper,
+                        folders_only=folders_only,
                     )
                 except ConnectionError as e:
                     result = SyncResult()

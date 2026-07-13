@@ -77,6 +77,7 @@ def sync_account(
     manage_progress: bool = True,
     folder_offset: int = 0,
     folder_mapper: Any | None = None,
+    folders_only: bool = False,
 ) -> SyncResult:
     """Sync messages from an IMAP account.
 
@@ -150,6 +151,19 @@ def sync_account(
             # Set default sync_priority
             priority = _default_sync_priority(folder_name, special_use)
             _set_folder_priority(db_store.db, account_email, folder_name, priority)
+
+        # ── folders_only: stop after folder registration ─────────────────
+        # Used by EmailFolderTab which only needs the folder hierarchy,
+        # not any message bodies.  Skip trash processing, message sync,
+        # and inverse draft sync.
+        if folders_only:
+            if progress_tracker is not None and task_id and manage_progress:
+                progress_tracker.complete(
+                    task_id,
+                    result_total=0,
+                    result_new=0,
+                )
+            return result
 
         # ── Phase 1b: Process pending trash BEFORE folder sync ────────────
         # Moving soft-deleted messages to Trash first means that Phase 2a's
