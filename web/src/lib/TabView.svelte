@@ -265,6 +265,8 @@
         <HelpPopup data={tabStore.active.data} />
       {:else if tabStore.active.type === "templates"}
         <StatusPopup data={tabStore.active.data} />
+      {:else if tabStore.active.type === "folder-list"}
+        <EmailFolderTab data={tabStore.active.data} />
       {:else if tabStore.active.type === "confirm_tool"}
         <ConfirmToolDialog
           batch={tabStore.active.data?.batch || []}
