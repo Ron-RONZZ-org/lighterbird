@@ -431,7 +431,7 @@ describe("ComposeEmail — body format switching", () => {
     const bodyArea = document.querySelector("#body");
     expect(bodyArea.value).toContain("Original");
 
-    // Switch to HTML
+    // Switch to HTML (non-destructive — happens immediately)
     const selects = document.querySelectorAll("select");
     const fmtSelect = Array.from(selects).find(s => s.value === "markdown" || (s.options && Array.from(s.options).some(o => o.value === "markdown" && o.selected)));
     if (fmtSelect) {
@@ -442,10 +442,18 @@ describe("ComposeEmail — body format switching", () => {
     flushEffects();
     expect(bodyArea.value).toContain("<strong>"); // now HTML
 
-    // Switch back to markdown without editing in HTML
+    // Switch back to markdown (destructive — shows ConfirmDialog)
     if (fmtSelect) {
       fmtSelect.value = "markdown";
       fmtSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    await new Promise((r) => setTimeout(r, 80));
+    flushEffects();
+
+    // Click "Switch" on the confirmation dialog
+    const confirmBtn = document.querySelector(".confirm-box .btn.warning");
+    if (confirmBtn) {
+      confirmBtn.dispatchEvent(new Event("click", { bubbles: true }));
     }
     await new Promise((r) => setTimeout(r, 80));
     flushEffects();

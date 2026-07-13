@@ -44,12 +44,12 @@ async function runTests(page) {
     await assertFormOpened("Compose Email", ["To", "Subject"]);
 
     // Try clicking Send without filling anything
-    const sendBtn = page.locator('[role="tabpanel"] button:has-text("Send")');
+    const panel = page.locator('[aria-label="Tab content"]');
+    const sendBtn = panel.locator('button:has-text("Send")');
     await sendBtn.click();
     await sleep(500);
 
     // Should show a banner/warning about missing required fields
-    // The banner lives outside the tabpanel — check body text or script error
     const bodyText = await page.locator("body").textContent() || "";
     const hasWarning = bodyText.includes("required") || bodyText.includes("required field");
     if (!hasWarning) {
@@ -62,9 +62,10 @@ async function runTests(page) {
     await pressEnter();
     await assertFormOpened("Compose Email", ["To", "Subject"]);
 
+    const panel = page.locator('[aria-label="Tab content"]');
     // Send button should NOT be disabled when fields are empty
     // (disabled only during async send to prevent double-click)
-    const sendBtn = page.locator('[role="tabpanel"] button:has-text("Send")');
+    const sendBtn = panel.locator('button:has-text("Send")');
     assert(!(await sendBtn.isDisabled()), "Send button should not be disabled when fields empty");
   });
 
@@ -73,30 +74,32 @@ async function runTests(page) {
     await pressEnter();
     await assertFormOpened("Compose Email", ["To", "Subject"]);
 
+    const panel = page.locator('[aria-label="Tab content"]');
+
     // Fill recipient (use a plausible address — SMTP will fail and queue)
-    const toInput = page.locator('[role="tabpanel"] input[placeholder*="recipient"]');
+    const toInput = panel.locator('input[placeholder*="recipient"]');
     if (await toInput.isVisible({ timeout: 1000 })) {
       await toInput.fill("test@example.com");
     } else {
       // MultiEntryField — type and press Enter to add chip
-      const chipInput = page.locator('[role="tabpanel"] .multi-entry-field input');
+      const chipInput = panel.locator('.multi-entry-field input');
       await chipInput.fill("test@example.com");
       await page.keyboard.press("Enter");
     }
     await sleep(100);
 
     // Fill subject
-    const subjectInput = page.locator('[role="tabpanel"] input[placeholder="Subject"]');
+    const subjectInput = panel.locator('input[placeholder="Subject"]');
     await subjectInput.fill("E2E test email");
     await sleep(50);
 
     // Fill body
-    const bodyArea = page.locator('[role="tabpanel"] textarea');
+    const bodyArea = panel.locator('textarea');
     await bodyArea.fill("This is an automated test email.");
     await sleep(100);
 
     // Click Send
-    const sendBtn = page.locator('[role="tabpanel"] button:has-text("Send")');
+    const sendBtn = panel.locator('button:has-text("Send")');
     await sendBtn.click();
     await sleep(800);
 
@@ -119,10 +122,11 @@ async function runTests(page) {
     await assertFormOpened("Compose Email", ["To", "Subject"]);
 
     // Check for the body format dropdown (Markdown / HTML / Plain Text)
-    const formatSelect = page.locator('[role="tabpanel"] select');
+    const panel = page.locator('[aria-label="Tab content"]');
+    const formatSelect = panel.locator('select');
     const selectCount = await formatSelect.count();
     // There should be at least 2 selects (account, priority, format)
-    const options = await page.locator('[role="tabpanel"] select option').allTextContents();
+    const options = await panel.locator('select option').allTextContents();
     const hasMarkdown = options.some((t) => t.toLowerCase().includes("markdown"));
     const hasHtml = options.some((t) => t.toLowerCase().includes("html"));
     const hasPlain = options.some((t) => t.toLowerCase().includes("plain"));
@@ -136,7 +140,7 @@ async function runTests(page) {
     await pressEnter();
     await assertFormOpened("Compose Email", ["To", "Subject"]);
 
-    const draftBtn = page.locator('[role="tabpanel"] button:has-text("Draft"), [role="tabpanel"] button:has-text("Save")');
+    const draftBtn = page.locator('[aria-label="Tab content"] button:has-text("Draft"), [aria-label="Tab content"] button:has-text("Save")');
     const draftVisible = await draftBtn.isVisible().catch(() => false);
     if (!draftVisible) {
       console.log("  (Save Draft button not visible — may be hidden behind tabs)");

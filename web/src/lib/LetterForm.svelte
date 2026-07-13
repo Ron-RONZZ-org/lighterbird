@@ -13,6 +13,8 @@
    *   - Contact suggestions for recipient field
    */
   import { contacts as contactsApi, drafts as draftsApi } from "./api.js";
+  import { tabStore } from "./tabStore.svelte.js";
+  import { saveCallbackStore } from "./saveCallbackStore.svelte.js";
   import LetterBodyEditor from "./LetterBodyEditor.svelte";
   import LetterAddressFields from "./LetterAddressFields.svelte";
   import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
@@ -203,8 +205,18 @@
       else if (field === "body") { bodyContent = text; bodyProvided = true; }
     },
   }));
-
   // ── Save draft ─────────────────────────────────────────────────────────
+  // Register save-draft callback so TabView's UnsavedChangesDialog can offer "Save Draft"
+  $effect(() => {
+    const tabId = tabStore.active?.id;
+    if (tabId && tabStore.active?.type === "form") {
+      saveCallbackStore.setCallback(tabId, async () => { await saveDraft(); return true; });
+    }
+    return () => {
+      if (tabId) saveCallbackStore.setCallback(tabId, null);
+    };
+  });
+
   async function saveDraft() {
     if (savingDraft) return;
     savingDraft = true;
@@ -275,12 +287,8 @@
       e.preventDefault();
       handleSubmit(e);
     }
-    // q — close tab; prompt save draft if dirty
-    if (e.key === "q" && !e.ctrlKey && !e.metaKey && dirty) {
-      if (confirm("You have unsaved changes. Save as draft?")) {
-        saveDraft();
-      }
-    }
+    // q — close tab; TabView's UnsavedChangesDialog handles dirty forms
+    // with Save/Discard/Cancel. No action needed here.
   }
 </script>
 

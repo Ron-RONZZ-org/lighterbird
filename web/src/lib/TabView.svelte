@@ -1,6 +1,9 @@
 <script>
   import { tabStore } from "./tabStore.svelte.js";
   import { dirtyFormStore } from "./dirtyFormStore.svelte.js";
+  import { overlayStack } from "@lightercore/ui/overlayStack.svelte.js";
+  import { saveCallbackStore } from "./saveCallbackStore.svelte.js";
+  import UnsavedChangesDialog from "./UnsavedChangesDialog.svelte";
   import HomeTab from "./HomeTab.svelte";
   import LoadingPopup from "./LoadingPopup.svelte";
   import StatusPopup from "./StatusPopup.svelte";
@@ -100,6 +103,8 @@
 
   let showGlobalHelp = $state(false);
   let inputFocused = $state(false);
+  /** When set, the UnsavedChangesDialog is shown for this tabId before closing. */
+  let pendingCloseTab = $state(null);
 
   // Track command input focus state for context-sensitive hints
   $effect(() => {
@@ -108,6 +113,17 @@
     }
     window.addEventListener("input-focus-changed", handler);
     return () => window.removeEventListener("input-focus-changed", handler);
+  });
+
+  // Listen for form-tab cancel requests (e.g. FormTab's ✕ button)
+  // so the UnsavedChangesDialog handles dirty forms consistently.
+  $effect(() => {
+    function handler(e) {
+      const { tabId } = e.detail || {};
+      if (tabId) handleCloseTab(tabId);
+    }
+    window.addEventListener("request-close-tab", handler);
+    return () => window.removeEventListener("request-close-tab", handler);
   });
 
   // Auto-focus command input when switching to home tab.
@@ -123,10 +139,46 @@
   /** Close a tab, checking for unsaved changes first. */
   function handleCloseTab(tabId) {
     if (dirtyFormStore.isDirty(tabId)) {
-      if (!confirm("You have unsaved changes. Discard them?")) return;
-      dirtyFormStore.clear(tabId);
+      pendingCloseTab = tabId;
+      return; // UnsavedChangesDialog will be shown — user picks Save/Discard/Cancel
     }
+    _doCloseTab(tabId);
+  }
+
+  function _doCloseTab(tabId) {
+    dirtyFormStore.clear(tabId);
     tabStore.close(tabId);
+  }
+
+  async function handleSaveDraft() {
+    if (!pendingCloseTab) return;
+    const tabId = pendingCloseTab;
+    const cb = saveCallbackStore.getCallback(tabId);
+    if (cb) {
+      try {
+        const shouldClose = await Promise.resolve(cb());
+        if (shouldClose) {
+          _doCloseTab(tabId);
+        }
+        // if shouldClose is false, form had validation errors — leave tab open
+      } catch {
+        // save failed — leave tab open
+      }
+    } else {
+      // No callback registered — just close
+      _doCloseTab(tabId);
+    }
+    pendingCloseTab = null;
+  }
+
+  function handleDiscardChanges() {
+    if (!pendingCloseTab) return;
+    _doCloseTab(pendingCloseTab);
+    pendingCloseTab = null;
+  }
+
+  function handleCancelClose() {
+    pendingCloseTab = null;
   }
 
   // Tab types that manage their own Escape (selection mode, search, dialogs)
@@ -163,7 +215,15 @@
       const type = tabStore.active?.type;
       if (type && LIST_TAB_TYPES.has(type)) return;
 
-      // Level 5: Close current tab
+      // Level 5: If an overlay (CowritePanel, modal, etc.) is active,
+      // close the top-most overlay instead of the tab.
+      if (overlayStack.top) {
+        overlayStack.top.close();
+        e.preventDefault();
+        return;
+      }
+
+      // Level 6: Close current tab
       if (tabStore.active && tabStore.active.closable && !tabStore.isHome) {
         handleCloseTab(tabStore.active.id);
         e.preventDefault();
@@ -204,9 +264,15 @@
     }
 
     // Q / q — close current tab (inert when typing in an input to avoid
-    // accidental closes from someone inserting "q" in a text field)
+    // accidental closes from someone inserting "q" in a text field).
+    // When an overlay is active, Q closes the overlay instead.
     if ((e.key === "q" || e.key === "Q") && !tabStore.isHome) {
       if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) {
+        return;
+      }
+      if (overlayStack.top) {
+        overlayStack.top.close();
+        e.preventDefault();
         return;
       }
       if (tabStore.active && tabStore.active.closable) {
@@ -354,6 +420,17 @@
 
   {#if showGlobalHelp}
     <KeyboardShortcutOverlay scope="global" onDismiss={() => { showGlobalHelp = false; }} />
+  {/if}
+
+  {#if pendingCloseTab}
+    <UnsavedChangesDialog
+      title="Unsaved Changes"
+      message="You have unsaved changes. What would you like to do?"
+      saveText="Save"
+      onSave={saveCallbackStore.getCallback(pendingCloseTab) ? handleSaveDraft : null}
+      onDiscard={handleDiscardChanges}
+      onCancel={handleCancelClose}
+    />
   {/if}
 </div>
 
