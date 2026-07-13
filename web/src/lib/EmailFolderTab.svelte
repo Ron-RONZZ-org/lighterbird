@@ -96,8 +96,8 @@
     if (data?.accounts) accounts = data.accounts;
   });
 
-  // Start blocking sync on mount (using .pre to avoid render-cycle side effects)
-  $effect.pre(() => {
+  // Start blocking sync on mount
+  $effect(() => {
     if (initialLoading) {
       handleInitialSync();
     }
