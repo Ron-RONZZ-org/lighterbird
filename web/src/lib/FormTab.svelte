@@ -13,6 +13,7 @@
 
   import { tabStore } from "./tabStore.svelte.js";
   import { dirtyFormStore } from "./dirtyFormStore.svelte.js";
+  import { saveCallbackStore } from "./saveCallbackStore.svelte.js";
   import { banner } from "./bannerStore.svelte.js";
   import { LIST_REFRESHERS } from "./mutationToTab.js";
   import ComposeEmail from "./ComposeEmail.svelte";
@@ -37,6 +38,29 @@
   function handleDirtyChange(dirty) {
     formDirty = dirty;
   }
+
+  // Register a default save callback that clicks the form's submit button.
+  // Individual forms (ComposeEmail, LetterForm) register their own save-draft
+  // callback which overrides this, so the UnsavedChangesDialog always works.
+  $effect(() => {
+    const tabId = tabStore.active?.id;
+    if (tabId && tabStore.active?.type === "form") {
+      saveCallbackStore.setCallback(tabId, () => {
+        // Click the primary submit/save button in the form
+        const formEl = document.querySelector('.form-tab form');
+        if (formEl) {
+          const btn = formEl.querySelector('button[type="submit"]');
+          if (btn) { btn.click(); return; }
+          // Fallback: look for common save/submit button classes
+          const fallback = formEl.querySelector('.btn-primary, .btn-save, [class*="submit"]');
+          if (fallback) fallback.click();
+        }
+      });
+    }
+    return () => {
+      if (tabId) saveCallbackStore.setCallback(tabId, null);
+    };
+  });
 
   // ── Wire dirty state to global store (beforeunload + tab-close guards) ──
   // This ensures the browser beforeunload handler (App.svelte) and the tab

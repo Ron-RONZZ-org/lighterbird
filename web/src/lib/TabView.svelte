@@ -416,7 +416,7 @@
     <UnsavedChangesDialog
       title="Unsaved Changes"
       message="You have unsaved changes. What would you like to do?"
-      saveText="Save Draft"
+      saveText="Save"
       onSave={saveCallbackStore.getCallback(pendingCloseTab) ? handleSaveDraft : null}
       onDiscard={handleDiscardChanges}
       onCancel={handleCancelClose}
