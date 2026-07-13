@@ -198,7 +198,9 @@
     // Delay to allow click on suggestion/chip to fire first
     setTimeout(() => {
       showSuggestions = false;
-      if (editingIndex >= 0 && inputValue.trim()) {
+      if (inputValue.trim()) {
+        // Auto-confirm typed text on blur (handles both new entry
+        // and edit mode) — user can tab away without pressing Enter.
         addEntry(inputValue);
       } else if (editingIndex >= 0) {
         cancelEdit();

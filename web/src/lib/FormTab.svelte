@@ -117,7 +117,7 @@
 
       // Clear any previous error and dirty state
       formError = "";
-      onDirtyChange(false);
+      handleDirtyChange(false);
 
       // Read return-to-list values BEFORE closing (component may unmount)
       const returnIdKey = initialData?._returnIdKey;
