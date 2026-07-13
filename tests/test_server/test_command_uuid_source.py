@@ -209,8 +209,6 @@ class TestCommandUuidSource:
         # Unused prefixes are not necessarily wrong — they could be
         # prepared for future commands. But warn about them.
         unused = self.frontend_prefixes - used_prefixes
-        # email.folders is a special case (used by flag-based autocomplete)
-        unused.discard("email.folders")
 
         if unused:
             # Display as warning, not failure — unused prefixes may be
