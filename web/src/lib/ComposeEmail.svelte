@@ -38,6 +38,7 @@
   //   - Otherwise the cache is stale (body was edited in an intermediate
   //     format) → convert from current body text.
   let bodyCache = $state({ markdown: "", html: "", plain: "" });
+  // svelte-ignore state_referenced_locally — one-time capture of initial format
   let bodyDirtyFormat = $state(bodyFormat); // tracks which format user last edited in
 
   // Lazy-init the TurndownService for HTML→markdown conversion
@@ -66,6 +67,7 @@
   }
 
   // Auto-convert body text when format changes + warn on destructive switch
+  // svelte-ignore state_referenced_locally — one-time capture of initial format
   let _prevFormat = $state(bodyFormat);
   $effect(() => {
     const newFmt = bodyFormat;

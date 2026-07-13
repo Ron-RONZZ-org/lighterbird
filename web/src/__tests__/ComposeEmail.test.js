@@ -275,7 +275,7 @@ describe("ComposeEmail — validation", () => {
     expect(banner.show).not.toHaveBeenCalled();
   });
 
-  it("Send button is disabled when To and Subject are empty", async () => {
+  it("Send button is not disabled when fields empty (disabled only during sending)", async () => {
     const ComposeEmail = (await import("../lib/ComposeEmail.svelte")).default;
     render(ComposeEmail, {});
     await new Promise((r) => setTimeout(r, 50));
@@ -283,7 +283,8 @@ describe("ComposeEmail — validation", () => {
 
     const sendBtn = screen.queryByText("Send");
     expect(sendBtn).toBeTruthy();
-    expect(sendBtn.hasAttribute("disabled")).toBe(true);
+    // Button is always enabled; validation happens on submit via banner
+    expect(sendBtn.hasAttribute("disabled")).toBe(false);
   });
 
   it("Send button is enabled when To and Subject are pre-filled", async () => {
@@ -373,6 +374,77 @@ describe("ComposeEmail — keyboard shortcuts", () => {
     // Should not throw — draft save is async, just verify no crash
     const drafts = await import("../lib/api.js").then((m) => m.drafts);
     expect(drafts.save).toHaveBeenCalled();
+  });
+});
+
+describe("ComposeEmail — body format switching", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("converts markdown to HTML when switching to HTML format", async () => {
+    const ComposeEmail = (await import("../lib/ComposeEmail.svelte")).default;
+    render(ComposeEmail, { initialData: { body: "**bold** and *italic*" } });
+    await new Promise((r) => setTimeout(r, 80));
+    flushEffects();
+
+    const bodyArea = document.querySelector("#body");
+    expect(bodyArea).toBeTruthy();
+    expect(bodyArea.value).toContain("**bold**");
+
+    const selects = document.querySelectorAll("select");
+    const bodyFmtSelect = Array.from(selects).find(
+      (s) => s.value === "markdown" || s.querySelector('option[value="markdown"]')
+    );
+    if (bodyFmtSelect) {
+      bodyFmtSelect.value = "html";
+      bodyFmtSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    } else {
+      const allCombos = document.querySelectorAll("select, [role='combobox']");
+      for (const el of allCombos) {
+        if (el.value === "markdown" || (el.options && Array.from(el.options).some(o => o.value === "markdown" && o.selected))) {
+          el.value = "html";
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+          break;
+        }
+      }
+    }
+    await new Promise((r) => setTimeout(r, 80));
+    flushEffects();
+
+    expect(bodyArea.value).toContain("<strong>bold</strong>");
+    expect(bodyArea.value).toContain("<em>italic</em>");
+  });
+
+  it("preserves original text when switching back without editing (cache)", async () => {
+    const ComposeEmail = (await import("../lib/ComposeEmail.svelte")).default;
+    render(ComposeEmail, { initialData: { body: "Original **markdown**" } });
+    await new Promise((r) => setTimeout(r, 80));
+    flushEffects();
+
+    const bodyArea = document.querySelector("#body");
+    expect(bodyArea.value).toContain("Original");
+
+    const selects = document.querySelectorAll("select");
+    const fmtSelect = Array.from(selects).find(s => s.value === "markdown" || (s.options && Array.from(s.options).some(o => o.value === "markdown" && o.selected)));
+    if (fmtSelect) {
+      fmtSelect.value = "html";
+      fmtSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    await new Promise((r) => setTimeout(r, 80));
+    flushEffects();
+    expect(bodyArea.value).toContain("<strong>");
+
+    if (fmtSelect) {
+      fmtSelect.value = "markdown";
+      fmtSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    await new Promise((r) => setTimeout(r, 80));
+    flushEffects();
+
+    expect(bodyArea.value).toContain("Original");
+    expect(bodyArea.value).toContain("**markdown**");
+    expect(bodyArea.value).not.toContain("<strong>");
   });
 });
 
