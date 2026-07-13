@@ -164,7 +164,6 @@ def sync_account(
                     result_new=0,
                 )
             return result
-
         # ── Phase 1b: Process pending trash BEFORE folder sync ────────────
         # Moving soft-deleted messages to Trash first means that Phase 2a's
         # Trash folder sync finds them already in the Trash folder in the DB
