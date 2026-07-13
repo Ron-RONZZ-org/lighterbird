@@ -26,8 +26,6 @@
   let bccList = $state(_initial.bcc ? _initial.bcc.split(",").map((s) => s.trim()).filter(Boolean) : []);
   let priority = $state(_initial.priority || "3");
   let bodyFormat = $state(_initial["body-format"] || _initial.body_format || "markdown"); // "markdown" | "html" | "plain"
-  /** Cache of body text per format — preserves user's text when switching back. */
-  let bodyCache = $state({ markdown: "", html: "", plain: "" });
   // Lazy-init the TurndownService for HTML→markdown conversion
   let _turndown = null;
   function getTurndown() {
@@ -35,7 +33,9 @@
     return _turndown;
   }
 
-  /** Convert body text between markdown/html/plain formats. */
+  /** Convert body text between markdown/html/plain formats.
+   *  Always converts from the CURRENT body text — no stale cache.
+   */
   function convertBodyFormat(text, fromFmt, toFmt) {
     if (!text || fromFmt === toFmt) return text;
     if (fromFmt === "markdown" && toFmt === "html") return renderMarkdown(text);
@@ -53,15 +53,7 @@
     const newFmt = bodyFormat;
     const oldFmt = _prevFormat;
     if (newFmt === oldFmt || !body.trim()) return;
-    // Save current text under old format
-    bodyCache[oldFmt] = body;
-    // Restore or convert to new format
-    if (bodyCache[newFmt]) {
-      body = bodyCache[newFmt];
-    } else {
-      body = convertBodyFormat(body, oldFmt, newFmt);
-      bodyCache[newFmt] = body;
-    }
+    body = convertBodyFormat(body, oldFmt, newFmt);
     _prevFormat = newFmt;
   });
 
