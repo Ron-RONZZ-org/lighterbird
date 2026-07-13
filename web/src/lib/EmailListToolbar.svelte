@@ -88,7 +88,11 @@
     </div>
     <div class="right">
       <button class="tool-btn" disabled={numSelected === 0} onclick={onExport} title="Export selected (E)">Export <kbd>E</kbd></button>
-      <button class="tool-btn" disabled={numSelected === 0} onclick={onMove} title="Move selected (Ctrl+M)">Move <kbd>⌃M</kbd></button>
+      {#if isTrashView}
+        <button class="tool-btn danger" onclick={onClearTrash} title="Empty Trash (Ctrl+Shift+Delete)">Clear Trash <kbd>⌃⇧Del</kbd></button>
+      {:else}
+        <button class="tool-btn" disabled={numSelected === 0} onclick={onMove} title="Move selected (Ctrl+M)">Move <kbd>⌃M</kbd></button>
+      {/if}
       {#if !isTrashView}
         <button class="tool-btn danger" disabled={numSelected === 0} onclick={onDelete} title="Delete selected (Delete key)">Delete <kbd>Del</kbd></button>
       {/if}

@@ -45,7 +45,9 @@
     syncTaskId = null;
     syncError = "";
     try {
-      const startResult = await emailApi.syncStart();
+      // Folders-only sync: register folder hierarchy without downloading messages.
+      // This is fast — just an IMAP LIST per account, no message bodies.
+      const startResult = await emailApi.syncStart(null, { foldersOnly: true });
       syncTaskId = startResult.task_id;
       await pollUntilComplete();
     } catch (err) {

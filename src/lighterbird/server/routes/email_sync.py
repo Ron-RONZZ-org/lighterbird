@@ -39,12 +39,50 @@ def sync_email_start(
     def _run_sync() -> None:
         """Run the sync in a background thread."""
         try:
+            folders = [req.folder_name] if req.folder_name else None
             if req.account_email:
                 result = email_svc.sync_account(
                     req.account_email,
+                    folders=folders,
+                    folders_only=req.folders_only,
                     progress_tracker=tracker,
                     task_id=task_id,
                 )
+            elif req.folder_name:
+                # Sync a specific folder (e.g. Trash) for all accounts
+                total = 0
+                new = 0
+                errors = []
+                for acct in email_svc.list_accounts():
+                    email = acct["email"]
+                    sr = email_svc.sync_account(
+                        email, folders=[req.folder_name],
+                        folders_only=req.folders_only,
+                        progress_tracker=tracker,
+                        task_id=task_id,
+                        manage_progress=False,
+                    )
+                    total += sr.total
+                    new += sr.new
+                    errors.extend(sr.errors)
+                tracker.complete(task_id, result_total=total, result_new=new,
+                                 errors=errors or None)
+            elif req.folders_only:
+                # Register folder hierarchy for all accounts
+                total = 0
+                errors = []
+                for acct in email_svc.list_accounts():
+                    email = acct["email"]
+                    sr = email_svc.sync_account(
+                        email, folders_only=True,
+                        progress_tracker=tracker,
+                        task_id=task_id,
+                        manage_progress=False,
+                    )
+                    total += sr.total
+                    errors.extend(sr.errors)
+                tracker.complete(task_id, result_total=total, result_new=0,
+                                 errors=errors or None)
             else:
                 results = email_svc.sync_all(
                     progress_tracker=tracker,

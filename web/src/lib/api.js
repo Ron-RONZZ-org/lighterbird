@@ -123,8 +123,13 @@ export const email = {
   sync: (accountEmail = null) =>
     request("POST", "/email/sync", accountEmail ? { account_email: accountEmail } : {}, { retry: true }),
 
-  syncStart: (accountEmail = null) =>
-    request("POST", "/email/sync/start", accountEmail ? { account_email: accountEmail } : {}),
+  syncStart: (accountEmail = null, opts = {}) => {
+    const body = {};
+    if (accountEmail) body.account_email = accountEmail;
+    if (opts.folderName) body.folder_name = opts.folderName;
+    if (opts.foldersOnly) body.folders_only = true;
+    return request("POST", "/email/sync/start", body);
+  },
 
   getSyncProgress: (taskId) =>
     request("GET", `/email/sync/progress/${encodeURIComponent(taskId)}`),

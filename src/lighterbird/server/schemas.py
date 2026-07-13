@@ -54,6 +54,8 @@ class AccountListResponse(BaseModel):
 
 class SyncRequest(BaseModel):
     account_email: str | None = Field(default=None, description="Account email (or empty for all)")
+    folder_name: str | None = Field(default=None, description="Only sync this folder (e.g. 'Trash'); requires account_email")
+    folders_only: bool = Field(default=False, description="Only sync folder hierarchy, not message bodies")
 
 
 class SyncResultResponse(BaseModel):
