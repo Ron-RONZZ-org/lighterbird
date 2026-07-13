@@ -388,10 +388,14 @@ describe("ComposeEmail — body format switching", () => {
     await new Promise((r) => setTimeout(r, 80));
     flushEffects();
 
+    // The body textarea should have the original markdown
     const bodyArea = document.querySelector("#body");
     expect(bodyArea).toBeTruthy();
     expect(bodyArea.value).toContain("**bold**");
 
+    // Find format select and switch to HTML
+    const formatSelect = document.querySelector("select.format-select, .format-select");
+    // If the select has the class, find it another way
     const selects = document.querySelectorAll("select");
     const bodyFmtSelect = Array.from(selects).find(
       (s) => s.value === "markdown" || s.querySelector('option[value="markdown"]')
@@ -400,6 +404,7 @@ describe("ComposeEmail — body format switching", () => {
       bodyFmtSelect.value = "html";
       bodyFmtSelect.dispatchEvent(new Event("change", { bubbles: true }));
     } else {
+      // Try the combobox with "Markdown" selected
       const allCombos = document.querySelectorAll("select, [role='combobox']");
       for (const el of allCombos) {
         if (el.value === "markdown" || (el.options && Array.from(el.options).some(o => o.value === "markdown" && o.selected))) {
@@ -412,6 +417,7 @@ describe("ComposeEmail — body format switching", () => {
     await new Promise((r) => setTimeout(r, 80));
     flushEffects();
 
+    // Body should now contain HTML
     expect(bodyArea.value).toContain("<strong>bold</strong>");
     expect(bodyArea.value).toContain("<em>italic</em>");
   });
@@ -425,6 +431,7 @@ describe("ComposeEmail — body format switching", () => {
     const bodyArea = document.querySelector("#body");
     expect(bodyArea.value).toContain("Original");
 
+    // Switch to HTML
     const selects = document.querySelectorAll("select");
     const fmtSelect = Array.from(selects).find(s => s.value === "markdown" || (s.options && Array.from(s.options).some(o => o.value === "markdown" && o.selected)));
     if (fmtSelect) {
@@ -433,8 +440,9 @@ describe("ComposeEmail — body format switching", () => {
     }
     await new Promise((r) => setTimeout(r, 80));
     flushEffects();
-    expect(bodyArea.value).toContain("<strong>");
+    expect(bodyArea.value).toContain("<strong>"); // now HTML
 
+    // Switch back to markdown without editing in HTML
     if (fmtSelect) {
       fmtSelect.value = "markdown";
       fmtSelect.dispatchEvent(new Event("change", { bubbles: true }));
@@ -442,6 +450,7 @@ describe("ComposeEmail — body format switching", () => {
     await new Promise((r) => setTimeout(r, 80));
     flushEffects();
 
+    // Should restore the original markdown text (cache hit)
     expect(bodyArea.value).toContain("Original");
     expect(bodyArea.value).toContain("**markdown**");
     expect(bodyArea.value).not.toContain("<strong>");
