@@ -75,16 +75,17 @@ def dev_main() -> None:
         args.data_dir, app_name="lighterbird",
     )
 
-    # --local-config overrides the config dir set by --data-dir or the
-    # default temp dir.
+    # ── Setup config directory (independent of data dir) ─────────────────
     if args.local_config:
-        local_config = Path(args.local_config).expanduser().resolve()
-        local_config.mkdir(parents=True, exist_ok=True)
-        os.environ["LIGHTERBIRD_CONFIG_DIR"] = str(local_config)
-        config_dir = local_config
-        _log(f"Local config dir: {config_dir} (overrides configured config dir)")
-    else:
+        config_dir = Path(args.local_config).expanduser().resolve()
+        config_dir.mkdir(parents=True, exist_ok=True)
+        os.environ["LIGHTERBIRD_CONFIG_DIR"] = str(config_dir)
         _log(f"Config dir: {config_dir}")
+    elif is_temp:
+        # Ephemeral: setup_data_dir already created config/ inside temp root
+        _log(f"Config dir: {config_dir}")
+    # else: persistent mode without --local-config — no config dir set.
+    #       The app will use its default config path (e.g. ~/.config/lighterbird/).
 
     _log(f"Data dir: {data_dir}")
 
@@ -165,7 +166,7 @@ def dev_main() -> None:
 
     # ── Restore --local-config override if seeding changed it ────────────
     if args.local_config:
-        os.environ["LIGHTERBIRD_CONFIG_DIR"] = str(local_config)
+        os.environ["LIGHTERBIRD_CONFIG_DIR"] = str(config_dir)
 
     # ── Start server ─────────────────────────────────────────────────────
     _log(f"Starting server on http://127.0.0.1:{port}")
