@@ -6,6 +6,8 @@
   import FormField from "./FormField.svelte";
   import PreviewDialog from "./PreviewDialog.svelte";
   import { banner } from "./bannerStore.svelte.js";
+  import { tabStore } from "./tabStore.svelte.js";
+  import { saveCallbackStore } from "./saveCallbackStore.svelte.js";
   import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
   import MultiEntryField from "./MultiEntryField.svelte";
   import { renderMarkdown } from "./markdown.js";
@@ -311,6 +313,18 @@
     return results;
   }
 
+  // Register save-draft callback so TabView's UnsavedChangesDialog
+  // can offer "Save Draft" when the user tries to close a dirty form.
+  $effect(() => {
+    const tabId = tabStore.active?.id;
+    if (tabId && tabStore.active?.type === "form") {
+      saveCallbackStore.setCallback(tabId, () => { saveDraft(); });
+    }
+    return () => {
+      if (tabId) saveCallbackStore.setCallback(tabId, null);
+    };
+  });
+
   // ── LLM co-writing ─────────────────────────────────────────────────
   let cowrite = $state(createCowrite({
     formType: "email-send",
@@ -367,13 +381,8 @@
       e.preventDefault();
       if (body.trim()) previewEmail();
     }
-    // q — close tab; prompt save draft if dirty
-    if (e.key === "q" && !e.ctrlKey && !e.metaKey && dirty) {
-      if (confirm("You have unsaved changes. Save as draft?")) {
-        saveDraft();
-      }
-      // Don't preventDefault — let TabView's global q handler close the tab
-    }
+    // q — close tab; TabView's UnsavedChangesDialog handles dirty forms
+    // with Save/Discard/Cancel. No action needed here.
   }
 
   // Dirty state — compare current against initial

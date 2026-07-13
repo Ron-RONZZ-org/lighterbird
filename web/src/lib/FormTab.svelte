@@ -164,13 +164,17 @@
     }
   }
 
-  /** Cancel / close the form tab. Warns if there are unsaved changes. */
+  /** Cancel / close the form tab. Warns if there are unsaved changes
+   *  via TabView's pendingCloseTab/UnsavedChangesDialog flow. */
   function handleCancel() {
-    if (formDirty) {
-      if (!confirm("You have unsaved changes. Discard them?")) return;
-    }
     const activeId = tabStore.active?.id;
-    if (activeId) tabStore.close(activeId);
+    if (!activeId) return;
+    if (formDirty) {
+      // Dispatch event so TabView shows the UnsavedChangesDialog
+      window.dispatchEvent(new CustomEvent("request-close-tab", { detail: { tabId: activeId } }));
+    } else {
+      tabStore.close(activeId);
+    }
   }
 
   /** Human-readable title for the form type. */
