@@ -71,21 +71,26 @@ def dev_main() -> None:
     port = args.port or int(os.environ.get("LIGHTERBIRD_PORT", 6006))
 
     # ── Setup data directory ──────────────────────────────────────────────
-    root_dir, data_dir, config_dir, is_temp = setup_data_dir(
+    data_dir, is_temp = setup_data_dir(
         args.data_dir, app_name="lighterbird",
     )
 
     # ── Setup config directory (independent of data dir) ─────────────────
+    config_dir: Path | None = None
+    is_temp_config = False
     if args.local_config:
         config_dir = Path(args.local_config).expanduser().resolve()
         config_dir.mkdir(parents=True, exist_ok=True)
         os.environ["LIGHTERBIRD_CONFIG_DIR"] = str(config_dir)
         _log(f"Config dir: {config_dir}")
     elif is_temp:
-        # Ephemeral: setup_data_dir already created config/ inside temp root
+        # Ephemeral: create temp config dir as sibling of data dir
+        config_dir = data_dir.parent / "config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        is_temp_config = True
+        os.environ["LIGHTERBIRD_CONFIG_DIR"] = str(config_dir)
         _log(f"Config dir: {config_dir}")
-    # else: persistent mode without --local-config — no config dir set.
-    #       The app will use its default config path (e.g. ~/.config/lighterbird/).
+    # else: persistent mode without --local-config — app uses default config
 
     _log(f"Data dir: {data_dir}")
 
@@ -184,9 +189,12 @@ def dev_main() -> None:
         )
     finally:
         cleanup_data_dir(
-            root_dir, is_temp, args.keep_data,
+            data_dir, is_temp, args.keep_data,
             quiet=args.quiet, log_prefix=LOG_PREFIX,
         )
+        # Also clean up temp config dir if we created one
+        if is_temp_config and not args.keep_data and config_dir is not None:
+            shutil.rmtree(config_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":

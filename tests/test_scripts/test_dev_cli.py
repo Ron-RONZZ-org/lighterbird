@@ -46,7 +46,7 @@ class TestDevMain:
             mock_parser = MagicMock()
             mock_parser.parse_args.return_value = self._make_args()
             mock_parser_factory.return_value = mock_parser
-            mock_setup.return_value = (tmp_path, tmp_path / "data", tmp_path / "config", True)
+            mock_setup.return_value = (tmp_path / "data", True)
 
             from lighterbird.scripts.dev_cli import dev_main
 
@@ -70,7 +70,7 @@ class TestDevMain:
             mock_parser = MagicMock()
             mock_parser.parse_args.return_value = self._make_args(port=9999)
             mock_parser_factory.return_value = mock_parser
-            mock_setup.return_value = (tmp_path, tmp_path / "data", tmp_path / "config", True)
+            mock_setup.return_value = (tmp_path / "data", True)
 
             from lighterbird.scripts.dev_cli import dev_main
 
@@ -105,7 +105,7 @@ class TestDevMain:
             mock_parser = MagicMock()
             mock_parser.parse_args.return_value = self._make_args(prod="auto")
             mock_parser_factory.return_value = mock_parser
-            mock_setup.return_value = (tmp_path, tmp_path / "data", tmp_path / "config", True)
+            mock_setup.return_value = (tmp_path / "data", True)
 
             from lighterbird.scripts.dev_cli import dev_main
 
@@ -131,7 +131,7 @@ class TestDevMain:
             mock_parser = MagicMock()
             mock_parser.parse_args.return_value = self._make_args(prod="auto")
             mock_parser_factory.return_value = mock_parser
-            mock_setup.return_value = (tmp_path, tmp_path / "data", tmp_path / "config", True)
+            mock_setup.return_value = (tmp_path / "data", True)
 
             from lighterbird.scripts.dev_cli import dev_main
 
@@ -157,7 +157,7 @@ class TestDevMain:
             mock_parser = MagicMock()
             mock_parser.parse_args.return_value = self._make_args(seed="auto")
             mock_parser_factory.return_value = mock_parser
-            mock_setup.return_value = (tmp_path, tmp_path / "data", tmp_path / "config", True)
+            mock_setup.return_value = (tmp_path / "data", True)
 
             from lighterbird.scripts.dev_cli import dev_main
 
@@ -183,7 +183,7 @@ class TestDevMain:
                 seed_from="/nonexistent/archive.7z"
             )
             mock_parser_factory.return_value = mock_parser
-            mock_setup.return_value = (Path("/tmp/foo"), Path("/tmp/foo/data"), Path("/tmp/foo/config"), True)
+            mock_setup.return_value = (Path("/tmp/foo/data"), True)
 
             from lighterbird.scripts.dev_cli import dev_main
 
@@ -213,7 +213,7 @@ class TestDevMain:
                 prod="auto", local_config=str(local_cfg),
             )
             mock_parser_factory.return_value = mock_parser
-            mock_setup.return_value = (tmp_path, tmp_path / "data", tmp_path / "config", True)
+            mock_setup.return_value = (tmp_path / "data", True)
 
             # seed_data_dir will set LIGHTERBIRD_CONFIG_DIR to data/config
             def _seed_side_effect(*a, **kw):
