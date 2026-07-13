@@ -504,7 +504,7 @@
         Save Draft <kbd>Ctrl+S</kbd>
       {/if}
     </button>
-    <button type="submit" class="btn-primary">
+    <button type="submit" class="btn-primary" disabled={sending}>
       {sending ? "Sending..." : "Send"} <kbd>Ctrl+Enter</kbd>
     </button>
   </div>
