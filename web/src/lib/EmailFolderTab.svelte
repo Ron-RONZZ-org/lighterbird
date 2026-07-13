@@ -13,10 +13,16 @@
   import { createCopyState, createSelectionManager } from "./listTabShared.svelte.js";
 
   let { data = {} } = $props();
-  let folders = $state(data?.folders || []);
-  let accounts = $state(data?.accounts || []);
+  let folders = $state([]);
+  let accounts = $state([]);
   let total = $derived(folders.length);
   let highlight = $derived(data?.highlight || "");
+
+  // Sync from props on initial load or prop change
+  $effect(() => {
+    if (data?.folders) folders = data.folders;
+    if (data?.accounts) accounts = data.accounts;
+  });
 
   // ── Account filter ─────────────────────────────────────────────────────
   let accountFilter = $state("");
