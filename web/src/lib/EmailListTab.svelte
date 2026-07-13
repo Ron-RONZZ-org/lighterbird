@@ -46,12 +46,14 @@
   let syncProgress = $state(null);
   let syncPollTimer = $state(null);
   let syncError = $state("");
+  let _syncGuard = false;
 
   // ── Blocking initial sync on mount ──────────────────────────────
   let initialLoading = $state(true);
 
   async function handleInitialSync() {
-    if (syncing) return;
+    if (_syncGuard) return;
+    _syncGuard = true;
     syncing = true;
     syncProgress = null;
     syncTaskId = null;
@@ -66,6 +68,7 @@
     } finally {
       syncing = false;
       initialLoading = false;
+      _syncGuard = false;
     }
     await refreshList();
   }
@@ -651,7 +654,7 @@
     {syncError}
   />
 {:else}
-<div class="email-list">
+<div class="email-list-tab">
   <!-- Toolbar -->
   <EmailListToolbar
     selectionMode={sel.selectionMode}
@@ -685,14 +688,13 @@
     {syncing}
     {syncProgress}
   />
-</div>
 
-{#if syncError}
-  <div class="sync-error-banner" role="alert">
-    <span class="sync-error-icon">⚠</span>
-    <span class="sync-error-text">{syncError}</span>
-  </div>
-{/if}
+  {#if syncError}
+    <div class="sync-error-banner" role="alert">
+      <span class="sync-error-icon">⚠</span>
+      <span class="sync-error-text">{syncError}</span>
+    </div>
+  {/if}
 
   <!-- Folder tree panel -->
   <EmailFolderPanel

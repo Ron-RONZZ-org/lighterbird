@@ -35,8 +35,11 @@
   let syncProgress = $state(null);
   let syncPollTimer = $state(null);
   let syncError = $state("");
+  let _syncGuard = false;
 
   async function handleInitialSync() {
+    if (_syncGuard) return;
+    _syncGuard = true;
     syncing = true;
     syncProgress = null;
     syncTaskId = null;
@@ -51,6 +54,7 @@
     } finally {
       syncing = false;
       initialLoading = false;
+      _syncGuard = false;
     }
     await refreshList();
   }
@@ -92,8 +96,8 @@
     if (data?.accounts) accounts = data.accounts;
   });
 
-  // Start blocking sync on mount
-  $effect(() => {
+  // Start blocking sync on mount (using .pre to avoid render-cycle side effects)
+  $effect.pre(() => {
     if (initialLoading) {
       handleInitialSync();
     }
