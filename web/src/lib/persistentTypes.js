@@ -23,6 +23,8 @@ const PERSISTENT_ENTRIES = [
   [/^!email\s+trash\s*(?:list)?\b/i, "email-trash-list"],
   [/^!email\s+draft\b/i, "email-draft-list"],
   [/^!email\s+(list|search)\b/i, "email-list"],
+  [/^!email\s+folder\s+list\s*$/i, "folder-list"],
+  [/^!email\s+folders\s*$/i, "folder-list"],
   [/^!email\s+signature\s+list\s*$/i, "signature-list"],
   [/^!user\s+saved-commands\s+list\s*$/i, "saved-commands"],
   [/^!user\s+info\s+list\s*$/i, "user-info-list"],
@@ -46,6 +48,7 @@ const TOKEN_TYPE_MAP = {
   "user info list": "user-info-list",
   "email sieve list": "sieve-list",
   "email signature list": "signature-list",
+  "email folder list": "folder-list",
   "letter list": "letter-list",
 };
 

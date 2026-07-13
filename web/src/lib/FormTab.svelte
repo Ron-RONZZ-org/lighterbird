@@ -75,6 +75,7 @@
       "backup-config-add": ["backup", "config", "add"],
       "backup-config-modify": ["backup", "config", "modify"],
       "backup-prune": ["backup", "prune"],
+      "email-folder-add": ["email", "folder", "add"],
       "email-signature-add": ["email", "signature", "add"],
       "email-signature-modify": ["email", "signature", "modify"],
       "letter-add": ["letter", "add"],

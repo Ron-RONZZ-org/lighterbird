@@ -36,9 +36,11 @@ finally:
 
 # ── Group metadata ────────────────────────────────────────────────────────
 
-from lighterbird.server.command.registry import group
+from lighterbird.server.command.registry import alias, group
 
 group("email", description="Email operations", default_action="list")
+group("email.folder", description="IMAP folder management")
+alias(["email", "folders"], ["email", "folder", "list"])
 group("calendar", description="Calendar operations", default_action="list")
 group("contact", description="Contact management", default_action="list")
 group("todo", description="Task management", default_action="list")

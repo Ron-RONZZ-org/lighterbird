@@ -36,6 +36,14 @@ from lighterbird.server.command.handlers.email_eml import (  # noqa: F401
 
 # Side-effect imports to register handlers split into sub-modules
 from lighterbird.server.command.handlers.email_send import email_send  # noqa: F401
+from lighterbird.server.command.handlers.email_folder import (  # noqa: F401
+    email_folder_root,
+    email_folder_list,
+    email_folder_add,
+    email_folder_rename,
+    email_folder_move,
+    email_folder_delete,
+)
 from lighterbird.core.storage import AttachmentStore
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_email_service

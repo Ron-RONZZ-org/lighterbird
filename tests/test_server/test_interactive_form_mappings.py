@@ -246,6 +246,7 @@ _FORM_REQUIRED = {
     "llm.profile.set",
     "backup.config.add",
     "email.signature.add",
+    "email.folder.add",
     "letter.add",
     "letter.send",
 }
@@ -263,6 +264,7 @@ _LIST_COMMANDS = {
     "user.info.list",
     "email.sieve.list",
     "email.signature.list",
+    "email.folder.list",
     "letter.list",
 }
 

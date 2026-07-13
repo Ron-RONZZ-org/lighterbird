@@ -621,6 +621,103 @@ class TestEmailHandlers:
         assert files[0]["name"] == "doc.pdf"
         assert files[0]["data"] == base64.b64encode(b"fake_pdf_content").decode("ascii")
 
+# ── Email folder handlers ─────────────────────────────────────────────────────
+
+
+class TestEmailFolderHandlers:
+    """!email folder {list,add,rename,move,delete} handlers."""
+
+    def test_email_folder_root(self, mock_email_svc):
+        """email folder root shows available subcommands."""
+        result = dispatch(["email", "folder"], {})
+        assert result["type"] == "status"
+        assert "folder" in result["title"].lower()
+        assert "_summary" in result["data"]
+
+    def test_email_folder_list(self, mock_email_svc):
+        """email folder list returns folder-list type with tree data."""
+        mock_email_svc.db.execute.return_value = [
+            {"account_email": "a@b.com", "name": "INBOX",
+             "special_use": "\\Inbox", "created_at": "", "updated_at": ""},
+            {"account_email": "a@b.com", "name": "Sent",
+             "special_use": "\\Sent", "created_at": "", "updated_at": ""},
+        ]
+        result = dispatch(["email", "folder", "list"], {})
+        assert result["type"] == "folder-list"
+        assert result["title"] == "Folders"
+        assert len(result["data"]["folders"]) == 2
+        assert result["data"]["folders"][0]["folder_name"] == "INBOX"
+        assert result["data"]["folders"][0]["account_email"] == "a@b.com"
+        assert "accounts" in result["data"]
+
+    def test_email_folder_list_empty(self, mock_email_svc):
+        """email folder list works with no folders."""
+        mock_email_svc.db.execute.return_value = []
+        result = dispatch(["email", "folder", "list"], {})
+        assert result["type"] == "folder-list"
+        assert result["data"]["total"] == 0
+
+    def test_email_folder_add_missing_name(self, mock_email_svc):
+        """email folder add without name raises error."""
+        from lighterbird.server.command.errors import CommandValidationError
+        with pytest.raises(CommandValidationError, match="Missing folder name"):
+            dispatch(["email", "folder", "add"], {})
+
+    def test_email_folder_add_missing_parent(self, mock_email_svc):
+        """email folder add with name but no --parent raises error."""
+        from lighterbird.server.command.errors import CommandValidationError
+        with pytest.raises(CommandValidationError, match="Missing --parent"):
+            dispatch(["email", "folder", "add", "MyFolder"], {})
+
+    def test_email_folder_rename_missing_args(self, mock_email_svc):
+        """email folder rename without enough args raises error."""
+        from lighterbird.server.command.errors import CommandValidationError
+        with pytest.raises(CommandValidationError, match="Missing arguments"):
+            dispatch(["email", "folder", "rename"], {})
+        with pytest.raises(CommandValidationError, match="Missing arguments"):
+            dispatch(["email", "folder", "rename", "a@b.com/INBOX"], {})
+
+    def test_email_folder_rename_invalid_path(self, mock_email_svc):
+        """email folder rename with invalid path raises error."""
+        from lighterbird.server.command.errors import CommandValidationError
+        with pytest.raises(CommandValidationError, match="Invalid folder path"):
+            dispatch(["email", "folder", "rename", "invalid", "NewName"], {})
+
+    def test_email_folder_move_missing_args(self, mock_email_svc):
+        """email folder move without path raises error."""
+        from lighterbird.server.command.errors import CommandValidationError
+        with pytest.raises(CommandValidationError, match="Missing folder path"):
+            dispatch(["email", "folder", "move"], {})
+
+    def test_email_folder_move_missing_parent(self, mock_email_svc):
+        """email folder move without --parent raises error."""
+        from lighterbird.server.command.errors import CommandValidationError
+        with pytest.raises(CommandValidationError, match="Missing --parent"):
+            dispatch(["email", "folder", "move", "a@b.com/MyFolder"], {})
+
+    def test_email_folder_delete_missing_path(self, mock_email_svc):
+        """email folder delete without path raises error."""
+        from lighterbird.server.command.errors import CommandValidationError
+        with pytest.raises(CommandValidationError, match="Missing folder path"):
+            dispatch(["email", "folder", "delete"], {})
+
+    def test_email_folder_delete_invalid_path(self, mock_email_svc):
+        """email folder delete with invalid path raises error."""
+        from lighterbird.server.command.errors import CommandValidationError
+        with pytest.raises(CommandValidationError, match="Invalid folder path"):
+            dispatch(["email", "folder", "delete", "justaname"], {})
+
+    def test_email_folders_alias(self, mock_email_svc):
+        """!email folders (plural) alias resolves to !email folder list."""
+        mock_email_svc.db.execute.return_value = [
+            {"account_email": "a@b.com", "name": "INBOX",
+             "special_use": "\\Inbox", "created_at": "", "updated_at": ""},
+        ]
+        result = dispatch(["email", "folders"], {})
+        assert result["type"] == "folder-list"
+        assert len(result["data"]["folders"]) == 1
+
+
 # ── Email account handlers ────────────────────────────────────────────────────
 
 

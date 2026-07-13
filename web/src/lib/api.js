@@ -181,6 +181,12 @@ export const email = {
 
   createFolder: (accountEmail, folderName) =>
     request("POST", `/email/folders?account_email=${encodeURIComponent(accountEmail)}&folder_name=${encodeURIComponent(folderName)}`),
+
+  renameFolder: (accountEmail, oldName, newName) =>
+    request("PATCH", `/email/folders/${encodeURIComponent(oldName)}?account_email=${encodeURIComponent(accountEmail)}&new_name=${encodeURIComponent(newName)}`),
+
+  deleteFolder: (accountEmail, folderName) =>
+    request("DELETE", `/email/folders/${encodeURIComponent(folderName)}?account_email=${encodeURIComponent(accountEmail)}`),
 };
 
 // ── Calendar API ──────────────────────────────────────────────────────

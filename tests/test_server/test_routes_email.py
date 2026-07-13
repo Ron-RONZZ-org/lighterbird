@@ -35,6 +35,54 @@ class TestEmailMessagesAPI:
         data = resp.json()
         assert "folders" in data
 
+    def test_create_folder_no_account(self):
+        """POST /api/v1/email/folders without account_email returns 422."""
+        resp = self._client().post("/api/v1/email/folders?folder_name=Test")
+        assert resp.status_code == 422
+
+    def test_create_folder_unknown_account(self):
+        """POST /api/v1/email/folders with nonexistent account returns 404."""
+        resp = self._client().post(
+            "/api/v1/email/folders?account_email=nobody@example.com&folder_name=Test",
+        )
+        assert resp.status_code == 404
+
+    def test_rename_folder_no_account(self):
+        """PATCH /api/v1/email/folders without account_email returns 422."""
+        resp = self._client().patch(
+            "/api/v1/email/folders/INBOX?new_name=INBOX2",
+        )
+        assert resp.status_code == 422
+
+    def test_rename_folder_no_new_name(self):
+        """PATCH /api/v1/email/folders without new_name returns 422."""
+        resp = self._client().patch(
+            "/api/v1/email/folders/INBOX?account_email=test@example.com",
+        )
+        assert resp.status_code == 422
+
+    def test_rename_folder_unknown_account(self):
+        """PATCH /api/v1/email/folders with nonexistent account returns 404."""
+        resp = self._client().patch(
+            "/api/v1/email/folders/INBOX"
+            "?account_email=nobody@example.com&new_name=INBOX2",
+        )
+        assert resp.status_code == 404
+
+    def test_delete_folder_no_account(self):
+        """DELETE /api/v1/email/folders without account_email returns 422."""
+        resp = self._client().delete(
+            "/api/v1/email/folders/Test",
+        )
+        assert resp.status_code == 422
+
+    def test_delete_folder_unknown_account(self):
+        """DELETE /api/v1/email/folders with nonexistent account returns 404."""
+        resp = self._client().delete(
+            "/api/v1/email/folders/Test?account_email=nobody@example.com",
+        )
+        assert resp.status_code == 404
+
     def test_get_message_conversation_nonexistent(self):
         """GET /api/v1/email/messages/{uuid}/conversation returns empty."""
         resp = self._client().get(

@@ -173,6 +173,36 @@ const MUTATION_MAP = {
     title: "Sieve Scripts",
   },
 
+  // ── Email folders ────────────────────────────────────────────────
+  "email folder add": {
+    listTokens: ["email", "folder", "list"],
+    listIdKey: "folder-list",
+    type: "folder-list",
+    isDelete: false,
+    title: "Folders",
+  },
+  "email folder rename": {
+    listTokens: ["email", "folder", "list"],
+    listIdKey: "folder-list",
+    type: "folder-list",
+    isDelete: false,
+    title: "Folders",
+  },
+  "email folder move": {
+    listTokens: ["email", "folder", "list"],
+    listIdKey: "folder-list",
+    type: "folder-list",
+    isDelete: false,
+    title: "Folders",
+  },
+  "email folder delete": {
+    listTokens: ["email", "folder", "list"],
+    listIdKey: "folder-list",
+    type: "folder-list",
+    isDelete: true,
+    title: "Folders",
+  },
+
   // ── Letters ──────────────────────────────────────────────────────
   "letter add": {
     listTokens: ["letter", "list"],
@@ -245,6 +275,7 @@ export const LIST_REFRESHERS = {
   "persistent-calendar-events":      (highlight) => calendarApi.listEvents({ limit: 50 }).then(r => ({ ...r, highlight })),
   "persistent-letter-list":          (highlight) => lettersApi.list({ limit: 50 }).then(r => ({ ...r, highlight })),
   "persistent-email-list":           (highlight) => emailApi.list({ limit: 50 }).then(r => ({ ...r, highlight })),
+  "persistent-folder-list":          (highlight) => emailApi.listFolders().then(r => ({ ...r, highlight })),
 };
 
 /**

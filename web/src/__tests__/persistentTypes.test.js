@@ -66,6 +66,10 @@ describe("detectPersistentType", () => {
     expect(detectPersistentType("!email sieve list")).toBe("sieve-list");
   });
 
+  it('returns "folder-list" for !email folder list', () => {
+    expect(detectPersistentType("!email folder list")).toBe("folder-list");
+  });
+
   it('returns "accounts" for !email account list', () => {
     expect(detectPersistentType("!email account list")).toBe("accounts");
   });
@@ -108,6 +112,10 @@ describe("resolveListIdKey", () => {
 
   it('returns "contacts-list" for contact list tokens', () => {
     expect(resolveListIdKey(["contact", "list"])).toBe("contacts-list");
+  });
+
+  it('returns "folder-list" for email folder list tokens', () => {
+    expect(resolveListIdKey(["email", "folder", "list"])).toBe("folder-list");
   });
 
   it('returns null for unknown paths', () => {

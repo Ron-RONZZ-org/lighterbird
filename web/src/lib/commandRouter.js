@@ -212,6 +212,7 @@ function resolveAddFormType(tokens, leafName) {
   if (/^llm\s+profile\s+set$/i.test(path)) return "llm-profile-set";
   if (/^backup\s+config\s+add$/i.test(path)) return "backup-config-add";
   if (/^backup\s+config\s+modify$/i.test(path)) return "backup-config-modify";
+  if (/^email\s+folder\s+add$/i.test(path)) return "email-folder-add";
   if (/^email\s+signature\s+add$/i.test(path)) return "email-signature-add";
   if (/^email\s+signature\s+modify$/i.test(path)) return "email-signature-modify";
   if (/^letter\s+add$/i.test(path)) return "letter-add";
@@ -252,6 +253,7 @@ function resolveAddTitle(addFormType) {
     "backup-config-modify": "Modify Backup Strategy",
     "email-signature-add": "Add Email Signature",
     "email-signature-modify": "Modify Email Signature",
+    "email-folder-add": "Create Folder",
     "letter-add": "Add Received Letter",
     "letter-send": "Send Letter",
   };
