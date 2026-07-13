@@ -92,6 +92,9 @@ def clear_trash(
     if not uuids:
         return {"status": "ok", "count": 0}
     result = email_svc.msg_ops.batch_hard_delete_messages(uuids)
+    # Process EXPUNGE backlog immediately so IMAP is cleaned up
+    # without waiting for the next sync cycle.
+    email_svc.msg_ops.process_sync_backlog()
     return {
         "status": "ok" if not result.get("errors") else "partial",
         "count": result["count"],
