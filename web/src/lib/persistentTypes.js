@@ -24,6 +24,7 @@ const PERSISTENT_ENTRIES = [
   [/^!email\s+draft\b/i, "email-draft-list"],
   [/^!email\s+(list|search)\b/i, "email-list"],
   [/^!email\s+folder\s+list\s*$/i, "folder-list"],
+  [/^!email\s+folders\s*$/i, "folder-list"],
   [/^!email\s+signature\s+list\s*$/i, "signature-list"],
   [/^!user\s+saved-commands\s+list\s*$/i, "saved-commands"],
   [/^!user\s+info\s+list\s*$/i, "user-info-list"],

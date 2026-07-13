@@ -139,6 +139,36 @@ describe("isMutationCommand", () => {
     expect(isMutationCommand(["todo"])).toBeNull();
   });
 
+  // ── Email folder mutations ─────────────────────────────────────────
+  it("returns config for email folder add", () => {
+    const cfg = isMutationCommand(["email", "folder", "add"]);
+    expect(cfg).not.toBeNull();
+    expect(cfg.listTokens).toEqual(["email", "folder", "list"]);
+    expect(cfg.listIdKey).toBe("folder-list");
+    expect(cfg.isDelete).toBe(false);
+  });
+
+  it("returns config for email folder rename", () => {
+    const cfg = isMutationCommand(["email", "folder", "rename"]);
+    expect(cfg).not.toBeNull();
+    expect(cfg.listIdKey).toBe("folder-list");
+    expect(cfg.isDelete).toBe(false);
+  });
+
+  it("returns config for email folder move", () => {
+    const cfg = isMutationCommand(["email", "folder", "move"]);
+    expect(cfg).not.toBeNull();
+    expect(cfg.listIdKey).toBe("folder-list");
+    expect(cfg.isDelete).toBe(false);
+  });
+
+  it("returns config for email folder delete with isDelete=true", () => {
+    const cfg = isMutationCommand(["email", "folder", "delete"]);
+    expect(cfg).not.toBeNull();
+    expect(cfg.listIdKey).toBe("folder-list");
+    expect(cfg.isDelete).toBe(true);
+  });
+
   it("uses longest match (e.g. 'calendar event add' not 'calendar')", () => {
     const cfg = isMutationCommand(["calendar", "event", "add"]);
     expect(cfg).not.toBeNull();
@@ -182,5 +212,6 @@ describe("persistentIdKey", () => {
     expect(persistentIdKey("journal-list")).toBe("persistent-journal-list");
     expect(persistentIdKey("letter-list")).toBe("persistent-letter-list");
     expect(persistentIdKey("sieve-list")).toBe("persistent-sieve-list");
+    expect(persistentIdKey("folder-list")).toBe("persistent-folder-list");
   });
 });
