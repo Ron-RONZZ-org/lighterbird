@@ -150,14 +150,24 @@
     tabStore.close(tabId);
   }
 
-  function handleSaveDraft() {
+  async function handleSaveDraft() {
     if (!pendingCloseTab) return;
-    const cb = saveCallbackStore.getCallback(pendingCloseTab);
+    const tabId = pendingCloseTab;
+    const cb = saveCallbackStore.getCallback(tabId);
     if (cb) {
-      cb();
+      try {
+        const shouldClose = await Promise.resolve(cb());
+        if (shouldClose) {
+          _doCloseTab(tabId);
+        }
+        // if shouldClose is false, form had validation errors — leave tab open
+      } catch {
+        // save failed — leave tab open
+      }
+    } else {
+      // No callback registered — just close
+      _doCloseTab(tabId);
     }
-    // Whether or not there's a save callback, close the tab
-    _doCloseTab(pendingCloseTab);
     pendingCloseTab = null;
   }
 

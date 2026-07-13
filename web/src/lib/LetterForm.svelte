@@ -210,7 +210,7 @@
   $effect(() => {
     const tabId = tabStore.active?.id;
     if (tabId && tabStore.active?.type === "form") {
-      saveCallbackStore.setCallback(tabId, () => { saveDraft(); });
+      saveCallbackStore.setCallback(tabId, async () => { await saveDraft(); return true; });
     }
     return () => {
       if (tabId) saveCallbackStore.setCallback(tabId, null);

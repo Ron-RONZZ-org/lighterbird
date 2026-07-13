@@ -1,15 +1,22 @@
 /**
- * saveCallbackStore — maps tab IDs to optional save-draft callbacks.
+ * saveCallbackStore — maps tab IDs to optional save callbacks.
  *
- * Used by TabView's UnsavedChangesDialog: when the user picks "Save Draft",
- * TabView looks up the callback registered by the form component (ComposeEmail,
- * LetterForm) and calls it.
+ * Used by TabView's UnsavedChangesDialog: when the user picks "Save",
+ * TabView looks up the callback registered by the form component and calls it.
  *
- * This is a separate store from dirtyFormStore because the save-callback
- * concept is lighterbird-specific (not in lightercore's shared store).
+ * The callback is async and returns a boolean:
+ *   true  → close the tab after saving
+ *   false → don't close (validation failed, form shows error)
+ *
+ * Draft forms (ComposeEmail, LetterForm) register a callback that saves
+ * the draft and returns true (close after save).
+ *
+ * Non-draft forms register via FormTab: the callback triggers form submit,
+ * and FormTab.handleFormSubmit closes the tab on success. If validation
+ * fails, the callback returns false so the tab stays open with the error.
  */
 
-/** @type {Map<string, () => void>} */
+/** @type {Map<string, () => Promise<boolean>>} */
 let _callbacks = $state(new Map());
 
 export const saveCallbackStore = {
