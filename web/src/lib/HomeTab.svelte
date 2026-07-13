@@ -545,7 +545,8 @@
   .home-tab {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
     position: relative;
   }
   .brand {
