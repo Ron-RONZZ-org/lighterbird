@@ -5,11 +5,22 @@
    */
 
   import { popup } from "../popupStore.svelte.js";
+  import { overlayStack } from "@lightercore/ui/overlayStack.svelte.js";
 
   /** @type {import("./CowriteEngine.svelte.js").ReturnType<typeof createCowrite>} */
   let { cowrite } = $props();
 
   let refinementText = $state("");
+
+  // Register with overlay stack so TabView defers to this overlay on ESC/Q
+  let _overlayEntry = $state(null);
+  $effect(() => {
+    _overlayEntry = overlayStack.push("cowrite-panel", () => cowrite.close());
+    return () => {
+      if (_overlayEntry) overlayStack.remove(_overlayEntry.id);
+      _overlayEntry = null;
+    };
+  });
 
   /** Render a single field's diff ops as HTML. */
   function renderDiff(original, ops) {
@@ -69,13 +80,40 @@
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events,a11y_no_static_element_interactions -->
-<div class="cowrite-overlay" role="presentation" onclick={() => cowrite.close()}>
+<div class="cowrite-overlay" role="presentation" onclick={() => cowrite.close()}
+     onkeydown={(e) => { if (e.key === "Escape") { e.stopPropagation(); cowrite.close(); } }}>
   <!-- svelte-ignore a11y_click_events_have_key_events,a11y_no_static_element_interactions -->
   <div class="cowrite-panel" role="presentation" onclick={(e) => e.stopPropagation()}>
     <!-- Header -->
     <div class="panel-header">
       <span class="panel-title">LLM Co-Writing</span>
       <button class="close-btn" onclick={() => cowrite.close()} aria-label="Close">✕</button>
+    </div>
+
+    <!-- Instruction input (top, always visible) -->
+    <div class="panel-footer">
+      <div class="input-row">
+        <input
+          type="text"
+          class="instruction-input"
+          placeholder="e.g. make it more formal, add a deadline..."
+          bind:value={refinementText}
+          onkeydown={handleKeydown}
+          disabled={cowrite.isLoading}
+        />
+        <button
+          type="button"
+          class="btn-ask"
+          onclick={() => cowrite.startCowrite(refinementText)}
+          disabled={cowrite.isLoading || !refinementText.trim()}
+        >
+          {#if cowrite.isLoading}
+            Thinking...
+          {:else}
+            Ask LLM
+          {/if}
+        </button>
+      </div>
     </div>
 
     <!-- Content area -->
@@ -144,31 +182,6 @@
       {/if}
     </div>
 
-    <!-- Bottom: instruction input + Ask button -->
-    <div class="panel-footer">
-      <div class="input-row">
-        <input
-          type="text"
-          class="instruction-input"
-          placeholder="e.g. make it more formal, add a deadline..."
-          bind:value={refinementText}
-          onkeydown={handleKeydown}
-          disabled={cowrite.isLoading}
-        />
-        <button
-          type="button"
-          class="btn-ask"
-          onclick={() => cowrite.startCowrite(refinementText)}
-          disabled={cowrite.isLoading || !refinementText.trim()}
-        >
-          {#if cowrite.isLoading}
-            Thinking...
-          {:else}
-            Ask LLM
-          {/if}
-        </button>
-      </div>
-    </div>
   </div>
 </div>
 

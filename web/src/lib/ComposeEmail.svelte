@@ -10,6 +10,7 @@
   import MultiEntryField from "./MultiEntryField.svelte";
   import { renderMarkdown } from "./markdown.js";
   import TurndownService from "turndown";
+  import ConfirmDialog from "./ConfirmDialog.svelte";
 
   let { initialData = {}, onsubmit, onDirtyChange = () => {} } = $props();
   // Snapshot of initial props for dirty-state comparison.
@@ -52,12 +53,39 @@
   function convertBodyFormat(text, fromFmt, toFmt) {
     if (!text || fromFmt === toFmt) return text;
     if (fromFmt === "markdown" && toFmt === "html") return renderMarkdown(text);
-    if (fromFmt === "markdown" && toFmt === "plain") return renderMarkdown(text).replace(/<[^>]+>/g, "");
+    if (fromFmt === "markdown" && toFmt === "plain") return htmlToPlainText(renderMarkdown(text));
     if (fromFmt === "html" && toFmt === "markdown") return getTurndown().turndown(text);
-    if (fromFmt === "html" && toFmt === "plain") return text.replace(/<[^>]+>/g, "");
+    if (fromFmt === "html" && toFmt === "plain") return htmlToPlainText(text);
     if (fromFmt === "plain" && toFmt === "markdown") return text;
     if (fromFmt === "plain" && toFmt === "html") return `<p>${text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</p>`;
     return text;
+  }
+
+  /** Convert HTML to plain text preserving block-level newlines. */
+  function htmlToPlainText(html) {
+    if (!html) return "";
+    // Replace block-level closing tags with newline equivalents first
+    let t = html
+      .replace(/<\/p>/gi, "\n\n")
+      .replace(/<\/h[1-6]>/gi, "\n\n")
+      .replace(/<\/li>/gi, "\n")
+      .replace(/<\/blockquote>/gi, "\n\n")
+      .replace(/<\/div>/gi, "\n")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/tr>/gi, "\n")
+      .replace(/<\/td>/gi, "\t");
+    // Strip remaining HTML tags
+    t = t.replace(/<[^>]+>/g, "");
+    // Unescape common entities
+    t = t.replace(/&amp;/g, "&")
+         .replace(/&lt;/g, "<")
+         .replace(/&gt;/g, ">")
+         .replace(/&nbsp;/g, " ");
+    // Collapse excessive blank lines (max 2 consecutive)
+    t = t.replace(/\n{3,}/g, "\n\n");
+    // Trim leading/trailing whitespace
+    t = t.trim();
+    return t;
   }
 
   /** Return true if switching toFmt may lose formatting present in fromFmt. */
@@ -66,18 +94,48 @@
     return order.indexOf(fromFmt) < order.indexOf(toFmt);
   }
 
-  // Auto-convert body text when format changes + warn on destructive switch
+  // ── Format switch with confirmation for destructive downgrades ────────
+  // _displayFormat drives the <select> UI; bodyFormat is the "committed"
+  // format that drives conversion via the $effect below.  When the user
+  // picks a "destructive" target format (html→md or md→plain), a
+  // ConfirmDialog asks for confirmation before committing.
+  let _displayFormat = $state(bodyFormat);
+  let formatConfirm = $state(null);            // {oldFmt, newFmt} or null
   // svelte-ignore state_referenced_locally — one-time capture of initial format
   let _prevFormat = $state(bodyFormat);
+
+  function handleFormatChange(e) {
+    const newFmt = e.target.value;
+    const oldFmt = bodyFormat;
+    if (newFmt === oldFmt) return;
+    if (isDestructiveSwitch(oldFmt, newFmt)) {
+      formatConfirm = { oldFmt, newFmt };
+      _displayFormat = oldFmt;                // keep select showing old value until confirmed
+    } else {
+      bodyFormat = newFmt;
+      _displayFormat = newFmt;
+      // The $effect below handles the actual conversion
+    }
+  }
+
+  function confirmFormatSwitch() {
+    if (formatConfirm) {
+      bodyFormat = formatConfirm.newFmt;
+      _displayFormat = formatConfirm.newFmt;
+      formatConfirm = null;
+    }
+  }
+
+  function cancelFormatSwitch() {
+    formatConfirm = null;
+    // _displayFormat was already reset in handleFormatChange
+  }
+
+  // Auto-convert body text when committed format changes + cache management.
   $effect(() => {
     const newFmt = bodyFormat;
     const oldFmt = _prevFormat;
     if (newFmt === oldFmt || !body.trim()) return;
-
-    // Warn if switching to a format that discards formatting
-    if (isDestructiveSwitch(oldFmt, newFmt)) {
-      banner.show(`Switching from ${oldFmt} to ${newFmt} — some formatting may be lost.`, "warn", 4000);
-    }
 
     // Save current body under old format for possible restore
     bodyCache[oldFmt] = body;
@@ -196,39 +254,61 @@
   }
 
   // ── Load contacts for recipient suggestions ──────────────────────────
+  // Each entry: { fullName: string, emails: string[] }
+  let contactEntries = $state([]);
+
   $effect(() => {
     contactsApi.list({ limit: 100 }).then((data) => {
       const contacts = data.contacts || [];
-      const emails = new Set();
+      const entries = [];
       for (const c of contacts) {
+        const name = c.full_name || "";
         const raw = c.emails;
+        let emailList = [];
         if (Array.isArray(raw)) {
           for (const e of raw) {
-            if (typeof e === "string" && e.includes("@")) emails.add(e);
-            else if (e?.value && e.value.includes("@")) emails.add(e.value);
+            const addr = typeof e === "string" ? e : (e?.value || "");
+            if (addr.includes("@")) emailList.push(addr);
           }
         } else if (typeof raw === "string") {
           try {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed)) {
               for (const e of parsed) {
-                if (typeof e === "string" && e.includes("@")) emails.add(e);
-                else if (e?.value && e.value.includes("@")) emails.add(e.value);
+                const addr = typeof e === "string" ? e : (e?.value || "");
+                if (addr.includes("@")) emailList.push(addr);
               }
             }
           } catch { /* ignore */ }
         }
+        if (emailList.length > 0) {
+          entries.push({ fullName: name, emails: emailList });
+        }
       }
-      contactSuggestions = [...emails].sort();
+      contactEntries = entries;
     }).catch(() => {});
   });
 
-  /** Autocomplete query for MultiEntryField: filter contact suggestions by partial match */
+  /** Autocomplete query for MultiEntryField: search by name OR email, show name <email> labels. */
   function searchContactEmails(partial) {
     if (!partial || partial.length < 1) return [];
     const q = partial.toLowerCase();
-    const matches = contactSuggestions.filter((e) => e.toLowerCase().includes(q));
-    return matches.map((email) => ({ label: email, value: email }));
+    const seen = new Set();
+    const results = [];
+    for (const entry of contactEntries) {
+      const nameMatch = entry.fullName.toLowerCase().includes(q);
+      for (const addr of entry.emails) {
+        if (seen.has(addr)) continue;
+        if (nameMatch || addr.toLowerCase().includes(q)) {
+          seen.add(addr);
+          const label = entry.fullName
+            ? `${entry.fullName} <${addr}>`
+            : addr;
+          results.push({ label, value: addr });
+        }
+      }
+    }
+    return results;
   }
 
   // ── LLM co-writing ─────────────────────────────────────────────────
@@ -479,7 +559,7 @@
     {#snippet children()}
       <div class="body-area">
         <div class="body-format-bar">
-          <select class="format-select" bind:value={bodyFormat}>
+          <select class="format-select" value={_displayFormat} onchange={handleFormatChange}>
             <option value="markdown">Markdown</option>
             <option value="html">HTML</option>
             <option value="plain">Plain Text</option>
@@ -538,6 +618,17 @@
       htmlContent={preview.htmlContent}
       title={preview.title}
       onclose={() => { preview = { showing: false, htmlContent: "", title: "Preview" }; }}
+    />
+  {/if}
+
+  {#if formatConfirm}
+    <ConfirmDialog
+      title="Confirm Format Switch"
+      message={`Switching from ${formatConfirm.oldFmt} to ${formatConfirm.newFmt} may lose some formatting (e.g. bold, headers, lists). Are you sure?`}
+      confirmText="Switch"
+      variant="warning"
+      onConfirm={confirmFormatSwitch}
+      onDismiss={cancelFormatSwitch}
     />
   {/if}
 

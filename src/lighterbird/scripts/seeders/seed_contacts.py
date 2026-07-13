@@ -95,3 +95,50 @@ def _seed_contacts(data_dir: Path) -> None:
         f"INSERT OR IGNORE INTO contacts ({', '.join(cols2)}) VALUES ({placeholders})",
         tuple(vals2),
     )
+
+    # Helper to insert a contact row with defaulted fields
+    def _contact_row(defaults: dict) -> dict:
+        row = {
+            "given_name": "", "middle_names": "", "family_name": "", "full_name": "",
+            "emails": "[]", "phones": "[]", "organization": "", "position": "",
+            "address": "", "post_code": "", "date_of_birth": "", "place_of_birth": "",
+            "notes": "", "category": "", "custom_fields": "{}", "created_at": now, "updated_at": now,
+        }
+        row.update(defaults)
+        return row
+
+    # Contact 3: Alice Johnson (multiple emails)
+    c3 = _contact_row({
+        "uuid": _gen_uuid(), "given_name": "Alice", "family_name": "Johnson",
+        "full_name": "Alice Johnson",
+        "emails": json.dumps([{"tag": "work", "value": "alice@example.com"}, {"tag": "home", "value": "alice.johnson@personal.org"}]),
+        "organization": "Example Inc", "notes": "Seed contact for autocomplete testing",
+    })
+    db.execute(
+        f"INSERT OR IGNORE INTO contacts ({', '.join(cols)}) VALUES ({placeholders})",
+        tuple(c3[k] for k in cols),
+    )
+
+    # Contact 4: Bob Smith
+    c4 = _contact_row({
+        "uuid": _gen_uuid(), "given_name": "Bob", "family_name": "Smith",
+        "full_name": "Bob Smith",
+        "emails": json.dumps([{"tag": "work", "value": "bob.smith@corp.com"}]),
+        "organization": "Corp Ltd", "notes": "Seed contact for autocomplete testing",
+    })
+    db.execute(
+        f"INSERT OR IGNORE INTO contacts ({', '.join(cols)}) VALUES ({placeholders})",
+        tuple(c4[k] for k in cols),
+    )
+
+    # Contact 5: Carol Davis (multiple emails)
+    c5 = _contact_row({
+        "uuid": _gen_uuid(), "given_name": "Carol", "middle_names": "Anne", "family_name": "Davis",
+        "full_name": "Carol Anne Davis",
+        "emails": json.dumps([{"tag": "work", "value": "carol@business.com"}, {"tag": "personal", "value": "cadavis@mail.org"}]),
+        "organization": "Business Co", "notes": "Seed contact for autocomplete testing",
+    })
+    db.execute(
+        f"INSERT OR IGNORE INTO contacts ({', '.join(cols)}) VALUES ({placeholders})",
+        tuple(c5[k] for k in cols),
+    )

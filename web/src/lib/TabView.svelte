@@ -1,6 +1,7 @@
 <script>
   import { tabStore } from "./tabStore.svelte.js";
   import { dirtyFormStore } from "./dirtyFormStore.svelte.js";
+  import { overlayStack } from "@lightercore/ui/overlayStack.svelte.js";
   import HomeTab from "./HomeTab.svelte";
   import LoadingPopup from "./LoadingPopup.svelte";
   import StatusPopup from "./StatusPopup.svelte";
@@ -163,7 +164,15 @@
       const type = tabStore.active?.type;
       if (type && LIST_TAB_TYPES.has(type)) return;
 
-      // Level 5: Close current tab
+      // Level 5: If an overlay (CowritePanel, modal, etc.) is active,
+      // close the top-most overlay instead of the tab.
+      if (overlayStack.top) {
+        overlayStack.top.close();
+        e.preventDefault();
+        return;
+      }
+
+      // Level 6: Close current tab
       if (tabStore.active && tabStore.active.closable && !tabStore.isHome) {
         handleCloseTab(tabStore.active.id);
         e.preventDefault();
@@ -204,9 +213,15 @@
     }
 
     // Q / q — close current tab (inert when typing in an input to avoid
-    // accidental closes from someone inserting "q" in a text field)
+    // accidental closes from someone inserting "q" in a text field).
+    // When an overlay is active, Q closes the overlay instead.
     if ((e.key === "q" || e.key === "Q") && !tabStore.isHome) {
       if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) {
+        return;
+      }
+      if (overlayStack.top) {
+        overlayStack.top.close();
+        e.preventDefault();
         return;
       }
       if (tabStore.active && tabStore.active.closable) {
