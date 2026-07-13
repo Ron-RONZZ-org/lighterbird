@@ -21,11 +21,15 @@
     onCancel = () => {},
   } = $props();
 
-  let focusBtn;
+  let saveBtn = $state(null);
+  let discardBtn = $state(null);
   let overlay;
 
   $effect(() => {
-    tick().then(() => focusBtn?.focus());
+    tick().then(() => {
+      if (onSave && saveBtn) saveBtn.focus();
+      else if (discardBtn) discardBtn.focus();
+    });
   });
 
   const trapKeydown = createDialogTrap(() => overlay, (e) => {
@@ -53,10 +57,10 @@
     <p class="unsaved-message">{message}</p>
     <div class="actions">
       {#if onSave}
-        <button class="btn btn-save" onclick={onSave} bind:this={focusBtn}>{saveText}</button>
+        <button class="btn btn-save" onclick={onSave} bind:this={saveBtn}>{saveText}</button>
       {/if}
       <button class="btn btn-discard" class:btn-only-two={!onSave}
-        onclick={onDiscard} bind:this={onSave ? undefined : focusBtn}>{discardText}</button>
+        onclick={onDiscard} bind:this={discardBtn}>{discardText}</button>
       <button class="btn btn-cancel" onclick={onCancel}>Cancel</button>
     </div>
   </div>
