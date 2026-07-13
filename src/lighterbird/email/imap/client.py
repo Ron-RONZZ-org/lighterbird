@@ -297,6 +297,41 @@ class IMAPClient:
         typ, _data = self.conn.create(folder_name)
         return typ == "OK"
 
+    def rename_folder(self, old_name: str, new_name: str) -> bool:
+        """Rename (or move) an IMAP folder on the server.
+
+        IMAP ``RENAME`` changes the folder name, which effectively moves
+        the folder in the hierarchy when the new name contains different
+        path segments.  All child folders are also moved.
+
+        Args:
+            old_name: Current folder name (full IMAP path).
+            new_name: New folder name (full IMAP path).
+
+        Returns:
+            True if the rename succeeded.
+        """
+        typ, _data = self.conn.rename(
+            _imap_quote_folder(old_name),
+            _imap_quote_folder(new_name),
+        )
+        return typ == "OK"
+
+    def delete_folder(self, folder_name: str) -> bool:
+        """Delete an IMAP folder on the server.
+
+        Sends ``DELETE`` command via imaplib.  The folder must be empty
+        (no messages) for most IMAP servers.
+
+        Args:
+            folder_name: The folder name (full IMAP path) to delete.
+
+        Returns:
+            True if the delete succeeded.
+        """
+        typ, _data = self.conn.delete(_imap_quote_folder(folder_name))
+        return typ == "OK"
+
     # Regex to extract APPENDUID from APPEND response
     # Format: OK [APPENDUID <uidvalidity> <uid>] APPEND completed
     _APPENDUID_RE = re.compile(rb"\[APPENDUID (\d+) (\d+)\]")

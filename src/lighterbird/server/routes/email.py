@@ -7,6 +7,7 @@ live in ``email_actions.py`` — this file is kept under 500 lines.
 from __future__ import annotations
 
 from datetime import UTC
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
@@ -196,6 +197,143 @@ def create_folder(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save folder to local DB: {e}")
+
+    return {"status": "ok", "folder_name": folder_name, "account_email": account_email}
+
+
+def _connect_imap_for_account(
+    account_email: str,
+    email_svc: EmailService,
+) -> tuple[dict, Any]:
+    """Look up an account and establish an IMAP connection.
+
+    Returns ``(account_dict, IMAPClient)`` or raises ``HTTPException``.
+
+    Args:
+        account_email: The account to connect to.
+        email_svc: EmailService instance.
+
+    Returns:
+        Tuple of (account dict, connected IMAPClient).
+    """
+    accounts = email_svc.list_accounts()
+    target = None
+    for acct in accounts:
+        if acct["email"] == account_email:
+            target = acct
+            break
+    if not target:
+        raise HTTPException(status_code=404, detail=f"Account not found: {account_email}")
+
+    password = email_svc.accounts.get_password(account_email)
+    if not password:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No password configured for account: {account_email}",
+        )
+
+    from lighterbird.email.imap.client import IMAPClient
+
+    host = target.get("imap_server", "")
+    port = target.get("imap_port", 993)
+    use_ssl = target.get("imap_use_ssl", True)
+    client = IMAPClient(host, port, use_ssl)
+    try:
+        client.connect(
+            username=target.get("imap_username", "") or account_email,
+            password=password,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"IMAP connection failed: {e}")
+    return target, client
+
+
+@router.patch("/folders/{folder_name:path}")
+def rename_folder(
+    folder_name: str,
+    account_email: str = Query(...),
+    new_name: str = Query(...),
+    email_svc: EmailService = Depends(get_email_service),
+):
+    """Rename (or move in hierarchy) an IMAP folder on the server.
+
+    The ``folder_name`` is the full current IMAP path (URL-decoded by
+    FastAPI).  ``new_name`` is the new full IMAP path — changing the
+    path prefix effectively moves the folder under a different parent.
+
+    Both the IMAP RENAME and the local DB update are performed.
+    Returns the new name on success.
+    """
+    target, client = _connect_imap_for_account(account_email, email_svc)
+    try:
+        success = client.rename_folder(folder_name, new_name)
+        if not success:
+            raise HTTPException(
+                status_code=500,
+                detail=f"IMAP RENAME failed for folder: {folder_name}",
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to rename folder: {e}")
+    finally:
+        client.disconnect()
+
+    # Update local DB
+    from datetime import UTC as _UTC, datetime
+
+    now = datetime.now(_UTC).isoformat()
+    try:
+        email_svc.db.execute(
+            "UPDATE folders SET name = ?, updated_at = ? "
+            "WHERE account_email = ? AND name = ?",
+            (new_name, now, account_email, folder_name),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Folder renamed on server but failed to update local DB: {e}",
+        )
+
+    return {"status": "ok", "old_name": folder_name, "new_name": new_name, "account_email": account_email}
+
+
+@router.delete("/folders/{folder_name:path}")
+def delete_folder(
+    folder_name: str,
+    account_email: str = Query(...),
+    email_svc: EmailService = Depends(get_email_service),
+):
+    """Delete an IMAP folder from the server and local DB.
+
+    The folder must be empty on most IMAP servers.
+    """
+    target, client = _connect_imap_for_account(account_email, email_svc)
+    try:
+        success = client.delete_folder(folder_name)
+        if not success:
+            raise HTTPException(
+                status_code=500,
+                detail=f"IMAP DELETE failed for folder: {folder_name}",
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete folder: {e}")
+    finally:
+        client.disconnect()
+
+    # Delete from local DB (cascades to messages via ON DELETE SET NULL)
+    try:
+        email_svc.db.execute(
+            "DELETE FROM folders WHERE account_email = ? AND name = ?",
+            (account_email, folder_name),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Folder deleted on server but failed to remove from local DB: {e}",
+        )
 
     return {"status": "ok", "folder_name": folder_name, "account_email": account_email}
 

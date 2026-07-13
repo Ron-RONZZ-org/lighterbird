@@ -68,6 +68,7 @@
   import LetterViewTab from "./LetterViewTab.svelte";
   import KeyboardShortcutOverlay from "./KeyboardShortcutOverlay.svelte";
   import SavedCommandsTab from "./SavedCommandsTab.svelte";
+  import EmailFolderTab from "./EmailFolderTab.svelte";
 
   /** Map of tab type → component constructor. */
   const TAB_COMPONENTS = {
@@ -91,6 +92,7 @@
     "letter-list": LetterListTab,
     "letter-view": LetterViewTab,
     "saved-commands": SavedCommandsTab,
+    "folder-list": EmailFolderTab,
     templates: StatusPopup,
     help: HelpPopup,
     form: FormTab,
@@ -130,7 +132,7 @@
   // Tab types that manage their own Escape (selection mode, search, dialogs)
   const LIST_TAB_TYPES = new Set([
     "email-list", "journal-list", "contacts-list", "todo-list",
-    "calendar-events", "sieve-list", "letter-list",
+    "calendar-events", "sieve-list", "letter-list", "folder-list",
   ]);
 
   function handleKeydown(e) {
@@ -369,6 +371,7 @@
       "contacts-list": "👤",
       "contact-view": "👤",
       "todo-list": "☐",
+      "folder-list": "📁",
       "calendar-events": "📅",
       "sieve-list": "🔍",
       "sieve-editor": "✏",
