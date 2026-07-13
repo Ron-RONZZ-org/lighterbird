@@ -404,7 +404,6 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
-    height: 100%;
   }
   .tab-content {
     flex: 1;

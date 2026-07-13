@@ -8,6 +8,8 @@
   import { banner } from "./bannerStore.svelte.js";
   import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
   import MultiEntryField from "./MultiEntryField.svelte";
+  import { renderMarkdown } from "./markdown.js";
+  import TurndownService from "turndown";
 
   let { initialData = {}, onsubmit, onDirtyChange = () => {} } = $props();
   // Snapshot of initial props for dirty-state comparison.
@@ -24,10 +26,85 @@
   let bccList = $state(_initial.bcc ? _initial.bcc.split(",").map((s) => s.trim()).filter(Boolean) : []);
   let priority = $state(_initial.priority || "3");
   let bodyFormat = $state(_initial["body-format"] || _initial.body_format || "markdown"); // "markdown" | "html" | "plain"
+
+  // ── Body cache with dirty-format invalidation ──────────────────────────
+  //
+  // bodyCache[fmt] = snapshot saved when user LAST left that format.
+  // bodyDirtyFormat = the format in which user LAST typed (not programmatic
+  // conversion).  On format switch:
+  //   - Save current body → cache[oldFormat]
+  //   - If cache[newFormat] exists AND the body was last EDITED in newFormat
+  //     (dirtyFormat === newFormat), restore the cache (preserves original).
+  //   - Otherwise the cache is stale (body was edited in an intermediate
+  //     format) → convert from current body text.
+  let bodyCache = $state({ markdown: "", html: "", plain: "" });
+  // svelte-ignore state_referenced_locally — one-time capture of initial format
+  let bodyDirtyFormat = $state(bodyFormat); // tracks which format user last edited in
+
+  // Lazy-init the TurndownService for HTML→markdown conversion
+  let _turndown = null;
+  function getTurndown() {
+    if (!_turndown) { _turndown = new TurndownService(); }
+    return _turndown;
+  }
+
+  /** Convert body text between markdown/html/plain formats. */
+  function convertBodyFormat(text, fromFmt, toFmt) {
+    if (!text || fromFmt === toFmt) return text;
+    if (fromFmt === "markdown" && toFmt === "html") return renderMarkdown(text);
+    if (fromFmt === "markdown" && toFmt === "plain") return renderMarkdown(text).replace(/<[^>]+>/g, "");
+    if (fromFmt === "html" && toFmt === "markdown") return getTurndown().turndown(text);
+    if (fromFmt === "html" && toFmt === "plain") return text.replace(/<[^>]+>/g, "");
+    if (fromFmt === "plain" && toFmt === "markdown") return text;
+    if (fromFmt === "plain" && toFmt === "html") return `<p>${text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</p>`;
+    return text;
+  }
+
+  /** Return true if switching toFmt may lose formatting present in fromFmt. */
+  function isDestructiveSwitch(fromFmt, toFmt) {
+    const order = ["html", "markdown", "plain"];
+    return order.indexOf(fromFmt) < order.indexOf(toFmt);
+  }
+
+  // Auto-convert body text when format changes + warn on destructive switch
+  // svelte-ignore state_referenced_locally — one-time capture of initial format
+  let _prevFormat = $state(bodyFormat);
+  $effect(() => {
+    const newFmt = bodyFormat;
+    const oldFmt = _prevFormat;
+    if (newFmt === oldFmt || !body.trim()) return;
+
+    // Warn if switching to a format that discards formatting
+    if (isDestructiveSwitch(oldFmt, newFmt)) {
+      banner.show(`Switching from ${oldFmt} to ${newFmt} — some formatting may be lost.`, "warn", 4000);
+    }
+
+    // Save current body under old format for possible restore
+    bodyCache[oldFmt] = body;
+
+    // Restore cache if valid (body was last EDITED in newFormat, not converted)
+    if (bodyCache[newFmt] && bodyDirtyFormat === newFmt) {
+      body = bodyCache[newFmt];
+    } else {
+      body = convertBodyFormat(body, oldFmt, newFmt);
+      bodyCache[newFmt] = body;
+    }
+    bodyDirtyFormat = newFmt;
+    _prevFormat = newFmt;
+  });
+
   let attachmentFiles = $state(_initial.files || []); // Array of {name, data} (base64)
   let saveAsSample = $state(true); // save as writing sample for LLM style learning
   let sending = $state(false);
   let savingDraft = $state(false);
+
+  // Debug logging: tracks if `sending` gets stuck at true (button text
+  // stays "Sending..." even after the async operation completes).
+  $effect(() => {
+    if (sending) {
+      console.debug("[ComposeEmail] sending=true", { toListLength: toList.length, hasSubject: !!subject });
+    }
+  });
   let draftSaved = $state(false);
   let draftUuid = $state(_initial._draft_uuid || null);
   let accounts = $state([]);
@@ -288,6 +365,7 @@
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (sending) return; // prevent double-submit while async send is in flight
     if (toList.length === 0 || !subject) {
       const missing = !toList.length && !subject ? "To and Subject"
                       : !toList.length ? "To" : "Subject";
@@ -409,7 +487,8 @@
           <!-- Preview now handled by unified "Preview Email" button below -->
         </div>
         <textarea id="body" class="ff-textarea" bind:value={body} rows="8"
-          placeholder="Message body (Markdown supported)"></textarea>
+          placeholder="Message body (Markdown supported)"
+          oninput={() => { bodyDirtyFormat = bodyFormat; }}></textarea>
       </div>
     {/snippet}
   </FormField>
@@ -495,7 +574,7 @@
         Save Draft <kbd>Ctrl+S</kbd>
       {/if}
     </button>
-    <button type="submit" class="btn-primary" disabled={sending || toList.length === 0 || !subject}>
+    <button type="submit" class="btn-primary" disabled={sending}>
       {sending ? "Sending..." : "Send"} <kbd>Ctrl+Enter</kbd>
     </button>
   </div>
@@ -556,7 +635,9 @@
 
   .attachment-area { display: flex; flex-direction: column; gap: 0.4rem; }
   .file-input {
-    font-family: monospace; font-size: 0.8rem; color: #ccc;
+    font-family: monospace; font-size: 0.8rem;
+    color: transparent; /* hides the native "No file selected" label — files show in .attachment-list below */
+    width: auto;
   }
   .file-input::file-selector-button {
     background: #2a2a3e; border: 1px solid #444; border-radius: 4px;

@@ -23,7 +23,6 @@
     if (data?.folders) folders = data.folders;
     if (data?.accounts) accounts = data.accounts;
   });
-
   // ── Account filter ─────────────────────────────────────────────────────
   let accountFilter = $state("");
   let filteredFolders = $derived(

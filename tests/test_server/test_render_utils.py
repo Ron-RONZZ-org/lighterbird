@@ -54,6 +54,32 @@ class TestConvertToHtml:
         assert "<p>Para1</p>" in result or "Para1" in result
         assert "Para2" in result
 
+    def test_markdown_single_newline_br(self):
+        """Single newline in markdown produces <br> (nl2br)."""
+        result = convert_to_html("Line1\nLine2\nLine3", "markdown")
+        assert "<br>" in result, f"Expected <br> for single newlines, got: {result}"
+
+    def test_markdown_mixed_newlines(self):
+        """Single newlines within paragraph produce <br>, double newlines new paragraph."""
+        result = convert_to_html("Line1\nLine2\n\nNewPara", "markdown")
+        assert "Line1" in result
+        assert "Line2" in result
+        assert "NewPara" in result
+        assert "<br>" in result, f"Expected <br> between Line1 and Line2, got: {result}"
+        # Line1 and Line2 should be in the same paragraph, NewPara in a different one
+        assert "</p>" in result
+
+    def test_markdown_single_newline_in_paragraph(self):
+        """Single newline after a heading still gets nl2br in following paragraph."""
+        result = convert_to_html("# Title\nBody text\nMore text", "markdown")
+        assert "<br>" in result, f"Expected <br> between Body text and More text, got: {result}"
+
+    def test_plain_text_preserves_newlines(self):
+        """Plain text wraps in <pre> which preserves all newlines."""
+        result = convert_to_html("Line1\nLine2", "plain")
+        assert "<pre>" in result
+        assert "Line1\nLine2" in result or "Line1<br>" in result
+
     def test_markdown_strikethrough(self):
         result = convert_to_html("~~struck~~", "markdown")
         assert "struck" in result

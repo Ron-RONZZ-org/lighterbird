@@ -28,7 +28,7 @@ def convert_to_html(content: str, fmt: str) -> str:
         try:
             import markdown as md_lib
 
-            return md_lib.markdown(content)
+            return md_lib.markdown(content, extensions=["nl2br"])
         except ImportError:
             pass
         # Fallback: basic hand-rolled markdown parser
@@ -60,6 +60,9 @@ def convert_to_html(content: str, fmt: str) -> str:
                 if not in_para:
                     lines.append("<p>")
                     in_para = True
+                else:
+                    # Single newline within a paragraph → <br>
+                    lines.append("<br>")
                 lines.append(_inline_markdown(stripped))
         if in_para:
             lines.append("</p>")
