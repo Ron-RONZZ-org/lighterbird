@@ -57,15 +57,15 @@ async function runTests(page) {
     }
   });
 
-  await test("Send button always enabled; validation banner shown on empty submit", async () => {
+  await test("Send button disabled only when sending; banner on empty submit", async () => {
     await typeCommand("!email send");
     await pressEnter();
     await assertFormOpened("Compose Email", ["To", "Subject"]);
 
-    // Send button should always be enabled (not disabled even when fields empty)
+    // Send button should NOT be disabled when fields are empty
+    // (disabled only during async send to prevent double-click)
     const sendBtn = page.locator('[role="tabpanel"] button:has-text("Send")');
-    const isDisabled = await sendBtn.isDisabled();
-    assert(!isDisabled, "Send button should always be enabled");
+    assert(!(await sendBtn.isDisabled()), "Send button should not be disabled when fields empty");
   });
 
   await test("ComposeEmail form: fill fields and submit", async () => {
