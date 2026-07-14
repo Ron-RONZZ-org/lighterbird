@@ -35,7 +35,7 @@
     { key: "Ctrl+M", desc: "Move selected messages", modifiers: "Ctrl", category: "Email List" },
   ]);
 
-  let { data = {} } = $props();
+  let { data = {}, isTrashView: _isTrashViewProp = null, isDraftView: _isDraftViewProp = null } = $props();
   let messages = $state([]);
   let total = $derived(messages.length);
   let hasMore = $state(false);
@@ -98,14 +98,15 @@
       syncPollTimer = setTimeout(poll, 500);
     });
   }
-  // isTrashView / isDraftView are set ONCE from initial data so they survive
-  // safeUpdate (which overwrites data without _isTrashView / _isDraftView).
+  // isTrashView / isDraftView are set ONCE from the explicit prop (when
+  // passed by TabView) or from initial data.  This survives safeUpdate
+  // (which overwrites data without _isTrashView / _isDraftView).
   // The component is destroyed/recreated on tab switch, so a fresh non-trash
   // non-draft tab starts with both=false.
   // svelte-ignore state_referenced_locally — intentional, see above
-  let isTrashView = $state(!!data?._isTrashView);
+  let isTrashView = $state(_isTrashViewProp !== null ? _isTrashViewProp : !!data?._isTrashView);
   // svelte-ignore state_referenced_locally — intentional, see above
-  let isDraftView = $state(!!data?._isDraftView);
+  let isDraftView = $state(_isDraftViewProp !== null ? _isDraftViewProp : !!data?._isDraftView);
 
   // Own idKey for tab targeting.  Derived from stable isTrashView/isDraftView
   // so it survives safeUpdate (which strips _isTrashView/_isDraftView from data).
@@ -185,13 +186,18 @@
         if (showMoveDialog && e.key === "Escape") { showMoveDialog = false; e.preventDefault(); return true; }
         const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
         switch (e.key) {
-          case "e": if (plain && sel.selectionMode && sel.numSelected > 0) { openExportDialog(); e.preventDefault(); } return true;
           case "/": if (plain) { showSearch = !showSearch; if (showSearch) requestAnimationFrame(() => document.querySelector(".search-input")?.focus()); else closeSearch(); e.preventDefault(); } return true;
           case "f": case "F": if (plain) { showFolderTree = !showFolderTree; e.preventDefault(); } return true;
           case "s": case "S": if (plain) { showSortDropdown = !showSortDropdown; e.preventDefault(); } return true;
           case "p": case "P": if (plain) { showParamsDialog = !showParamsDialog; e.preventDefault(); } return true;
           case "l": case "L": if (plain && hasMore) { loadMore(); e.preventDefault(); } return true;
           case "a": case "A": if (plain) { showAdvancedSearch = true; e.preventDefault(); } return true;
+          case "m": case "M":
+            if (plain && sel.numSelected > 0) { showMoveDialog = true; e.preventDefault(); }
+            return true;
+          case "r": case "R":
+            if (plain && isTrashView && sel.selectionMode && sel.numSelected > 0) { handleRestoreSelected(); e.preventDefault(); }
+            return true;
           case "Escape":
             if (showShortcutHelp) { showShortcutHelp = false; e.preventDefault(); return true; }
             if (showSearch) { closeSearch(); e.preventDefault(); return true; }
@@ -203,7 +209,10 @@
             tabStore.close(tabStore.active?.id); return true;
         }
         if ((e.ctrlKey || e.metaKey) && e.key === "r") { e.preventDefault(); handleSync(); return true; }
-        if ((e.ctrlKey || e.metaKey) && e.key === "m") { e.preventDefault(); if (sel.numSelected > 0) showMoveDialog = true; return true; }
+        // Ctrl+E: export selected
+        if ((e.ctrlKey || e.metaKey) && e.key === "e") { e.preventDefault(); if (sel.numSelected > 0) openExportDialog(); return true; }
+        // Ctrl+M: import draft (only in draft view)
+        if ((e.ctrlKey || e.metaKey) && e.key === "m") { e.preventDefault(); if (isDraftView) openImportDialog(); return true; }
         if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "Delete" || e.key === "Del")) {
           // Ctrl+Shift+Delete: clear entire trash (only in trash view)
           e.preventDefault();
@@ -624,6 +633,20 @@
     }
   }
 
+  async function handleRestoreSelected() {
+    const uuids = [...sel.selectedKeys];
+    if (uuids.length === 0) return;
+    try {
+      await emailApi.batchMove(uuids, "INBOX");
+      sel.toggleSelectionMode();
+      await refreshList();
+    } catch (err) {
+      tabStore.open("error", "Restore Failed", {
+        message: err.message || "Failed to restore messages",
+      });
+    }
+  }
+
   function stopSync() {
     syncing = false;
     syncTaskId = null;
@@ -746,6 +769,8 @@
     onHardDelete={() => { if (sel.numSelected > 0) confirmHardDelete = true; }}
     onClearTrash={() => { if (isTrashView) confirmClearTrash = true; }}
     {isTrashView}
+    {isDraftView}
+    onRestore={handleRestoreSelected}
     onMove={() => { if (sel.numSelected > 0) showMoveDialog = true; }}
     onNew={handleNew}
     onToggleSearch={() => { showSearch = !showSearch; if (showSearch) requestAnimationFrame(() => document.querySelector(".search-input")?.focus()); }}

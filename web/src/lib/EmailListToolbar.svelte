@@ -13,8 +13,10 @@
     onToggleMode = () => {},
     onDelete = () => {},
     isTrashView = false,
+    isDraftView = false,
     onHardDelete = () => {},
     onClearTrash = () => {},
+    onRestore = () => {},
     onMove = () => {},
     onNew = null,
     onToggleSearch = () => {},
@@ -65,7 +67,9 @@
           {#if onNew}
             <button class="tool-btn primary" onclick={onNew} title="New message">+ New <kbd>N</kbd></button>
           {/if}
-          <button class="tool-btn" onclick={onImport} title="Import messages">Import</button>
+          {#if isDraftView}
+            <button class="tool-btn" onclick={onImport} title="Import .eml as draft (Ctrl+M)">Import <kbd>⌃M</kbd></button>
+          {/if}
           <button class="tool-btn" onclick={onSync} disabled={syncing} title="Sync (Ctrl+R)">
             {syncing ? "Syncing…" : "Sync"} <kbd>Ctrl+R</kbd>
           </button>
@@ -87,11 +91,12 @@
       {/if}
     </div>
     <div class="right">
-      <button class="tool-btn" disabled={numSelected === 0} onclick={onExport} title="Export selected (E)">Export <kbd>E</kbd></button>
+      <button class="tool-btn" disabled={numSelected === 0} onclick={onExport} title="Export selected (Ctrl+E)">Export <kbd>⌃E</kbd></button>
       {#if isTrashView}
-        <button class="tool-btn danger" onclick={onClearTrash} title="Empty Trash (Ctrl+Shift+Delete)">Clear Trash <kbd>⌃⇧Del</kbd></button>
+        <button class="tool-btn" onclick={onRestore} disabled={numSelected === 0} title="Restore to Inbox (R)">Restore <kbd>R</kbd></button>
+        <button class="tool-btn" onclick={onClearTrash} title="Empty Trash (Ctrl+Shift+Delete)">Clear Trash <kbd>⌃⇧Del</kbd></button>
       {:else}
-        <button class="tool-btn" disabled={numSelected === 0} onclick={onMove} title="Move selected (Ctrl+M)">Move <kbd>⌃M</kbd></button>
+        <button class="tool-btn" disabled={numSelected === 0} onclick={onMove} title="Move selected (M)">Move <kbd>M</kbd></button>
       {/if}
       {#if !isTrashView}
         <button class="tool-btn danger" disabled={numSelected === 0} onclick={onDelete} title="Delete selected (Delete key)">Delete <kbd>Del</kbd></button>
@@ -136,7 +141,9 @@
           {syncing ? "Syncing…" : "Sync"} <kbd>Ctrl+R</kbd>
         </button>
       {/if}
-      <button class="tool-btn" onclick={onImport} title="Import messages (M)">Import <kbd>M</kbd></button>
+      {#if isDraftView}
+        <button class="tool-btn" onclick={onImport} title="Import .eml as draft (Ctrl+M)">Import <kbd>⌃M</kbd></button>
+      {/if}
     </div>
   {/if}
 </div>
