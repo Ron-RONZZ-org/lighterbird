@@ -16,7 +16,7 @@
   import ExportDialog from "./ExportDialog.svelte";
   import ImportDialog from "./ImportDialog.svelte";
   import ProgressBar from "./ProgressBar.svelte";
-  import SyncOverlay from "./SyncOverlay.svelte";
+  import ScrollList from "@lightercore/ui/ScrollList.svelte";
   import {
     createSelectionManager,
     createCopyState,
@@ -29,7 +29,7 @@
     { key: "s", desc: "Change sort order", category: "Email List" },
     { key: "p", desc: "Toggle params dialog", category: "Email List" },
     { key: "r", desc: "Reply to selected message", category: "Email List" },
-    { key: "l", desc: "Load more messages", category: "Email List" },
+    { key: "l", desc: "Scroll to bottom of list", category: "Email List" },
     { key: "a", desc: "Open advanced search", category: "Email List" },
     { key: "Ctrl+R", desc: "Sync emails", modifiers: "Ctrl", category: "Email List" },
     { key: "Ctrl+M", desc: "Move selected messages", modifiers: "Ctrl", category: "Email List" },
@@ -830,20 +830,6 @@
 
   <!-- Message list -->
   <div class="list" role="listbox" aria-label="Email messages" aria-multiselectable="true">
-    {#each messages as msg, i (msg.uuid)}
-      <EmailListRow
-        {msg}
-        index={i}
-        isSelected={sel.isSelected(msg.uuid)}
-        isFocused={i === sel.focusedIndex}
-        selectionMode={sel.selectionMode}
-        {uuidCopy}
-        {emailCopy}
-        onRowClick={(e, msg) => isDraftView ? handleDraftClick(e, msg, sel) : handleRowClick(e, msg, sel)}
-      />
-    {:else}
-      <p class="empty">No messages.</p>
-    {/each}
     {#if showSearch && searchQuery && searchFetchedTotal > 0}
       <div class="search-progress" role="status">
         {#if searchFetchingAll}
@@ -854,11 +840,28 @@
           <span>Search complete: {searchFetchedTotal} result{searchFetchedTotal !== 1 ? 's' : ''}</span>
         {/if}
       </div>
-    {:else if hasMore}
-      <button class="load-more" onclick={loadMore} disabled={loadingMore}>
-        {loadingMore ? "Loading…" : "Load more"}
-      </button>
     {/if}
+    <ScrollList
+      items={messages}
+      hasMore={hasMore}
+      loading={loadingMore}
+      getKey={(m) => m.uuid}
+      onLoadMore={loadMore}
+      emptyMessage="No messages."
+    >
+      {#snippet children(msg, i)}
+        <EmailListRow
+          {msg}
+          index={i}
+          isSelected={sel.isSelected(msg.uuid)}
+          isFocused={i === sel.focusedIndex}
+          selectionMode={sel.selectionMode}
+          {uuidCopy}
+          {emailCopy}
+          onRowClick={(e, msg) => isDraftView ? handleDraftClick(e, msg, sel) : handleRowClick(e, msg, sel)}
+        />
+      {/snippet}
+    </ScrollList>
   </div>
 
 {#if sel.confirmDelete}
