@@ -122,7 +122,7 @@
 
     <!-- Level 2: Folder autocomplete (only when "move" selected) -->
     {#if disposition === "move"}
-      <div class="dest-box" role="combobox" aria-expanded={showSuggestions}>
+      <div class="dest-box" role="combobox" aria-expanded={showSuggestions} aria-controls="dest-suggestions">
         <input
           type="text"
           class="dest-input"
@@ -133,7 +133,7 @@
           aria-autocomplete="list"
         />
         {#if showSuggestions}
-          <ul class="suggestions" role="listbox" aria-label="Destination folder suggestions">
+          <ul id="dest-suggestions" class="suggestions" role="listbox" aria-label="Destination folder suggestions">
             {#each suggestions as folder}
               <li
                 class="suggestion-item"

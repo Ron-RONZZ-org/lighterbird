@@ -40,42 +40,6 @@ vi.mock("../lib/tabStore.svelte.js", () => ({
   },
 }));
 
-// Mock child components
-vi.mock("../lib/DynamicForm.svelte", () => ({
-  default: {
-    render: () => {},
-    $$render: () => '<div class="dynamic-form-mock">Dynamic Form</div>',
-  },
-}));
-
-vi.mock("../lib/ComposeEmail.svelte", () => ({
-  default: {
-    render: () => {},
-    $$render: () => '<div class="compose-mock">Compose Email</div>',
-  },
-}));
-
-vi.mock("../lib/JournalWrite.svelte", () => ({
-  default: {
-    render: () => {},
-    $$render: () => '<div class="journal-mock">Journal Write</div>',
-  },
-}));
-
-vi.mock("../lib/TodoAddForm.svelte", () => ({
-  default: {
-    render: () => {},
-    $$render: () => '<div class="todo-mock">Todo Add</div>',
-  },
-}));
-
-vi.mock("../lib/EventForm.svelte", () => ({
-  default: {
-    render: () => {},
-    $$render: () => '<div class="event-mock">Event Form</div>',
-  },
-}));
-
 // FormTab uses _inferCommandPath internally — let's test the mapping logic
 // by examining which form types map to which command paths.
 
