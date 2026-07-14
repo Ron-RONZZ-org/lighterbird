@@ -65,7 +65,8 @@
   // ── Wire dirty state to global store (beforeunload + tab-close guards) ──
   // This ensures the browser beforeunload handler (App.svelte) and the tab
   // close confirmation (TabView.svelte) work for ALL form types.
-  // Store entry is cleaned up by TabView.handleCloseTab or form submit.
+  // Store entry is cleaned up on each update (setDirty deletes when false),
+  // and on destroy (clear) to prevent stale entries from blocking future closes.
   // Using setTimeout to break reactive chains that can trigger
   // Svelte 5's effect_update_depth_exceeded detection.
   $effect(() => {
@@ -73,6 +74,11 @@
     if (tabId) {
       setTimeout(() => dirtyFormStore.setDirty(tabId, formDirty), 0);
     }
+    return () => {
+      if (tabId) {
+        setTimeout(() => dirtyFormStore.clear(tabId), 0);
+      }
+    };
   });
 
   /** Infer command path from form type name */
@@ -193,12 +199,11 @@
   function handleCancel() {
     const activeId = tabStore.active?.id;
     if (!activeId) return;
-    if (formDirty) {
-      // Dispatch event so TabView shows the UnsavedChangesDialog
-      window.dispatchEvent(new CustomEvent("request-close-tab", { detail: { tabId: activeId } }));
-    } else {
-      tabStore.close(activeId);
-    }
+    // Always dispatch so TabView's unified handleCloseTab manages the close.
+    // When formDirty is false, it closes immediately; when true, it shows
+    // the UnsavedChangesDialog.  This avoids duplicating the close logic
+    // which can break if tabStore state shifts between active?.id and close().
+    window.dispatchEvent(new CustomEvent("request-close-tab", { detail: { tabId: activeId } }));
   }
 
   /** Human-readable title for the form type. */

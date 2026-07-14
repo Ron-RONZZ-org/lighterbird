@@ -64,7 +64,7 @@
           <button class="tool-btn" title="Advanced search (A)" onclick={onToggleAdvancedSearch}>Adv srch <kbd>A</kbd></button>
         </div>
         <div class="right">
-          {#if onNew}
+          {#if onNew && !isTrashView}
             <button class="tool-btn primary" onclick={onNew} title="New message">+ New <kbd>N</kbd></button>
           {/if}
           {#if isDraftView}
@@ -123,7 +123,7 @@
     </div>
     <div class="right">
       <button class="tool-btn" title="Advanced search (A)" onclick={onToggleAdvancedSearch}>Adv srch <kbd>A</kbd></button>
-      {#if onNew}
+      {#if onNew && !isTrashView}
         <button class="tool-btn primary" onclick={onNew} title="New message">+ New <kbd>N</kbd></button>
       {/if}
       {#if syncing && syncProgress}

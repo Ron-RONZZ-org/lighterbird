@@ -385,18 +385,20 @@
     // with Save/Discard/Cancel. No action needed here.
   }
 
-  // Dirty state — compare current against initial
+  // Dirty state — compare current against initial snapshot
   let initialToArray = $derived(_initial.to ? _initial.to.split(",").map((s) => s.trim()).filter(Boolean) : []);
+  let initialCcArray = $derived(_initial.cc ? _initial.cc.split(",").map((s) => s.trim()).filter(Boolean) : []);
+  let initialBccArray = $derived(_initial.bcc ? _initial.bcc.split(",").map((s) => s.trim()).filter(Boolean) : []);
   let dirty = $derived(
     toList.length !== initialToArray.length || toList.some((e, i) => e !== initialToArray[i])
+    || ccList.length !== initialCcArray.length || ccList.some((e, i) => e !== initialCcArray[i])
+    || bccList.length !== initialBccArray.length || bccList.some((e, i) => e !== initialBccArray[i])
     || subject !== (_initial.subject || "")
     || body !== (_initial.body || "")
-    || ccList.length > 0
-    || bccList.length > 0
     || priority !== (_initial.priority || "3")
-    || bodyFormat !== "markdown"
+    || bodyFormat !== (_initial["body-format"] || _initial.body_format || "markdown")
     || attachmentFiles.length > 0
-    || saveAsSample !== true
+    || saveAsSample !== (_initial["no-save-sample"] ? false : true)
   );
   $effect(() => { onDirtyChange(dirty); });
 
