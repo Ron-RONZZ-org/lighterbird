@@ -190,12 +190,16 @@
   function handleKeydown(e) {
     // Escape — context-sensitive: blur field → allow component → close tab
     if (e.key === "Escape") {
-      // Level 1: If an input/textarea is focused, blur it
+      // Level 1: If an input/textarea is focused, blur it.
+      // Only blur when a focusable element is actually focused — otherwise
+      // let the event fall through to Level 6 (close tab) directly.
       const tag = e.target?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || e.target?.isContentEditable) {
-        e.target.blur();
-        e.preventDefault();
-        return;
+        if (document.activeElement === e.target) {
+          e.target.blur();
+          e.preventDefault();
+          return;
+        }
       }
 
       // Level 2: Dismiss global help overlay if open
