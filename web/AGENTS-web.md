@@ -82,6 +82,76 @@ When a result tab is active:
 - `WebSocket /api/v1/ai/chat` — send message, receive streaming response
 - `WebSocket /api/v1/ai/command` — send `!` command, receive structured result
 
+## Svelte 5 Reactive Best Practices
+
+### Always key `{#each}` blocks
+
+Provide a unique key `(item.id)` for every `{#each}` block that contains event
+handlers or mutable state. Index-based matching (`item, i`) can produce stale
+closures when items are dynamically added/removed, causing event handlers to
+reference the wrong data or silently fail.
+
+```svelte
+<!-- BAD -->
+{#each tabStore.tabs as tab, i}
+  <button onclick={() => closeTab(tab.id)}>✕</button>
+{/each}
+
+<!-- GOOD -->
+{#each tabStore.tabs as tab (tab.id)}
+  <button onclick={() => closeTab(tab.id)}>✕</button>
+{/each}
+```
+
+### Consolidate module-level $state writes in a single $effect
+
+When a component writes to module-level `$state` variables (stores defined in
+`.svelte.js` files with `$state(new Map())` or similar), use ONE `$effect` for
+ALL such writes. Each `$state` reassignment inside an `$effect` increments
+Svelte 5's internal batch flush counter. During mount, the combined depth of
+multiple effects writing to module-level stores can exceed the 1000-iteration
+guard, throwing `effect_update_depth_exceeded` and silently corrupting all
+event handlers (tab close buttons, keyboard shortcuts).
+
+```javascript
+// BAD — two separate effects, each contributes to flush depth
+$effect(() => { storeA.set(tabId, value); });
+$effect(() => { storeB.set(tabId, value); });
+
+// GOOD — single effect with deferred write for the second store
+$effect(() => {
+  storeA.set(tabId, value);
+  queueMicrotask(() => storeB.set(tabId, value));
+  return () => { storeA.clear(tabId); storeB.clear(tabId); };
+});
+```
+
+### Debugging silent event-handler failures
+
+When keyboard shortcuts, tab close buttons, or other event handlers appear
+"dead" (no response to clicks/keys, no console errors):
+
+1. **Check for `effect_update_depth_exceeded`** — This Svelte 5 error is
+   NOT logged to `console.error`. Use `page.on("pageerror", ...)` in
+   Playwright to detect it. In Vite, look for the error URL
+   `https://svelte.dev/e/effect_update_depth_exceeded` in browser devtools
+   or the terminal.
+2. **Consolidate concurrent `$effect` writes** to module-level `$state`
+   (see rule above).
+3. **Verify `{#each}` keys** — missing unique keys can cause stale closures.
+
+### Mock strategy for Svelte 5 component tests
+
+`@testing-library/svelte` v5.x cannot render Svelte 5 components with mock
+child `.svelte` stubs — the test harness fails with "Class constructors
+cannot be invoked without 'new'". Instead:
+
+- Mock at the **module-import level**: mock `.js` stores, API clients, and
+  utility modules rather than child `.svelte` component files.
+- Test child `.svelte` components **independently** in their own test files.
+- Use **Playwright E2E scripts** for integration testing that spans multiple
+  components.
+
 ## Documentation Reference
 
 - Svelte 5 docs: https://svelte.dev/docs/svelte/overview
