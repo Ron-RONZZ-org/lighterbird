@@ -8,12 +8,28 @@ import { render, screen, fireEvent } from "@testing-library/svelte";
 import { flushSync } from "svelte";
 import FolderDeleteDialog from "../lib/FolderDeleteDialog.svelte";
 
+// Mock the email API for folder loading
+const mockListFolders = vi.fn();
+vi.mock("../lib/api.js", () => ({
+  email: {
+    listFolders: (...args) => mockListFolders(...args),
+  },
+}));
+
 function flushEffects() {
   flushSync();
 }
 
 describe("FolderDeleteDialog", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockListFolders.mockResolvedValue({
+      folders: [
+        { label: "user@example.com/Inbox", folder_name: "Inbox", account_email: "user@example.com" },
+        { label: "user@example.com/Sent", folder_name: "Sent", account_email: "user@example.com" },
+      ],
+    });
+  });
 
   it("renders folder path in message", () => {
     render(FolderDeleteDialog, {
@@ -114,5 +130,70 @@ describe("FolderDeleteDialog", () => {
     const dialog = document.querySelector('[role="alertdialog"]');
     expect(dialog).toBeTruthy();
     expect(dialog?.getAttribute("aria-modal")).toBe("true");
+  });
+
+  it("combobox has aria-controls pointing to suggestions listbox", async () => {
+    render(FolderDeleteDialog, {
+      folderPaths: ["a/F1"],
+    });
+    flushEffects();
+    // Select "Move to another folder" to show the combobox
+    const moveRadio = screen.getByDisplayValue("move");
+    await fireEvent.click(moveRadio);
+    flushEffects();
+    // Wait for folder load and type to trigger suggestions
+    await new Promise(r => setTimeout(r, 10));
+    flushEffects();
+    const destInput = screen.getByPlaceholderText("user@example.com/folder name");
+    await fireEvent.input(destInput, { target: { value: "In" } });
+    flushEffects();
+    const combobox = document.querySelector('[role="combobox"]');
+    expect(combobox).toBeTruthy();
+    const controlsId = combobox?.getAttribute("aria-controls");
+    expect(controlsId).toBeTruthy();
+    // The ID should match the suggestions listbox
+    const listbox = document.getElementById(controlsId);
+    expect(listbox).toBeTruthy();
+    expect(listbox?.getAttribute("role")).toBe("listbox");
+  });
+
+  it("suggestions listbox has id matching combobox aria-controls", async () => {
+    render(FolderDeleteDialog, {
+      folderPaths: ["a/F1"],
+    });
+    flushEffects();
+    // Select "Move to another folder" to show the combobox
+    const moveRadio = screen.getByDisplayValue("move");
+    await fireEvent.click(moveRadio);
+    flushEffects();
+    // Wait for folder load and type to trigger suggestions
+    await new Promise(r => setTimeout(r, 10));
+    flushEffects();
+    const destInput = screen.getByPlaceholderText("user@example.com/folder name");
+    await fireEvent.input(destInput, { target: { value: "In" } });
+    flushEffects();
+    const combobox = document.querySelector('[role="combobox"]');
+    const controlsId = combobox?.getAttribute("aria-controls");
+    const listbox = document.querySelector('[role="listbox"]');
+    expect(listbox?.getAttribute("id")).toBe(controlsId);
+  });
+
+  it("combobox has aria-expanded attribute", async () => {
+    render(FolderDeleteDialog, {
+      folderPaths: ["a/F1"],
+    });
+    flushEffects();
+    // Select "Move to another folder" to show the combobox
+    const moveRadio = screen.getByDisplayValue("move");
+    await fireEvent.click(moveRadio);
+    flushEffects();
+    // Wait for folder load and type to trigger suggestions
+    await new Promise(r => setTimeout(r, 10));
+    flushEffects();
+    const destInput = screen.getByPlaceholderText("user@example.com/folder name");
+    await fireEvent.input(destInput, { target: { value: "In" } });
+    flushEffects();
+    const combobox = document.querySelector('[role="combobox"]');
+    expect(combobox?.hasAttribute("aria-expanded")).toBe(true);
   });
 });
