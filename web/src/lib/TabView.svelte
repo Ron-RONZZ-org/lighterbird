@@ -362,7 +362,7 @@
   <!-- Tab bar (hidden when only home tab exists) -->
   {#if tabStore.count > 1}
     <div class="tab-bar" role="tablist" aria-label="Open tabs">
-      {#each tabStore.tabs as tab, i}
+      {#each tabStore.tabs as tab (tab.id)}
         <button
           role="tab"
           class="tab"

@@ -521,7 +521,7 @@
     showSearch = false;
     searchQuery = "";
     if (data?.query) performSearch("");
-    document.querySelector(".email-list .list")?.focus();
+    document.querySelector(".email-list-tab .list")?.focus();
   }
 
   async function refreshList() {
@@ -930,45 +930,10 @@
   {/if}
 
 <style>
-  .email-list {
-    display: flex;
-    flex-direction: column;
-    font-family: monospace;
-    font-size: 0.85rem;
-    position: relative;
-  }
-
   .list {
     flex: 1;
     overflow-y: auto;
     padding: 0;
-  }
-
-  .empty {
-    color: var(--clr-muted);
-    text-align: center;
-    padding: 2rem;
-  }
-
-  .load-more {
-    display: block;
-    width: 100%;
-    padding: 0.6rem;
-    text-align: center;
-    background: var(--clr-surface, #2a2a3e);
-    border: 1px solid var(--clr-border, #4a4a6a);
-    border-radius: 0 0 4px 4px;
-    color: var(--clr-primary, #7c9bff);
-    cursor: pointer;
-    font: inherit;
-    transition: background 0.15s;
-  }
-  .load-more:hover:not(:disabled) {
-    background: var(--clr-hover, #3a3a52);
-  }
-  .load-more:disabled {
-    color: var(--clr-muted, #888);
-    cursor: default;
   }
 
   .search-progress {

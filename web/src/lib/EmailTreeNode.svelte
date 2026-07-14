@@ -75,12 +75,14 @@
   }
 </script>
 
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="tree-node"
   class:active={isActive}
   class:drag-over={isDragOver}
   class:folder-node={node.isFolder}
   style="padding-left: {paddingLeft}px"
+  role="presentation"
   ondragover={handleDragOver}
   ondragleave={handleDragLeave}
   ondrop={handleDrop}
@@ -118,6 +120,7 @@
     class:account={!node.isFolder && (node.children?.length || 0) > 0}
     class:active-label={isActive}
     role="treeitem"
+    aria-selected={isActive}
     tabindex="-1"
     onclick={handleClick}
     oncontextmenu={handleRightClick}

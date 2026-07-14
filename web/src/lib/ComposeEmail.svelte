@@ -101,6 +101,7 @@
   // format that drives conversion via the $effect below.  When the user
   // picks a "destructive" target format (html→md or md→plain), a
   // ConfirmDialog asks for confirmation before committing.
+  // svelte-ignore state_referenced_locally — intentional one-time capture of initial format
   let _displayFormat = $state(bodyFormat);
   let formatConfirm = $state(null);            // {oldFmt, newFmt} or null
   // svelte-ignore state_referenced_locally — one-time capture of initial format
