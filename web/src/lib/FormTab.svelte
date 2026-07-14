@@ -42,6 +42,10 @@
   // Register a default save callback that clicks the form's submit button.
   // Individual forms (ComposeEmail, LetterForm) register their own save-draft
   // callback which overrides this, so the UnsavedChangesDialog always works.
+  // Combined with dirty-state wiring in a SINGLE $effect to minimise reactive
+  // cascade during initialization — two separate $effects each writing to
+  // module-level $state stores can create enough flush iterations to exceed
+  // Svelte 5's effect_update_depth_exceeded (1000) guard.
   $effect(() => {
     const tabId = tabStore.active?.id;
     if (tabId && tabStore.active?.type === "form") {
@@ -56,27 +60,13 @@
           if (fallback) fallback.click();
         }
       });
-    }
-    return () => {
-      if (tabId) saveCallbackStore.setCallback(tabId, null);
-    };
-  });
-
-  // ── Wire dirty state to global store (beforeunload + tab-close guards) ──
-  // This ensures the browser beforeunload handler (App.svelte) and the tab
-  // close confirmation (TabView.svelte) work for ALL form types.
-  // Store entry is cleaned up on each update (setDirty deletes when false),
-  // and on destroy (clear) to prevent stale entries from blocking future closes.
-  // Using setTimeout to break reactive chains that can trigger
-  // Svelte 5's effect_update_depth_exceeded detection.
-  $effect(() => {
-    const tabId = tabStore.active?.id;
-    if (tabId) {
-      setTimeout(() => dirtyFormStore.setDirty(tabId, formDirty), 0);
+      // Defer dirty-state write to avoid contributing to mount-time flush depth
+      queueMicrotask(() => dirtyFormStore.setDirty(tabId, formDirty));
     }
     return () => {
       if (tabId) {
-        setTimeout(() => dirtyFormStore.clear(tabId), 0);
+        saveCallbackStore.setCallback(tabId, null);
+        dirtyFormStore.clear(tabId);
       }
     };
   });
