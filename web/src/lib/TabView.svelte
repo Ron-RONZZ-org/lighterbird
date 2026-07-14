@@ -302,7 +302,12 @@
       {:else if tabStore.active.type === "error"}
         <ErrorPopup data={tabStore.active.data} />
       {:else if tabStore.active.type === "email-list" || tabStore.active.type === "email-trash-list" || tabStore.active.type === "email-draft-list"}
-        <EmailListTab data={tabStore.active.data} tabId={tabStore.active.id} />
+        <EmailListTab
+          data={tabStore.active.data}
+          tabId={tabStore.active.id}
+          isTrashView={tabStore.active.type === "email-trash-list"}
+          isDraftView={tabStore.active.type === "email-draft-list"}
+        />
       {:else if tabStore.active.type === "journal-list"}
         <JournalListTab data={tabStore.active.data} tabId={tabStore.active.id} />
       {:else if tabStore.active.type === "journal-view"}
