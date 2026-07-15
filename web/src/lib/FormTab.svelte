@@ -42,26 +42,28 @@
   // Register a default save callback that clicks the form's submit button.
   // Individual forms (ComposeEmail, LetterForm) register their own save-draft
   // callback which overrides this, so the UnsavedChangesDialog always works.
-  // Combined with dirty-state wiring in a SINGLE $effect to minimise reactive
-  // cascade during initialization — two separate $effects each writing to
-  // module-level $state stores can create enough flush iterations to exceed
-  // Svelte 5's effect_update_depth_exceeded (1000) guard.
+  // Defer ALL module-level $state writes via queueMicrotask so they don't
+  // contribute to the mount-time flush depth.  Two separate synchronous writes
+  // (save callback + dirty state) in the same $effect can accumulate enough
+  // flush iterations to exceed Svelte 5's effect_update_depth_exceeded (1000)
+  // guard when multiple form components mount simultaneously.
   $effect(() => {
     const tabId = tabStore.active?.id;
     if (tabId && tabStore.active?.type === "form") {
-      saveCallbackStore.setCallback(tabId, () => {
-        // Click the primary submit/save button in the form
-        const formEl = document.querySelector('.form-tab form');
-        if (formEl) {
-          const btn = formEl.querySelector('button[type="submit"]');
-          if (btn) { btn.click(); return; }
-          // Fallback: look for common save/submit button classes
-          const fallback = formEl.querySelector('.btn-primary, .btn-save, [class*="submit"]');
-          if (fallback) fallback.click();
-        }
+      queueMicrotask(() => {
+        saveCallbackStore.setCallback(tabId, () => {
+          // Click the primary submit/save button in the form
+          const formEl = document.querySelector('.form-tab form');
+          if (formEl) {
+            const btn = formEl.querySelector('button[type="submit"]');
+            if (btn) { btn.click(); return; }
+            // Fallback: look for common save/submit button classes
+            const fallback = formEl.querySelector('.btn-primary, .btn-save, [class*="submit"]');
+            if (fallback) fallback.click();
+          }
+        });
+        dirtyFormStore.setDirty(tabId, formDirty);
       });
-      // Defer dirty-state write to avoid contributing to mount-time flush depth
-      queueMicrotask(() => dirtyFormStore.setDirty(tabId, formDirty));
     }
     return () => {
       if (tabId) {

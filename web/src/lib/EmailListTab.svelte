@@ -16,6 +16,7 @@
   import ExportDialog from "./ExportDialog.svelte";
   import ImportDialog from "./ImportDialog.svelte";
   import ProgressBar from "./ProgressBar.svelte";
+  import SyncOverlay from "./SyncOverlay.svelte";
   import ScrollList from "@lightercore/ui/ScrollList.svelte";
   import {
     createSelectionManager,

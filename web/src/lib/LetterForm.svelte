@@ -207,10 +207,13 @@
   }));
   // ── Save draft ─────────────────────────────────────────────────────────
   // Register save-draft callback so TabView's UnsavedChangesDialog can offer "Save Draft"
+  // Deferred via queueMicrotask (same rationale as ComposeEmail).
   $effect(() => {
     const tabId = tabStore.active?.id;
     if (tabId && tabStore.active?.type === "form") {
-      saveCallbackStore.setCallback(tabId, async () => { await saveDraft(); return true; });
+      queueMicrotask(() => {
+        saveCallbackStore.setCallback(tabId, async () => { await saveDraft(); return true; });
+      });
     }
     return () => {
       if (tabId) saveCallbackStore.setCallback(tabId, null);
