@@ -170,9 +170,10 @@
           if (listResult.type === "error") {
             popup.show("error", "Error", listResult.data);
           } else {
-            // Open the persistent list tab
+            // Open the persistent list tab (use resolved listIdKey as type
+            // so subtypes like email-list / email-trash-list are correct).
             popup.showPersistent(
-              listResult.type,
+              routing.listIdKey || listResult.type,
               listResult.title,
               listResult.data || {},
               routing.listIdKey,
@@ -252,8 +253,10 @@
               if (!isDelete && highlightUuid) {
                 listData.highlight = highlightUuid;
               }
+              // Use the resolved listIdKey as tab type so TabView correctly
+              // distinguishes list subtypes (email-list vs email-trash-list).
               popup.showPersistent(
-                listResult.type,
+                mutationCfg.listIdKey,
                 listResult.title,
                 listData,
                 mutationCfg.listIdKey,
@@ -282,7 +285,10 @@
 
       const dataType = detectPersistentType(input);
       if (dataType) {
-        popup.showPersistent(result.type, result.title, result.data, dataType);
+        // Use the resolved data type as the tab type (not result.type) so that
+        // TabView can correctly distinguish email-list / email-trash-list /
+        // email-draft-list subtypes for toolbar context and shortcut keys.
+        popup.showPersistent(dataType, result.title, result.data, dataType);
       } else {
         popup.show(result.type, result.title, result.data);
       }

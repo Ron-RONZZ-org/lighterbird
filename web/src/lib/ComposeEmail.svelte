@@ -316,10 +316,16 @@
 
   // Register save-draft callback so TabView's UnsavedChangesDialog
   // can offer "Save Draft" when the user tries to close a dirty form.
+  // Deferred via queueMicrotask to avoid contributing to the mount-time
+  // flush depth — FormTab already sets a default callback in its own
+  // (also deferred) $effect, and overwriting it synchronously from a
+  // child component's $effect can cascade through module-level $state.
   $effect(() => {
     const tabId = tabStore.active?.id;
     if (tabId && tabStore.active?.type === "form") {
-      saveCallbackStore.setCallback(tabId, async () => { await saveDraft(); return true; });
+      queueMicrotask(() => {
+        saveCallbackStore.setCallback(tabId, async () => { await saveDraft(); return true; });
+      });
     }
     return () => {
       if (tabId) saveCallbackStore.setCallback(tabId, null);

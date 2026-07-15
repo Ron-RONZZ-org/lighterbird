@@ -85,7 +85,7 @@
             }
             const dataType = detectPersistentType(cmd);
             if (dataType) {
-              popup.showPersistent(result.type, result.title, result.data, dataType);
+              popup.showPersistent(dataType, result.title, result.data, dataType);
             } else {
               popup.show(result.type, result.title, result.data);
             }
@@ -110,7 +110,7 @@
             popup.show("error", "Error", listResult.data);
           } else {
             popup.showPersistent(
-              listResult.type,
+              routing.listIdKey || listResult.type,
               listResult.title,
               listResult.data || {},
               routing.listIdKey,
@@ -160,7 +160,7 @@
 
         const dataType = detectPersistentType(trimmed);
         if (dataType) {
-          popup.showPersistent(result.type, result.title, result.data, dataType);
+          popup.showPersistent(dataType, result.title, result.data, dataType);
         } else {
           popup.show(result.type, result.title, result.data);
         }
