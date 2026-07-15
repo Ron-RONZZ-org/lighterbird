@@ -189,18 +189,18 @@
         if (showMoveDialog && e.key === "Escape") { showMoveDialog = false; e.preventDefault(); return true; }
         const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
         switch (e.key) {
-          case "/": if (plain) { showSearch = !showSearch; if (showSearch) requestAnimationFrame(() => document.querySelector(".search-input")?.focus()); else closeSearch(); e.preventDefault(); } return true;
-          case "f": case "F": if (plain) { showFolderTree = !showFolderTree; e.preventDefault(); } return true;
-          case "s": case "S": if (plain) { showSortDropdown = !showSortDropdown; e.preventDefault(); } return true;
-          case "p": case "P": if (plain) { showParamsDialog = !showParamsDialog; e.preventDefault(); } return true;
-          case "l": case "L": if (plain && hasMore) { loadMore(); e.preventDefault(); } return true;
-          case "a": case "A": if (plain) { showAdvancedSearch = true; e.preventDefault(); } return true;
+          case "/": if (plain) { showSearch = !showSearch; if (showSearch) requestAnimationFrame(() => document.querySelector(".search-input")?.focus()); else closeSearch(); e.preventDefault(); return true; } break;
+          case "f": case "F": if (plain) { showFolderTree = !showFolderTree; e.preventDefault(); return true; } break;
+          case "s": case "S": if (plain) { showSortDropdown = !showSortDropdown; e.preventDefault(); return true; } break;
+          case "p": case "P": if (plain) { showParamsDialog = !showParamsDialog; e.preventDefault(); return true; } break;
+          case "l": case "L": if (plain && hasMore) { loadMore(); e.preventDefault(); return true; } break;
+          case "a": case "A": if (plain) { showAdvancedSearch = true; e.preventDefault(); return true; } break;
           case "m": case "M":
-            if (plain && sel.numSelected > 0) { showMoveDialog = true; e.preventDefault(); }
-            return true;
+            if (plain && sel.numSelected > 0) { showMoveDialog = true; e.preventDefault(); return true; }
+            break;
           case "r": case "R":
-            if (plain && isTrashView && sel.selectionMode && sel.numSelected > 0) { handleRestoreSelected(); e.preventDefault(); }
-            return true;
+            if (plain && isTrashView && sel.selectionMode && sel.numSelected > 0) { handleRestoreSelected(); e.preventDefault(); return true; }
+            break;
           case "Escape":
             if (showShortcutHelp) { showShortcutHelp = false; e.preventDefault(); return true; }
             if (showSearch) { closeSearch(); e.preventDefault(); return true; }

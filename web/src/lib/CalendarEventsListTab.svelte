@@ -152,21 +152,21 @@
     const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
     switch (e.key) {
       case "v":
-        if (plain && !sel.selectionMode) { sel.toggleSelectionMode(); e.preventDefault(); }
-        return;
+        if (plain && !sel.selectionMode) { sel.toggleSelectionMode(); e.preventDefault(); return; }
+        break;
       case "e":
         if (plain && sel.selectionMode && sel.numSelected > 0) {
-          openExportDialog(); e.preventDefault();
+          openExportDialog(); e.preventDefault(); return;
         }
-        return;
+        break;
       case "/":
         if (plain) {
           showSearch = !showSearch;
           if (showSearch) requestAnimationFrame(() => document.querySelector(".search-input")?.focus());
           else closeSearch();
-          e.preventDefault();
+          e.preventDefault(); return;
         }
-        return;
+        break;
       case "Escape":
         if (showSearch) { closeSearch(); e.preventDefault(); return; }
         if (sel.selectionMode) { sel.toggleSelectionMode(); e.preventDefault(); return; }

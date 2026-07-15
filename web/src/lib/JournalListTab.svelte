@@ -161,14 +161,14 @@
           showSearch = !showSearch;
           if (showSearch) requestAnimationFrame(() => document.querySelector(".search-input")?.focus());
           else closeSearch();
-          e.preventDefault();
+          e.preventDefault(); return;
         }
-        return;
+        break;
       case "e":
         if (plain && sel.selectionMode && sel.numSelected > 0) {
           openExportDialog(); e.preventDefault(); return;
         }
-        return;
+        break;
       case "Escape":
         if (showSearch) { closeSearch(); e.preventDefault(); return; }
         if (sel.selectionMode) { sel.toggleSelectionMode(); e.preventDefault(); return; }

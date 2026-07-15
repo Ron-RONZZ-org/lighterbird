@@ -43,7 +43,12 @@ def send_email(
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    return {"status": result.get("status", "sent")}
+    # Trigger background SMTP delivery (non-blocking) — the send queue
+    # processes immediately on the email worker thread.
+    from lighterbird.server.tasks import enqueue_email_send
+
+    enqueue_email_send()
+    return {"status": result.get("status", "queued")}
 
 
 @router.patch("/messages/{uuid}/read")

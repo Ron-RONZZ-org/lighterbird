@@ -146,8 +146,11 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
             str(e),
             suggestion="Check the account exists and has a password configured.",
         )
-    if result.get("status") == "queued":
-        return {"type": "status", "title": "Queued for Delivery",
-                "data": {"to": to_str, "subject": subject, "folder": "Outbox",
-                         "error": result.get("error", "")}}
-    return {"type": "status", "title": "Sent", "data": {"to": to_str, "subject": subject}}
+
+    # Trigger background SMTP delivery (non-blocking) — the send queue
+    # processes immediately on the email worker thread.
+    from lighterbird.server.tasks import enqueue_email_send
+    enqueue_email_send()
+
+    return {"type": "status", "title": "Queued for Delivery",
+            "data": {"to": to_str, "subject": subject, "folder": "Outbox"}}

@@ -75,6 +75,25 @@ def enqueue_email_sync(account_email: str | None = None) -> None:
     )
 
 
+def enqueue_email_send() -> None:
+    """Enqueue a background send-queue processing job.
+
+    Triggers :meth:`EmailService.process_send_queue` on the email
+    worker, delivering any queued outbound messages via SMTP.
+    """
+    worker = _pool.get("email")
+    if worker is None:
+        logger.warning("[tasks] Email worker not available")
+        return
+    worker.enqueue(
+        Job(
+            domain="email",
+            operation="send",
+            payload={},
+        )
+    )
+
+
 def enqueue_email_trash(account_email: str | None = None) -> None:
     """Enqueue a background trash queue drain job.
 
@@ -158,6 +177,8 @@ class EmailSyncWorker(BackgroundWorker):
 
         if job.operation == "sync":
             self._do_sync(job.payload)
+        elif job.operation == "send":
+            self._do_send(job.payload)
         elif job.operation == "process_trash":
             self._do_process_trash(job.payload)
         else:
@@ -207,6 +228,26 @@ class EmailSyncWorker(BackgroundWorker):
                 send_result.get("sent", 0),
                 send_result.get("retrying", 0),
                 send_result.get("failed", 0),
+            )
+
+    @staticmethod
+    def _do_send(payload: dict) -> None:
+        """Process the send queue — delivers queued outbound messages via SMTP.
+
+        Runs :meth:`EmailService.process_send_queue` to flush any pending
+        outbox entries.  Messages move from ``"Outbox"`` to ``"Sent"`` on
+        success, or stay in the queue with exponential backoff on failure.
+        """
+        from lighterbird.server.deps import get_email_service
+
+        svc = get_email_service()
+        result = svc.process_send_queue()
+        if result.get("sent") or result.get("retrying") or result.get("failed"):
+            logger.info(
+                "[tasks] Send queue: %d sent, %d retrying, %d failed",
+                result.get("sent", 0),
+                result.get("retrying", 0),
+                result.get("failed", 0),
             )
 
     @staticmethod
@@ -456,6 +497,7 @@ __all__ = [
     "EmailSyncWorker",
     "enqueue_caldav_push",
     "enqueue_caldav_sync",
+    "enqueue_email_send",
     "enqueue_email_sync",
     "enqueue_email_trash",
     "get_worker_pool",

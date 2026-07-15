@@ -48,15 +48,15 @@ class MsgSendComposeMixin:
         *,
         save_as_sample: bool = True,
     ) -> dict[str, Any]:
-        """Send an email via SMTP with outbox fallback on connection failure.
+        """Enqueue an email for background delivery via the send queue.
 
         Always saves the composed message to the local database first
-        (folder = ``"Outbox"``). Then attempts SMTP delivery:
+        (folder = ``"Outbox"``) and enqueues a background send-queue entry.
+        SMTP delivery happens asynchronously via :meth:`process_send_queue`
+        (called by the EmailSyncWorker immediately after enqueue).
 
-        * **On success**: moves the message to the ``"Sent"`` folder.
-        * **On connection failure**: leaves the message in ``"Outbox"``
-          and enqueues a retry with exponential backoff via
-          :meth:`process_send_queue`.
+        This avoids blocking the request thread on SMTP connectivity — the
+        API response is instant, and delivery proceeds in the background.
 
         Args:
             account_email: Sender account email.
@@ -76,11 +76,9 @@ class MsgSendComposeMixin:
                 for LLM cowrite style learning (RAG).
 
         Returns:
-            Dict with ``status`` ("sent" or "queued"), ``uuid`` (message UUID),
+            Dict with ``status`` ("queued"), ``uuid`` (message UUID),
             and ``message_id`` (SMTP Message-ID).
         """
-        from lighterbird.email.smtp import SMTPClient
-
         acct = self._account_service.get_account_with_password(account_email)
         if not acct:
             exists = self._account_service.get(account_email)
@@ -97,7 +95,6 @@ class MsgSendComposeMixin:
         cc = cc or []
         bcc = bcc or []
         att_list = attachments or []
-        smtp_port = acct.get("smtp_port", 587)
 
         # Resolve signature — use stored default if no override provided
         if signature is None:
@@ -110,21 +107,8 @@ class MsgSendComposeMixin:
         msg_uuid = str(uuid_mod.uuid4())
         message_id = str(uuid_mod.uuid4())
 
-        # Parse body per body_format using the same rendering utility
-        # used by the preview endpoint for consistency.
-        from lighterbird.server.render_utils import convert_to_html
-
-        html_body = ""
-        final_body = body
-        if body_format == "markdown" and body:
-            html_body = convert_to_html(body, "markdown")
-            final_body = body
-        elif body_format == "html":
-            html_body = body
-            final_body = ""
-        elif body_format == "plain" and body:
-            html_body = convert_to_html(body, "plain")
-        # "plain" with no body — no html_body, final_body stays as-is
+        # Note: body rendering (markdown→html etc.) happens inside
+        # process_send_queue, not here — keeps this path fast.
 
         # Step 1: Save to Outbox folder first (never lose the message)
         self._ensure_folder(account_email, "Outbox")
@@ -142,62 +126,23 @@ class MsgSendComposeMixin:
             attachments=att_list,
         )
 
-        # Step 2: Attempt SMTP send
-        send_error: str | None = None
-        client = SMTPClient(
-            host=acct.get("smtp_server", ""),
-            port=smtp_port,
-            use_tls=acct.get("smtp_use_tls", 1) == 1,
-            use_ssl=smtp_port == 465,
-        )
-        try:
-            client.connect(
-                username=acct.get("smtp_username", "") or sender_email,
-                password=acct["password"],
-            )
-            client.send_email(
-                from_addr=sender_email, to=to, subject=subject,
-                body=final_body, cc=cc, bcc=bcc,
-                html_body=html_body,
-                attachments=att_list,
-                signature=signature,
-                signature_format=signature_format,
-                message_id=message_id,
-                in_reply_to=in_reply_to,
-            )
-        except ConnectionError as e:
-            send_error = str(e)
-        except Exception as e:
-            send_error = str(e)
-        finally:
-            client.disconnect()
+        # Step 2: Always enqueue for background delivery (never attempt SMTP
+        # inline — keeps the API response instant).  The caller is responsible
+        # for triggering process_send_queue via the worker pool.
+        self._enqueue_send(msg_uuid, account_email, body_format, signature,
+                           priority, "", signature_format)
+        logger.info("Email %s queued for background delivery to %s", msg_uuid[:8], to)
 
-        # Step 3: On success → Sent + save writing sample; on failure → queue
-        now = datetime.now(UTC).isoformat()
-        if send_error is None:
-            self.db.execute(
-                "UPDATE messages SET folder_name = 'Sent', is_read = 1, "
-                "updated_at = ? WHERE uuid = ?",
-                (now, msg_uuid),
+        if save_as_sample:
+            self._save_writing_sample(
+                sample_uuid=str(uuid_mod.uuid4()),
+                source_uuid=msg_uuid,
+                title=subject,
+                body=body,
+                body_format=body_format,
             )
-            logger.info("Email %s sent successfully to %s", msg_uuid[:8], to)
-            if save_as_sample:
-                self._save_writing_sample(
-                    sample_uuid=str(uuid_mod.uuid4()),
-                    source_uuid=msg_uuid,
-                    title=subject,
-                    body=body,
-                    body_format=body_format,
-                )
-            return {"status": "sent", "uuid": msg_uuid, "message_id": message_id}
-        else:
-            self._enqueue_send(msg_uuid, account_email, body_format, signature,
-                               priority, send_error, signature_format)
-            logger.warning(
-                "Email %s queued for retry (SMTP failed: %s)", msg_uuid[:8], send_error,
-            )
-            return {"status": "queued", "uuid": msg_uuid, "message_id": message_id,
-                    "error": send_error}
+
+        return {"status": "queued", "uuid": msg_uuid, "message_id": message_id}
 
     # ── Writing sample registration (RAG) ────────────────────────────────
 
