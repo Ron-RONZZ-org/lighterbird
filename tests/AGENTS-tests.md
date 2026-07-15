@@ -4,6 +4,37 @@ This file contains testing instructions extracted from the root `AGENTS.md`. Age
 
 ---
 
+## Running Tests from Git Worktrees
+
+When running tests in a git worktree (created by `worktreeCreate` or `git worktree add`),
+the worktree does **not** have its own `.venv` — it shares the main checkout's virtual
+environment.  The project provides a convenience script that auto-detects this:
+
+```bash
+./scripts/test.sh [pytest-args...]
+```
+
+This script:
+1. Detects if the current directory is inside a git worktree via
+   `git rev-parse --is-inside-work-tree`.
+2. If yes, finds the **main checkout's** `.venv` via `git rev-parse --git-common-dir`
+   and uses that Python interpreter, with `PYTHONPATH=<worktree-root>/src` to pick up
+   the worktree's code (the main checkout's editable install `.pth` file still points
+   to the parent `src/`, so `PYTHONPATH` must override it).
+3. If in the main checkout, runs `python -m pytest` directly (assumes `.venv` is active).
+
+**Example** — run only email-anchored tests from a worktree:
+```bash
+./scripts/test.sh tests/test_email/ -x -v
+```
+
+**Manual invocation** (equivalent to what the script does for a worktree):
+```bash
+PYTHONPATH=src /path/to/main/checkout/.venv/bin/python -m pytest tests/...
+```
+
+---
+
 ## Dev Instance for Realistic Testing
 
 When working on lighterbird, **always spring up a seeded dev instance** for any testing beyond trivial unit-test changes. This gives you a real server with real accounts to test against.

@@ -19,9 +19,6 @@ import logging
 import os
 from typing import Any
 
-import fastembed  # noqa: F401  # always available in desktop builds
-from fastembed import TextEmbedding
-
 from lightercore.exceptions import AIError
 
 logger = logging.getLogger(__name__)
@@ -60,6 +57,8 @@ _MODEL_INSTANCE: Any = None
 def _model_is_downloaded() -> bool:
     """Check if the configured model's weights are cached locally."""
     try:
+        from fastembed import TextEmbedding
+
         model = TextEmbedding(model_name=_resolve_model_name(), max_length=512)
         # fastembed raises if model not cached; if it succeeds, weights exist
         list(model.embed(["ping"]))
@@ -160,6 +159,8 @@ async def embed(texts: list[str]) -> list[list[float]] | None:
 
 async def _local_embed(texts: list[str]) -> list[list[float]]:
     """Embed via fastembed (ONNX, runs sync in thread pool)."""
+    from fastembed import TextEmbedding
+
     global _MODEL_INSTANCE
 
     if _MODEL_INSTANCE is None:
@@ -216,6 +217,8 @@ def install(model_name: str) -> dict[str, Any]:
 
 def _download_model(hf_id: str) -> None:
     """Pre-download model weights so first embed call is instant."""
+    from fastembed import TextEmbedding
+
     model = TextEmbedding(model_name=hf_id, max_length=512)
     list(model.embed(["warmup"]))
 
