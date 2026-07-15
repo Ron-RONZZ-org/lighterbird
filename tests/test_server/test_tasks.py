@@ -15,6 +15,7 @@ from lighterbird.server.tasks import (
     EmailSyncWorker,
     enqueue_caldav_push,
     enqueue_caldav_sync,
+    enqueue_email_send,
     enqueue_email_sync,
     enqueue_email_trash,
     get_worker_pool,
@@ -79,6 +80,26 @@ class TestModuleFunctions:
         pool.get.return_value = None
         monkeypatch.setattr("lighterbird.server.tasks._pool", pool)
         enqueue_email_trash()  # should not raise
+
+    # ── enqueue_email_send ────────────────────────────────────────────
+
+    def test_enqueue_email_send(self, monkeypatch):
+        worker = MagicMock(spec=BackgroundWorker)
+        pool = MagicMock(spec=WorkerPool)
+        pool.get.return_value = worker
+        monkeypatch.setattr("lighterbird.server.tasks._pool", pool)
+
+        enqueue_email_send()
+        job = worker.enqueue.call_args[0][0]
+        assert job.domain == "email"
+        assert job.operation == "send"
+
+    def test_enqueue_email_send_worker_unavailable(self, monkeypatch):
+        pool = MagicMock(spec=WorkerPool)
+        pool.get.return_value = None
+        monkeypatch.setattr("lighterbird.server.tasks._pool", pool)
+
+        enqueue_email_send()  # should not raise
 
     def test_enqueue_caldav_push(self, monkeypatch):
         worker = MagicMock(spec=BackgroundWorker)
@@ -148,6 +169,23 @@ class TestEmailSyncWorker:
         with patch.object(worker, "_do_process_trash") as mock_trash:
             worker.execute_job(Job("email", "process_trash", {"k": "v"}))
             mock_trash.assert_called_once_with({"k": "v"})
+
+    def test_execute_job_dispatch_send(self):
+        worker = EmailSyncWorker("test-email")
+        with patch.object(worker, "_do_send") as mock_send:
+            worker.execute_job(Job("email", "send", {"k": "v"}))
+            mock_send.assert_called_once_with({"k": "v"})
+
+    @patch("lighterbird.server.deps.get_email_service")
+    def test_do_send(self, mock_get_svc):
+        """_do_send calls process_send_queue and logs result."""
+        worker = EmailSyncWorker("test-email")
+        svc = MagicMock()
+        svc.process_send_queue.return_value = {"sent": 1, "retrying": 0, "failed": 0}
+        mock_get_svc.return_value = svc
+
+        worker._do_send({})
+        svc.process_send_queue.assert_called_once()
 
     def test_execute_job_unknown_operation(self):
         """Unknown operation logs but does not raise."""

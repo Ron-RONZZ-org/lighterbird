@@ -142,9 +142,8 @@ class TestSaveWritingSample:
 class TestSendEmailSampleOptOut:
     """Tests that send_email() respects save_as_sample."""
 
-    @patch("lighterbird.email.smtp.SMTPClient")
-    def test_send_success_saves_sample(self, mock_smtp, host, db):
-        """When save_as_sample=True (default), a writing sample is created."""
+    def test_send_success_saves_sample(self, host, db):
+        """When send is queued with save_as_sample=True, a writing sample is saved."""
         host._account_service.get_account_with_password.return_value = {
             "email": "test@example.com",
             "name": "Test",
@@ -157,8 +156,6 @@ class TestSendEmailSampleOptOut:
             "signature": "",
             "password": "secret",
         }
-        mock_client = MagicMock()
-        mock_smtp.return_value = mock_client
 
         result = host.send_email(
             account_email="test@example.com",
@@ -166,9 +163,10 @@ class TestSendEmailSampleOptOut:
             subject="Test",
             body="Hello world",
         )
-        assert result["status"] == "sent"
+        # Always queued — SMTP delivery happens asynchronously
+        assert result["status"] == "queued"
 
-        # Writing sample should exist
+        # Writing sample should be saved at queue time (not deferred to SMTP)
         sample = db.execute_one(
             "SELECT * FROM writing_samples WHERE source_uuid = ?",
             (result["uuid"],),
@@ -177,8 +175,7 @@ class TestSendEmailSampleOptOut:
         assert sample["title"] == "Test"
         assert sample["body"] == "Hello world"
 
-    @patch("lighterbird.email.smtp.SMTPClient")
-    def test_send_with_opt_out_skips_sample(self, mock_smtp, host, db):
+    def test_send_with_opt_out_skips_sample(self, host, db):
         """When save_as_sample=False, no writing sample is created."""
         host._account_service.get_account_with_password.return_value = {
             "email": "test@example.com",
@@ -192,8 +189,6 @@ class TestSendEmailSampleOptOut:
             "signature": "",
             "password": "secret",
         }
-        mock_client = MagicMock()
-        mock_smtp.return_value = mock_client
 
         result = host.send_email(
             account_email="test@example.com",
@@ -202,7 +197,8 @@ class TestSendEmailSampleOptOut:
             body="This is private",
             save_as_sample=False,
         )
-        assert result["status"] == "sent"
+        # Always queued — SMTP delivery happens asynchronously
+        assert result["status"] == "queued"
 
         # No writing sample should exist for this message
         sample = db.execute_one(
@@ -211,9 +207,8 @@ class TestSendEmailSampleOptOut:
         )
         assert sample is None
 
-    @patch("lighterbird.email.smtp.SMTPClient")
-    def test_send_queued_does_not_save_sample(self, mock_smtp, host, db):
-        """When send fails and queued, no writing sample is created."""
+    def test_send_queued_saves_sample(self, host, db):
+        """Send always queues; writing sample is saved regardless."""
         host._account_service.get_account_with_password.return_value = {
             "email": "test@example.com",
             "name": "Test",
@@ -226,9 +221,6 @@ class TestSendEmailSampleOptOut:
             "signature": "",
             "password": "secret",
         }
-        mock_client = MagicMock()
-        mock_client.connect.side_effect = ConnectionError("Connection refused")
-        mock_smtp.return_value = mock_client
 
         result = host.send_email(
             account_email="test@example.com",
@@ -236,15 +228,19 @@ class TestSendEmailSampleOptOut:
             subject="Queued",
             body="Will be queued",
         )
+        # Always queued — SMTP delivery happens asynchronously
         assert result["status"] == "queued"
 
-        # No writing sample should exist (message was not sent)
+        # Writing sample IS saved (send_email saves it at queue time,
+        # not deferred to SMTP delivery — the old "queued means SMTP
+        # failed" path no longer exists).
         sample = db.execute_one(
             "SELECT * FROM writing_samples WHERE source_uuid = ?",
             (result["uuid"],),
         )
-        assert sample is None
-
+        assert sample is not None
+        assert sample["title"] == "Queued"
+        assert sample["body"] == "Will be queued"
 
 class TestGatherContext:
     """Tests for gather_context() in server/cowrite/context.py."""

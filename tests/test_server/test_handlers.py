@@ -207,11 +207,13 @@ class TestEmailHandlers:
             dispatch(["email", "send", "to@b.com", "Subject", "Body"], {})
 
     def test_email_send_success(self, mock_email_svc):
-        """email send with valid args sends and returns status."""
+        """email send with valid args queues for background delivery."""
         mock_email_svc.list_accounts.return_value = [{"email": "me@b.com"}]
         result = dispatch(["email", "send", "to@b.com", "Subject", "Body"], {})
         assert result["type"] == "status"
-        assert result["title"] == "Sent"
+        # Always queued — SMTP delivery happens asynchronously via outbox
+        assert result["title"] == "Queued for Delivery"
+        assert result["data"]["folder"] == "Outbox"
 
     def test_email_send_passes_signature_format(self, mock_email_svc):
         """email send passes signature_format parameter to svc.send_email()."""
