@@ -28,11 +28,15 @@
     { key: "f", desc: "Toggle folder tree", category: "Email List" },
     { key: "s", desc: "Change sort order", category: "Email List" },
     { key: "p", desc: "Toggle params dialog", category: "Email List" },
-    { key: "r", desc: "Reply to selected message", category: "Email List" },
-    { key: "l", desc: "Scroll to bottom of list", category: "Email List" },
     { key: "a", desc: "Open advanced search", category: "Email List" },
+    { key: "m", desc: "Move selected messages", category: "Email List" },
+    { key: "r", desc: "Restore from trash (selection mode, trash view)", category: "Email List" },
+    { key: "l", desc: "Scroll to bottom of list", category: "Email List" },
+    { key: "Ctrl+E", desc: "Export selected", modifiers: "Ctrl", category: "Email List" },
+    { key: "Ctrl+M", desc: "Import .eml as draft (draft view)", modifiers: "Ctrl", category: "Email List" },
     { key: "Ctrl+R", desc: "Sync emails", modifiers: "Ctrl", category: "Email List" },
-    { key: "Ctrl+M", desc: "Move selected messages", modifiers: "Ctrl", category: "Email List" },
+    { key: "Ctrl+Shift+Delete", desc: "Empty Trash (trash view)", modifiers: "Ctrl+Shift", category: "Email List" },
+    { key: "Ctrl+Delete", desc: "Permanently delete selected", modifiers: "Ctrl", category: "Email List" },
   ]);
 
   let { data = {}, isTrashView: _isTrashViewProp = null, isDraftView: _isDraftViewProp = null } = $props();
@@ -98,15 +102,13 @@
       syncPollTimer = setTimeout(poll, 500);
     });
   }
-  // isTrashView / isDraftView are set ONCE from the explicit prop (when
-  // passed by TabView) or from initial data.  This survives safeUpdate
-  // (which overwrites data without _isTrashView / _isDraftView).
-  // The component is destroyed/recreated on tab switch, so a fresh non-trash
-  // non-draft tab starts with both=false.
-  // svelte-ignore state_referenced_locally — intentional, see above
-  let isTrashView = $state(_isTrashViewProp !== null ? _isTrashViewProp : !!data?._isTrashView);
-  // svelte-ignore state_referenced_locally — intentional, see above
-  let isDraftView = $state(_isDraftViewProp !== null ? _isDraftViewProp : !!data?._isDraftView);
+  // isTrashView / isDraftView are derived from the explicit prop (when
+  // passed by TabView) or from initial data.  $derived ensures they stay
+  // in sync when the user switches between tabs of different email-list
+  // subtypes (email-list / email-trash-list / email-draft-list), because
+  // EmailListTab stays mounted within the same {:else if} branch.
+  let isTrashView = $derived(_isTrashViewProp !== null ? _isTrashViewProp : !!data?._isTrashView);
+  let isDraftView = $derived(_isDraftViewProp !== null ? _isDraftViewProp : !!data?._isDraftView);
 
   // Own idKey for tab targeting.  Derived from stable isTrashView/isDraftView
   // so it survives safeUpdate (which strips _isTrashView/_isDraftView from data).
