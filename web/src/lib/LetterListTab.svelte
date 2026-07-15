@@ -180,25 +180,25 @@
     switch (e.key) {
       case "e":
         if (plain && sel.selectionMode && sel.numSelected > 0) {
-          openExportDialog(); e.preventDefault();
+          openExportDialog(); e.preventDefault(); return;
         }
-        return;
+        break;
       case "/":
         if (plain) {
           showSearch = !showSearch;
           if (showSearch) requestAnimationFrame(() => document.querySelector(".search-input")?.focus());
           else closeSearch();
-          e.preventDefault();
+          e.preventDefault(); return;
         }
-        return;
+        break;
       case "s":
       case "S":
-        if (plain) { showSortDropdown = !showSortDropdown; e.preventDefault(); }
-        return;
+        if (plain) { showSortDropdown = !showSortDropdown; e.preventDefault(); return; }
+        break;
       case "f":
       case "F":
-        if (plain) { showTagFilter = !showTagFilter; e.preventDefault(); }
-        return;
+        if (plain) { showTagFilter = !showTagFilter; e.preventDefault(); return; }
+        break;
       case "Escape":
         if (showSortDropdown) { showSortDropdown = false; e.preventDefault(); return; }
         if (showTagFilter) { showTagFilter = false; e.preventDefault(); return; }
