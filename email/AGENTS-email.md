@@ -69,6 +69,34 @@ Backend IMAP operations (flag sync, trash move, permanent deletion) are deferred
 
 Key rule: **hard-delete (`!email delete --hard`, batch-delete-hard, clear-trash) deletes the local DB row immediately** and enqueues an `'expunge'` backlog entry. The IMAP EXPUNGE happens asynchronously, giving instant UX — same contract as soft delete. `hard_delete_message()` returns a dict with `count`, `queued`, and `errors` — no longer raises on IMAP failure.
 
+### Pre-Sync Backlog Drain
+
+Before `EmailService.sync_account()` acquires the per-account IMAP lock for an
+IMAP sync scan, it drains ALL pending backlog entries for that account first.
+This ensures all local operations (hard-delete, soft-delete, flag changes) are
+reflected on the IMAP server before the scan, preventing:
+
+- **Re-import of hard-deleted messages**: The expunge backlog entry removes the
+  UID from the server before the sync's UID SEARCH scans for it.
+- **Trash folder consistency**: The trash backlog entry moves the message to
+  the IMAP Trash folder before the sync discovers it there.
+- **Flag freshness**: Locally set read/starred flags are pushed to the server
+  before CONDSTORE pull during sync.
+
+The pre-sync drain runs **before** the sync's own IMAP lock acquisition. The
+`BacklogService` acquires its own per-account IMAP lock internally, so the two
+operations serialize correctly — the sync waits for the backlog's IMAP
+connection to finish before starting its own.
+
+The previously separate post-sync `process_sync_backlog()` call has been
+removed — the pre-sync drain subsumes it. Backlog entries enqueued during sync
+(e.g. user flag toggles) will be picked up by the next sync cycle or background
+worker.
+
+**Best-effort contract**: If the BacklogService lock is busy (another thread
+processing backlog), `process_all()` returns 0 gracefully and the sync proceeds
+without draining. The backlog entries remain for the next cycle.
+
 ### Locking (Two Levels)
 
 Backlog processing uses two levels of locking for thread safety:
@@ -78,10 +106,12 @@ Backlog processing uses two levels of locking for thread safety:
 2. **Per-account IMAP lock** (`threading.Lock` per account email, 30s timeout) — Prevents concurrent IMAP connections for the same account. Multiple paths can open IMAP connections independently (background worker `_do_sync`, `_do_process_trash`, user-initiated `!email sync`, `POST /api/v1/sync/start`). Without coordination, these connections can race on the same IMAP folder (one thread scanning UIDs while another EXPUNGEs), causing missed or duplicated messages.
 
    Lock acquisition flow:
-   - `EmailService.sync_account()` — acquires before IMAP connect, releases in `finally`
+   - `EmailService.sync_account()` — pre-sync backlog drain runs first (BacklogService acquires its own IMAP lock internally), THEN sync's IMAP lock is acquired for the scan
    - `BacklogService._process_account()` — acquires before IMAP connect for backlog processing, releases in `finally`
    
-   If the lock cannot be acquired within the timeout, the caller logs a warning and gracefully skips the IMAP operation (entries remain in backlog for next cycle, or sync returns with an appropriate error message).
+   Lock ordering is strictly sequential (never nested): the pre-sync drain's IMAP lock is released before the sync scan's IMAP lock is acquired. If the backlog drain cannot acquire its IMAP lock within the timeout, it returns 0 gracefully and the sync proceeds without draining.
+
+   If the sync scan's IMAP lock cannot be acquired within the 30s timeout, the caller logs a warning and gracefully returns with an error message (backlog entries remain for next cycle).
 
 ### Dead-Letter Limits
 
@@ -109,3 +139,4 @@ Entries exceeding `MAX_RETRIES` (default: 10) are automatically moved to the `_d
 14. **``email_draft_uid_map`` SQLite table** — Tracks the correlation between local draft UUIDs and IMAP UIDs. Primary key is ``(account_email, folder_name, draft_uuid)``. Used to avoid SEARCH HEADER on subsequent saves and to enable IMAP→local inverse sync.
 15. **``!email draft`` opens Drafts folder pane** — ``!email draft`` opens the ``EmailListTab`` filtered to the Drafts folder (with ``_isDraftView``). ``!email draft recall <uuid>`` recalls a saved composition draft.
 16. **``!email trash list`` simplified to ``!email trash``** — The ``list`` sub-command is removed for consistency. ``!email trash`` opens the trash view directly.
+17. **Pre-sync backlog drain contract** — ``EmailService.sync_account()`` drains all pending backlog entries (expunge, trash, flag sync) for the account BEFORE acquiring the IMAP sync lock. This prevents re-import of hard-deleted messages and ensures flag state consistency. The previously separate post-sync ``process_sync_backlog()`` has been removed — the pre-sync drain subsumes it. Any entries enqueued during sync (e.g. user flag toggles during the sync window) will be picked up by the next sync cycle or background worker. Best-effort contract: if the BacklogService lock is busy, sync proceeds without draining.
