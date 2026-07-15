@@ -209,6 +209,7 @@ Testing guidelines and requirements for lighterbird have been centralized in:
 [`tests/AGENTS-tests.md`](tests/AGENTS-tests.md)
 
 Key topics covered there:
+- **Worktree testing** — use `./scripts/test.sh` (auto-detects worktree context)
 - **Dev instance setup** — how to spin up a seeded server for manual testing
 - **GUI + CLI form testing** — how to verify interactive commands end-to-end
 - **E2E test automation** — Playwright + pytest integration
