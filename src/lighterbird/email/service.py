@@ -139,9 +139,11 @@ class EmailService:
                      folders_only: bool = False):
         """Sync messages for a single account by email.
 
-        Always returns a SyncResult (never raises). Pending flag syncs
-        (\\Seen, \\Deleted) from the backlog are processed regardless
-        of whether the IMAP fetch succeeds.
+        Always returns a SyncResult (never raises).  Before connecting
+        to IMAP, all pending backlog entries for this account are drained
+        (expunge, trash, flag sync) so the server reflects all local
+        operations before the IMAP scan — preventing re-import of
+        hard-deleted messages and ensuring flag state consistency.
 
         If *progress_tracker* and *task_id* are provided, folder-level
         progress is reported via ``progress_tracker.update_folder()``.
@@ -169,15 +171,30 @@ class EmailService:
                 f"Set it with: !email account modify {email} --password <pw>"
             )
         else:
-            # Acquire per-account IMAP lock to prevent concurrent
-            # connections to the same account (e.g. from background
-            # backlog processing).  If the lock is busy, skip IMAP
-            # and let the backlog processor handle it later.
+            # Step 1: Drain pending backlog entries for this account BEFORE
+            # acquiring the IMAP sync lock.  This ensures all local operations
+            # (hard-delete, soft-delete, flag changes) are reflected on the
+            # server before we scan it, preventing re-import of deleted messages
+            # and ensuring flag state consistency.
+            # The BacklogService acquires its own per-account IMAP lock internally,
+            # so there is no lock ordering concern with the sync lock below.
+            # If the backlog lock is busy (another thread is processing), this is
+            # best-effort — the sync proceeds without draining, and the backlog
+            # entries will be retried on the next cycle.
+            pending = self.msg_ops.backlog.count_pending(account_email=email)
+            if pending:
+                drained = self.msg_ops.backlog.process_all(account_email=email)
+                logger.info(
+                    "Drained %d/%d backlog entries before IMAP sync for %s",
+                    drained, pending, email,
+                )
+
+            # Step 2: Acquire per-account IMAP lock for the sync scan.
             if not acquire_account_imap_lock(email):
                 result.errors.append(
                     f"IMAP operation already in progress for {email}. "
-                    "Sync skipped — pending flag/trash syncs will be "
-                    "processed when the current operation completes."
+                    "Sync skipped — pending backlog entries were drained "
+                    "and will be retried on the next cycle."
                 )
             else:
                 try:
@@ -206,12 +223,11 @@ class EmailService:
                     result.errors.append(f"Sync error: {e}")
                 finally:
                     release_account_imap_lock(email)
-        # ALWAYS drain the flag sync backlog, even on sync failure.
-        # This ensures \\Seen and \\Deleted flags pushed by mark_read
-        # and trash_message are eventually sent to the IMAP server.
-        backlog = self.msg_ops.process_sync_backlog()
-        if backlog:
-            result.total += backlog
+        # Note: No post-sync backlog drain here.  The pre-sync drain above
+        # already processed all entries that existed before the sync started.
+        # Any entries enqueued during sync (e.g. user flag toggles during
+        # the sync window) will be picked up by the background worker or
+        # the next sync cycle.
         return result
 
     def sync_all(self, force: bool = False,
