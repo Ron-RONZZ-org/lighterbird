@@ -8,6 +8,7 @@ Updated for Phase 0 of the IMAP sync overhaul:
 
 from __future__ import annotations
 
+import unittest
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -177,29 +178,66 @@ class TestTrashMessage:
         assert msg_ops.db.execute.call_count >= 1
 
 
-# ── batch_trash_messages ─────────────────────────────────────────────────────
+# ── batch_trash_messages (batched) ───────────────────────────────────────────
 
 
 class TestBatchTrashMessages:
+    def _setup_batch_trash_mocks(self, msg_ops, rows):
+        """Configure mocks for the batched trash path.
+
+        The new implementation does a single SELECT IN (db.execute) and then
+        uses db.transaction() → conn for mutations.
+        """
+        msg_ops.db.execute.return_value = rows
+        mock_conn = MagicMock()
+        msg_ops.db.transaction.return_value.__enter__.return_value = mock_conn
+        return mock_conn
+
     def test_batch_trash_empty(self, msg_ops):
         result = msg_ops.batch_trash_messages([])
         assert result == {"count": 0, "queued": 0}
 
     def test_batch_trash_one(self, msg_ops):
-        msg_ops.db.execute_one.return_value = {
+        mock_conn = self._setup_batch_trash_mocks(msg_ops, [{
             "uuid": "msg-1", "account_email": "user@example.com",
             "imap_uid": 42, "folder_name": "INBOX",
             "is_read": 0, "is_deleted": 0,
-        }
+        }])
         result = msg_ops.batch_trash_messages(["msg-1"])
         assert result["count"] == 1
         assert result["queued"] == 1
+        # Verify UPDATE was called with the right params
+        mock_conn.execute.assert_any_call(
+            "UPDATE messages SET is_deleted = 1, updated_at = ? "
+            "WHERE uuid IN (?)",
+            unittest.mock.ANY,
+        )
 
     def test_batch_trash_skips_already_deleted(self, msg_ops):
-        msg_ops.db.execute_one.return_value = None  # already deleted
+        self._setup_batch_trash_mocks(msg_ops, [])  # empty = nothing non-deleted
         result = msg_ops.batch_trash_messages(["msg-1"])
         assert result["count"] == 0
         assert result["queued"] == 0
+
+    def test_batch_trash_multiple_mixed(self, msg_ops):
+        """Some found, some not-found, some no imap_uid."""
+        mock_conn = self._setup_batch_trash_mocks(msg_ops, [
+            {
+                "uuid": "msg-1", "account_email": "user@example.com",
+                "imap_uid": 42, "folder_name": "INBOX",
+                "is_read": 0, "is_deleted": 0,
+            },
+            {
+                "uuid": "msg-2", "account_email": "user@example.com",
+                "imap_uid": None, "folder_name": "INBOX",
+                "is_read": 0, "is_deleted": 0,
+            },
+        ])
+        result = msg_ops.batch_trash_messages(["msg-1", "nonexistent", "msg-2"])
+        assert result["count"] == 2   # msg-1 and msg-2 trashed
+        assert result["queued"] == 1  # only msg-1 has imap_uid
+        # Verify executed UPDATE with all requested UUIDs (including nonexistent)
+        mock_conn.execute.assert_called_once()
 
 
 # ── hard_delete_message (background-deferred) ─────────────────────────────────
@@ -278,33 +316,46 @@ class TestHardDeleteMessage:
         assert result["errors"] == []
 
 
-# ── batch_hard_delete_messages (background-deferred) ──────────────────────────
+# ── batch_hard_delete_messages (batched) ─────────────────────────────────────
 
 
 class TestBatchHardDeleteMessages:
+    def _setup_batch_hard_delete_mocks(self, msg_ops, rows):
+        """Configure mocks for the batched hard-delete path."""
+        msg_ops.db.execute.return_value = rows
+        mock_conn = MagicMock()
+        msg_ops.db.transaction.return_value.__enter__.return_value = mock_conn
+        return mock_conn
+
     def test_batch_empty(self, msg_ops):
         """batch_hard_delete_messages with empty list returns zero."""
         result = msg_ops.batch_hard_delete_messages([])
         assert result["count"] == 0
+        assert result["queued"] == 0
         assert result["errors"] == []
 
     def test_batch_one_success(self, msg_ops):
         """batch_hard_delete_messages deletes locally and enqueues expunge."""
-        msg_ops.db.execute_one.return_value = {
+        mock_conn = self._setup_batch_hard_delete_mocks(msg_ops, [{
             "uuid": "msg-1", "account_email": "user@example.com",
             "imap_uid": 42, "folder_name": "INBOX",
-        }
+        }])
         result = msg_ops.batch_hard_delete_messages(["msg-1"])
         assert result["count"] == 1
         assert result["queued"] == 1
         assert result["errors"] == []
+        # Verify DELETE was called via the transaction connection
+        mock_conn.execute.assert_any_call(
+            "DELETE FROM messages WHERE uuid IN (?)",
+            ("msg-1",),
+        )
 
     def test_batch_one_no_imap_uid(self, msg_ops):
         """batch_hard_delete_messages deletes locally but does not enqueue."""
-        msg_ops.db.execute_one.return_value = {
+        mock_conn = self._setup_batch_hard_delete_mocks(msg_ops, [{
             "uuid": "msg-1", "account_email": "user@example.com",
             "imap_uid": None, "folder_name": "INBOX",
-        }
+        }])
         result = msg_ops.batch_hard_delete_messages(["msg-1"])
         assert result["count"] == 1
         assert result["queued"] == 0
@@ -312,11 +363,31 @@ class TestBatchHardDeleteMessages:
 
     def test_batch_skips_not_found(self, msg_ops):
         """batch_hard_delete_messages skips messages not in DB."""
-        msg_ops.db.execute_one.return_value = None
+        self._setup_batch_hard_delete_mocks(msg_ops, [])
         result = msg_ops.batch_hard_delete_messages(["nonexistent"])
         assert result["count"] == 0
         assert result["queued"] == 0
         assert len(result["errors"]) == 1  # "message not found"
+
+    def test_batch_hard_delete_multiple_mixed(self, msg_ops):
+        """Some found, some not-found, some no imap_uid."""
+        mock_conn = self._setup_batch_hard_delete_mocks(msg_ops, [
+            {
+                "uuid": "msg-1", "account_email": "user@example.com",
+                "imap_uid": 42, "folder_name": "INBOX",
+            },
+            {
+                "uuid": "msg-2", "account_email": "user@example.com",
+                "imap_uid": None, "folder_name": "INBOX",
+            },
+        ])
+        result = msg_ops.batch_hard_delete_messages(
+            ["msg-1", "nonexistent", "msg-2"]
+        )
+        assert result["count"] == 2
+        assert result["queued"] == 1   # only msg-1 has imap_uid
+        assert len(result["errors"]) == 1
+        assert "not found" in result["errors"][0]
 
 
 # ── send_email (high-level) ──────────────────────────────────────────────────
@@ -481,3 +552,39 @@ class TestMoveMessage:
         call_args = msg_ops.db.execute.call_args[0]
         assert "UPDATE messages" in call_args[0]
         assert "folder_name" in call_args[0]
+
+
+# ── batch_move_messages ──────────────────────────────────────────────────────
+
+
+class TestBatchMoveMessages:
+    def _setup_batch_move_mocks(self, msg_ops):
+        mock_conn = MagicMock()
+        msg_ops.db.transaction.return_value.__enter__.return_value = mock_conn
+        return mock_conn
+
+    def test_batch_move_empty(self, msg_ops):
+        result = msg_ops.batch_move_messages([], "Archive")
+        assert result == 0
+
+    def test_batch_move_one(self, msg_ops):
+        mock_conn = self._setup_batch_move_mocks(msg_ops)
+        result = msg_ops.batch_move_messages(["msg-1"], "Archive")
+        assert result == 1
+        mock_conn.execute.assert_called_once()
+        call_sql = mock_conn.execute.call_args[0][0]
+        assert "UPDATE messages" in call_sql
+        assert "folder_name" in call_sql
+        assert "uuid IN" in call_sql
+
+    def test_batch_move_multiple(self, msg_ops):
+        mock_conn = self._setup_batch_move_mocks(msg_ops)
+        result = msg_ops.batch_move_messages(
+            ["msg-1", "msg-2", "msg-3"], "Trash"
+        )
+        assert result == 3
+        mock_conn.execute.assert_called_once()
+        call_sql = mock_conn.execute.call_args[0][0]
+        # Verify IN clause has 3 placeholders
+        assert call_sql.count("?") == 5  # folder_name + updated_at + 3 uuids
+        assert "Trash" in str(mock_conn.execute.call_args[0])

@@ -455,6 +455,9 @@ class EmailService:
     def move_message(self, msg_uuid: str, destination_folder_name: str):
         self.msg_ops.move_message(msg_uuid, destination_folder_name)
 
+    def batch_move_messages(self, uuids: list[str], destination_folder_name: str) -> int:
+        return self.msg_ops.batch_move_messages(uuids, destination_folder_name)
+
     def send_email(self, account_email: str, to: list[str], subject: str,
                    body: str = "", cc: list[str] | None = None,
                    bcc: list[str] | None = None, priority: int = 3,

@@ -126,10 +126,9 @@ def batch_move(
     req: BatchMoveRequest,
     email_svc: EmailService = Depends(get_email_service),
 ):
-    """Move multiple messages to a destination folder."""
-    for uuid in req.uuids:
-        email_svc.move_message(uuid, req.destination_folder)
-    return BatchResultResponse(status="ok", count=len(req.uuids))
+    """Move multiple messages to a destination folder in one transaction."""
+    count = email_svc.batch_move_messages(req.uuids, req.destination_folder)
+    return BatchResultResponse(status="ok", count=count)
 
 
 @router.get("/export-eml/{uuid}")

@@ -132,13 +132,13 @@ class MarkReadRequest(BaseModel):
 
 
 class BatchDeleteRequest(BaseModel):
-    uuids: list[str] = Field(..., min_length=1, max_length=200)
+    uuids: list[str] = Field(..., min_length=1)
 
     model_config = {"extra": "forbid"}
 
 
 class BatchMoveRequest(BaseModel):
-    uuids: list[str] = Field(..., min_length=1, max_length=200)
+    uuids: list[str] = Field(..., min_length=1)
     destination_folder: str = Field(..., min_length=1, description="Destination folder name")
 
     model_config = {"extra": "forbid"}
