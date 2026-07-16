@@ -140,3 +140,12 @@ Entries exceeding `MAX_RETRIES` (default: 10) are automatically moved to the `_d
 15. **``!email draft`` opens Drafts folder pane** — ``!email draft`` opens the ``EmailListTab`` filtered to the Drafts folder (with ``_isDraftView``). ``!email draft recall <uuid>`` recalls a saved composition draft.
 16. **``!email trash list`` simplified to ``!email trash``** — The ``list`` sub-command is removed for consistency. ``!email trash`` opens the trash view directly.
 17. **Pre-sync backlog drain contract** — ``EmailService.sync_account()`` drains all pending backlog entries (expunge, trash, flag sync) for the account BEFORE acquiring the IMAP sync lock. This prevents re-import of hard-deleted messages and ensures flag state consistency. The previously separate post-sync ``process_sync_backlog()`` has been removed — the pre-sync drain subsumes it. Any entries enqueued during sync (e.g. user flag toggles during the sync window) will be picked up by the next sync cycle or background worker. Best-effort contract: if the BacklogService lock is busy, sync proceeds without draining.
+
+18. **Enhanced local search (``!email search --header``)** — ``MessageService.search_messages()`` now searches **all** message fields when a free-text ``query`` is provided:
+    - Fields: ``subject``, ``from_addr``, ``to_recipients``, ``cc_recipients``, ``body``
+    - Results are ordered by **relevance score**: subject (weight 3) > sender (2) > recipients (1) > body (0.5)
+    - Each result includes a ``matched_in`` list of field names for frontend match badges
+    - Cursor-based pagination falls back to time-based sort (relevance ordering is incompatible with cursor format)
+    - The ``--participant`` flag (search From/To/CC) now works on the local SQL path (previously only IMAP remote)
+    - Body preview in search results uses **match-centered snippets** rather than simple prefix truncation
+19. **``_extract_match_snippet(body, query, context=100)``** — Module-level helper in ``messages.py`` that extracts a match-centered window from body text. Replaces the first-N-chars truncation when a search query is present.

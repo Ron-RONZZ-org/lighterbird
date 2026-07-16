@@ -28,6 +28,7 @@ from typing import Any
 from lightercore.permissions import PermissionLevel
 
 from lighterbird.email.service import EmailService
+from lighterbird.email.services.messages import _extract_match_snippet
 from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.handlers.email_eml import (  # noqa: F401
     email_export_eml,
@@ -457,11 +458,25 @@ def email_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     server-side SEARCH.  Use ``--header`` to restrict to local headers only
     (fast, no IMAP connection).  Use ``--body`` to force body search.
 
+    **Enhanced local search** (``--header`` or named flags): a free-text query
+    searches **all** message fields — subject, sender (from), recipients (to,
+    cc), and body — with **relevance-ranked ordering**.  Results matching
+    higher-signal fields (subject > sender > recipients > body) appear first.
+    Each result includes a ``matched_in`` list showing which fields matched
+    (frontend displays match badges).
+
+    The ``--participant`` flag searches across From, To, and CC fields
+    (previously only worked via IMAP remote search; now works locally too).
+
+    When a query is present, the body field in list results is replaced with
+    a **match-centered snippet** (instead of a simple prefix) so body matches
+    at any position are visible.
+
     Examples::
 
-      !email search meeting                  # search headers + body via IMAP
-      !email search --header meeting         # search headers only (local)
-      !email search --body "project X"       # force body search via IMAP
+      !email search meeting                  # search all fields (IMAP)
+      !email search --header meeting         # search all fields locally (fast)
+      !email search --header --from alice    # filter by sender + free-text
       !email search --from alice             # local header search
       !email search --to bob --cc carol      # recipients
       !email search --participant dave       # anywhere in From/To/CC
@@ -500,6 +515,28 @@ def email_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         messages = [dict(m) for m in svc.list_messages(limit=limit)]
 
     frontend_filters = {k: v for k, v in filters.items() if k != "query"}
+
+    # Apply body preview for list display
+    _PREVIEW_MAX = 2000
+    if query:
+        # Match-centered snippet when query is present
+        for m in messages:
+            full_body = m.get("body", "") or ""
+            if full_body:
+                m["body"] = _extract_match_snippet(full_body, query)
+            if m.get("html_body"):
+                m["html_body"] = ""
+    else:
+        # Standard first-N-char preview for non-search listing
+        for m in messages:
+            full_body = m.get("body", "") or ""
+            if full_body:
+                preview = full_body[:_PREVIEW_MAX]
+                if len(full_body) > _PREVIEW_MAX:
+                    preview += "\n\n[...]"
+                m["body"] = preview
+            if m.get("html_body"):
+                m["html_body"] = ""
 
     return {
         "type": "email-list",

@@ -16,6 +16,7 @@ from lighterbird.email.service import (
     release_account_imap_lock,
 )
 from lighterbird.email.services import AccountService, MessageService
+from lighterbird.email.services.messages import _extract_match_snippet
 from lighterbird.email.imap.sync import SyncResult
 
 
@@ -129,10 +130,232 @@ class TestMessageService:
         msgs = svc.list_messages()
         assert len(msgs) == 1
 
-    def test_search_messages(self, db):
+    def test_search_messages_empty(self, db):
         svc = MessageService(db)
         result = svc.search_messages({"query": "hello"}, limit=10)
         assert result == []
+
+
+class TestSearchMessages:
+    """Tests for MessageService.search_messages() enhanced search."""
+
+    MSGS = [
+        # (uuid_suffix, subject, from_addr, to_recipients, cc_recipients, body)
+        ("s1", "Meeting agenda", "alice@example.com", '["bob@example.com"]', '[]',
+         "Let's discuss the project plan"),
+        ("s2", "Lunch plans", "bob@example.com", '["alice@example.com"]', '[]',
+         "Are we still on for lunch today?"),
+        ("s3", "Project update", "carol@example.com", '["team@example.com"]',
+         '["alice@example.com"]', "Q3 milestones are on track"),
+        ("s4", "Invoice", "billing@example.com", '["alice@example.com"]', '[]',
+         "Your invoice for project services is attached"),
+        ("s5", "Hello world", "someone@example.com", '["alice@example.com"]', '[]',
+         "This is a test email with no relevance"),
+    ]
+
+    @pytest.fixture(autouse=True)
+    def _setup_msgs(self, db):
+        """Insert test messages into the database."""
+        acct_svc = AccountService(db)
+        acct_svc.create_account({
+            "name": "Search Test",
+            "email": "search@example.com",
+            "imap_server": "imap.example.com",
+            "smtp_server": "smtp.example.com",
+        }, "pw")
+        now = datetime.now(UTC).isoformat()
+        for i, (suffix, subject, from_addr, to_rcpts, cc_rcpts, body) in enumerate(self.MSGS):
+            # Stagger received_at so time-based ordering has a deterministic
+            # pattern for relevance-ordering tests.
+            received = datetime.now(UTC).isoformat()
+            db.execute(
+                "INSERT INTO messages "
+                "(uuid, account_email, from_addr, to_recipients, cc_recipients, "
+                " subject, body, received_at, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (f"search-{suffix}", "search@example.com", from_addr, to_rcpts,
+                 cc_rcpts, subject, body, received, now, now),
+            )
+
+    def test_search_subject_match(self, db):
+        """Query matching subject returns results with matched_in=['subject']."""
+        svc = MessageService(db)
+        results = svc.search_messages({"query": "meeting"}, limit=10)
+        assert len(results) >= 1
+        match = next((m for m in results if m["uuid"] == "search-s1"), None)
+        assert match is not None
+        assert "subject" in match.get("matched_in", [])
+
+    def test_search_from_addr_match(self, db):
+        """Query matching from_addr returns results."""
+        svc = MessageService(db)
+        results = svc.search_messages({"query": "billing"}, limit=10)
+        assert len(results) >= 1
+        uuids = [m["uuid"] for m in results]
+        assert "search-s4" in uuids
+
+    def test_search_to_recipients_match(self, db):
+        """Query matching to_recipients returns results (JSON text)."""
+        svc = MessageService(db)
+        results = svc.search_messages({"query": "team@example.com"}, limit=10)
+        assert len(results) >= 1
+        uuids = [m["uuid"] for m in results]
+        assert "search-s3" in uuids
+
+    def test_search_cc_recipients_match(self, db):
+        """Query matching cc_recipients returns results."""
+        svc = MessageService(db)
+        results = svc.search_messages({"query": "alice@example.com"}, limit=10)
+        # Multiple messages have alice@example.com in to/cc
+        assert len(results) >= 2
+
+    def test_search_body_match(self, db):
+        """Query matching body text returns results with matched_in=['body']."""
+        svc = MessageService(db)
+        results = svc.search_messages({"query": "milestones"}, limit=10)
+        assert len(results) >= 1
+        match = next((m for m in results if m["uuid"] == "search-s3"), None)
+        assert match is not None
+        assert "body" in match.get("matched_in", [])
+
+    def test_relevance_ordering(self, db):
+        """Subject matches sort above from_addr matches, above body-only."""
+        svc = MessageService(db)
+        # "project" matches:
+        #   s1: subject="Meeting agenda" -> NO
+        #   s3: subject="Project update" -> subject match (weight 3)
+        #   s4: body="Your invoice for project services..." -> body match (weight 0.5)
+        results = svc.search_messages({"query": "project"}, limit=10)
+        uuids = [m["uuid"] for m in results]
+        # s3 (subject match) should come before s4 (body match)
+        s3_idx = uuids.index("search-s3") if "search-s3" in uuids else len(uuids)
+        s4_idx = uuids.index("search-s4") if "search-s4" in uuids else len(uuids)
+        assert s3_idx < s4_idx, (
+            f"Subject match (search-s3) should rank above body match (search-s4). "
+            f"Order: {uuids}"
+        )
+
+    def test_search_without_query_uses_time_order(self, db):
+        """No query = time-based sort, not relevance."""
+        svc = MessageService(db)
+        results = svc.search_messages({}, limit=10)
+        assert len(results) >= 1
+        # No matched_in when no query
+        for m in results:
+            assert "matched_in" not in m or not m["matched_in"]
+
+    def test_search_with_cursor_no_relevance(self, db):
+        """When cursor is present, uses time-based sort even with query."""
+        svc = MessageService(db)
+        # Use a future cursor with sort=newest, so received_at < cursor matches all
+        results = svc.search_messages(
+            {"query": "test", "cursor": "2099-01-01T00:00:00|zzzzzzzz"},
+            limit=10,
+        )
+        assert len(results) >= 1
+        # Results should NOT have matched_in when cursor is used (no relevance sort)
+        for m in results:
+            assert "matched_in" not in m or not m["matched_in"]
+
+    def test_matched_in_subject_only(self, db):
+        """matched_in shows 'subject' when only subject matched."""
+        svc = MessageService(db)
+        results = svc.search_messages({"query": "meeting"}, limit=10)
+        msgs_with_meeting = [m for m in results if "subject" in (m.get("matched_in") or [])]
+        assert len(msgs_with_meeting) >= 1
+
+    def test_matched_in_multiple_fields(self, db):
+        """matched_in shows multiple fields when query matches multiple fields."""
+        svc = MessageService(db)
+        # "alice" appears in to_recipients, cc_recipients, and from_addr of
+        # different messages
+        results = svc.search_messages({"query": "alice"}, limit=10)
+        for m in results:
+            matched = m.get("matched_in") or []
+            if matched:
+                # Verify it actually matches
+                q = "alice"
+                fields_to_check = {
+                    "subject": (m.get("subject") or "").lower(),
+                    "from": (m.get("from_addr") or "").lower(),
+                    "to": (m.get("to_recipients") or "").lower(),
+                    "cc": (m.get("cc_recipients") or "").lower(),
+                    "body": (m.get("body") or "").lower(),
+                }
+                for field in matched:
+                    assert q in fields_to_check[field], (
+                        f"Field {field} does not contain '{q}'"
+                    )
+
+    def test_participant_filter(self, db):
+        """--participant searches from_addr, to_recipients, cc_recipients."""
+        svc = MessageService(db)
+        results = svc.search_messages({"participant": "carol"}, limit=10)
+        assert len(results) >= 1
+        uuids = [m["uuid"] for m in results]
+        assert "search-s3" in uuids  # carol@example.com is the from_addr
+
+    def test_participant_filter_matches_to(self, db):
+        """--participant also matches to_recipients."""
+        svc = MessageService(db)
+        results = svc.search_messages({"participant": "team@example.com"}, limit=10)
+        assert len(results) >= 1
+
+    def test_participant_filter_matches_cc(self, db):
+        """--participant also matches cc_recipients."""
+        svc = MessageService(db)
+        results = svc.search_messages({"participant": "alice@example.com"}, limit=10)
+        assert len(results) >= 2
+
+
+class TestExtractMatchSnippet:
+    """Tests for _extract_match_snippet()."""
+
+    def test_empty_body(self):
+        assert _extract_match_snippet("", "hello") == ""
+
+    def test_empty_query(self):
+        assert _extract_match_snippet("Hello world", "") == "Hello world"
+
+    def test_basic_match(self):
+        result = _extract_match_snippet(
+            "This is a long email body with the search term meeting in the middle of it",
+            "meeting",
+            context=10,
+        )
+        assert "meeting" in result
+
+    def test_match_at_start(self):
+        body = "meeting is at the start of this email body"
+        result = _extract_match_snippet(body, "meeting", context=10)
+        assert result.startswith("meeting")
+        assert "[...]" not in result[:20]
+
+    def test_match_at_end(self):
+        body = "This is a long email body with the meeting"
+        result = _extract_match_snippet(body, "meeting", context=10)
+        assert "meeting" in result
+        assert result.endswith("]...") or not result.endswith("[...]")
+
+    def test_match_centered_snippet(self):
+        body = "x" * 500 + "MATCH HERE" + "y" * 500
+        result = _extract_match_snippet(body, "MATCH HERE", context=50)
+        assert "MATCH HERE" in result
+        assert result.startswith("[...]")
+        assert result.endswith("[...]")
+        # Context window: 50 before + "MATCH HERE" (10) + 50 after = ~110 + marker
+        assert len(result) < 200
+
+    def test_case_insensitive(self):
+        result = _extract_match_snippet(
+            "Hello World", "hello", context=5,
+        )
+        assert "Hello" in result
+
+    def test_long_body_fallback_without_match(self):
+        body = "x" * 500
+        result = _extract_match_snippet(body, "nonexistent", context=50)
+        assert len(result) <= 200
 
 
 class TestEmailService:

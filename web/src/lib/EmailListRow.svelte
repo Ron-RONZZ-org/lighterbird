@@ -60,6 +60,16 @@
   {:else}
     <span class="priority normal" title="Priority 3 — Normal">–</span>
   {/if}
+  {#if msg.matched_in?.length}
+    <span class="match-indicator" title="Matched in: {msg.matched_in.join(', ')}">
+      {#each msg.matched_in.slice(0, 2) as field}
+        <span class="match-badge" class:match-subject={field === 'subject'} class:match-from={field === 'from'} class:match-body={field === 'body'}>{field}</span>
+      {/each}
+      {#if msg.matched_in.length > 2}
+        <span class="match-badge match-more">+{msg.matched_in.length - 2}</span>
+      {/if}
+    </span>
+  {/if}
   <span class="subject" class:unread={!msg.is_read}>{truncate(msg.subject || "(no subject)", 40)}</span>
   <span class="date">{formatListItemDate(msg.received_at)}</span>
 </div>
@@ -121,6 +131,28 @@
   }
   .from:hover { color: #ccc; text-decoration: underline; }
   .from.unread { font-weight: 700; }
+
+  .match-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 0;
+    margin-right: 0.25rem;
+  }
+  .match-badge {
+    font-size: 0.6rem;
+    font-weight: 600;
+    padding: 1px 4px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+  .match-badge.match-subject { background: #3a6a4a; color: #a0e0a0; }
+  .match-badge.match-from { background: #4a5a8a; color: #a0c0e0; }
+  .match-badge.match-body { background: #6a5a3a; color: #e0c0a0; }
+  .match-badge.match-more { background: #4a4a5a; color: #a0a0c0; }
+
   .subject {
     color: #ccc;
     flex: 1;
