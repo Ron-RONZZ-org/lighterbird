@@ -33,6 +33,38 @@
     onDrop = () => {},             // [Tab only]  DnD completion
   } = $props();
 
+  /** Decode IMAP modified UTF-7 folder name (RFC 3501 §5.1.3) for display.
+   *
+   *  Non-ASCII characters are encoded as &lt;base64&gt;- in IMAP responses.
+   *  This function decodes them to the actual Unicode characters.
+   *  The original encoded name is kept for IMAP operations.
+   */
+  function decodeImapUtf7(str) {
+    const parts = [];
+    let i = 0;
+    while (i < str.length) {
+      if (str[i] !== '&') {
+        parts.push(str[i]);
+        i++;
+        continue;
+      }
+      const j = str.indexOf('-', i + 1);
+      if (j === -1) { parts.push('&'); i++; }
+      else if (j === i + 1) { parts.push('&'); i = j + 1; }
+      else {
+        const b64 = str.slice(i + 1, j);
+        try {
+          const binary = atob(b64);
+          const buf = new Uint8Array(binary.length);
+          for (let k = 0; k < binary.length; k++) buf[k] = binary.charCodeAt(k);
+          parts.push(new TextDecoder("utf-16be").decode(buf));
+        } catch { parts.push(str.slice(i, j + 1)); }
+        i = j + 1;
+      }
+    }
+    return parts.join("");
+  }
+
   let tree = $derived(buildTree(folders));
   let showNewFolderInput = $state(false);
   let newFolderName = $state("");
@@ -62,8 +94,11 @@
       const path = prefix ? `${prefix}/${key}` : key;
       const hasChildren = Object.keys(val).some((k) => !k.startsWith("_"));
       const isFolder = !!val._folder;
+      // Use decoded name for display (leaf folders may have decoded_name from API)
+      const rawName = (val._folder && val._folder.decoded_name) || key;
+      const displayName = rawName !== key ? rawName : decodeImapUtf7(key);
       nodes.push({
-        name: key,
+        name: displayName,
         path,
         isFolder,
         folder: val._folder || null,

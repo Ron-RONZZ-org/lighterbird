@@ -763,8 +763,9 @@
     {searchQuery}
     {showFolderTree}
     onToggleMode={() => {
-      // If search is active, close it first so the selection toolbar is shown
-      if (showSearch) closeSearch();
+      // Selection mode now takes priority over search mode in the toolbar,
+      // so no need to close search first.  The search stays active in the
+      // background — when the user exits selection mode the search bar returns.
       sel.toggleSelectionMode();
     }}
     onDelete={() => { if (sel.numSelected > 0) sel.confirmDelete = true; }}
