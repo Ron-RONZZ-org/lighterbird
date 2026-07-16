@@ -450,6 +450,58 @@ class TestEmailHandlers:
         filters = mock_email_svc.search_messages.call_args[0][0]
         assert filters.get("query") == "hello world"
 
+    def test_email_search_body_snippet_with_query(self, mock_email_svc):
+        """email search with query replaces body with match-centered snippet."""
+        mock_email_svc.search_messages.return_value = [
+            {"uuid": "abc", "subject": "Test", "body": "A" * 300 + "meeting" + "B" * 300,
+             "html_body": "<p>html</p>"},
+        ]
+        result = dispatch(["email", "search", "meeting"], {})
+        msgs = result["data"]["messages"]
+        assert len(msgs) == 1
+        assert "meeting" in msgs[0]["body"]
+        # Snippet should be centered around the match, not a simple prefix
+        assert not msgs[0]["body"].startswith("AAA")
+        # html_body should be cleared
+        assert msgs[0]["html_body"] == ""
+
+    def test_email_search_body_snippet_long_body(self, mock_email_svc):
+        """email search with query produces compact snippet for long bodies."""
+        mock_email_svc.search_messages.return_value = [
+            {"uuid": "abc", "subject": "Test",
+             "body": "x" * 500 + "meeting" + "y" * 500},
+        ]
+        result = dispatch(["email", "search", "meeting"], {})
+        msgs = result["data"]["messages"]
+        snippet = msgs[0]["body"]
+        assert "meeting" in snippet
+        # Snippet should be compact (< 400 chars with context markers)
+        assert len(snippet) < 400
+
+    def test_email_search_body_no_query_uses_standard_preview(self, mock_email_svc):
+        """email search without query uses standard first-N-char preview."""
+        # No query path: filters empty -> list_messages is called
+        mock_email_svc.list_messages.return_value = [
+            {"uuid": "abc", "subject": "Test", "body": "A" * 5000,
+             "html_body": "<p>html</p>"},
+        ]
+        result = dispatch(["email", "search"], {})
+        msgs = result["data"]["messages"]
+        assert len(msgs) == 1
+        assert len(msgs[0]["body"]) <= 2010  # 2000 + "[...]"
+        assert msgs[0]["body"].endswith("[...]")
+        assert msgs[0]["html_body"] == ""
+
+    def test_email_search_body_short_no_query_no_truncation(self, mock_email_svc):
+        """email search without query keeps short body unchanged."""
+        # Named flag path (no free-text query): query is empty, body is short
+        mock_email_svc.search_messages.return_value = [
+            {"uuid": "abc", "subject": "Test", "body": "Hello!"},
+        ]
+        result = dispatch(["email", "search"], {"from": "alice"})
+        msgs = result["data"]["messages"]
+        assert msgs[0]["body"] == "Hello!"
+
     def test_email_export_eml_missing_uuid(self):
         """email export eml without uuid raises."""
         with pytest.raises(CommandValidationError, match="Missing message UUID"):
@@ -1084,10 +1136,10 @@ class TestDraftsHandlers:
         assert isinstance(result, dict)
         assert "type" in result
 
-    def test_email_draft_not_found(self):
-        """email draft <uuid> with non-existent draft raises."""
+    def test_email_draft_recall_not_found(self):
+        """email draft recall <uuid> with non-existent draft raises."""
         with pytest.raises(CommandValidationError, match="Draft not found"):
-            dispatch(["email", "draft", "nonexistent-uuid"], {})
+            dispatch(["email", "draft", "recall", "nonexistent-uuid"], {})
 
 
 # ── Letter handlers ──────────────────────────────────────────────────────────
