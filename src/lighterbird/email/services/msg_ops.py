@@ -161,8 +161,9 @@ class MessageOpsService(MsgSendQueueMixin):
     def batch_trash_messages(self, uuids: list[str]) -> dict[str, Any]:
         """Soft-delete multiple messages locally and queue IMAP trash.
 
-        All local DB updates happen in a single batch for speed.  IMAP
-        trash operations are deferred to the background worker.
+        All local DB updates happen in a single batch inside a transaction
+        for speed.  IMAP trash operations are deferred to the background
+        worker.
 
         Args:
             uuids: List of message UUIDs to trash.
@@ -171,39 +172,60 @@ class MessageOpsService(MsgSendQueueMixin):
             Dict with ``count`` of successfully trashed messages and
             ``queued`` count for background IMAP sync.
         """
+        if not uuids:
+            return {"count": 0, "queued": 0}
+
         now = datetime.now(UTC).isoformat()
-        queued = 0
+
+        # Single SELECT IN to find all non-deleted messages at once
+        placeholders = ",".join("?" for _ in uuids)
+        existing = {
+            row["uuid"]: row for row in self.db.execute(
+                f"SELECT * FROM messages WHERE uuid IN ({placeholders}) AND is_deleted = 0",
+                tuple(uuids),
+            )
+        }
+
         trashed = 0
+        backlog_entries: list[tuple] = []
 
         for msg_uuid in uuids:
-            msg = self.db.execute_one(
-                "SELECT * FROM messages WHERE uuid = ? AND is_deleted = 0",
-                (msg_uuid,),
-            )
+            msg = existing.get(msg_uuid)
             if not msg:
                 continue
-
-            # Local soft-delete (instant)
-            self.db.execute(
-                "UPDATE messages SET is_deleted = 1, updated_at = ? WHERE uuid = ?",
-                (now, msg_uuid),
-            )
             trashed += 1
-
-            # Queue IMAP trash for background processing
             imap_uid = msg.get("imap_uid")
             account_email = msg.get("account_email", "")
             folder_name = msg.get("folder_name", "")
             if imap_uid is not None and account_email and folder_name:
-                self.backlog.enqueue_trash(
-                    msg_uuid=msg_uuid,
-                    account_email=account_email,
-                    folder_name=folder_name,
-                    imap_uid=imap_uid,
+                backlog_entries.append(
+                    (msg_uuid, msg_uuid, account_email, folder_name,
+                     imap_uid, 1, 1, "trash", now)
                 )
-                queued += 1
 
-        return {"count": trashed, "queued": queued}
+        # Single transaction for all mutations
+        if trashed:
+            with self.db.transaction() as conn:
+                conn.execute(
+                    f"UPDATE messages SET is_deleted = 1, updated_at = ? "
+                    f"WHERE uuid IN ({','.join('?' for _ in uuids)})",
+                    (now, *uuids),
+                )
+                if backlog_entries:
+                    conn.executemany(
+                        "INSERT OR REPLACE INTO _sync_backlog "
+                        "(id, msg_uuid, account_email, folder_name, imap_uid, "
+                        " is_read, is_deleted, operation, created_at, "
+                        " last_attempt, retries) "
+                        "VALUES ("
+                        "  COALESCE((SELECT id FROM _sync_backlog "
+                        "           WHERE msg_uuid = ?), NULL),"
+                        "  ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0"
+                        ")",
+                        backlog_entries,
+                    )
+
+        return {"count": trashed, "queued": len(backlog_entries)}
 
     # ── Hard-delete (permanent) operations ────────────────────────────────
     #
@@ -262,46 +284,71 @@ class MessageOpsService(MsgSendQueueMixin):
         """Permanently delete multiple messages from local DB (instant) and
         enqueue IMAP EXPUNGE for background processing.
 
-        All local DB deletions happen first (instant), then IMAP EXPUNGE
-        entries are enqueued to the backlog.  The caller gets an immediate
-        response with counts.  No IMAP round-trips.
+        All local DB operations happen in a single transaction for speed.
+        IMAP EXPUNGE entries are enqueued to the backlog.  The caller gets
+        an immediate response with counts.  No IMAP round-trips.
 
         Returns:
             Dict with ``count`` of locally deleted messages, ``queued``
             count of backlogged expunge operations, and ``errors`` list
             (messages not found are reported as errors).
         """
-        deleted = 0
-        queued = 0
+        if not uuids:
+            return {"count": 0, "queued": 0, "errors": []}
+
+        now = datetime.now(UTC).isoformat()
+
+        # Single SELECT IN to find all existing messages at once
+        placeholders = ",".join("?" for _ in uuids)
+        existing = {
+            row["uuid"]: row for row in self.db.execute(
+                f"SELECT * FROM messages WHERE uuid IN ({placeholders})",
+                tuple(uuids),
+            )
+        }
+
         errors: list[str] = []
+        to_delete: list[str] = []
+        backlog_entries: list[tuple] = []
 
         for msg_uuid in uuids:
-            msg = self.db.execute_one(
-                "SELECT * FROM messages WHERE uuid = ?", (msg_uuid,)
-            )
+            msg = existing.get(msg_uuid)
             if not msg:
                 errors.append(f"{msg_uuid[:8]}: message not found")
                 continue
-
+            to_delete.append(msg_uuid)
             imap_uid = msg.get("imap_uid")
             account_email = msg.get("account_email", "")
             folder_name = msg.get("folder_name", "")
-
-            # Local DB deletion — instant
-            self.db.execute("DELETE FROM messages WHERE uuid = ?", (msg_uuid,))
-            deleted += 1
-
-            # Enqueue IMAP EXPUNGE for background processing
             if imap_uid is not None and account_email and folder_name:
-                self.backlog.enqueue_expunge(
-                    msg_uuid=msg_uuid,
-                    account_email=account_email,
-                    folder_name=folder_name,
-                    imap_uid=imap_uid,
+                backlog_entries.append(
+                    (msg_uuid, msg_uuid, account_email, folder_name,
+                     imap_uid, 1, 1, "expunge", now)
                 )
-                queued += 1
 
-        return {"count": deleted, "queued": queued, "errors": errors}
+        # Single transaction for all mutations
+        if to_delete:
+            with self.db.transaction() as conn:
+                conn.execute(
+                    f"DELETE FROM messages WHERE uuid IN "
+                    f"({','.join('?' for _ in to_delete)})",
+                    tuple(to_delete),
+                )
+                if backlog_entries:
+                    conn.executemany(
+                        "INSERT OR REPLACE INTO _sync_backlog "
+                        "(id, msg_uuid, account_email, folder_name, imap_uid, "
+                        " is_read, is_deleted, operation, created_at, "
+                        " last_attempt, retries) "
+                        "VALUES ("
+                        "  COALESCE((SELECT id FROM _sync_backlog "
+                        "           WHERE msg_uuid = ?), NULL),"
+                        "  ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0"
+                        ")",
+                        backlog_entries,
+                    )
+
+        return {"count": len(to_delete), "queued": len(backlog_entries), "errors": errors}
 
     def move_message(self, msg_uuid: str, destination_folder_name: str) -> None:
         """Move a message to a different folder (by folder name)."""
@@ -310,6 +357,28 @@ class MessageOpsService(MsgSendQueueMixin):
             "UPDATE messages SET folder_name = ?, updated_at = ? WHERE uuid = ?",
             (destination_folder_name, now, msg_uuid),
         )
+
+    def batch_move_messages(self, uuids: list[str], destination_folder_name: str) -> int:
+        """Move multiple messages to a destination folder in one transaction.
+
+        Args:
+            uuids: List of message UUIDs to move.
+            destination_folder_name: Target folder name.
+
+        Returns:
+            Number of messages moved.
+        """
+        if not uuids:
+            return 0
+        now = datetime.now(UTC).isoformat()
+        placeholders = ",".join("?" for _ in uuids)
+        with self.db.transaction() as conn:
+            conn.execute(
+                f"UPDATE messages SET folder_name = ?, updated_at = ? "
+                f"WHERE uuid IN ({placeholders})",
+                (destination_folder_name, now, *uuids),
+            )
+        return len(uuids)
 
     # ── Dead-letter management ────────────────────────────────────────────
 

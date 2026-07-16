@@ -556,9 +556,8 @@
         params.query = searchQuery;
       }
       const result = await emailApi.listMessages(params);
-      messages = [...messages, ...(result.messages || [])];
-      hasMore = !!result.has_more;
-      nextCursor = result.next_cursor || "";
+      // Deduplicate by uuid to prevent Svelte each_key_duplicate errors
+      appendUniqueResults(result);
     } catch { /* silent */ }
     finally { loadingMore = false; }
   }
