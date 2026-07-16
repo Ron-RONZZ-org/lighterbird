@@ -9,6 +9,36 @@ import email.message
 from typing import Any
 
 
+def _extract_match_snippet(body: str, query: str, context: int = 100) -> str:
+    """Extract a match-centered snippet from *body* for the given *query*.
+
+    Finds the first occurrence of *query* (case-insensitive) in *body* and
+    returns a short window around it.  If the query is not found, returns
+    the first *context* characters as a fallback.
+
+    Args:
+        body: The full message body text.
+        query: The search term.
+        context: Number of characters to include before and after the match.
+
+    Returns:
+        A snippet string with ``[...]`` prefix/suffix if truncated.
+    """
+    if not body or not query:
+        return (body or "")[:200]
+    idx = body.lower().find(query.lower())
+    if idx == -1:
+        return (body or "")[:200]
+    start = max(0, idx - context)
+    end = min(len(body), idx + len(query) + context)
+    snippet = body[start:end]
+    if start > 0:
+        snippet = "[...]" + snippet
+    if end < len(body):
+        snippet = snippet + "[...]"
+    return snippet
+
+
 class MessageService:
     """Read-only message queries."""
 
@@ -65,16 +95,35 @@ class MessageService:
     ) -> list[dict[str, Any]]:
         """Search messages with filters.
 
+        When ``filters["query"]`` is provided, searches all message fields
+        (subject, from_addr, to_recipients, cc_recipients, body) and orders
+        results by relevance (subject > sender > recipients > body).
+
+        When ``filters["participant"]`` is provided, searches across from_addr,
+        to_recipients, and cc_recipients.
+
         Supports cursor-based pagination via ``filters["cursor"]``.
         The cursor is a pipe-separated string ``received_at|uuid`` of the
         last message on the previous page.  Returns *limit* rows.
+
+        When a query is present, each result dict includes a ``matched_in``
+        list of field names where the query matched.
         """
         conditions = ["m.is_deleted = 0"]
         params: list[Any] = []
-        if filters.get("query"):
-            conditions.append("(m.subject LIKE ? OR m.body LIKE ?)")
-            q = f"%{filters['query']}%"
-            params.extend([q, q])
+        query = filters.get("query", "")
+        has_query = bool(query)
+        q = f"%{query}%" if has_query else None
+
+        # Free-text query: search all fields
+        if has_query:
+            query_where = (
+                "(m.subject LIKE ? OR m.from_addr LIKE ? "
+                "OR m.to_recipients LIKE ? OR m.cc_recipients LIKE ? "
+                "OR m.body LIKE ?)"
+            )
+            conditions.append(query_where)
+            params.extend([q, q, q, q, q])
         if filters.get("from"):
             conditions.append("m.from_addr LIKE ?")
             params.append(f"%{filters['from']}%")
@@ -87,6 +136,14 @@ class MessageService:
         if filters.get("body"):
             conditions.append("m.body LIKE ?")
             params.append(f"%{filters['body']}%")
+        # participant filter: search across from, to, cc
+        if filters.get("participant"):
+            conditions.append(
+                "(m.from_addr LIKE ? OR m.to_recipients LIKE ? "
+                "OR m.cc_recipients LIKE ?)"
+            )
+            p = f"%{filters['participant']}%"
+            params.extend([p, p, p])
         if filters.get("after"):
             conditions.append("m.received_at >= ?")
             params.append(filters["after"])
@@ -120,7 +177,8 @@ class MessageService:
 
         # Cursor-based pagination (pipe-separated "received_at|uuid")
         cursor = filters.get("cursor", "")
-        if cursor:
+        has_cursor = bool(cursor)
+        if has_cursor:
             parts = cursor.split("|", 1)
             if len(parts) == 2:
                 cursor_ts, cursor_uuid = parts
@@ -137,12 +195,26 @@ class MessageService:
 
         where = " AND ".join(conditions)
 
-        # Sorting — add uuid tiebreaker for stable pagination
-        sort = filters.get("sort", "newest")
-        if sort == "oldest":
-            order = "m.received_at ASC, m.uuid ASC"
+        # Determine ordering
+        has_relevance = has_query and not has_cursor
+        if has_relevance:
+            # Relevance-weighted ORDER BY when a free-text query is present
+            order = (
+                "(CASE WHEN m.subject LIKE ? THEN 3 ELSE 0 END "
+                "+ CASE WHEN m.from_addr LIKE ? THEN 2 ELSE 0 END "
+                "+ CASE WHEN m.to_recipients LIKE ? THEN 1 ELSE 0 END "
+                "+ CASE WHEN m.cc_recipients LIKE ? THEN 1 ELSE 0 END "
+                "+ CASE WHEN m.body LIKE ? THEN 0.5 ELSE 0 END) DESC, "
+                "m.received_at DESC, m.uuid DESC"
+            )
+            params.extend([q, q, q, q, q])
         else:
-            order = "m.received_at DESC, m.uuid DESC"
+            # Time-based sort (default or cursor-based pagination)
+            sort = filters.get("sort", "newest")
+            if sort == "oldest":
+                order = "m.received_at ASC, m.uuid ASC"
+            else:
+                order = "m.received_at DESC, m.uuid DESC"
 
         # Group by sender
         group = filters.get("group", "")
@@ -160,15 +232,36 @@ class MessageService:
         )
         params.append(limit)
         try:
-            rows = self.db.execute(sql, tuple(params))
+            rows = list(self.db.execute(sql, tuple(params)))
         except Exception:
+            # If the enhanced query fails (e.g. type mismatch on params),
+            # fall back to a simple non-deleted scan.
+            fallback_order = "m.received_at DESC, m.uuid DESC"
             fallback_sql = (
                 f"SELECT {select_cols} FROM messages m"
                 " WHERE m.is_deleted = 0"
-                f" ORDER BY {order} LIMIT ?"
+                f" ORDER BY {fallback_order} LIMIT ?"
             )
-            rows = self.db.execute(fallback_sql, (limit,))
-        return list(rows)
+            rows = list(self.db.execute(fallback_sql, (limit,)))
+
+        # Annotate results with matched_in when relevance ordering is active
+        if has_relevance and rows:
+            q_lower = query.lower()
+            for m in rows:
+                matched = []
+                if q_lower in (m.get("subject") or "").lower():
+                    matched.append("subject")
+                if q_lower in (m.get("from_addr") or "").lower():
+                    matched.append("from")
+                if q_lower in (m.get("to_recipients") or "").lower():
+                    matched.append("to")
+                if q_lower in (m.get("cc_recipients") or "").lower():
+                    matched.append("cc")
+                if q_lower in (m.get("body") or "").lower():
+                    matched.append("body")
+                m["matched_in"] = matched
+
+        return rows
 
     def export_eml(self, uuid_: str) -> str | None:
         """Export a message as an RFC 822 .eml string.
