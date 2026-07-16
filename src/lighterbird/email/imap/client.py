@@ -116,7 +116,7 @@ def decode_imap_utf7(name: str) -> str:
                     encoded_padded = encoded + '=' * pad
                 else:
                     encoded_padded = encoded
-                raw = base64.b64decode(encoded_padded)
+                raw = base64.b64decode(encoded_padded, validate=True)
                 parts.append(raw.decode('utf-16-be', errors='replace'))
             except (ValueError, OSError):
                 # Garbled encoding — preserve original

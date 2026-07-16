@@ -1479,3 +1479,44 @@ class TestGetDefinitions:
             if "contact" in (d.get("canonical", "") or " ".join(d.get("path", [])))
         ]
         assert len(contact_cmds) > 0
+
+
+class TestDebugSyncLog:
+    """Test !debug sync log command handler."""
+
+    def test_debug_sync_log_title_is_sync_log(self, mock_email_svc):
+        """!debug sync log returns title 'Sync Log'."""
+        from lighterbird.server.command.registry import dispatch
+
+        result = dispatch(["debug", "sync", "log"], {})
+        assert result is not None
+        assert result.get("type") == "status"
+        assert result.get("title") == "Sync Log", \
+            f"Expected title 'Sync Log', got {result.get('title')!r}"
+
+    def test_debug_sync_log_response_has_log_path_and_entries(self, mock_email_svc):
+        """!debug sync log response includes log_path and entries fields."""
+        from lighterbird.server.command.registry import dispatch
+
+        result = dispatch(["debug", "sync", "log"], {})
+        assert "data" in result
+        assert "log_path" in result["data"]
+        assert "entries" in result["data"]
+        assert isinstance(result["data"]["entries"], list)
+
+    def test_debug_sync_log_accepts_line_count_arg(self, mock_email_svc):
+        """!debug sync log <n> accepts an integer argument."""
+        from lighterbird.server.command.registry import dispatch
+
+        result = dispatch(["debug", "sync", "log", "10"], {})
+        assert result is not None
+        assert result.get("title") == "Sync Log"
+
+    def test_debug_sync_log_invalid_arg_defaults_to_50(self, mock_email_svc):
+        """!debug sync log with non-integer arg defaults to 50."""
+        from lighterbird.server.command.registry import dispatch
+
+        # Non-integer arg should not raise; defaults to 50
+        result = dispatch(["debug", "sync", "log", "abc"], {})
+        assert result is not None
+        assert result.get("title") == "Sync Log"
