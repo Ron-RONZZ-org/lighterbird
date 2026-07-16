@@ -41,6 +41,9 @@ junit-*.xml
 .serena/
 export-20260629T060827372733913/
 
+# opencode plugin state
+.opencode/
+
 # Coverage
 .coverage
 coverage.xml
