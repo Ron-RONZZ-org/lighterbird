@@ -37,7 +37,51 @@
 </script>
 
 <div class="toolbar" class:active={selectionMode || numSelected > 0}>
-  {#if showSearch}
+  {#if selectionMode}
+    <!-- Selection mode: action toolbar (takes priority so delete/hard-delete
+         buttons are visible even when entering from search mode) -->
+    <div class="left">
+      <button class="tool-btn" title="Exit selection mode (V)" onclick={onToggleMode}>
+        Exit <kbd>V</kbd>
+      </button>
+    </div>
+    <div class="center">
+      {#if numSelected > 0}
+        <span class="count">{numSelected} selected</span>
+      {:else}
+        <span class="count muted">Select messages with click or <kbd>Space</kbd></span>
+      {/if}
+    </div>
+    <div class="right">
+      <button class="tool-btn" disabled={numSelected === 0} onclick={onExport} title="Export selected (Ctrl+E)">Export <kbd>⌃E</kbd></button>
+      {#if isTrashView}
+        <button class="tool-btn" onclick={onRestore} disabled={numSelected === 0} title="Restore to Inbox (R)">Restore <kbd>R</kbd></button>
+        <button class="tool-btn" onclick={onClearTrash} title="Empty Trash (Ctrl+Shift+Delete)">Clear Trash <kbd>⌃⇧Del</kbd></button>
+      {:else}
+        <button class="tool-btn" disabled={numSelected === 0} onclick={onMove} title="Move selected (M)">Move <kbd>M</kbd></button>
+      {/if}
+      {#if !isTrashView}
+        <button class="tool-btn danger" disabled={numSelected === 0} onclick={onDelete} title="Delete selected (Delete key)">Delete <kbd>Del</kbd></button>
+      {/if}
+      <button class="tool-btn danger" disabled={numSelected === 0} onclick={onHardDelete} title="Permanently delete from server (Ctrl+Delete)">Hard Del <kbd>⌃Del</kbd></button>
+      {#if syncing && syncProgress}
+        <div class="sync-progress">
+          <ProgressBar
+            current={syncProgress.current_folder}
+            total={syncProgress.total_folders}
+            label={syncProgress.folder_name || "Sync"}
+            status={syncProgress.status}
+            compact={true}
+          />
+        </div>
+      {:else}
+        <button class="tool-btn" onclick={onSync} disabled={syncing} title="Sync (Ctrl+R)">
+          {syncing ? "Syncing…" : "Sync"} <kbd>Ctrl+R</kbd>
+        </button>
+      {/if}
+    </div>
+  {:else if showSearch}
+    <!-- Search mode -->
     <ListSearchBar
       {showSearch}
       {searchQuery}
@@ -70,39 +114,24 @@
           {#if isDraftView}
             <button class="tool-btn" onclick={onImport} title="Import .eml as draft (Ctrl+M)">Import <kbd>⌃M</kbd></button>
           {/if}
-          <button class="tool-btn" onclick={onSync} disabled={syncing} title="Sync (Ctrl+R)">
-            {syncing ? "Syncing…" : "Sync"} <kbd>Ctrl+R</kbd>
-          </button>
+          {#if syncing && syncProgress}
+            <div class="sync-progress">
+              <ProgressBar
+                current={syncProgress.current_folder}
+                total={syncProgress.total_folders}
+                label={syncProgress.folder_name || "Sync"}
+                status={syncProgress.status}
+                compact={true}
+              />
+            </div>
+          {:else}
+            <button class="tool-btn" onclick={onSync} disabled={syncing} title="Sync (Ctrl+R)">
+              {syncing ? "Syncing…" : "Sync"} <kbd>Ctrl+R</kbd>
+            </button>
+          {/if}
         </div>
       {/snippet}
     </ListSearchBar>
-  {:else if selectionMode}
-    <!-- Selection mode: action toolbar -->
-    <div class="left">
-      <button class="tool-btn" title="Exit selection mode (V)" onclick={onToggleMode}>
-        Exit <kbd>V</kbd>
-      </button>
-    </div>
-    <div class="center">
-      {#if numSelected > 0}
-        <span class="count">{numSelected} selected</span>
-      {:else}
-        <span class="count muted">Select messages with click or <kbd>Space</kbd></span>
-      {/if}
-    </div>
-    <div class="right">
-      <button class="tool-btn" disabled={numSelected === 0} onclick={onExport} title="Export selected (Ctrl+E)">Export <kbd>⌃E</kbd></button>
-      {#if isTrashView}
-        <button class="tool-btn" onclick={onRestore} disabled={numSelected === 0} title="Restore to Inbox (R)">Restore <kbd>R</kbd></button>
-        <button class="tool-btn" onclick={onClearTrash} title="Empty Trash (Ctrl+Shift+Delete)">Clear Trash <kbd>⌃⇧Del</kbd></button>
-      {:else}
-        <button class="tool-btn" disabled={numSelected === 0} onclick={onMove} title="Move selected (M)">Move <kbd>M</kbd></button>
-      {/if}
-      {#if !isTrashView}
-        <button class="tool-btn danger" disabled={numSelected === 0} onclick={onDelete} title="Delete selected (Delete key)">Delete <kbd>Del</kbd></button>
-      {/if}
-      <button class="tool-btn danger" disabled={numSelected === 0} onclick={onHardDelete} title="Permanently delete from server (Ctrl+Delete)">Hard Del <kbd>⌃Del</kbd></button>
-    </div>
   {:else}
     <!-- View mode: expanded toolbar with actions + nav -->
     <div class="left">

@@ -114,6 +114,10 @@ def batch_delete_hard(
 ):
     """Permanently delete multiple messages from local DB and IMAP server."""
     result = email_svc.msg_ops.batch_hard_delete_messages(req.uuids)
+    # Process EXPUNGE backlog immediately so IMAP is cleaned up without
+    # waiting for the next sync cycle.  Without this, hard-deleted messages
+    # get re-inserted on the next IMAP sync (resurrection bug).
+    email_svc.msg_ops.process_sync_backlog()
     return BatchResultResponse(
         status="ok" if not result.get("errors") else "partial",
         count=result["count"],

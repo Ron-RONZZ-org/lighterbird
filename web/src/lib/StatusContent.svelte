@@ -410,13 +410,19 @@
     white-space: nowrap;
   }
   .log-entry {
-    padding: 0.1rem 0.75rem;
+    padding: 0.2rem 0.75rem;
     border-bottom: 1px solid #1e1e30;
     white-space: pre-wrap;
     word-break: break-all;
-    color: #c0c0d0;
+    color: #d8d8e0;
+  }
+  .log-entry:nth-child(even) {
+    background: #16162a;
+  }
+  .log-entry:nth-child(odd) {
+    background: #1a1a2e;
   }
   .log-entry:hover {
-    background: #1a1a2e;
+    background: #22223e;
   }
 </style>

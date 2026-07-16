@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 
 from lighterbird.email.server_detect import detect_servers
+from lighterbird.email.imap.client import decode_imap_utf7
 from lighterbird.email.service import EmailService
 from lighterbird.server.deps import get_email_service
 from lighterbird.server.schemas import (
@@ -138,10 +139,12 @@ def list_folders(email_svc: EmailService = Depends(get_email_service)):
     folders = []
     for row in rows:
         acct_email = row["account_email"]
+        raw_name = row["name"]
         folders.append({
-            "folder_name": row["name"],
+            "folder_name": raw_name,
             "account_email": acct_email,
-            "label": f"{acct_email}/{row['name']}",
+            "label": f"{acct_email}/{raw_name}",
+            "decoded_name": decode_imap_utf7(raw_name),
         })
     return {"folders": folders}
 

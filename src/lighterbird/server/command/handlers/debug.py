@@ -39,7 +39,7 @@ def debug_sync_log(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
 
     return {
         "type": "status",
-        "title": f"Sync Log (last {len(entries)} entries)",
+        "title": "Sync Log",
         "data": {
             "log_path": path_str,
             "entries": entries,

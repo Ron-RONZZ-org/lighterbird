@@ -5,6 +5,7 @@ Forked from A-lien's imap/client.py, stripped of i18n.
 
 from __future__ import annotations
 
+import base64
 import email as email_lib
 import imaplib
 import logging
@@ -75,6 +76,53 @@ def _to_imap_date(iso_date: str) -> str:
         return dt.strftime("%d-%b-%Y")
     except (ValueError, TypeError):
         return iso_date
+
+
+def decode_imap_utf7(name: str) -> str:
+    """Decode an IMAP modified UTF-7 folder name (RFC 3501 §5.1.3) to Unicode.
+
+    Modified UTF-7 encodes non-ASCII characters as ``&<base64>-`` where
+    the base64 is the UTF-16BE encoding of the character(s).  ``&-`` is
+    a literal ``&``.  Printable ASCII passes through unchanged.
+
+    This is used for *display* only.  IMAP commands (SELECT, LIST, etc.)
+    require the original modified UTF-7 encoding, so folder names in the
+    database are kept in their raw IMAP form.
+    """
+    parts: list[str] = []
+    i = 0
+    while i < len(name):
+        if name[i] != '&':
+            parts.append(name[i])
+            i += 1
+            continue
+        # Found '&' — look for closing '-'
+        j = name.find('-', i + 1)
+        if j == -1:
+            # No closing dash — treat '&' as literal
+            parts.append('&')
+            i += 1
+        elif j == i + 1:
+            # '&-' — literal ampersand
+            parts.append('&')
+            i = j + 1
+        else:
+            # '&<base64>-' — encoded UTF-16BE
+            encoded = name[i + 1:j]
+            try:
+                # IMAP modified base64 has no padding — add it
+                pad = 4 - len(encoded) % 4
+                if pad != 4:
+                    encoded_padded = encoded + '=' * pad
+                else:
+                    encoded_padded = encoded
+                raw = base64.b64decode(encoded_padded)
+                parts.append(raw.decode('utf-16-be', errors='replace'))
+            except (ValueError, OSError):
+                # Garbled encoding — preserve original
+                parts.append(name[i:j + 1])
+            i = j + 1
+    return ''.join(parts)
 
 
 def _parse_list_response(line: bytes) -> dict[str, Any] | None:
