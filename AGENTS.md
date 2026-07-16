@@ -27,6 +27,21 @@ The backend is forked from proven code in [A-lien](../A-lien) (email), [A-organi
 
 **Shared core**: lighterbird now depends on [lightercore](../lightercore) for cross-cutting infrastructure — database, paths, exceptions, CRUD, and backup. The local ``lighterbird/core/`` modules are thin re-exports; the canonical implementations live in lightercore.
 
+### Disk Locations (absolute paths)
+
+All sibling repos live under `/home/rongzhou/kodo/autish/`:
+
+| Project | Absolute path |
+|---------|--------------|
+| **semantika** | `/home/rongzhou/kodo/autish/semantika/` |
+| **lighterbird** | `/home/rongzhou/kodo/autish/lighterbird/` — this repo |
+| **lightercore** | `/home/rongzhou/kodo/autish/lightercore/` |
+| **A-lien** | `/home/rongzhou/kodo/autish/A-lien/` |
+| **A-organizi** | `/home/rongzhou/kodo/autish/A-organizi/` |
+| **A-core** | `/home/rongzhou/kodo/autish/A-core/` |
+
+Relative references in this file (e.g., `../lightercore`) resolve correctly because all repos share the same parent directory.
+
 ---
 
 ## Language and Naming Conventions
