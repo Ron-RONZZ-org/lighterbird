@@ -37,12 +37,8 @@ junit-*.xml
 .dev
 /.prod
 
-# Agent memory
-.serena/
-export-20260629T060827372733913/
-
-# opencode plugin state
-.opencode/
+# opencode plugin worktree state DB (not the config files)
+.opencode/worktree-state.sqlite
 
 # Coverage
 .coverage
