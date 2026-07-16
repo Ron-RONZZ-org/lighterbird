@@ -396,6 +396,7 @@ class TestBatchHardDeleteMessages:
 class TestSendEmail:
     @patch(SMTP_PATCH)
     def test_send_email_success(self, mock_smtp_class, msg_ops, mock_account_service):
+        """send_email now always queues for background delivery (no inline SMTP)."""
         mock_smtp = MagicMock()
         mock_smtp_class.return_value = mock_smtp
 
@@ -405,14 +406,15 @@ class TestSendEmail:
             subject="Test",
             body="Hello",
         )
-        assert result["status"] == "sent"
+        assert result["status"] == "queued"
         assert result["uuid"] is not None
-        mock_smtp.connect.assert_called_once()
-        mock_smtp.send_email.assert_called_once()
-        mock_smtp.disconnect.assert_called_once()
+        assert result["message_id"] is not None
+        # SMTP is never called in send_email — it's deferred to process_send_queue
+        mock_smtp.connect.assert_not_called()
 
     @patch(SMTP_PATCH)
     def test_send_email_queued_on_failure(self, mock_smtp_class, msg_ops):
+        """Even if SMTP would fail, send_email always queues successfully."""
         mock_smtp = MagicMock()
         mock_smtp_class.return_value = mock_smtp
         mock_smtp.connect.side_effect = ConnectionError("SMTP unavailable")
@@ -424,10 +426,13 @@ class TestSendEmail:
             body="Hello",
         )
         assert result["status"] == "queued"
-        assert "error" in result
+        assert result["uuid"] is not None
+        # No error at queuing time — SMTP failure manifests in process_send_queue
+        mock_smtp.connect.assert_not_called()
 
     @patch(SMTP_PATCH)
     def test_send_email_markdown_body(self, mock_smtp_class, msg_ops):
+        """Markdown body is rendered during process_send_queue, not at enqueue."""
         mock_smtp = MagicMock()
         mock_smtp_class.return_value = mock_smtp
 
@@ -438,7 +443,8 @@ class TestSendEmail:
             body="**bold** text",
             body_format="markdown",
         )
-        assert result["status"] == "sent"
+        assert result["status"] == "queued"
+        assert result["uuid"] is not None
 
     def test_send_email_no_account(self, msg_ops, mock_account_service):
         mock_account_service.get_account_with_password.return_value = None

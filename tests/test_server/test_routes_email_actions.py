@@ -85,6 +85,41 @@ class TestEmailActionsAPI:
         )
         assert resp.status_code == 422  # min_length=1
 
+    def test_batch_delete_hard_large_list(self):
+        """POST batch-delete-hard with 1000 UUIDs accepted (no max_length=200)."""
+        uuids = [f"00000000-0000-0000-0000-{i:012d}" for i in range(1000)]
+        resp = self._client().post(
+            "/api/v1/email/messages/batch-delete-hard",
+            json={"uuids": uuids},
+        )
+        # Schema passes — service returns 200 (all not-found is fine)
+        assert resp.status_code == 200
+
+    def test_batch_delete_hard_empty_list(self):
+        """POST batch-delete-hard with empty list rejected."""
+        resp = self._client().post(
+            "/api/v1/email/messages/batch-delete-hard",
+            json={"uuids": []},
+        )
+        assert resp.status_code == 422
+
+    def test_batch_move_large_list(self):
+        """POST batch-move with 1000 UUIDs accepted (no max_length=200)."""
+        uuids = [f"00000000-0000-0000-0000-{i:012d}" for i in range(1000)]
+        resp = self._client().post(
+            "/api/v1/email/messages/batch-move",
+            json={"uuids": uuids, "destination_folder": "Trash"},
+        )
+        assert resp.status_code == 200
+
+    def test_batch_move_empty_list(self):
+        """POST batch-move with empty list rejected."""
+        resp = self._client().post(
+            "/api/v1/email/messages/batch-move",
+            json={"uuids": [], "destination_folder": "Trash"},
+        )
+        assert resp.status_code == 422
+
     def test_import_eml_no_path(self):
         """POST /api/v1/email/import-eml without path returns 400."""
         resp = self._client().post("/api/v1/email/import-eml", json={})
