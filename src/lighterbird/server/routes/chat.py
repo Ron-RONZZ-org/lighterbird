@@ -5,11 +5,16 @@
 ``POST  /api/v1/chat/stream``  — (Deprecated) SSE streaming without tools.
 ``GET   /api/v1/chat/notice``  — Return stale-commands notice.
 
-The primary endpoint (``/chat``) replaces the old one-shot ``generate_command``
-→ dispatch → summarise pipeline with a **multi-round tool-calling loop**.
-The LLM receives all registered ``!commands`` as native tools and can
-call them, see results, and iterate until it produces a final answer.
-WRITE-level tools gate behind user confirmation via ``/chat/resume``.
+The primary endpoint (``/chat``) runs a **multi-round tool-calling loop**
+using the LLM tool registry (:mod:`~lighterbird.server.llm.tools`).
+The LLM receives **AI-optimised tools** (domain services called directly,
+UUID-based operations, structured schemas) and can call them, see
+results, and iterate until it produces a final answer.  WRITE-level tools
+gate behind user confirmation via ``/chat/resume``.
+
+Unlike the CLI command registry (which serves human ``!`` commands), the
+LLM tool registry is a separate set of tools designed for AI consumption —
+no CLI flag parsing overhead, no frontend-shaped response wrapping.
 """
 
 from __future__ import annotations
@@ -21,15 +26,13 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from lightercore.llm.base import defs_to_tools
+from lightercore.permissions import PermissionLevel
 
 from lighterbird.core.ai import get_provider as _create_core_provider
 from lighterbird.core.system_prompt import load_system_prompt
 from lighterbird.server.command.registry import (
-    dispatch,
-    get_command_level,
-    get_definitions,
-    get_handler_metadata,
+    get_definitions as _get_cli_definitions,  # used only by legacy /chat/stream
+    get_handler_metadata as _get_cli_handler_metadata,
 )
 from lighterbird.server.llm.provider import get_provider
 from lighterbird.server.llm.render import render_markdown
@@ -37,6 +40,12 @@ from lighterbird.server.llm.tool_loop import (
     _pending_executions,
     resume_execution,
     run_tool_loop,
+)
+from lighterbird.server.llm.tools import (
+    dispatch_llm_tool,
+    get_llm_tool_level,
+    get_llm_tool_metadata,
+    get_llm_tools,
 )
 
 logger = logging.getLogger(__name__)
@@ -82,9 +91,9 @@ def _build_tool_messages(
 ) -> list[dict]:
     """Build messages for the tool loop: system prompt + conversation history.
 
-    Unlike the old ``_build_messages``, this does **not** dump command
-    definitions as plain text — they are supplied as native tool
-    definitions via :func:`defs_to_tools` instead.
+    Tool definitions are supplied separately via
+    :func:`~lighterbird.server.llm.tools.get_llm_tools` to the
+    tool loop — they are NOT dumped as plain text.
     """
     base_prompt = load_system_prompt()
     messages: list[dict] = [{"role": "system", "content": base_prompt}]
@@ -94,13 +103,35 @@ def _build_tool_messages(
     return messages
 
 
-def _dispatch_path(path: str, flags: dict) -> dict:
-    """Dispatch a command by dot-separated path.
+def _dispatch_llm_tool(path: str, flags: dict) -> dict:
+    """Dispatch an LLM tool by dot-separated path.
 
-    Splits ``"email.list"`` → ``["email", "list"]`` and calls
-    :func:`~lighterbird.server.command.registry.dispatch`.
+    Routes through the LLM tool registry (NOT the CLI command registry).
+    LLM tools call domain services directly — no flag parsing overhead.
     """
-    return dispatch(path.split("."), flags)
+    return dispatch_llm_tool(path, flags)
+
+
+def _get_llm_tool_level(path: str) -> PermissionLevel | None:
+    """Permission lookup for LLM tools only — no CLI registry fallback.
+
+    Passed as ``get_tool_level_fn`` to :func:`run_tool_loop` and
+    :func:`resume_execution`.
+    """
+    return get_llm_tool_level(path)
+
+
+def _get_handler_metadata(path: str) -> dict | None:
+    """Combined metadata lookup: LLM tool registry first, then CLI registry.
+
+    The LLM tool registry stores ``description`` in its entries, which
+    :func:`~lightercore.llm.tool_loop.run_tool_loop` uses to populate
+    the ``confirm_tool`` dialog descriptions.
+    """
+    meta = get_llm_tool_metadata(path)
+    if meta:
+        return meta
+    return _get_cli_handler_metadata(path)
 
 
 # ── Primary chat endpoint ────────────────────────────────────────────────
@@ -132,10 +163,9 @@ async def chat_endpoint(data: dict[str, Any]) -> dict[str, Any]:
             "data": {"message": "LLM not configured. Use ! commands or configure a provider."},
         }
 
-    # Build messages and tool definitions
+    # Build messages and tool definitions from the LLM tool registry
     messages = _build_tool_messages(message, context)
-    defs = get_definitions()
-    tools = defs_to_tools(defs) if defs else []
+    tools = get_llm_tools()
 
     # Run the multi-round tool loop
     result = await run_tool_loop(
@@ -143,9 +173,10 @@ async def chat_endpoint(data: dict[str, Any]) -> dict[str, Any]:
         tools=tools,
         name="chat",
         provider=provider,
-        dispatch_fn=_dispatch_path,
-        get_handler_metadata_fn=get_handler_metadata,
-        get_command_level_fn=get_command_level,
+        dispatch_fn=_dispatch_llm_tool,
+        get_handler_metadata_fn=_get_handler_metadata,
+        get_command_level_fn=lambda _: None,  # unused — get_tool_level_fn takes priority
+        get_tool_level_fn=_get_llm_tool_level,
     )
 
     # Handle confirm_tool pause
@@ -201,9 +232,10 @@ async def chat_resume(data: dict[str, Any]) -> dict[str, Any]:
             decisions=data.get("decisions"),
             confirmed=data.get("confirmed"),
             provider=provider,
-            dispatch_fn=_dispatch_path,
-            get_handler_metadata_fn=get_handler_metadata,
-            get_command_level_fn=get_command_level,
+            dispatch_fn=_dispatch_llm_tool,
+            get_handler_metadata_fn=_get_handler_metadata,
+            get_command_level_fn=lambda _: None,  # unused — get_tool_level_fn takes priority
+            get_tool_level_fn=_get_llm_tool_level,
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
@@ -260,7 +292,8 @@ async def chat_stream(data: dict[str, Any]) -> StreamingResponse:
         try:
             # Build messages with command definitions as text (legacy format)
             base_prompt = load_system_prompt()
-            defs_text = json.dumps(get_definitions(), indent=2) if get_definitions() else "[]"
+            cli_defs = _get_cli_definitions()
+            defs_text = json.dumps(cli_defs, indent=2) if cli_defs else "[]"
             system_content = base_prompt + "\n\nAVAILABLE COMMANDS:\n" + defs_text
             stream_messages: list[dict] = [{"role": "system", "content": system_content}]
             if context:

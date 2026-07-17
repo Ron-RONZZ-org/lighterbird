@@ -24,7 +24,7 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 
 - **The server is a single-user app** — no authentication middleware needed initially (future: optional auth)
 - **Svelte SPA is served as static files** — the FastAPI app mounts `web/dist/` as static files
-- **Multi-round tool-calling LLM chat** — `POST /api/v1/chat` uses a multi-round tool loop (`run_tool_loop` in `llm/tool_loop.py`) instead of one-shot command generation. The LLM receives all `!commands` as native tools and can iterate until it produces a final answer. WRITE-level tools gate behind user confirmation via `POST /api/v1/chat/resume`.
+- **Multi-round tool-calling LLM chat** — `POST /api/v1/chat` uses a multi-round tool loop (`run_tool_loop` in `llm/tool_loop.py`) instead of one-shot command generation. The LLM receives tools from the **LLM tool registry** (`llm/tools/`) — AI-optimised tools that call domain services directly — rather than CLI ``!command`` definitions. WRITE-level tools gate behind user confirmation via `POST /api/v1/chat/resume`. Permission resolution uses ``get_tool_level_fn`` (from #247) via the LLM registry's ``get_llm_tool_level()`` callback.
 - **REST API for everything else** — messages, contacts, calendar, todo, journal, letters, profiles CRUD
 - **Command system (`!` commands)** — the primary user interaction model. Defined in `command/tree.py`, dispatched by `command/registry.py`, handled by per-domain handlers in `command/handlers/`
 - **Backup scheduler** — automatic timestamped backups of all domain databases on configurable schedule
@@ -73,7 +73,7 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 
 The `llm/tools/` directory provides a **standalone LLM tool registry** with tools optimized for AI consumption:
 
-- **`__init__.py`** — ``@llm_tool()`` decorator, ``get_llm_tools()`` (OpenAI format), ``dispatch_llm_tool()``, ``get_llm_tool_level()`` (permission callback for ``run_tool_loop``)
+- **`__init__.py`** — ``@llm_tool()`` decorator, ``get_llm_tools()`` (OpenAI format), ``dispatch_llm_tool()``, ``get_llm_tool_level()`` (permission callback for ``run_tool_loop``), ``get_llm_tool_metadata()`` (metadata lookup for ``confirm_tool`` descriptions)
 - **Domain modules** — each registers tools via ``@llm_tool()``: ``system.py`` (1 tool), ``email.py`` (13), ``calendar.py`` (10), ``contacts.py`` (5), ``todo.py`` (6), ``journal.py`` (4), ``letter.py`` (5) = **44 tools total**
 
 Key design points:
@@ -82,13 +82,13 @@ Key design points:
 3. **Dot-separated names** with underscore OpenAI format (``email.find`` ↔ ``email_find``) — compatible with ``tc_path()``
 4. **Permission-gated** via ``get_llm_tool_level()`` callback passed as ``get_tool_level_fn`` to ``run_tool_loop()`` (from #247)
 5. **UUID-based operations** (``email.read <uuid>``, ``todo.update``, etc.) — LLMs excel at UUID tracking
-6. **Not yet wired into the chat endpoint** — that's Subissue 6 (#249)
+6. **Wired into the chat endpoint** — ``POST /api/v1/chat`` and ``POST /api/v1/chat/resume`` use the LLM tool registry exclusively (from #249). ``get_llm_tools()`` replaces the old ``get_definitions()`` + ``defs_to_tools()`` pipeline. The ``/chat`` endpoint uses a combined metadata callback that checks the LLM tool registry first (for ``confirm_tool`` descriptions), falling back to the CLI registry.
 
 ## Domain-Specific Rules for Agents
 
 1. **Thin route layer** — routes call into domain services and return JSON. No business logic in route handlers.
 2. **Pydantic schemas for all I/O** — never return raw dicts from routes. Define request/response models in `schemas.py`.
-3. **Multi-round tool loop for chat and prompt commands** — both `POST /api/v1/chat` and `POST /api/v1/prompt-commands/execute` use the shared `run_tool_loop()` from `lightercore.llm.tool_loop`. The LLM receives all `!commands` as native OpenAI-compatible tools and can iterate up to 20 rounds. READ-level tools execute silently; WRITE+ tools gate behind `confirm_tool` → `/chat/resume` (or `/execute/resume`).
+3. **Multi-round tool loop for chat and prompt commands** — both `POST /api/v1/chat` and `POST /api/v1/prompt-commands/execute` use the shared `run_tool_loop()` from `lightercore.llm.tool_loop`. The `/chat` endpoint uses tools from the **LLM tool registry** (`llm/tools/`); `prompt-commands/execute` uses CLI ``!command`` definitions. The LLM can iterate up to 20 rounds. READ-level tools execute silently; WRITE+ tools gate behind `confirm_tool` → `/chat/resume` (or `/execute/resume`).
 4. **Error responses are structured JSON** — `{"error": "...", "code": "...", "suggestion": "..."}` (inspired by A-lien's actionable error messages).
 5. **CORS is wide open in development** — restrictive in production (or behind a reverse proxy).
 6. **Static file serving for production** — mount `web/dist/` at the root path. For development, use Svelte's Vite dev server with a proxy to FastAPI.

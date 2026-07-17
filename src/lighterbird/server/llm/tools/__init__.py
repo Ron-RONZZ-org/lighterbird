@@ -4,8 +4,10 @@ Provides the :func:`@llm_tool() <llm_tool>` decorator to register tool
 handlers with OpenAI-compatible metadata, a :func:`get_llm_tools()`
 converter that produces function-calling definitions, a
 :func:`dispatch_llm_tool()` for executing handlers by dot-separated path,
-and a :func:`get_llm_tool_level()` permission callback for
-:func:`~lightercore.llm.tool_loop.run_tool_loop`.
+a :func:`get_llm_tool_level()` permission callback for
+:func:`~lightercore.llm.tool_loop.run_tool_loop`, and a
+:func:`get_llm_tool_metadata()` lookup for ``confirm_tool`` dialog
+descriptions.
 
 LLM tools use the ``domain.verb`` naming convention (e.g. ``email.find``,
 ``contacts.create``) and call domain services **directly** — no CLI flag
@@ -224,10 +226,28 @@ def is_llm_tool(path: str) -> bool:
     return path in _llm_registry
 
 
+def get_llm_tool_metadata(path: str) -> dict | None:
+    """Return the metadata dict for a registered LLM tool, or ``None``.
+
+    The returned dict has the same structure as the registry entry
+    (``handler``, ``name``, ``description``, ``parameters``,
+    ``permission_level``).  This is useful for the chat endpoint's
+    combined metadata lookup when populating ``confirm_tool`` dialogs.
+
+    Args:
+        path: Dot-separated tool path (e.g. ``"email.find"``).
+
+    Returns:
+        The registry entry dict, or ``None`` if *path* is not registered.
+    """
+    return _llm_registry.get(path)
+
+
 __all__ = [
     "_llm_registry",
     "dispatch_llm_tool",
     "get_llm_tool_level",
+    "get_llm_tool_metadata",
     "get_llm_tool_names",
     "get_llm_tools",
     "is_llm_tool",
