@@ -13,7 +13,7 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 - **`sync_progress.py`** — Thread-safe in-memory sync progress tracker used by the async sync endpoints. Provides ``SyncProgressTracker`` class and ``get_sync_progress_tracker()`` singleton.
 - **`sync_state.py`** — Per-account sync state manager (thread-safe singleton) tracking startup sync completion and IDLE thread health. Provides ``SyncStateManager``, ``get_sync_state_manager()``, ``init_sync_state_manager()``.
 - **`command/`** — `!` command system: tree definition, parser, registry, response models, per-domain handlers
-- **`llm/`** — LLM integration: chat sessions, provider resolution, and the shared **tool_loop** module (multi-round tool-calling loop with human-in-the-loop support)
+- **`llm/`** — LLM integration: chat sessions, provider resolution, the shared **tool_loop** module (multi-round tool-calling loop with human-in-the-loop support), and the **`llm/tools/`** module (standalone LLM tool registry with 44 tools across 8 domains)
 - **`cowrite/`** — AI-assisted writing integration for form editors
 - **`middleware.py`** — CORS, error handling, request logging, static file serving
 - **`deps.py`** — FastAPI dependency injection (get_db, get_email_service, get_db_for, etc.)
@@ -67,6 +67,21 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 
 - FastAPI docs: https://fastapi.tiangolo.com/
 - Svelte SPA + FastAPI pattern: https://github.com/tecladocode/fastapi-svelte-spa
+
+## LLM Tool Registry (`llm/tools/`)
+
+The `llm/tools/` directory provides a **standalone LLM tool registry** with tools optimized for AI consumption:
+
+- **`__init__.py`** — ``@llm_tool()`` decorator, ``get_llm_tools()`` (OpenAI format), ``dispatch_llm_tool()``, ``get_llm_tool_level()`` (permission callback for ``run_tool_loop``)
+- **Domain modules** — each registers tools via ``@llm_tool()``: ``system.py`` (1 tool), ``email.py`` (13), ``calendar.py`` (10), ``contacts.py`` (5), ``todo.py`` (6), ``journal.py`` (4), ``letter.py`` (5) = **44 tools total**
+
+Key design points:
+1. **Direct domain service calls** — no CLI dispatch involvement, no flag parsing overhead
+2. **Uniform return format** — ``{"success": True, "data": ...}`` or ``{"success": False, "error": "..."}``
+3. **Dot-separated names** with underscore OpenAI format (``email.find`` ↔ ``email_find``) — compatible with ``tc_path()``
+4. **Permission-gated** via ``get_llm_tool_level()`` callback passed as ``get_tool_level_fn`` to ``run_tool_loop()`` (from #247)
+5. **UUID-based operations** (``email.read <uuid>``, ``todo.update``, etc.) — LLMs excel at UUID tracking
+6. **Not yet wired into the chat endpoint** — that's Subissue 6 (#249)
 
 ## Domain-Specific Rules for Agents
 

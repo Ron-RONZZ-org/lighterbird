@@ -151,7 +151,8 @@ lighterbird/
 │       │   ├── __init__.py
 │       │   ├── dev_cli.py       # lighterbird-dev CLI entry point
 │       │   └── seed.py          # Seed data generator for test databases
-│       ├── server/              # FastAPI web server: routes, middleware, command system
+│       ├── server/                      # FastAPI web server: routes, middleware, command system
+│   └── llm/tools/               # Standalone LLM tool registry (44 tools, 8 domains)
 │       ├── todo/                # Task CRUD, priority formulas, subtasks, dependencies
 │       └── user_commands/       # User-defined saved commands with template expansion
 ├── reset/                       # Reset module AGENTS file
@@ -408,6 +409,7 @@ The following module-specific AGENTS files are located in their respective direc
 | Scripts | `scripts/AGENTS-scripts.md` | Dev CLI, seed data generator, test infrastructure |
 | Server | `server/AGENTS-server.md` | FastAPI routes, middleware, command system |
 | Web | `web/AGENTS-web.md` | Svelte SPA, command-bar UI, build tooling |
+| LLM Tools | `src/lighterbird/server/llm/tools/` | Standalone LLM tool registry, 44 tools across 8 domains |
 
 (Update this table as new modules are added)
 
@@ -430,6 +432,7 @@ Root AGENTS.md (global rules)
     ├── reset/AGENTS-reset.md     Reset with optional backup
     ├── scripts/AGENTS-scripts.md Dev CLI, seed data, test infra
     ├── server/AGENTS-server.md   FastAPI backend, API routes
+    │   └── server/llm/tools/     Standalone LLM tool registry
     └── web/AGENTS-web.md         Svelte SPA frontend
 ```
 
