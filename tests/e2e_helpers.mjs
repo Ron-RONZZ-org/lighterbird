@@ -139,12 +139,27 @@ export async function assertTabOpened(expectedTitle) {
     );
   }
 
-  const panel = page.locator('[aria-label="Tab content"]');
+  // Use the active tab's title to locate its panel (avoids strict-mode violation
+  // from matching the home tab, which also has data-testid="tab-panel").
+  const panel = page.locator(`.tab-content.active[data-testid="tab-panel"][aria-label="${titleAttr}"]`);
   await panel.waitFor({ state: "visible", timeout: 3000 });
   const panelText = (await panel.textContent() || "").trim();
   if (panelText.length === 0) {
     throw new Error(`Tab panel for "${expectedTitle}" is empty`);
   }
+}
+
+/**
+ * Get the active (visible) tab panel locator, uniquely identified by its aria-label.
+ * This avoids Playwright strict-mode violations since both the home tab and result
+ * tabs share the same data-testid.
+ */
+export function getActiveTabPanel() {
+  // Returns a function that lazily resolves — caller must await textContent etc.
+  return page.locator('[role="tablist"] [role="tab"][aria-selected="true"]').first().getAttribute("title").then((title) => {
+    if (!title) throw new Error("No active tab title");
+    return page.locator(`.tab-content.active[data-testid="tab-panel"][aria-label="${title}"]`);
+  });
 }
 
 /**
@@ -162,7 +177,7 @@ export async function assertFormOpened(expectedTitle, fieldHints = []) {
     );
   }
 
-  const panel = page.locator('[aria-label="Tab content"]');
+  const panel = page.locator(`.tab-content.active[data-testid="tab-panel"][aria-label="${titleAttr}"]`);
   await panel.waitFor({ state: "visible", timeout: 3000 });
   const panelText = (await panel.textContent() || "").toLowerCase();
 
@@ -203,7 +218,8 @@ export async function assertHomeActive() {
  * Assert the active tab panel contains the given text substring.
  */
 export async function assertPanelContains(text) {
-  const panel = page.locator('[aria-label="Tab content"]');
+  const titleAttr = await getActiveTabTitleAttr();
+  const panel = page.locator(`.tab-content.active[data-testid="tab-panel"][aria-label="${titleAttr}"]`);
   await panel.waitFor({ state: "visible", timeout: 3000 });
   const panelText = await panel.textContent() || "";
   if (!panelText.toLowerCase().includes(text.toLowerCase())) {
@@ -213,14 +229,48 @@ export async function assertPanelContains(text) {
 
 // ── Tab cleanup ───────────────────────────────────────────────────────
 
-/** Dismiss all result tabs: go home then press Escape multiple times. */
+/** Dismiss all result tabs: go home then close tabs unconditionally.
+ *  Handles the UnsavedChangesDialog: if it appears, click "Discard" to
+ *  force-close the tab, then continue closing remaining tabs. */
 export async function dismissAllTabs() {
+  // Navigate to home via the Alt+1 shortcut
   await page.keyboard.press("Alt+1");
   await sleep(150);
-  for (let i = 0; i < 5; i++) {
+
+  // Close result tabs by pressing Escape. If the UnsavedChangesDialog
+  // appears, dismiss it with "Discard" to force-close the dirty tab.
+  for (let i = 0; i < 10; i++) {
     await page.keyboard.press("Escape");
-    await sleep(100);
+    await sleep(150);
+
+    // Check for UnsavedChangesDialog and click Discard
+    try {
+      const dialog = page.locator('[role="alertdialog"]');
+      if (await dialog.isVisible({ timeout: 100 })) {
+        const discardBtn = dialog.locator('button:has-text("Discard")');
+        if (await discardBtn.isVisible({ timeout: 100 })) {
+          await discardBtn.click();
+          await sleep(150);
+          continue;
+        }
+        const cancelBtn = dialog.locator('button:has-text("Cancel")');
+        if (await cancelBtn.isVisible({ timeout: 100 })) {
+          await cancelBtn.click();
+          await sleep(150);
+          continue;
+        }
+      }
+    } catch { /* no dialog */ }
+
+    // Check if we're back to home (only home tab visible)
+    const tabBar = page.locator('[role="tablist"]');
+    const tabBarVisible = await tabBar.isVisible().catch(() => false);
+    if (!tabBarVisible) break;
+    const tabCount = await tabBar.locator('[role="tab"]').count().catch(() => 0);
+    if (tabCount <= 1) break;
   }
+
+  // Dismiss any welcome notice
   try {
     const dismissBtn = page.locator("button", { hasText: "Dismiss notice" });
     if (await dismissBtn.isVisible({ timeout: 300 })) {

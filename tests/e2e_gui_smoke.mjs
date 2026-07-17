@@ -41,7 +41,7 @@ async function fillFormField(fieldId, value) {
 
 /** Click the Save/Submit button in the active form panel. */
 async function clickFormSubmit() {
-  const panel = page.locator('[aria-label="Tab content"]');
+  const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
   const submitBtn = panel.locator(
     'button[type="submit"], button:has-text("Save"), button:has-text("Add"), button:has-text("Create"), button:has-text("Send")'
   ).first();
@@ -73,7 +73,7 @@ async function enterSelectionMode() {
 
 /** Assert the active tab panel text contains expected content. */
 async function assertPanelHasContent() {
-  const panel = page.locator('[aria-label="Tab content"]');
+  const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
   await panel.waitFor({ state: "visible", timeout: 3000 });
   const text = (await panel.textContent() || "").trim();
   assert(text.length > 0, "Tab panel should have non-empty content");
@@ -82,7 +82,7 @@ async function assertPanelHasContent() {
 
 /** Count visible items in a list tab panel. */
 async function countListItems() {
-  return await page.locator('[aria-label="Tab content"] .checkbox-cell').count().catch(() => 0);
+  return await page.locator('.tab-content.active[data-testid="tab-panel"] .checkbox-cell').count().catch(() => 0);
 }
 
 /** Check if clipboard API is available in the test context (requires secure context). */
@@ -101,7 +101,7 @@ async function clipboardAvailable() {
 async function waitForClassInPanel(className, timeout = 3000) {
   const start = Date.now();
   while (Date.now() - start < timeout) {
-    const els = await page.locator(`[aria-label="Tab content"] .${CSS.escape(className)}`).count();
+    const els = await page.locator(`.tab-content.active[data-testid="tab-panel"] .${CSS.escape(className)}`).count();
     if (els > 0) return els;
     await sleep(100);
   }
@@ -352,7 +352,7 @@ async function runTests(page) {
     await typeCommand("!contact list");
     await pressEnter();
     await assertTabOpened("Contact");
-    const panel = page.locator('[aria-label="Tab content"]');
+    const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
     const panelText = await panel.textContent() || "";
     assert(panelText.length > 10, `Contacts tab panel should have substantial content`);
   });
@@ -366,7 +366,7 @@ async function runTests(page) {
     await typeCommand("!contact search zzzZZZnosuchthing");
     await pressEnter();
     await assertTabOpened("Contact");
-    const panel = page.locator('[aria-label="Tab content"]');
+    const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
     const panelText = ((await panel.textContent()) || "").toLowerCase();
     const hasEmptyIndicator = panelText.includes("no ") || panelText.includes("0 ") || panelText.includes("zzz");
     assert(hasEmptyIndicator,
@@ -387,12 +387,12 @@ async function runTests(page) {
     await page.keyboard.press("v");
     await sleep(400);
 
-    const checkboxes = page.locator('[aria-label="Tab content"] .checkbox-cell');
+    const checkboxes = page.locator('.tab-content.active[data-testid="tab-panel"] .checkbox-cell');
     const checkboxCount = await checkboxes.count().catch(() => 0);
     if (checkboxCount > 0) {
       console.log(`    Selection mode: ${checkboxCount} checkbox(es) visible`);
     } else {
-      const panel = page.locator('[aria-label="Tab content"]');
+      const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
       const panelText = (await panel.textContent() || "").toLowerCase();
       const hasSelectBtn = panelText.includes("exit") || panelText.includes("selected");
       assert(hasSelectBtn || checkboxCount > 0,
@@ -413,7 +413,7 @@ async function runTests(page) {
     await pressEnter();
     await assertFormOpened("Contact", ["first"]);
 
-    const panel = page.locator('[aria-label="Tab content"]');
+    const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
     const saveBtn = panel.locator('button:has-text("Save")');
     const btnVisible = await saveBtn.isVisible().catch(() => false);
     assert(btnVisible, "Form should have a Save button");
@@ -439,7 +439,7 @@ async function runTests(page) {
     await assertTabOpened("Todo");
     await sleep(200);
 
-    const panel = page.locator('[aria-label="Tab content"]');
+    const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
     const sortBtn = panel.locator('button:has-text("Sort"), select:has-text("sort"), [aria-label*="sort" i], [aria-label*="Sort" i]');
     const btnCount = await sortBtn.count();
     if (btnCount > 0) {
@@ -465,7 +465,7 @@ async function runTests(page) {
 
     await enterSelectionMode();
 
-    const checkboxesBefore = page.locator('[aria-label="Tab content"] .checkbox-cell');
+    const checkboxesBefore = page.locator('.tab-content.active[data-testid="tab-panel"] .checkbox-cell');
     const cbCount = await checkboxesBefore.count().catch(() => 0);
     if (cbCount < 2) {
       console.log(`    (${cbCount} items — skipping arrow nav test, needs ≥2)`);
@@ -476,13 +476,13 @@ async function runTests(page) {
 
     await page.keyboard.press("ArrowDown");
     await sleep(200);
-    const focusedRowDown = page.locator('[aria-label="Tab content"] .focused, [aria-label="Tab content"] [class*="focus"]');
+    const focusedRowDown = page.locator('.tab-content.active[data-testid="tab-panel"] .focused, .tab-content.active[data-testid="tab-panel"] [class*="focus"]');
     const focusedCountDown = await focusedRowDown.count().catch(() => 0);
     console.log(`    After ArrowDown: ${focusedCountDown} focused row(s)`);
 
     await page.keyboard.press("ArrowUp");
     await sleep(200);
-    const focusedRowUp = page.locator('[aria-label="Tab content"] .focused, [aria-label="Tab content"] [class*="focus"]');
+    const focusedRowUp = page.locator('.tab-content.active[data-testid="tab-panel"] .focused, .tab-content.active[data-testid="tab-panel"] [class*="focus"]');
     const focusedCountUp = await focusedRowUp.count().catch(() => 0);
     console.log(`    After ArrowUp: ${focusedCountUp} focused row(s)`);
 
@@ -498,7 +498,7 @@ async function runTests(page) {
 
     await enterSelectionMode();
 
-    const checkboxes = page.locator('[aria-label="Tab content"] .checkbox-cell');
+    const checkboxes = page.locator('.tab-content.active[data-testid="tab-panel"] .checkbox-cell');
     const cbCount = await checkboxes.count().catch(() => 0);
     if (cbCount < 1) {
       console.log("    (no items — skipping selection toggle test)");
@@ -509,7 +509,7 @@ async function runTests(page) {
     await page.keyboard.press("Space");
     await sleep(300);
 
-    const checkedCb = page.locator('[aria-label="Tab content"] .checkbox-cell input:checked, [aria-label="Tab content"] input[type="checkbox"]:checked');
+    const checkedCb = page.locator('.tab-content.active[data-testid="tab-panel"] .checkbox-cell input:checked, .tab-content.active[data-testid="tab-panel"] input[type="checkbox"]:checked');
     const checkedCount = await checkedCb.count().catch(() => 0);
     console.log(`    After Space: ${checkedCount} checkbox(es) checked`);
 
@@ -531,7 +531,7 @@ async function runTests(page) {
     await page.keyboard.press("n");
     await sleep(600);
 
-    const panel = page.locator('[aria-label="Tab content"]');
+    const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
     await panel.waitFor({ state: "visible", timeout: 3000 });
     const panelText = (await panel.textContent() || "").toLowerCase();
     assert(panelText.includes("title") || panelText.includes("todo"),
@@ -552,7 +552,7 @@ async function runTests(page) {
     await page.keyboard.press("/");
     await sleep(400);
 
-    const panel = page.locator('[aria-label="Tab content"]');
+    const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
     const searchInput = panel.locator('input[type="search"], input[placeholder*="earch" i], input[placeholder*="Filter" i], input[aria-label*="search" i]');
     const searchExists = await searchInput.count().catch(() => 0);
     if (searchExists > 0) {
@@ -604,7 +604,7 @@ async function runTests(page) {
     await sleep(400);
 
     // Find the UUID span in the todo list
-    const uuidSpan = page.locator('[aria-label="Tab content"] .tuuid');
+    const uuidSpan = page.locator('.tab-content.active[data-testid="tab-panel"] .tuuid');
     const uuidCount = await uuidSpan.count().catch(() => 0);
     if (uuidCount === 0) {
       console.log("    (no UUID elements found — may be empty list)");
@@ -645,7 +645,7 @@ async function runTests(page) {
     await sleep(300);
 
     // Check initial state — look for a mode toggle button or indicator
-    const panel = page.locator('[aria-label="Tab content"]');
+    const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
     const initialText = (await panel.textContent() || "").toLowerCase();
 
     // Press T to toggle mode
@@ -687,7 +687,7 @@ async function runTests(page) {
     await sleep(400);
 
     // Look for tag/label elements
-    const panel = page.locator('[aria-label="Tab content"]');
+    const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
     const tags = panel.locator('.tag, .tag-pill, [class*="tag"], .labels span');
     const tagCount = await tags.count().catch(() => 0);
     if (tagCount > 0) {
@@ -713,7 +713,7 @@ async function runTests(page) {
     // Enter selection mode
     await enterSelectionMode();
 
-    const checkboxes = page.locator('[aria-label="Tab content"] .checkbox-cell');
+    const checkboxes = page.locator('.tab-content.active[data-testid="tab-panel"] .checkbox-cell');
     const cbCount = await checkboxes.count().catch(() => 0);
     if (cbCount < 2) {
       console.log(`    (${cbCount} items — skipping range selection test, needs ≥2)`);
@@ -723,7 +723,7 @@ async function runTests(page) {
     }
 
     // Click first row (todo items use role="option")
-    const firstRow = page.locator('[aria-label="Tab content"] [role="option"], [aria-label="Tab content"] .row').first();
+    const firstRow = page.locator('.tab-content.active[data-testid="tab-panel"] [role="option"], .tab-content.active[data-testid="tab-panel"] .row').first();
     const firstRowCount = await firstRow.count().catch(() => 0);
     if (firstRowCount === 0) {
       console.log("    (no rows found via role=option — trying fallback selector)");
@@ -735,12 +735,12 @@ async function runTests(page) {
 
     // Shift+click third (or second, depending on count) row
     const targetIndex = Math.min(2, cbCount - 1);
-    const targetRow = page.locator('[aria-label="Tab content"] [role="option"], [aria-label="Tab content"] .row').nth(targetIndex);
+    const targetRow = page.locator('.tab-content.active[data-testid="tab-panel"] [role="option"], .tab-content.active[data-testid="tab-panel"] .row').nth(targetIndex);
     await targetRow.click({ modifiers: ["Shift"] });
     await sleep(300);
 
     // Check that multiple items are now selected
-    const checkedCb = page.locator('[aria-label="Tab content"] input[type="checkbox"]:checked');
+    const checkedCb = page.locator('.tab-content.active[data-testid="tab-panel"] input[type="checkbox"]:checked');
     const checkedCount = await checkedCb.count().catch(() => 0);
     console.log(`    After Shift+click: ${checkedCount} checkbox(es) checked`);
 
@@ -775,7 +775,7 @@ async function runTests(page) {
     // Enter selection mode
     await enterSelectionMode();
 
-    const checkboxes = page.locator('[aria-label="Tab content"] .checkbox-cell');
+    const checkboxes = page.locator('.tab-content.active[data-testid="tab-panel"] .checkbox-cell');
     const cbCount = await checkboxes.count().catch(() => 0);
     if (cbCount < 1) {
       console.log("    (no items — skipping batch delete test)");
@@ -784,7 +784,7 @@ async function runTests(page) {
     }
 
     // Click first row to select it (todo items use role="option")
-    const firstRow = page.locator('[aria-label="Tab content"] [role="option"], [aria-label="Tab content"] .row').first();
+    const firstRow = page.locator('.tab-content.active[data-testid="tab-panel"] [role="option"], .tab-content.active[data-testid="tab-panel"] .row').first();
     const firstRowCount = await firstRow.count().catch(() => 0);
     if (firstRowCount === 0) {
       console.log("    (no rows found — skipping batch delete test)");
@@ -842,7 +842,7 @@ async function runTests(page) {
     // Enter selection mode
     await enterSelectionMode();
 
-    const checkboxes = page.locator('[aria-label="Tab content"] .checkbox-cell');
+    const checkboxes = page.locator('.tab-content.active[data-testid="tab-panel"] .checkbox-cell');
     const cbCount = await checkboxes.count().catch(() => 0);
     if (cbCount < 1) {
       console.log("    (no items — skipping export test)");
@@ -851,7 +851,7 @@ async function runTests(page) {
     }
 
     // Select first item (todo items use role="option")
-    const firstRow = page.locator('[aria-label="Tab content"] [role="option"], [aria-label="Tab content"] .row').first();
+    const firstRow = page.locator('.tab-content.active[data-testid="tab-panel"] [role="option"], .tab-content.active[data-testid="tab-panel"] .row').first();
     const firstRowCount = await firstRow.count().catch(() => 0);
     if (firstRowCount === 0) {
       console.log("    (no rows found — skipping export test)");
@@ -902,7 +902,7 @@ async function runTests(page) {
     assert(titleMatch, `Email tab title should contain "Email" or "Inbox", got "${titleAttr}"`);
     await sleep(400);
 
-    const panel = page.locator('[aria-label="Tab content"]');
+    const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
     const panelText = (await panel.textContent() || "").toLowerCase();
 
     // Look for toolbar elements
@@ -920,7 +920,7 @@ async function runTests(page) {
     await pressEnter();
     const tabBar = page.locator('[role="tablist"]');
     await tabBar.waitFor({ state: "visible", timeout: 4000 });
-    const panel = page.locator('[aria-label="Tab content"]');
+    const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
     await panel.waitFor({ state: "visible", timeout: 3000 });
     await sleep(500);
 
@@ -944,7 +944,7 @@ async function runTests(page) {
     await sleep(400);
 
     // The folder panel should appear as a dropdown
-    const panel = page.locator('[aria-label="Tab content"]');
+    const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
     const folderPanel = panel.locator('.folder-panel, .dropdown-panel');
     const folderVisible = await folderPanel.isVisible().catch(() => false);
     if (!folderVisible) {
@@ -968,7 +968,7 @@ async function runTests(page) {
     await sleep(400);
 
     // The sort overlay should appear as a dropdown panel
-    const panel = page.locator('[aria-label="Tab content"]');
+    const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
     const sortPanel = panel.locator('.sort-panel, .dropdown-panel');
     const sortVisible = await sortPanel.isVisible().catch(() => false);
     if (!sortVisible) {
@@ -992,7 +992,7 @@ async function runTests(page) {
     await sleep(400);
 
     // The params dialog should appear
-    const panel = page.locator('[aria-label="Tab content"]');
+    const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
     const paramsPanel = panel.locator('.params-panel, .dropdown-panel');
     const paramsVisible = await paramsPanel.isVisible().catch(() => false);
     if (!paramsVisible) {
@@ -1012,7 +1012,7 @@ async function runTests(page) {
     await sleep(500);
 
     // Click the Fldrs button
-    const panel = page.locator('[aria-label="Tab content"]');
+    const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
     const fldrsBtn = panel.locator('button:has-text("Fldrs")');
     const btnExists = await fldrsBtn.count().catch(() => 0);
     assert(btnExists > 0, "Fldrs button should be in toolbar");
@@ -1034,7 +1034,7 @@ async function runTests(page) {
     await sleep(500);
 
     // Click the Sort button
-    const panel = page.locator('[aria-label="Tab content"]');
+    const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
     const sortBtn = panel.locator('button:has-text("Sort")');
     const btnExists = await sortBtn.count().catch(() => 0);
     assert(btnExists > 0, "Sort button should be in toolbar");
@@ -1056,7 +1056,7 @@ async function runTests(page) {
     await sleep(500);
 
     // Click the Params button
-    const panel = page.locator('[aria-label="Tab content"]');
+    const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
     const paramsBtn = panel.locator('button:has-text("Params")');
     const btnExists = await paramsBtn.count().catch(() => 0);
     assert(btnExists > 0, "Params button should be in toolbar");
@@ -1082,7 +1082,7 @@ async function runTests(page) {
     await sleep(400);
 
     // Advanced search dialog should appear
-    const panel = page.locator('[aria-label="Tab content"]');
+    const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
     const advSearch = panel.locator('.adv-search, .adv-search-dialog, [class*="advanced-search"], h3:has-text("Advanced"), h4:has-text("Advanced")');
     const advVisible = await advSearch.isVisible().catch(() => false);
     if (!advVisible) {
