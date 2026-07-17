@@ -896,6 +896,26 @@ class TestEmailSignatureHandlers:
         assert result["type"] == "status"
         mock_sigs.delete.assert_called_once()
 
+    def test_signature_default_interactive_form(self, mock_email_svc):
+        """email signature default without args returns form-required with accounts + signatures."""
+        mock_sigs = MagicMock()
+        mock_sigs.list_signatures.return_value = [
+            {"uuid": "sig-1", "name": "work"},
+            {"uuid": "sig-2", "name": "personal"},
+        ]
+        mock_email_svc.signatures = mock_sigs
+        mock_email_svc.list_accounts.return_value = [
+            {"email": "me@example.com", "name": "Me"},
+        ]
+        result = dispatch(["email", "signature", "default"], {})
+        assert result["type"] == "form-required"
+        assert result["title"] == "Set Default Signature"
+        assert "accounts" in result["data"]
+        assert len(result["data"]["accounts"]) == 1
+        assert result["data"]["accounts"][0]["email"] == "me@example.com"
+        assert "signatures" in result["data"]
+        assert len(result["data"]["signatures"]) == 2
+
 
 # ── Calendar handlers ────────────────────────────────────────────────────────
 
