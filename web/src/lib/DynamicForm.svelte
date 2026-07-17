@@ -17,6 +17,7 @@
    *   onsubmit      — called with {tokens, flags, remaining}
    */
 
+  import { onMount } from "svelte";
   import { findNode, commandTree } from "./commandTree.js";
   import FormField from "./FormField.svelte";
   import PreviewDialog from "./PreviewDialog.svelte";
@@ -26,6 +27,7 @@
   let {
     commandPath = [],
     initialData = {},
+    tabId = null,
     onsubmit = async () => {},
     onDirtyChange = () => {},
   } = $props();
@@ -40,8 +42,11 @@
   let fieldValues = $state({});
   let dirty = $state(false);
 
-  // Initialize form fields from initialData + tree metadata
-  $effect(() => {
+  // Initialize form fields from initialData + tree metadata.
+  // Using onMount instead of $effect because this is a one-time
+  // initialization — the commandPath is fixed for the component's
+  // lifetime, so no reactive re-runs are needed.
+  onMount(() => {
     const vals = { ...initialData };
     for (const p of (node?.params || [])) {
       if (!(p.name in vals)) vals[p.name] = "";
@@ -56,7 +61,9 @@
     fieldValues = vals;
   });
 
-  // Dirty tracking — derived synchronously from current values
+  // Dirty tracking — derived synchronously from current values.
+  // This $effect tracks fieldValues reactively and MUST stay as an
+  // effect so that user edits trigger dirty state updates.
   $effect(() => {
     const vals = fieldValues;
     if (Object.keys(vals).length === 0) { dirty = false; return; }
@@ -227,7 +234,10 @@
   // ── Autocomplete data loading ─────────────────────────────────────────
   let autocompleteData = $state({}); // {fieldName: [values]}
 
-  $effect(() => {
+  // One-time mount: fetch autocomplete data for params/flags with
+  // autocompleteSource. Using onMount instead of $effect because
+  // the command tree metadata is stable for the component's lifetime.
+  onMount(() => {
     // Collect unique autocompleteSource values from params + flags
     const sources = new Set();
     for (const p of (node?.params || [])) {

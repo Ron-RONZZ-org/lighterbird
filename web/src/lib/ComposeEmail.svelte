@@ -1,12 +1,12 @@
 <script>
   /** Email compose form — used when !email send is typed interactively. */
 
+  import { onMount } from "svelte";
   import { email as emailApi, contacts as contactsApi, drafts as draftsApi } from "./api.js";
   import EmbedInstallDialog from "./EmbedInstallDialog.svelte";
   import FormField from "./FormField.svelte";
   import PreviewDialog from "./PreviewDialog.svelte";
   import { banner } from "./bannerStore.svelte.js";
-  import { tabStore } from "./tabStore.svelte.js";
   import { saveCallbackStore } from "./saveCallbackStore.svelte.js";
   import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
   import MultiEntryField from "./MultiEntryField.svelte";
@@ -14,7 +14,7 @@
   import TurndownService from "turndown";
   import ConfirmDialog from "./ConfirmDialog.svelte";
 
-  let { initialData = {}, onsubmit, onDirtyChange = () => {} } = $props();
+  let { initialData = {}, tabId = null, onsubmit, onDirtyChange = () => {} } = $props();
   // Snapshot of initial props for dirty-state comparison.
   // $state ensures Svelte treats this as a reactive binding without tracking
   // updates — intentionally a one-time capture, not a live $derived.
@@ -158,14 +158,6 @@
   let saveAsSample = $state(true); // save as writing sample for LLM style learning
   let sending = $state(false);
   let savingDraft = $state(false);
-
-  // Debug logging: tracks if `sending` gets stuck at true (button text
-  // stays "Sending..." even after the async operation completes).
-  $effect(() => {
-    if (sending) {
-      console.debug("[ComposeEmail] sending=true", { toListLength: toList.length, hasSubject: !!subject });
-    }
-  });
   let draftSaved = $state(false);
   let draftUuid = $state(_initial._draft_uuid || null);
   let accounts = $state([]);
@@ -204,10 +196,7 @@
     }
   }
 
-  // Load signatures on mount (no account dependency)
-  $effect(() => {
-    loadAllSignatures();
-  });
+  // Load signatures on mount (no account dependency) — handled in bulk onMount below
 
   // When the selected signature changes, update the preview
   function onSignatureSelect(name) {
@@ -251,38 +240,6 @@
   // Each entry: { fullName: string, emails: string[] }
   let contactEntries = $state([]);
 
-  $effect(() => {
-    contactsApi.list({ limit: 100 }).then((data) => {
-      const contacts = data.contacts || [];
-      const entries = [];
-      for (const c of contacts) {
-        const name = c.full_name || "";
-        const raw = c.emails;
-        let emailList = [];
-        if (Array.isArray(raw)) {
-          for (const e of raw) {
-            const addr = typeof e === "string" ? e : (e?.value || "");
-            if (addr.includes("@")) emailList.push(addr);
-          }
-        } else if (typeof raw === "string") {
-          try {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) {
-              for (const e of parsed) {
-                const addr = typeof e === "string" ? e : (e?.value || "");
-                if (addr.includes("@")) emailList.push(addr);
-              }
-            }
-          } catch { /* ignore */ }
-        }
-        if (emailList.length > 0) {
-          entries.push({ fullName: name, emails: emailList });
-        }
-      }
-      contactEntries = entries;
-    }).catch(() => {});
-  });
-
   /** Autocomplete query for MultiEntryField: search by name OR email, show name <email> labels. */
   function searchContactEmails(partial) {
     if (!partial || partial.length < 1) return [];
@@ -307,16 +264,14 @@
 
   // Register save-draft callback so TabView's UnsavedChangesDialog
   // can offer "Save Draft" when the user tries to close a dirty form.
-  // Deferred via queueMicrotask to avoid contributing to the mount-time
-  // flush depth — FormTab already sets a default callback in its own
-  // (also deferred) $effect, and overwriting it synchronously from a
-  // child component's $effect can cascade through module-level $state.
-  $effect(() => {
-    const tabId = tabStore.active?.id;
-    if (tabId && tabStore.active?.type === "form") {
-      queueMicrotask(() => {
-        saveCallbackStore.setCallback(tabId, async () => { await saveDraft(); return true; });
-      });
+  // Using onMount instead of $effect because:
+  //   - tabId is available as a prop (no reactive dependency needed)
+  //   - onMount runs after FormTab's (parent) $effect default callback,
+  //     so this save-draft callback correctly overrides the default
+  //   - No reactive tracking means zero contribution to flush depth
+  onMount(() => {
+    if (tabId) {
+      saveCallbackStore.setCallback(tabId, async () => { await saveDraft(); return true; });
     }
     return () => {
       if (tabId) saveCallbackStore.setCallback(tabId, null);
@@ -409,16 +364,82 @@
     try { localStorage.setItem(LS_LAST_ACCOUNT, email); } catch { /* best-effort */ }
   }
 
-  $effect(() => {
-    emailApi.listAccounts().then((data) => {
-      accounts = data.accounts || [];
-      if (accounts.length > 0 && !accountEmail) {
-        // Try last-used, fall back to first
-        const last = getLastUsedAccount();
-        const match = last ? accounts.find((a) => a.email === last) : null;
-        accountEmail = match ? match.email : accounts[0].email;
-      }
-    }).catch(() => {});
+  // ── Bulk data loading on mount (signatures + contacts + accounts) ─────
+  // Previously three separate $effect blocks, each triggering a reactive
+  // flush iteration. Merged into one onMount with Promise.allSettled to
+  // eliminate unnecessary flush depth during mount.
+  onMount(() => {
+    Promise.allSettled([
+      // 1. Signatures
+      (async () => {
+        try {
+          const data = await emailApi.listSignatures();
+          const sigs = data.signatures || [];
+          signatureList = sigs;
+          if (sigs.length > 0) {
+            const def = sigs[0];
+            selectedSignatureName = def.name;
+            signaturePreview = def.signature_text || "";
+            signatureFormat = def.signature_format || "plain";
+            useSignature = true;
+          } else {
+            signaturePreview = "";
+            signatureFormat = "plain";
+            useSignature = false;
+          }
+        } catch {
+          signatureList = [];
+          signaturePreview = "";
+          signatureFormat = "plain";
+          useSignature = false;
+        }
+      })(),
+      // 2. Contacts
+      (async () => {
+        try {
+          const data = await contactsApi.list({ limit: 100 });
+          const contacts = data.contacts || [];
+          const entries = [];
+          for (const c of contacts) {
+            const name = c.full_name || "";
+            const raw = c.emails;
+            let emailList = [];
+            if (Array.isArray(raw)) {
+              for (const e of raw) {
+                const addr = typeof e === "string" ? e : (e?.value || "");
+                if (addr.includes("@")) emailList.push(addr);
+              }
+            } else if (typeof raw === "string") {
+              try {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                  for (const e of parsed) {
+                    const addr = typeof e === "string" ? e : (e?.value || "");
+                    if (addr.includes("@")) emailList.push(addr);
+                  }
+                }
+              } catch { /* ignore */ }
+            }
+            if (emailList.length > 0) {
+              entries.push({ fullName: name, emails: emailList });
+            }
+          }
+          contactEntries = entries;
+        } catch { /* silent */ }
+      })(),
+      // 3. Accounts
+      (async () => {
+        try {
+          const data = await emailApi.listAccounts();
+          accounts = data.accounts || [];
+          if (accounts.length > 0 && !accountEmail) {
+            const last = getLastUsedAccount();
+            const match = last ? accounts.find((a) => a.email === last) : null;
+            accountEmail = match ? match.email : accounts[0].email;
+          }
+        } catch { /* silent */ }
+      })(),
+    ]);
   });
 
   async function handleAttachmentUpload(e) {

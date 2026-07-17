@@ -12,15 +12,15 @@
    *   - LLM co-writing integration (Ask LLM)
    *   - Contact suggestions for recipient field
    */
+  import { onMount } from "svelte";
   import { contacts as contactsApi, drafts as draftsApi } from "./api.js";
-  import { tabStore } from "./tabStore.svelte.js";
   import { saveCallbackStore } from "./saveCallbackStore.svelte.js";
   import LetterBodyEditor from "./LetterBodyEditor.svelte";
   import LetterAddressFields from "./LetterAddressFields.svelte";
   import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
   import MultiEntryField from "./MultiEntryField.svelte";
 
-  let { initialData = {}, formType = "add", onsubmit, onDirtyChange } = $props();
+  let { initialData = {}, formType = "add", tabId = null, onsubmit, onDirtyChange } = $props();
 
   // ── Form state ─────────────────────────────────────────────────────────
   // svelte-ignore state_referenced_locally
@@ -65,7 +65,8 @@
     }).slice(0, 8)
   );
 
-  $effect(() => {
+  // Load contacts on mount for recipient suggestions
+  onMount(() => {
     contactsApi.list({ limit: 100 }).then((data) => {
       const contacts = data.contacts || [];
       const entries = [];
@@ -207,13 +208,10 @@
   }));
   // ── Save draft ─────────────────────────────────────────────────────────
   // Register save-draft callback so TabView's UnsavedChangesDialog can offer "Save Draft"
-  // Deferred via queueMicrotask (same rationale as ComposeEmail).
-  $effect(() => {
-    const tabId = tabStore.active?.id;
-    if (tabId && tabStore.active?.type === "form") {
-      queueMicrotask(() => {
-        saveCallbackStore.setCallback(tabId, async () => { await saveDraft(); return true; });
-      });
+  // Using onMount instead of $effect (tabId is available as a prop).
+  onMount(() => {
+    if (tabId) {
+      saveCallbackStore.setCallback(tabId, async () => { await saveDraft(); return true; });
     }
     return () => {
       if (tabId) saveCallbackStore.setCallback(tabId, null);
