@@ -306,9 +306,10 @@ describe("ComposeEmail — keyboard shortcuts", () => {
     vi.clearAllMocks();
   });
 
-  it("Ctrl+Enter submits the form", async () => {
+  it("Ctrl+Enter submits the form via REST directResult", async () => {
     const ComposeEmail = (await import("../lib/ComposeEmail.svelte")).default;
     const onSubmit = vi.fn();
+    const { email } = await import("../lib/api.js");
 
     render(ComposeEmail, {
       initialData: { to: "test@example.com", subject: "Hello", body: "World" },
@@ -323,16 +324,22 @@ describe("ComposeEmail — keyboard shortcuts", () => {
       ctrlKey: true,
       bubbles: true,
     }));
-    await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 150));
 
-    // onSubmit should have been called with the correct data
-    expect(onSubmit).toHaveBeenCalledTimes(1);
-    expect(onSubmit).toHaveBeenCalledWith(
+    // ComposeEmail now calls REST endpoint directly and passes result via directResult
+    expect(email.send).toHaveBeenCalledWith(
       expect.objectContaining({
-        tokens: ["email", "send"],
-        remaining: expect.arrayContaining(["test@example.com", "Hello", "World"]),
+        account_email: expect.any(String),
+        to: ["test@example.com"],
+        subject: "Hello",
+        body: "World",
       }),
     );
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit).toHaveBeenCalledWith({
+      directResult: { status: "sent" },
+      directFormType: "email-send",
+    });
   });
 
   it("Ctrl+Enter without data does not submit (validation blocks)", async () => {
@@ -470,9 +477,10 @@ describe("ComposeEmail — attachments", () => {
     vi.clearAllMocks();
   });
 
-  it("serializes attachment files as JSON in submit flags", async () => {
+  it("sends attachments via emailApi.send, not CLI flags", async () => {
     const ComposeEmail = (await import("../lib/ComposeEmail.svelte")).default;
     const onSubmit = vi.fn();
+    const { email } = await import("../lib/api.js");
 
     render(ComposeEmail, {
       initialData: {
@@ -492,22 +500,28 @@ describe("ComposeEmail — attachments", () => {
     // Submit the form
     const form = document.querySelector("form");
     form.dispatchEvent(new Event("submit"));
-    await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 150));
 
-    expect(onSubmit).toHaveBeenCalledTimes(1);
-    const callArg = onSubmit.mock.calls[0][0];
-    // The file flag should be a JSON string containing attachment data
-    expect(callArg.flags.file).toBe(
-      JSON.stringify([
-        { name: "report.pdf", data: "dGVzdA==" },
-        { name: "photo.jpg", data: "cGhvdG8=" },
-      ]),
+    // emailApi.send should receive attachments array directly (not CLI file flag)
+    expect(email.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments: [
+          { name: "report.pdf", data: "dGVzdA==" },
+          { name: "photo.jpg", data: "cGhvdG8=" },
+        ],
+      }),
     );
+    // onsubmit receives directResult (no flags/tokens)
+    expect(onSubmit).toHaveBeenCalledWith({
+      directResult: { status: "sent" },
+      directFormType: "email-send",
+    });
   });
 
-  it("does not include file flag when no attachments", async () => {
+  it("omits attachments field when no files", async () => {
     const ComposeEmail = (await import("../lib/ComposeEmail.svelte")).default;
     const onSubmit = vi.fn();
+    const { email } = await import("../lib/api.js");
 
     render(ComposeEmail, {
       initialData: { to: "test@example.com", subject: "Hello" },
@@ -518,11 +532,11 @@ describe("ComposeEmail — attachments", () => {
 
     const form = document.querySelector("form");
     form.dispatchEvent(new Event("submit"));
-    await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 150));
 
-    expect(onSubmit).toHaveBeenCalledTimes(1);
-    const callArg = onSubmit.mock.calls[0][0];
-    // No file flag when no attachments
-    expect(callArg.flags.file).toBeUndefined();
+    // No attachments key when no files
+    expect(email.send).toHaveBeenCalledWith(
+      expect.not.objectContaining({ attachments: expect.anything() }),
+    );
   });
 });
