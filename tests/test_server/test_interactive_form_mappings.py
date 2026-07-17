@@ -214,6 +214,8 @@ _NON_FORM_INTERACTIVE = {
     "contact.modify",
     "email.sieve.modify",
     "email.signature.modify",
+    "email.signature.default",
+    "email.block.add",
     "todo.modify",
     "todo.delete",
     "todo.template.modify",

@@ -856,7 +856,7 @@ class TestEmailSignatureHandlers:
         mock_sigs.get_account_default_uuid.return_value = None
         mock_email_svc.signatures = mock_sigs
         result = dispatch(["email", "signature", "list"], {})
-        assert result["type"] == "status"
+        assert result["type"] == "signature-list"
         assert "Signatures" in result["title"]
         assert len(result["data"]["signatures"]) == 1
 

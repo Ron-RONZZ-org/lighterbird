@@ -275,6 +275,7 @@ export function getDataCompletionsFromCache(cachedData, uuidSource) {
     return result;
   }
 
+  if (uuidSource === "email.signatures") addEmailSignatures(cachedData, result);
   if (uuidSource.startsWith("email.")) addAccounts(cachedData, result);
   // calendar.events must be checked BEFORE calendar.* (which matches calendars/accounts)
   if (uuidSource.startsWith("calendar.events")) addEvents(cachedData, result);
@@ -331,6 +332,14 @@ function addJournal(cache, result) {
   if (cache.journal) {
     for (const e of cache.journal) {
       result.push({ uuid: e.uuid, label: `${e.date || ""} — ${e.title || ""}` });
+    }
+  }
+}
+
+function addEmailSignatures(cache, result) {
+  if (cache.signatures) {
+    for (const s of cache.signatures) {
+      result.push({ uuid: s.uuid, label: s.name || "(unnamed)" });
     }
   }
 }

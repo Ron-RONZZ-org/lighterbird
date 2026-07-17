@@ -166,6 +166,10 @@ export const email = {
 
   listSignatures: () => request("GET", "/email/signatures"),
 
+  updateSignature: (uuid, data) => request("PATCH", `/email/signatures/${uuid}`, data),
+
+  deleteSignature: (uuid) => request("DELETE", `/email/signatures/${uuid}`),
+
   send: (data) => request("POST", "/email/send", data),
 
   markRead: (uuid, read = true) =>
@@ -186,6 +190,12 @@ export const email = {
 
   batchMove: (uuids, destinationFolder) =>
     request("POST", "/email/messages/batch-move", { uuids, destination_folder: destinationFolder }),
+
+  listBlocks: () => request("GET", "/email/blocks"),
+
+  updateBlock: (uuid, data) => request("PATCH", `/email/blocks/${uuid}`, data),
+
+  deleteBlock: (uuid) => request("DELETE", `/email/blocks/${uuid}`),
 
   listFolders: () => request("GET", "/email/folders"),
 

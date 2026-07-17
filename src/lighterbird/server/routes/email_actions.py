@@ -13,6 +13,8 @@ from fastapi.responses import Response
 from lighterbird.email.service import EmailService
 from lighterbird.core.paths import safe_resolve_path
 from lighterbird.server.deps import get_email_service
+from pydantic import BaseModel, Field
+
 from lighterbird.server.schemas import (
     BatchDeleteRequest,
     BatchMoveRequest,
@@ -22,6 +24,14 @@ from lighterbird.server.schemas import (
     MarkReadRequest,
     SendRequest,
 )
+
+
+class SignatureUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, description="New signature name")
+    signature_text: str | None = Field(default=None, description="New signature text")
+    signature_format: str | None = Field(default=None, description="Signature format: plain, html, or markdown")
+
+    model_config = {"extra": "forbid"}
 
 router = APIRouter(prefix="/api/v1/email", tags=["email"])
 
@@ -293,4 +303,37 @@ def list_signatures(email_svc: EmailService = Depends(get_email_service)):
         enriched.append(entry)
 
     return {"signatures": enriched}
+
+
+@router.patch("/signatures/{sig_uuid}")
+def update_signature(
+    sig_uuid: str,
+    data: SignatureUpdateRequest,
+    email_svc: EmailService = Depends(get_email_service),
+):
+    """Update a signature's name, text, and/or format."""
+    try:
+        updated = email_svc.signatures.update(
+            sig_uuid,
+            name=data.name,
+            signature_text=data.signature_text,
+            signature_format=data.signature_format,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    if not updated:
+        raise HTTPException(status_code=404, detail=f"Signature not found: {sig_uuid}")
+    return updated
+
+
+@router.delete("/signatures/{sig_uuid}")
+def delete_signature(
+    sig_uuid: str,
+    email_svc: EmailService = Depends(get_email_service),
+):
+    """Delete a signature by UUID."""
+    deleted = email_svc.signatures.delete(sig_uuid)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Signature not found: {sig_uuid}")
+    return {"status": "deleted", "uuid": sig_uuid}
 

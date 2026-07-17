@@ -391,7 +391,7 @@
       // Use a 3-month window for events (30 days ago → 60 days ahead)
       const eventStart = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
       const eventEnd = new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10);
-      const [accts, cals, conts, tds, jrnl, fldrs, evts, ltrs, profs] = await Promise.all([
+      const [accts, cals, conts, tds, jrnl, fldrs, evts, ltrs, profs, sigs] = await Promise.all([
         emailApi.listAccounts().catch(() => null),
         calendar.listCalendars().catch(() => null),
         contacts.list({ limit: 50 }).catch(() => null),
@@ -401,6 +401,7 @@
         calendar.listEvents({ start: eventStart, end: eventEnd }).catch(() => null),
         letters.list({ limit: 50 }).catch(() => null),
         profiles.list({ limit: 50 }).catch(() => null),
+        emailApi.listSignatures().catch(() => null),
       ]);
       popup.updateCache({
         accounts: accts?.accounts ?? [],
@@ -412,6 +413,7 @@
         events: evts?.events ?? [],
         letters: ltrs?.letters ?? [],
         profiles: profs?.profiles ?? [],
+        signatures: sigs?.signatures ?? [],
       });
     } catch { /* ignore */ }
   }

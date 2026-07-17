@@ -11,8 +11,7 @@ Email module, forked from [A-lien](../../A-lien). Provides IMAP sync, SMTP send,
 - **`imap/`** — IMAP sync engine: client, message parser, concurrent sync, UID-based dedup
 - **`smtp.py`** — SMTP send with attachments, HTML body, signatures, priority headers
 - **`accounts/`** — Email account CRUD + keyring password management
-- **`filters/`** — Sieve filter CRUD + ManageSieve sync
-- **`spam.py`** — Spam block management + Sieve rule generation
+- **`filters/`** — Sieve filter CRUD + ManageSieve sync, SpamManager (block senders/domains + Sieve rule generation)
 - **`signatures/`** — Per-account email signature management
 
 ## Constraints and Invariants
@@ -116,6 +115,20 @@ Backlog processing uses two levels of locking for thread safety:
 ### Dead-Letter Limits
 
 Entries exceeding `MAX_RETRIES` (default: 10) are automatically moved to the `_dead_letters` table. They can be retried via `DeadLetterService.retry_entry()` or cleared via `DeadLetterService.clear()`.
+
+### Recent rename: ``!email spam`` → ``!email block``
+
+The ``!email spam`` command tree has been renamed to ``!email block`` (issue #245):
+
+- ``!email block list`` → ``block-list`` tab type (``BlockedSendersListTab.svelte``)
+- ``!email block add <sender> [--note TEXT]`` → status + highlight, interactive form fallback
+- **No CLI ``remove``/``modify``** — edit/delete are GUI-only via the list tab (REST API)
+- REST API: ``GET /api/v1/email/blocks``, ``PATCH /api/v1/email/blocks/{uuid}``, ``DELETE /api/v1/email/blocks/{uuid}``
+- ``SpamManager`` now supports ``note`` field (reason for blocking)
+- ``spam_blocks`` table has ``note TEXT NOT NULL DEFAULT ''`` column (added directly, pre-release — no migration needed)
+- ``!email signature list`` → ``signature-list`` tab type (``SignatureListTab.svelte``)
+- ``!email signature default`` → interactive form with account email dropdown + signature autocomplete
+- ``PATCH /api/v1/email/signatures/{uuid}`` and ``DELETE /api/v1/email/signatures/{uuid}`` for GUI edit/delete
 
 ## Domain-Specific Rules for Agents
 

@@ -23,11 +23,12 @@ class SpamManager:
 
     # ── Block management ────────────────────────────────────────────────
 
-    def block_sender(self, sender: str) -> dict[str, Any]:
+    def block_sender(self, sender: str, note: str = "") -> dict[str, Any]:
         """Block emails from a specific sender.
 
         Args:
             sender: Email address to block.
+            note: Optional reason for blocking.
 
         Returns:
             Block record dict.
@@ -36,24 +37,19 @@ class SpamManager:
         from datetime import datetime
 
         now = datetime.now(UTC).isoformat()
-        block = {
-            "uuid": str(uuid.uuid4()),
-            "type": "sender",
-            "pattern": sender.strip().lower(),
-            "created_at": now,
-            "updated_at": now,
-        }
+        block_id = str(uuid.uuid4())
         return self.db.execute_one(
-            "INSERT INTO spam_blocks (uuid, type, pattern, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?) RETURNING *",
-            (block["uuid"], block["type"], block["pattern"], now, now),
+            "INSERT INTO spam_blocks (uuid, type, pattern, note, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?) RETURNING *",
+            (block_id, "sender", sender.strip().lower(), note, now, now),
         )
 
-    def block_domain(self, domain: str) -> dict[str, Any]:
+    def block_domain(self, domain: str, note: str = "") -> dict[str, Any]:
         """Block emails from a specific domain.
 
         Args:
             domain: Domain to block (e.g. ``"spam.example.com"``).
+            note: Optional reason for blocking.
 
         Returns:
             Block record dict.
@@ -65,18 +61,47 @@ class SpamManager:
         domain = domain.strip().lower()
         if domain.startswith("@"):
             domain = domain[1:]
-        block = {
-            "uuid": str(uuid.uuid4()),
-            "type": "domain",
-            "pattern": domain,
-            "created_at": now,
-            "updated_at": now,
-        }
+        block_id = str(uuid.uuid4())
         return self.db.execute_one(
-            "INSERT INTO spam_blocks (uuid, type, pattern, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?) RETURNING *",
-            (block["uuid"], block["type"], block["pattern"], now, now),
+            "INSERT INTO spam_blocks (uuid, type, pattern, note, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?) RETURNING *",
+            (block_id, "domain", domain, note, now, now),
         )
+
+    def get_block(self, block_uuid: str) -> dict[str, Any] | None:
+        """Get a single block by UUID.
+
+        Args:
+            block_uuid: Block UUID.
+
+        Returns:
+            Block record dict or None if not found.
+        """
+        return self.db.execute_one(
+            "SELECT * FROM spam_blocks WHERE uuid = ?", (block_uuid,)
+        )
+
+    def update_block(self, block_uuid: str, note: str | None = None) -> dict[str, Any] | None:
+        """Update a block's note.
+
+        Args:
+            block_uuid: Block UUID.
+            note: New note text. If None, the note is not changed.
+
+        Returns:
+            Updated block record dict, or None if not found.
+        """
+        existing = self.get_block(block_uuid)
+        if not existing:
+            return None
+        from datetime import datetime
+        now = datetime.now(UTC).isoformat()
+        new_note = note if note is not None else existing.get("note", "")
+        self.db.execute(
+            "UPDATE spam_blocks SET note = ?, updated_at = ? WHERE uuid = ?",
+            (new_note, now, block_uuid),
+        )
+        return {**existing, "note": new_note, "updated_at": now}
 
     def unblock(self, block_uuid: str) -> None:
         """Remove a block by UUID."""

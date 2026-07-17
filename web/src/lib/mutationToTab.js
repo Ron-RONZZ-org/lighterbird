@@ -152,6 +152,38 @@ const MUTATION_MAP = {
     title: "Sieve Scripts",
   },
 
+  // ── Email block ─────────────────────────────────────────────────
+  "email block add": {
+    listTokens: ["email", "block", "list"],
+    listIdKey: "block-list",
+    type: "block-list",
+    isDelete: false,
+    title: "Blocked Senders",
+  },
+
+  // ── Email signature ─────────────────────────────────────────────
+  "email signature add": {
+    listTokens: ["email", "signature", "list"],
+    listIdKey: "signature-list",
+    type: "signature-list",
+    isDelete: false,
+    title: "Signatures",
+  },
+  "email signature modify": {
+    listTokens: ["email", "signature", "list"],
+    listIdKey: "signature-list",
+    type: "signature-list",
+    isDelete: false,
+    title: "Signatures",
+  },
+  "email signature delete": {
+    listTokens: ["email", "signature", "list"],
+    listIdKey: "signature-list",
+    type: "signature-list",
+    isDelete: true,
+    title: "Signatures",
+  },
+
   // ── Email folders ────────────────────────────────────────────────
   "email folder add": {
     listTokens: ["email", "folder", "list"],
@@ -254,6 +286,8 @@ export const LIST_REFRESHERS = {
   "persistent-calendar-events":      (highlight) => calendarApi.listEvents({ limit: 50 }).then(r => ({ ...r, highlight })),
   "persistent-letter-list":          (highlight) => lettersApi.list({ limit: 50 }).then(r => ({ ...r, highlight })),
   "persistent-email-list":           (highlight) => emailApi.list({ limit: 50 }).then(r => ({ ...r, highlight })),
+  "persistent-block-list":           (highlight) => emailApi.listBlocks().then(r => ({ ...r, highlight })),
+  "persistent-signature-list":       (highlight) => emailApi.listSignatures().then(r => ({ ...r, highlight })),
   "persistent-folder-list":          (highlight) => emailApi.listFolders().then(r => ({ ...r, highlight })),
 };
 
