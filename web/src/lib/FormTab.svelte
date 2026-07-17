@@ -108,39 +108,58 @@
 
   let submitting = $state(false);
 
-  /** Submit form data to the command endpoint. */
+  /** Submit form data to the command or REST endpoint. */
   async function handleFormSubmit(payload) {
     if (submitting) return;
     submitting = true;
     formError = "";
     try {
-      // Include remaining positional args in the tokens array
-      const allTokens = [...(payload.tokens || []), ...(payload.remaining || [])];
-      const resp = await fetch("/api/v1/command", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tokens: allTokens,
-          flags: payload.flags || {},
-          raw_input: "!" + allTokens.join(" "),
-        }),
-      });
+      let result;
 
-      const result = await resp.json();
+      if (payload.directResult) {
+        // REST direct submission (e.g. ComposeEmail via POST /api/v1/email/send)
+        // Skip CLI dispatch — the form component already called the REST endpoint.
+        formError = "";
+        handleDirtyChange(false);
+        // Wrap the REST response in a synthetic structure matching the CLI
+        // response format so the post-submission navigation logic below works.
+        const directFormType = payload.directFormType || formType;
+        result = {
+          type: "status",
+          title: directFormType === "email-send" ? "Queued for Delivery" : "Done",
+          data: payload.directResult,
+        };
+      } else {
+        // CLI dispatch — send command tokens to POST /api/v1/command
+        const allTokens = [...(payload.tokens || []), ...(payload.remaining || [])];
+        const resp = await fetch("/api/v1/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tokens: allTokens,
+            flags: payload.flags || {},
+            raw_input: "!" + allTokens.join(" "),
+          }),
+        });
 
-      if (!resp.ok) {
-        const detail = result.detail || {};
-        const msg = typeof detail === "string" ? detail : detail.error || `HTTP ${resp.status}`;
-        const suggestion = detail.suggestion || "";
-        // Keep form open, show error banner — preserve user input
-        formError = suggestion ? `${msg} — ${suggestion}` : msg;
-        banner.show(formError, "error", 5000);
-        return;
+        result = await resp.json();
+
+        if (!resp.ok) {
+          const detail = result.detail || {};
+          const msg = typeof detail === "string" ? detail : detail.error || `HTTP ${resp.status}`;
+          const suggestion = detail.suggestion || "";
+          // Keep form open, show error banner — preserve user input
+          formError = suggestion ? `${msg} — ${suggestion}` : msg;
+          banner.show(formError, "error", 5000);
+          return;
+        }
+
+        // Clear any previous error and dirty state
+        formError = "";
+        handleDirtyChange(false);
       }
 
-      // Clear any previous error and dirty state
-      formError = "";
-      handleDirtyChange(false);
+      // ── Shared post-submission navigation ────────────────────────────
 
       // Read return-to-list values BEFORE closing (component may unmount)
       const returnIdKey = initialData?._returnIdKey;

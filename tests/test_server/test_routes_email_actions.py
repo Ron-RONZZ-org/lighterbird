@@ -227,3 +227,80 @@ class TestEmailPreviewAPI:
             "signature_text": None,
         })
         assert resp.status_code == 200
+
+
+class TestEmailSignaturesAPI:
+    """Test GET /api/v1/email/signatures endpoint."""
+
+    def _client(self):
+        from lighterbird.server.deps import reset_services
+        reset_services()
+        return TestClient(create_app())
+
+    def test_signatures_empty_list(self):
+        """GET /api/v1/email/signatures returns empty list when none exist."""
+        resp = self._client().get("/api/v1/email/signatures")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "signatures" in data
+        assert data["signatures"] == []
+
+    def test_signatures_with_seeded_data(self):
+        """GET /api/v1/email/signatures returns seeded signatures."""
+        from lighterbird.server.deps import reset_services, get_email_service
+        reset_services()
+        svc = get_email_service()
+
+        # Seed a signature via the service
+        svc.signatures.create(
+            name="work",
+            signature_text="Best regards,\nJohn",
+            signature_format="plain",
+        )
+        svc.signatures.create(
+            name="personal",
+            signature_text="Cheers,\nJohn",
+            signature_format="markdown",
+        )
+
+        client = TestClient(create_app())
+        resp = client.get("/api/v1/email/signatures")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["signatures"]) == 2
+
+        sigs_by_name = {s["name"]: s for s in data["signatures"]}
+        assert sigs_by_name["work"]["signature_text"] == "Best regards,\nJohn"
+        assert sigs_by_name["work"]["signature_format"] == "plain"
+        assert sigs_by_name["personal"]["signature_format"] == "markdown"
+        # No account defaults yet
+        assert "default_for" not in sigs_by_name["work"]
+
+    def test_signatures_with_account_default(self):
+        """GET /api/v1/email/signatures enriches with default_for."""
+        from lighterbird.server.deps import reset_services, get_email_service
+        reset_services()
+        svc = get_email_service()
+
+        sig = svc.signatures.create(
+            name="work",
+            signature_text="Best,\nJohn",
+            signature_format="plain",
+        )
+        # Create an account and set it as default
+        svc.create_account(
+            {"email": "john@work.com",
+             "name": "John Work",
+             "imap_server": "imap.work.com",
+             "smtp_server": "smtp.work.com"},
+            password="pw",
+        )
+        svc.signatures.set_account_default("john@work.com", sig["uuid"])
+
+        client = TestClient(create_app())
+        resp = client.get("/api/v1/email/signatures")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["signatures"]) == 1
+        sig_data = data["signatures"][0]
+        assert sig_data["default_for"] == ["john@work.com"]

@@ -117,15 +117,11 @@
           }
         }
       } else if (d.signatures !== undefined) {
-        const resp = await fetch("/api/v1/command", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tokens: ["email", "signature", "list"], flags: {} }),
-        });
-        const cmdResult = await resp.json();
-        if (resp.ok) {
-          result = cmdResult.data;
-        }
+        const data = await emailApi.listSignatures();
+        // The REST endpoint returns {signatures: [...]} directly,
+        // while StatusPopup expects result.data = {signatures: [...]}
+        // to match the CLI handler's {data: {signatures: [...]}} format.
+        result = data;
       } else if (d.entries !== undefined) {
         result = await journalApi.list({ limit: 50 });
       }

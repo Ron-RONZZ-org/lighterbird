@@ -179,38 +179,29 @@
   let signatureFormat = $state("plain");
 
   /** Load all signatures (global — not per-account) */
-  function loadAllSignatures() {
-    fetch("/api/v1/command", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tokens: ["email", "signature", "list"],
-        flags: {},
-      }),
-    })
-      .then((r) => r.json())
-      .then((cmdData) => {
-        const sigs = cmdData.data?.signatures || cmdData.signatures || [];
-        signatureList = sigs;
-        if (sigs.length > 0) {
-          const def = sigs[0];
-          selectedSignatureName = def.name;
-          signaturePreview = def.signature_text || "";
-          signatureFormat = def.signature_format || "plain";
-          useSignature = true;
-        } else {
-          signaturePreview = "";
-          signatureFormat = "plain";
-          useSignature = false;
-        }
-      })
-      .catch(() => {
-        // Silently fail — no signatures available
-        signatureList = [];
+  async function loadAllSignatures() {
+    try {
+      const data = await emailApi.listSignatures();
+      const sigs = data.signatures || [];
+      signatureList = sigs;
+      if (sigs.length > 0) {
+        const def = sigs[0];
+        selectedSignatureName = def.name;
+        signaturePreview = def.signature_text || "";
+        signatureFormat = def.signature_format || "plain";
+        useSignature = true;
+      } else {
         signaturePreview = "";
         signatureFormat = "plain";
         useSignature = false;
-      });
+      }
+    } catch {
+      // Silently fail — no signatures available
+      signatureList = [];
+      signaturePreview = "";
+      signatureFormat = "plain";
+      useSignature = false;
+    }
   }
 
   // Load signatures on mount (no account dependency)
@@ -473,29 +464,38 @@
     sending = true;
     try {
       if (accountEmail) saveLastUsedAccount(accountEmail);
-      // Resolve signature: pass --signature-name, or --no-signature if disabled
-      const flags = {
-        ...(accountEmail ? { account: accountEmail } : {}),
-        ...(ccList.length > 0 ? { cc: ccList.join(",") } : {}),
-        ...(bccList.length > 0 ? { bcc: bccList.join(",") } : {}),
-        priority,
-        ...(bodyFormat !== "markdown" ? { [`body-format`]: bodyFormat } : {}),
-        ...(saveAsSample === false ? { "no-save-sample": "true" } : {}),
-        // Signature: pass --signature-name, or --no-signature if disabled
-        ...(!useSignature ? { "no-signature": "true" } : {}),
-        ...(useSignature && selectedSignatureName ? { "signature-name": selectedSignatureName } : {}),
-        // File attachments as JSON-encoded array (avoids fragility with commas/colons in filenames)
-        ...(attachmentFiles.length > 0 ? { file: JSON.stringify(attachmentFiles.map((att) => ({name: att.name, data: att.data}))) } : {}),
-      };
-      const toStr = toList.join(",");
-      const remaining = [toStr, subject, body];
-      await onsubmit({
-        tokens: ["email", "send"],
-        flags,
-        remaining,
+      // Resolve signature: look up name in already-loaded signatureList
+      let signature = null;
+      let signatureFormatValue = "plain";
+      if (!useSignature) {
+        signature = ""; // empty string = send without signature
+      } else if (selectedSignatureName) {
+        const found = signatureList.find((s) => s.name === selectedSignatureName);
+        if (found) {
+          signature = found.signature_text || "";
+          signatureFormatValue = found.signature_format || "plain";
+        }
+      }
+      const result = await emailApi.send({
+        account_email: accountEmail,
+        to: toList,
+        subject,
+        body,
+        cc: ccList.length > 0 ? ccList : undefined,
+        bcc: bccList.length > 0 ? bccList : undefined,
+        priority: parseInt(priority, 10),
+        body_format: bodyFormat,
+        attachments: attachmentFiles.length > 0 ? attachmentFiles.map((att) => ({name: att.name, data: att.data})) : undefined,
+        signature,
+        signature_format: signatureFormatValue,
+        save_as_sample: saveAsSample,
       });
       // Clear dirty state after successful submit
       onDirtyChange(false);
+      // Signal FormTab with direct result — skip CLI dispatch
+      await onsubmit({ directResult: result, directFormType: "email-send" });
+    } catch (err) {
+      banner.show(`Send failed: ${err.message}`, "error", 5000);
     } finally {
       sending = false;
     }

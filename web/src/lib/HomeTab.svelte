@@ -206,22 +206,23 @@
   }
 
   /** Handle action accept (draft approval). */
-  function handleActionAccept(action) {
+  async function handleActionAccept(action) {
     if (action.action === "send_email") {
-      const tokens = ["email", "send", action.params.to[0], action.params.subject, action.params.body];
+      const to = action.params.to || [action.params.to];
+      const toList = Array.isArray(to) ? to : [to];
       tabStore.open("loading", "Sending…", null, { closable: false });
-      fetch("/api/v1/command", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tokens, flags: {} }),
-      })
-        .then((r) => r.json())
-        .then((result) => {
-          tabStore.open(result.type || "status", result.title || "Sent", result.data || {});
-        })
-        .catch((err) => {
-          tabStore.open("error", "Error", { message: err.message || "Failed to send" });
+      try {
+        const result = await emailApi.send({
+          account_email: action.params.account || "",
+          to: toList,
+          subject: action.params.subject || "",
+          body: action.params.body || "",
+          save_as_sample: true,
         });
+        tabStore.open("status", "Sent", result || {});
+      } catch (err) {
+        tabStore.open("error", "Error", { message: err.message || "Failed to send" });
+      }
     }
   }
 
