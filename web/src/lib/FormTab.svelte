@@ -38,6 +38,22 @@
 
   function handleDirtyChange(dirty) {
     formDirty = dirty;
+    // Write to the global dirtyFormStore directly — this is called
+    // synchronously from the child form's $effect, which correctly tracks
+    // the child's dirty $derived as a dependency.  We bypass FormTab's
+    // own $effect for dirty-tracking (which would need formDirty as a
+    // reactive dependency) because:
+    //   1. Module-level $state writes (dirtyFormStore.setDirty) inside
+    //      a $effect body contribute to Svelte 5's flush depth and can
+    //      cascade past the 1000-iteration guard when formDirty changes
+    //      rapidly (keystrokes).
+    //   2. Writing directly from handleDirtyChange decouples dirty-state
+    //      propagation from FormTab's own reactive graph — the child's
+    //      $effect drives the update, not a chain through FormTab's $state.
+    const tabId = tabStore.active?.id;
+    if (tabId) {
+      dirtyFormStore.setDirty(tabId, dirty);
+    }
   }
 
   // Track the tab ID we registered with — used by onDestroy for cleanup.
@@ -47,30 +63,16 @@
   // Individual forms (ComposeEmail, LetterForm) register their own save-draft
   // callback which overrides this, so the UnsavedChangesDialog always works.
   //
-  // Design constraints (Svelte 5 reactive system):
-  //   1. formDirty MUST be read synchronously in the $effect body so Svelte 5
-  //      tracks it as a dependency (queueMicrotask reads are invisible).
-  //   2. Module-level $state writes (dirtyFormStore, saveCallbackStore) MUST
-  //      be deferred via queueMicrotask to avoid contributing to the mount-time
-  //      flush depth, which can exceed Svelte 5's 1000-iteration guard.
-  //   3. The $effect return (cleanup) MUST NOT write to module-level $state,
-  //      because cleanup runs synchronously during $effect re-runs — if formDirty
-  //      changes frequently (every keystroke), the synchronous clear+re-register
-  //      cycle accumulates flush iterations.
-  //   4. Therefore, cleanup is handled by onDestroy (runs once on teardown),
-  //      not by the $effect return.
+  // Defer via queueMicrotask to avoid contributing to the mount-time flush
+  // depth.  Module-level $state writes inside a $effect can accumulate enough
+  // flush iterations to exceed Svelte 5's effect_update_depth_exceeded (1000)
+  // guard when multiple form components mount simultaneously.
   $effect(() => {
     const tabId = tabStore.active?.id;
-    // Read formDirty synchronously to establish it as a reactive dependency.
-    // Svelte 5's $effect only tracks signals accessed during the synchronous
-    // execution of the effect function.  Reading inside queueMicrotask below
-    // (asynchronously) would NOT track it, so the effect would never re-run
-    // when the user makes a form dirty — the entire unsaved-changes guard
-    // would silently break for every form type.
-    const dirty = formDirty;
     if (tabId && tabStore.active?.type === "form") {
-      // Register save callback once on mount (skip on re-runs from formDirty
-      // changes — the callback identity hasn't changed).
+      // Register save callback once on mount (skip on re-runs — the
+      // callback identity hasn't changed, and handleDirtyChange handles
+      // dirty-tracking directly).
       if (!_registeredTabId) {
         _registeredTabId = tabId;
         queueMicrotask(() => {
@@ -87,19 +89,12 @@
           });
         });
       }
-      // Sync dirty state (deferred — runs every time formDirty changes)
-      queueMicrotask(() => {
-        dirtyFormStore.setDirty(tabId, dirty);
-      });
     }
-    // NO return cleanup — module-level $state writes in the cleanup would
-    // cascade through Svelte 5's reactive flush when formDirty changes
-    // rapidly (keystrokes).  See constraint #3 above.
   });
 
-  // Cleanup runs ONCE on component destroy, never during $effect re-runs.
-  // This avoids synchronous module-level $state writes inside the flush cycle
-  // that would cascade past Svelte 5's 1000-iteration guard.
+  // Cleanup runs ONCE on component destroy — not during $effect re-runs.
+  // This avoids synchronous module-level $state writes inside the flush
+  // cycle that would cascade past Svelte 5's 1000-iteration guard.
   onDestroy(() => {
     if (_registeredTabId) {
       saveCallbackStore.setCallback(_registeredTabId, null);
