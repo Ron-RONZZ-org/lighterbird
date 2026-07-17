@@ -339,6 +339,8 @@ Backend list commands return typed responses that map to frontend components:
 | `!email list draft` / `!email draft list` | `email-list` (with `_isDraftView`) | EmailListTab (drafts-only) |
 | `!email export eml <uuid>` | download .eml | ExportDialog / direct download |
 | `!email import eml <path>` | `status` | ImportDialog |
+| `!email block list` | `block-list` | BlockedSendersListTab |
+| `!email signature list` | `signature-list` | SignatureListTab |
 | `!journal list` / `!journal search` | `journal-list` | JournalListTab |
 | `!journal export md <uuid>` | `status` (markdown) | ExportDialog |
 | `!journal import md <path>` | `status` | ImportDialog |

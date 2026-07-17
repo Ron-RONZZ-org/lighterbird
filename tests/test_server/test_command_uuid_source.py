@@ -76,6 +76,10 @@ _COMMANDS_REQUIRING_UUID_SOURCE = {
     # Email accounts (uuidSource: "email.accounts")
     "email.account.delete",
 
+    # Email signatures (uuidSource: "email.signatures")
+    "email.signature.modify",
+    "email.signature.delete",
+
     # Letters (uuidSource: "letters.letters")
     "letter.view",
     "letter.pdf",

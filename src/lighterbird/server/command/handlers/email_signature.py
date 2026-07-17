@@ -40,9 +40,9 @@ def signature_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any
         enriched.append(entry)
 
     return {
-        "type": "status",
+        "type": "signature-list",
         "title": "Email Signatures",
-        "data": {"signatures": enriched},
+        "data": {"signatures": enriched, "total": len(enriched)},
     }
 
 
@@ -114,7 +114,8 @@ def _resolve_signature(svc: EmailService, identifier: str) -> dict | None:
 
 @command("email.signature.modify",
          params=[
-             {"name": "name", "type": "string", "help": "Signature name (or UUID)", "required": True},
+             {"name": "name", "type": "string", "help": "Signature name (or UUID)", "required": True,
+              "uuidSource": "email.signatures"},
          ],
          flags=[
              {"name": "name", "type": "string", "help": "New signature name"},
@@ -195,7 +196,12 @@ def signature_modify(remaining: list[str], flags: dict[str, str]) -> dict[str, A
     }
 
 
-@command("email.signature.delete")
+@command("email.signature.delete",
+         params=[
+             {"name": "uuid", "type": "string",
+              "help": "Signature UUID or name", "required": True,
+              "uuidSource": "email.signatures"},
+         ])
 def signature_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email signature delete <uuid>
 
@@ -214,13 +220,42 @@ def signature_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, A
     raise CommandValidationError(f"Signature not found: {uuid_}")
 
 
-@command("email.signature.default")
+@command("email.signature.default",
+         params=[
+             {"name": "email", "type": "string",
+              "help": "Account email address", "required": True},
+         ],
+         flags=[
+             {"name": "uuid", "type": "string",
+              "help": "Signature UUID to set as default",
+              "uuidSource": "email.signatures"},
+         ],
+         interactive=True)
 def signature_default(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     """!email signature default <email> [--uuid UUID]
 
     Show or set the default signature for an account.
     Without ``--uuid``, shows the current default.
+    When invoked without args (interactive), opens a form with
+    account email dropdown and signature autocomplete.
     """
+    svc: EmailService = get_email_service()
+
+    # Interactive mode: no args → return form-required
+    if not remaining and not flags.get("uuid"):
+        accounts = svc.list_accounts()
+        sigs = svc.signatures.list_signatures()
+        return {
+            "type": "form-required",
+            "title": "Set Default Signature",
+            "data": {
+                "form": "email-signature-default",
+                "initialData": {},
+                "accounts": [{"email": a["email"], "name": a.get("name", "")} for a in accounts],
+                "signatures": [{"uuid": s["uuid"], "name": s["name"]} for s in sigs],
+            },
+        }
+
     if not remaining:
         raise CommandValidationError(
             "Missing account email.",
@@ -228,7 +263,6 @@ def signature_default(remaining: list[str], flags: dict[str, str]) -> dict[str, 
         )
     email_addr = remaining[0]
 
-    svc: EmailService = get_email_service()
     acct = svc.get_account(email_addr)
     if not acct:
         raise CommandValidationError(

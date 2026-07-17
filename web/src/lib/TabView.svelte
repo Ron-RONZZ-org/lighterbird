@@ -16,6 +16,8 @@
   import JournalListTab from "./JournalListTab.svelte";
   import JournalViewTab from "./JournalViewTab.svelte";
   import SieveListTab from "./SieveListTab.svelte";
+  import BlockedSendersListTab from "./BlockedSendersListTab.svelte";
+  import SignatureListTab from "./SignatureListTab.svelte";
   import ContactsListTab from "./ContactsListTab.svelte";
   import ContactViewTab from "./ContactViewTab.svelte";
   import TodoListTab from "./TodoListTab.svelte";
@@ -91,6 +93,8 @@
     "todo-view": TodoViewTab,
     "calendar-events": CalendarEventsListTab,
     "sieve-list": SieveListTab,
+    "block-list": BlockedSendersListTab,
+    "signature-list": SignatureListTab,
     "sieve-editor": SieveEditorForm,
     "letter-list": LetterListTab,
     "letter-view": LetterViewTab,
@@ -185,6 +189,7 @@
   const LIST_TAB_TYPES = new Set([
     "email-list", "journal-list", "contacts-list", "todo-list",
     "calendar-events", "sieve-list", "letter-list", "folder-list",
+    "block-list", "signature-list",
   ]);
 
   function handleKeydown(e) {
@@ -329,6 +334,10 @@
           <CalendarEventsListTab data={tab.data} tabId={tab.id} />
         {:else if tab.type === "sieve-list"}
           <SieveListTab data={tab.data} tabId={tab.id} />
+        {:else if tab.type === "block-list"}
+          <BlockedSendersListTab data={tab.data} tabId={tab.id} />
+        {:else if tab.type === "signature-list"}
+          <SignatureListTab data={tab.data} tabId={tab.id} />
         {:else if tab.type === "sieve-editor"}
           <SieveEditorForm data={tab.data} />
         {:else if tab.type === "letter-list"}
@@ -464,6 +473,8 @@
       "folder-list": "📁",
       "calendar-events": "📅",
       "sieve-list": "🔍",
+      "block-list": "🚫",
+      "signature-list": "📝",
       "sieve-editor": "✏",
       "saved-commands": "⚡",
       "templates": "📋",

@@ -18,9 +18,9 @@ try:
         drafts,  # noqa: F401
         email,  # noqa: F401
         email_account,  # noqa: F401
+        email_block,  # noqa: F401
         email_sieve,  # noqa: F401
         email_signature,  # noqa: F401
-        email_spam,  # noqa: F401
         help,  # noqa: F401
         journal,  # noqa: F401
         letter,  # noqa: F401
@@ -46,7 +46,8 @@ group("calendar", description="Calendar operations", default_action="list")
 group("contact", description="Contact management", default_action="list")
 group("todo", description="Task management", default_action="list")
 group("journal", description="Journal entries", default_action="list")
-group("email.spam", description="Spam block management")
+group("email.block", description="Block senders/domains")
+group("email.signature", description="Email signature management", default_action="list")
 group("tag", description="Cross-domain tag management")
 group("contact.category", description="Contact category management")
 
