@@ -11,6 +11,7 @@
    *   Level 3 — Sieve editor (dedicated): SieveEditorForm
    */
 
+  import { onDestroy } from "svelte";
   import { tabStore } from "./tabStore.svelte.js";
   import { dirtyFormStore } from "./dirtyFormStore.svelte.js";
   import { saveCallbackStore } from "./saveCallbackStore.svelte.js";
@@ -39,38 +40,71 @@
     formDirty = dirty;
   }
 
+  // Track the tab ID we registered with — used by onDestroy for cleanup.
+  let _registeredTabId = null;
+
   // Register a default save callback that clicks the form's submit button.
   // Individual forms (ComposeEmail, LetterForm) register their own save-draft
   // callback which overrides this, so the UnsavedChangesDialog always works.
-  // Defer ALL module-level $state writes via queueMicrotask so they don't
-  // contribute to the mount-time flush depth.  Two separate synchronous writes
-  // (save callback + dirty state) in the same $effect can accumulate enough
-  // flush iterations to exceed Svelte 5's effect_update_depth_exceeded (1000)
-  // guard when multiple form components mount simultaneously.
+  //
+  // Design constraints (Svelte 5 reactive system):
+  //   1. formDirty MUST be read synchronously in the $effect body so Svelte 5
+  //      tracks it as a dependency (queueMicrotask reads are invisible).
+  //   2. Module-level $state writes (dirtyFormStore, saveCallbackStore) MUST
+  //      be deferred via queueMicrotask to avoid contributing to the mount-time
+  //      flush depth, which can exceed Svelte 5's 1000-iteration guard.
+  //   3. The $effect return (cleanup) MUST NOT write to module-level $state,
+  //      because cleanup runs synchronously during $effect re-runs — if formDirty
+  //      changes frequently (every keystroke), the synchronous clear+re-register
+  //      cycle accumulates flush iterations.
+  //   4. Therefore, cleanup is handled by onDestroy (runs once on teardown),
+  //      not by the $effect return.
   $effect(() => {
     const tabId = tabStore.active?.id;
+    // Read formDirty synchronously to establish it as a reactive dependency.
+    // Svelte 5's $effect only tracks signals accessed during the synchronous
+    // execution of the effect function.  Reading inside queueMicrotask below
+    // (asynchronously) would NOT track it, so the effect would never re-run
+    // when the user makes a form dirty — the entire unsaved-changes guard
+    // would silently break for every form type.
+    const dirty = formDirty;
     if (tabId && tabStore.active?.type === "form") {
-      queueMicrotask(() => {
-        saveCallbackStore.setCallback(tabId, () => {
-          // Click the primary submit/save button in the form
-          const formEl = document.querySelector('.form-tab form');
-          if (formEl) {
-            const btn = formEl.querySelector('button[type="submit"]');
-            if (btn) { btn.click(); return; }
-            // Fallback: look for common save/submit button classes
-            const fallback = formEl.querySelector('.btn-primary, .btn-save, [class*="submit"]');
-            if (fallback) fallback.click();
-          }
+      // Register save callback once on mount (skip on re-runs from formDirty
+      // changes — the callback identity hasn't changed).
+      if (!_registeredTabId) {
+        _registeredTabId = tabId;
+        queueMicrotask(() => {
+          saveCallbackStore.setCallback(tabId, () => {
+            // Click the primary submit/save button in the form
+            const formEl = document.querySelector('.form-tab form');
+            if (formEl) {
+              const btn = formEl.querySelector('button[type="submit"]');
+              if (btn) { btn.click(); return; }
+              // Fallback: look for common save/submit button classes
+              const fallback = formEl.querySelector('.btn-primary, .btn-save, [class*="submit"]');
+              if (fallback) fallback.click();
+            }
+          });
         });
-        dirtyFormStore.setDirty(tabId, formDirty);
+      }
+      // Sync dirty state (deferred — runs every time formDirty changes)
+      queueMicrotask(() => {
+        dirtyFormStore.setDirty(tabId, dirty);
       });
     }
-    return () => {
-      if (tabId) {
-        saveCallbackStore.setCallback(tabId, null);
-        dirtyFormStore.clear(tabId);
-      }
-    };
+    // NO return cleanup — module-level $state writes in the cleanup would
+    // cascade through Svelte 5's reactive flush when formDirty changes
+    // rapidly (keystrokes).  See constraint #3 above.
+  });
+
+  // Cleanup runs ONCE on component destroy, never during $effect re-runs.
+  // This avoids synchronous module-level $state writes inside the flush cycle
+  // that would cascade past Svelte 5's 1000-iteration guard.
+  onDestroy(() => {
+    if (_registeredTabId) {
+      saveCallbackStore.setCallback(_registeredTabId, null);
+      dirtyFormStore.clear(_registeredTabId);
+    }
   });
 
   /** Infer command path from form type name */
