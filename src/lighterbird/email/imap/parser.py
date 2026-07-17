@@ -77,12 +77,19 @@ def parse_email_message(
                 }
                 attachments.append(att)
             elif ct not in ("text/plain", "text/html") and not part.is_multipart():
+                # Capture inline resources (embedded images) even without
+                # explicit filename/name — Content-ID alone indicates an
+                # inline resource (e.g. ``multipart/related`` images from
+                # Outlook that lack a ``name=`` Content-Type param).
+                # Only `has_cid` checks the actual header (no fallback) so
+                # unreferenced inline parts without a CID are still skipped.
+                has_cid = bool(part.get("Content-ID"))
                 name = part.get_param("name", None, "Content-Type") or ""
-                if name:
-                    payload = part.get_payload(decode=True)
+                if name or has_cid:
                     content_id = (part.get("Content-ID") or str(uuid_mod.uuid4())).strip("<>")
+                    payload = part.get_payload(decode=True)
                     attachments.append({
-                        "filename": name,
+                        "filename": name or content_id,
                         "mime_type": ct,
                         "size": len(payload) if payload else 0,
                         "content_id": content_id,

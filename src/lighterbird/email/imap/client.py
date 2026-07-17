@@ -849,33 +849,45 @@ class IMAPClient:
                     ),
                 )
 
-                # Store attachment blobs
+                # Get the REAL message UUID from the DB — parse_email_message
+                # generates a fresh random UUID that does NOT match the
+                # existing row's UUID.  Use the real one for storage.
+                row = db_store.db.execute_one(
+                    "SELECT uuid FROM messages WHERE account_email = ? "
+                    "AND folder_name = ? AND imap_uid = ?",
+                    (account_email, folder_name, imap_uid),
+                )
+                real_msg_uuid = row["uuid"] if row else data["uuid"]
+
+                # Store attachment blobs under the correct message UUID
                 if "_attachments_data" in data:
                     store = AttachmentStore()
                     for att in data["_attachments_data"]:
                         try:
-                            store.store(data["uuid"], att["content_id"], att["data"])
+                            store.store(real_msg_uuid, att["content_id"], att["data"])
                         except Exception:
                             pass
 
-                # Insert attachment metadata
+                # Insert attachment metadata with the correct message_uuid
                 if "_attachments_meta" in data:
                     for meta in data["_attachments_meta"]:
                         try:
                             att_uuid = str(uuid_mod.uuid4())
-                            store_path = f"{data['uuid']}/{meta['content_id']}"
+                            storage_path = f"{real_msg_uuid}/{meta['content_id']}"
                             db_store.db.execute(
                                 "INSERT OR IGNORE INTO email_attachments "
                                 "(uuid, message_uuid, filename, mime_type, size, content_id, storage_path, created_at, updated_at) "
                                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                                (att_uuid, data["uuid"], meta["filename"],
+                                (att_uuid, real_msg_uuid, meta["filename"],
                                  meta["mime_type"], meta["size"],
-                                 meta["content_id"], store_path,
+                                 meta["content_id"], storage_path,
                                  now_ts, now_ts),
                             )
                         except Exception:
                             pass
 
+                # Return data with the real UUID patched in
+                data["uuid"] = real_msg_uuid
                 return data
         except Exception as exc:
             logger.warning(

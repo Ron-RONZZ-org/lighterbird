@@ -273,12 +273,15 @@ class TestSearchMessages:
 
 class TestExportEml:
     def test_export_existing(self, svc, db):
+        import email as email_lib
+
         _insert_message(db, uuid="msg-001", subject="Test",
                         from_addr="a@b.com", to='["c@d.com"]')
         eml = svc.export_eml("msg-001")
         assert eml is not None
-        assert "Subject: Test" in eml
-        assert "From: a@b.com" in eml
+        parsed = email_lib.message_from_string(eml)
+        assert parsed["Subject"] == "Test"
+        assert parsed["From"] == "a@b.com"
 
     def test_export_nonexistent(self, svc):
         assert svc.export_eml("nonexistent") is None
@@ -286,6 +289,45 @@ class TestExportEml:
     def test_export_deleted_returns_none(self, svc, db):
         _insert_message(db, uuid="msg-001", is_deleted=1)
         assert svc.export_eml("msg-001") is None
+
+    def test_export_with_html_body(self, svc, db):
+        """Export includes HTML body as multipart/alternative."""
+        import email as email_lib
+
+        _insert_message(db, uuid="msg-002", subject="HTML Email",
+                        from_addr="a@b.com", to='["c@d.com"]',
+                        body="plain text")
+        db.execute(
+            "UPDATE messages SET html_body = ? WHERE uuid = ?",
+            ("<p>rich text</p>", "msg-002"),
+        )
+        eml = svc.export_eml("msg-002")
+        assert eml is not None
+        parsed = email_lib.message_from_string(eml)
+        assert parsed.is_multipart()
+        assert parsed.get_content_type() == "multipart/alternative"
+        # Verify parts decoded correctly
+        parts = list(parsed.walk())
+        text_parts = [p for p in parts if p.get_content_type() == "text/plain"]
+        html_parts = [p for p in parts if p.get_content_type() == "text/html"]
+        assert len(text_parts) == 1
+        assert len(html_parts) == 1
+        assert "plain text" in text_parts[0].get_payload(decode=True).decode()
+        assert "rich text" in html_parts[0].get_payload(decode=True).decode()
+
+    def test_export_with_recipients_json(self, svc, db):
+        """Export decodes JSON-encoded recipients list."""
+        import email as email_lib
+
+        _insert_message(db, uuid="msg-003", subject="JSON To",
+                        from_addr="a@b.com",
+                        to='["alice@example.com", "bob@example.com"]')
+        eml = svc.export_eml("msg-003")
+        assert eml is not None
+        parsed = email_lib.message_from_string(eml)
+        to_header = parsed["To"]
+        assert "alice@example.com" in to_header
+        assert "bob@example.com" in to_header
 
 
 class TestConversation:

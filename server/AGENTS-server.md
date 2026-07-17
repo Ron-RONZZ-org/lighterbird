@@ -59,6 +59,7 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 - `POST /api/v1/prompt-commands/expand` — preview expanded prompt text
 - `POST /api/v1/render-preview` — shared content-to-HTML conversion (markdown/html/plain) for preview rendering used by ComposeEmail, JournalWrite, LetterBodyEditor
 - `POST /api/v1/email/preview` — compose full email preview HTML from subject, body, body_format, optional signature, and optional attachments (uses ``compose_email_html()`` internally). Returns ``{"html": "…"}``.
+- `GET /api/v1/email/messages/{uuid}/cid/{content_id}` — serve inline attachment (embedded image) by message UUID and Content-ID. Resolves ``cid:`` references in HTML email bodies. Returns raw bytes with correct MIME type (no Content-Disposition so browser renders inline).
 - `POST /api/v1/prompt-commands/execute` — expand + multi-round tool loop
 - `POST /api/v1/prompt-commands/execute/resume` — resume paused HITL session
 - `POST /api/v1/prompt-commands/execute/stream` — (deprecated) SSE without tool-calling

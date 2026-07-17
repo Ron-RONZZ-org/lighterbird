@@ -142,6 +142,73 @@ class TestEmailActionsAPI:
         assert resp.status_code == 400
 
 
+class TestCidAttachmentAPI:
+    """Test GET /api/v1/email/messages/{uuid}/cid/{content_id}."""
+
+    def _client(self):
+        return TestClient(create_app())
+
+    def test_cid_nonexistent_message(self):
+        """GET cid for unknown message UUID returns 404."""
+        resp = self._client().get(
+            "/api/v1/email/messages/00000000-0000-0000-0000-000000000000/cid/logo@local"
+        )
+        assert resp.status_code == 404
+
+    def test_cid_nonexistent_attachment(self):
+        """GET cid for message with no matching attachment returns 404."""
+        from lighterbird.server.deps import get_email_service
+
+        app = create_app()
+        svc = get_email_service()
+        # Insert minimal account + message to satisfy FK constraints
+        from datetime import UTC, datetime
+        now = datetime.now(UTC).isoformat()
+        acct_email = "cid-test@example.com"
+        try:
+            svc.db.execute(
+                "INSERT OR IGNORE INTO accounts "
+                "(email, name, sort_order, imap_server, imap_port, imap_use_ssl, "
+                " smtp_server, smtp_port, smtp_use_tls, created_at, updated_at) "
+                "VALUES (?, ?, 0, ?, 993, 1, ?, 587, 1, ?, ?)",
+                (acct_email, "CID Test",
+                 "imap.example.com", "smtp.example.com",
+                 now, now),
+            )
+            svc.db.execute(
+                "INSERT OR IGNORE INTO folders "
+                "(account_email, name, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?)",
+                (acct_email, "INBOX", now, now),
+            )
+            svc.db.execute(
+                """INSERT OR IGNORE INTO messages
+                   (uuid, account_email, folder_name, from_addr,
+                    to_recipients, subject, body, received_at,
+                    created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    "msg-cid-001", acct_email, "INBOX",
+                    "sender@example.com", '["test@example.com"]',
+                    "Test CID", "Body", now, now, now,
+                ),
+            )
+            client = TestClient(app)
+            resp = client.get(
+                "/api/v1/email/messages/msg-cid-001/cid/nonexistent@local"
+            )
+            assert resp.status_code == 404
+        finally:
+            # Clean up to avoid polluting shared app state
+            svc.db.execute("DELETE FROM messages WHERE uuid = 'msg-cid-001'")
+            svc.db.execute(
+                "DELETE FROM folders WHERE account_email = ?", (acct_email,)
+            )
+            svc.db.execute(
+                "DELETE FROM accounts WHERE email = ?", (acct_email,)
+            )
+
+
 class TestEmailPreviewAPI:
     """Test POST /api/v1/email/preview endpoint."""
 

@@ -6,6 +6,10 @@ Flat service class, forked from A-lien's RetpostoMessagingMixin.
 from __future__ import annotations
 
 import email.message
+import email.mime.multipart
+import email.mime.text
+import email.mime.base
+import email.encoders
 from typing import Any
 
 
@@ -266,23 +270,113 @@ class MessageService:
     def export_eml(self, uuid_: str) -> str | None:
         """Export a message as an RFC 822 .eml string.
 
+        Reconstructs a proper MIME message from the DB fields, preserving
+        HTML body and attachments (including inline/embedded images with
+        Content-ID references).
+
         Returns the .eml content or None if the message is not found.
         """
+        from lighterbird.core.storage import AttachmentStore
+
         msg = self.get_message(uuid_)
         if not msg:
             return None
 
-        eml = email.message.EmailMessage()
-        eml["From"] = msg.get("from_addr", "")
-        eml["To"] = msg.get("to_recipients", "")
-        eml["Subject"] = msg.get("subject", "")
-        eml["Date"] = msg.get("received_at", "")
-        if msg.get("message_id"):
-            eml["Message-ID"] = msg["message_id"]
-        body = msg.get("body", "")
-        eml.set_content(body or "")
+        body = msg.get("body", "") or ""
+        html_body = msg.get("html_body", "") or ""
+        has_html = bool(html_body.strip())
 
-        return eml.as_string()
+        # Fetch attachments from DB
+        att_rows = list(
+            self.db.execute(
+                "SELECT filename, mime_type, content_id "
+                "FROM email_attachments WHERE message_uuid = ? ORDER BY filename",
+                (uuid_,),
+            )
+        )
+        has_attachments = bool(att_rows)
+
+        # ── Build the MIME structure ──────────────────────────────────────
+
+        # Outer container: multipart/mixed if attachments, else single part.
+        if has_attachments:
+            outer = email.mime.multipart.MIMEMultipart("mixed")
+        else:
+            outer = email.mime.multipart.MIMEMultipart("alternative")
+
+        outer["From"] = msg.get("from_addr", "")
+        recipients = msg.get("to_recipients", "")
+        if isinstance(recipients, str):
+            try:
+                import json
+                parsed = json.loads(recipients)
+                if isinstance(parsed, list):
+                    recipients = ", ".join(parsed)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        outer["To"] = recipients
+        outer["Subject"] = msg.get("subject", "")
+        outer["Date"] = msg.get("received_at", "")
+        if msg.get("message_id"):
+            outer["Message-ID"] = msg["message_id"]
+
+        # Text/plain alternative (always present)
+        text_part = email.mime.text.MIMEText(body, "plain", "utf-8")
+
+        if not has_html and not has_attachments:
+            # Plain text only — set headers on the single part
+            text_part["From"] = outer["From"]
+            text_part["To"] = outer["To"]
+            text_part["Subject"] = outer["Subject"]
+            text_part["Date"] = outer["Date"]
+            if msg.get("message_id"):
+                text_part["Message-ID"] = msg["message_id"]
+            return text_part.as_string()
+
+        if has_html and has_attachments:
+            # Structure: mixed [ alternative [ plain, html ], attachments... ]
+            alt_container = email.mime.multipart.MIMEMultipart("alternative")
+            alt_container.attach(text_part)
+            html_part = email.mime.text.MIMEText(html_body, "html", "utf-8")
+            alt_container.attach(html_part)
+            outer.attach(alt_container)
+        elif has_html:
+            # Simple alternative: plain + html
+            outer.attach(text_part)
+            html_part = email.mime.text.MIMEText(html_body, "html", "utf-8")
+            outer.attach(html_part)
+        elif has_attachments:
+            # Mixed: plain + attachments
+            outer.attach(text_part)
+
+        # Attach files (inline images keep their Content-ID)
+        if has_attachments:
+            store = AttachmentStore()
+            for row in att_rows:
+                try:
+                    raw = store.retrieve(uuid_, row["content_id"])
+                except FileNotFoundError:
+                    continue
+                mtype = row["mime_type"] or "application/octet-stream"
+                if "/" in mtype:
+                    maintype, subtype = mtype.split("/", 1)
+                else:
+                    maintype, subtype = "application", "octet-stream"
+                part = email.mime.base.MIMEBase(maintype, subtype)
+                part.set_payload(raw)
+                email.encoders.encode_base64(part)
+                filename = row["filename"] or "attachment"
+                part.add_header(
+                    "Content-Disposition",
+                    "inline",
+                    filename=filename,
+                )
+                cid = row.get("content_id")
+                if cid and cid.strip():
+                    part.add_header("Content-ID", f"<{cid}>")
+                outer.attach(part)
+
+        return outer.as_string()
 
     # ── Folder queries ──────────────────────────────────────────────────
 
