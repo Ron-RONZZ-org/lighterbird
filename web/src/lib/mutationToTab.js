@@ -128,27 +128,6 @@ const MUTATION_MAP = {
     isDelete: false,
     title: "Inbox",
   },
-  "email draft recall": {
-    listTokens: ["email", "list"],
-    listIdKey: "email-list",
-    type: "email-list",
-    isDelete: false,
-    title: "Inbox",
-  },
-  "email delete": {
-    listTokens: ["email", "list"],
-    listIdKey: "email-list",
-    type: "email-list",
-    isDelete: true,
-    title: "Inbox",
-  },
-  "email archive": {
-    listTokens: ["email", "list"],
-    listIdKey: "email-list",
-    type: "email-list",
-    isDelete: true,
-    title: "Inbox",
-  },
 
   // ── Sieve scripts ────────────────────────────────────────────────
   "email sieve add": {

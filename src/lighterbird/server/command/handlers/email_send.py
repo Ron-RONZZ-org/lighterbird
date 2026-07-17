@@ -1,7 +1,8 @@
-"""Command handler for ``!email send`` (extracted from email.py for size).
+"""Command handlers for ``!email send`` and ``!email draft new``.
 
 Registered paths:
     - email.send
+    - email.draft.new
 """
 
 from __future__ import annotations
@@ -14,50 +15,33 @@ from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_email_service
 
 
-@command("email.send", interactive=True,
-         params=[
-             {"name": "to", "type": "string", "help": "Recipient email address(es), comma-separated", "required": True},
-             {"name": "subject", "type": "string", "help": "Email subject", "required": True},
-             {"name": "body", "type": "string", "help": "Email body text", "required": False},
-         ],
-         flags=[
-             {"name": "account", "type": "string", "help": "Sender account email"},
-             {"name": "cc", "type": "string", "help": "CC recipients (comma-separated)"},
-             {"name": "bcc", "type": "string", "help": "BCC recipients (comma-separated)"},
-             {"name": "priority", "type": "string", "help": "Priority 1-5 (default 3)"},
-             {"name": "body-format", "type": "string", "help": "Body format: markdown, html, or plain"},
-             {"name": "signature", "type": "string", "help": "Override account signature text"},
-             {"name": "signature-name", "type": "string", "help": "Use a named signature from the account"},
-             {"name": "signature-format", "type": "string", "help": "Signature format when using --signature: plain, html, or markdown",
-              "values": ["plain", "html", "markdown"]},
-             {"name": "no-signature", "type": "bool", "help": "Send without any signature"},
-             {"name": "file", "type": "string", "help": "Attachment JSON array [{\"name\":...,\"data\":base64}] or legacy name:base64,..."},
-             {"name": "no-save-sample", "type": "bool", "help": "Do not save as writing sample"},
-         ])
-def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email send <to> <subject> [body] [--account <email>] [--cc email]
-                    [--bcc email] [--priority N] [--body-format fmt]
-                    [--signature <text>] [--signature-name <name>]
-                    [--no-signature]
-                    [--file <name:base64>]
+# ── Shared send core ──────────────────────────────────────────────────────
 
-    Sends an email.  ``<to>`` and ``<subject>`` are required; ``<body>``
-    is optional.  Use ``--cc`` / ``--bcc`` for additional recipients,
-    ``--priority`` (1-5) to set importance, ``--body-format`` to choose
-    markdown (default), html, or plain, ``--signature`` to override the
-    account's stored signature with inline text, ``--signature-name`` to
-    use a named signature from the account's signature library,
-    ``--no-signature`` to send without any signature, and ``--file`` for
-    attachments (repeatable, format: ``<filename>:<base64>``).
+
+def _send_email_core(
+    to_str: str,
+    subject: str,
+    body: str,
+    flags: dict[str, str],
+) -> dict[str, Any]:
+    """Validate inputs and send an email via the service.
+
+    Shared by ``!email send`` and ``!email draft new`` (when invoked
+    with all required args).
+
+    Args:
+        to_str: Comma-separated recipient addresses.
+        subject: Email subject line.
+        body: Email body text.
+        flags: Parsed CLI flags (account, cc, bcc, priority,
+            body-format, signature options, file attachments, etc.).
+
+    Returns:
+        Response dict with type ``"status"``.
+
+    Raises:
+        CommandValidationError: On invalid inputs.
     """
-    if len(remaining) < 2:
-        raise CommandValidationError(
-            "Missing required args: <to> <subject> [body]",
-            "Usage: !email send recipient@example.com \"Subject\" \"Body\" --account <email>",
-        )
-    to_str = remaining[0]
-    subject = remaining[1]
-    body = " ".join(remaining[2:]) if len(remaining) > 2 else ""
     account_email = flags.get("account", "")
     cc_str = flags.get("cc", "")
     bcc_str = flags.get("bcc", "")
@@ -75,7 +59,10 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     if not account_email:
         accounts = svc.list_accounts()
         if not accounts:
-            raise CommandValidationError("No email accounts configured.", "Add one with: !email account add")
+            raise CommandValidationError(
+                "No email accounts configured.",
+                "Add one with: !email account add",
+            )
         account_email = accounts[0]["email"]
 
     # Parse priority
@@ -98,10 +85,11 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     cc_list = [t.strip() for t in cc_str.split(",") if t.strip()] if cc_str else None
     bcc_list = [t.strip() for t in bcc_str.split(",") if t.strip()] if bcc_str else None
 
-    # Parse --file flag: JSON array of {name, data} objects (robust against special chars in filenames)
+    # Parse --file flag: JSON array of {name, data} objects
     attachments = None
     if file_flags:
         import json as _json
+
         try:
             parsed = _json.loads(file_flags)
             if isinstance(parsed, list):
@@ -123,34 +111,211 @@ def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     if no_signature:
         signature_value = ""  # empty string = send without signature
     elif signature_name is not None:
-        # Look up named signature globally — preserve its format
         sig = svc.signatures.resolve(account_email, name=signature_name)
         signature_value = (sig or {}).get("signature_text", "")
         signature_format = (sig or {}).get("signature_format", "plain")
     elif signature_override is not None:
         signature_value = signature_override
-        # Inline override defaults to plain
         signature_format = flags.get("signature-format", "plain")
 
     try:
-        result = svc.send_email(account_email, to_list, subject, body,
-                                cc=cc_list, bcc=bcc_list, priority=priority,
-                                body_format=body_format,
-                                attachments=attachments,
-                                signature=signature_value,
-                                signature_format=signature_format,
-                                in_reply_to=in_reply_to or None,
-                                save_as_sample=save_as_sample)
+        svc.send_email(
+            account_email,
+            to_list,
+            subject,
+            body,
+            cc=cc_list,
+            bcc=bcc_list,
+            priority=priority,
+            body_format=body_format,
+            attachments=attachments,
+            signature=signature_value,
+            signature_format=signature_format,
+            in_reply_to=in_reply_to or None,
+            save_as_sample=save_as_sample,
+        )
     except ValueError as e:
         raise CommandValidationError(
             str(e),
             suggestion="Check the account exists and has a password configured.",
         )
 
-    # Trigger background SMTP delivery (non-blocking) — the send queue
-    # processes immediately on the email worker thread.
+    # Trigger background SMTP delivery
     from lighterbird.server.tasks import enqueue_email_send
+
     enqueue_email_send()
 
-    return {"type": "status", "title": "Queued for Delivery",
-            "data": {"to": to_str, "subject": subject, "folder": "Outbox"}}
+    return {
+        "type": "status",
+        "title": "Queued for Delivery",
+        "data": {"to": to_str, "subject": subject, "folder": "Outbox"},
+    }
+
+
+# ── email.send ────────────────────────────────────────────────────────────
+
+
+@command(
+    "email.send",
+    interactive=True,
+    params=[
+        {
+            "name": "to",
+            "type": "string",
+            "help": "Recipient email address(es), comma-separated",
+            "required": True,
+        },
+        {
+            "name": "subject",
+            "type": "string",
+            "help": "Email subject",
+            "required": True,
+        },
+        {
+            "name": "body",
+            "type": "string",
+            "help": "Email body text",
+            "required": False,
+        },
+    ],
+    flags=[
+        {"name": "account", "type": "string", "help": "Sender account email"},
+        {
+            "name": "cc",
+            "type": "string",
+            "help": "CC recipients (comma-separated)",
+        },
+        {
+            "name": "bcc",
+            "type": "string",
+            "help": "BCC recipients (comma-separated)",
+        },
+        {
+            "name": "priority",
+            "type": "string",
+            "help": "Priority 1-5 (default 3)",
+        },
+        {
+            "name": "body-format",
+            "type": "string",
+            "help": "Body format: markdown, html, or plain",
+        },
+        {
+            "name": "signature",
+            "type": "string",
+            "help": "Override account signature text",
+        },
+        {
+            "name": "signature-name",
+            "type": "string",
+            "help": "Use a named signature from the account",
+        },
+        {
+            "name": "signature-format",
+            "type": "string",
+            "help": "Signature format when using --signature: plain, html, or markdown",
+            "values": ["plain", "html", "markdown"],
+        },
+        {
+            "name": "no-signature",
+            "type": "bool",
+            "help": "Send without any signature",
+        },
+        {
+            "name": "file",
+            "type": "string",
+            "help": 'Attachment JSON array [{"name":...,"data":base64}] or legacy name:base64,...',
+        },
+        {
+            "name": "no-save-sample",
+            "type": "bool",
+            "help": "Do not save as writing sample",
+        },
+    ],
+)
+def email_send(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!email send <to> <subject> [body] [--account <email>] [--cc email]
+                    [--bcc email] [--priority N] [--body-format fmt]
+                    [--signature <text>] [--signature-name <name>]
+                    [--no-signature]
+                    [--file <name:base64>]
+
+    Sends an email.  ``<to>`` and ``<subject>`` are required; ``<body>``
+    is optional.  Uses ``_send_email_core`` for shared logic with
+    ``!email draft new``.
+    """
+    if len(remaining) < 2:
+        raise CommandValidationError(
+            "Missing required args: <to> <subject> [body]",
+            "Usage: !email send recipient@example.com \"Subject\" \"Body\" --account <email>",
+        )
+    return _send_email_core(
+        remaining[0],
+        remaining[1],
+        " ".join(remaining[2:]) if len(remaining) > 2 else "",
+        flags,
+    )
+
+
+# ── email.draft.new ───────────────────────────────────────────────────────
+
+
+@command(
+    "email.draft.new",
+    interactive=True,
+    form_type="email-send",
+    params=[
+        {
+            "name": "to",
+            "type": "string",
+            "help": "Recipient email address(es), comma-separated",
+            "required": False,
+        },
+        {
+            "name": "subject",
+            "type": "string",
+            "help": "Email subject",
+            "required": False,
+        },
+        {
+            "name": "body",
+            "type": "string",
+            "help": "Email body text",
+            "required": False,
+        },
+    ],
+    flags=[
+        {"name": "account", "type": "string", "help": "Sender account email"},
+        {"name": "cc", "type": "string", "help": "CC recipients (comma-separated)"},
+        {"name": "bcc", "type": "string", "help": "BCC recipients (comma-separated)"},
+    ],
+)
+def email_draft_new(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!email draft new [to] [subject] [body] [--account <email>] [--cc] [--bcc]
+
+    Opens the compose form for drafting a new email.  Any provided
+    positional args pre-populate the form fields.  The form auto-saves
+    drafts as the user types (frontend handles the draft REST API).
+
+    All params are optional — the command always opens the form so the
+    user can compose freely.
+    """
+    initial_data: dict[str, Any] = {}
+    if remaining:
+        initial_data["to"] = remaining[0]
+    if len(remaining) > 1:
+        initial_data["subject"] = remaining[1]
+    if len(remaining) > 2:
+        initial_data["body"] = " ".join(remaining[2:])
+    for key in ("account", "cc", "bcc"):
+        if flags.get(key):
+            initial_data[key] = flags[key]
+
+    return {
+        "type": "form-required",
+        "title": "New Draft",
+        "data": {
+            "form": "email-send",
+            "initialData": initial_data,
+        },
+    }

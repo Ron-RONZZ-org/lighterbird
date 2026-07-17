@@ -334,8 +334,8 @@ Backend list commands return typed responses that map to frontend components:
 | Command | Backend Response Type | Frontend Component |
 |---------|----------------------|--------------------|
 | `!email list` / `!email search` | `email-list` | EmailListTab |
-| `!email trash` | `email-list` (with `_isTrashView`) | EmailListTab (trash-only) |
-| `!email draft` | `email-list` (with `_isDraftView`) | EmailListTab (drafts-only) |
+| `!email list trash` | `email-list` (with `_isTrashView`) | EmailListTab (trash-only) |
+| `!email list draft` / `!email draft list` | `email-list` (with `_isDraftView`) | EmailListTab (drafts-only) |
 | `!email export eml <uuid>` | download .eml | ExportDialog / direct download |
 | `!email import eml <path>` | `status` | ImportDialog |
 | `!journal list` / `!journal search` | `journal-list` | JournalListTab |

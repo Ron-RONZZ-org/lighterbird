@@ -374,61 +374,6 @@ class TestEmailHandlers:
                 {"body-format": "docx"},
             )
 
-    def test_email_read_missing_uuid(self):
-        """email read without uuid raises."""
-        with pytest.raises(CommandValidationError, match="Missing message UUID"):
-            dispatch(["email", "read"], {})
-
-    def test_email_read_not_found(self, mock_email_svc):
-        """email read with non-existent uuid raises."""
-        with pytest.raises(CommandValidationError, match="Message not found"):
-            dispatch(["email", "read", "nonexistent-uuid"], {})
-
-    def test_email_read_success(self, mock_email_svc):
-        """email read returns an email response."""
-        mock_email_svc.get_message.return_value = {
-            "uuid": "abc123",
-            "subject": "Hello",
-            "from_addr": "a@b.com",
-        }
-        result = dispatch(["email", "read", "abc123"], {})
-        assert result["type"] == "email"
-        assert result["title"] == "Hello"
-
-    def test_email_delete_missing_uuid(self):
-        """email delete without uuid raises."""
-        with pytest.raises(CommandValidationError, match="Missing message UUID"):
-            dispatch(["email", "delete"], {})
-
-    def test_email_delete_success(self, mock_email_svc):
-        """email delete calls trash_message and returns status."""
-        result = dispatch(["email", "delete", "abc123"], {})
-        assert result["type"] == "status"
-        assert result["title"] == "Trashed"
-        mock_email_svc.trash_message.assert_called_once_with("abc123")
-
-    def test_email_delete_hard_success(self, mock_email_svc):
-        """email delete --hard calls hard_delete_message and returns status."""
-        result = dispatch(["email", "delete", "abc123"], {"hard": ""})
-        assert result["type"] == "status"
-        assert result["title"] == "Permanently Deleted"
-        mock_email_svc.msg_ops.hard_delete_message.assert_called_once_with("abc123")
-
-    def test_email_trash_list_opens_trash_view(self):
-        """email trash list returns email-list with isTrashView and Trash filter."""
-        result = dispatch(["email", "trash", "list"], {})
-        assert result["type"] == "email-list"
-        assert result.get("idKey") == "email-trash-list"
-        assert result["data"].get("_isTrashView") is True
-        assert result["data"].get("filters", {}).get("folder") == "Trash"
-
-    def test_email_archive_success(self, mock_email_svc):
-        """email archive calls move_message to Archive folder and returns status."""
-        result = dispatch(["email", "archive", "abc123"], {})
-        assert result["type"] == "status"
-        assert result["title"] == "Archived"
-        mock_email_svc.move_message.assert_called_once_with("abc123", "Archive")
-
     def test_email_search_no_filters(self, mock_email_svc):
         """email search without filters calls list_messages."""
         mock_email_svc.list_messages.return_value = [
@@ -551,58 +496,6 @@ class TestEmailHandlers:
         with pytest.raises(CommandValidationError, match="Import failed"):
             dispatch(["email", "import", "eml", str(eml_file)], {})
 
-    def test_email_reply_missing_uuid(self):
-        """email reply without uuid raises."""
-        with pytest.raises(CommandValidationError, match="Missing message UUID"):
-            dispatch(["email", "reply"], {})
-
-    def test_email_reply_not_found(self, mock_email_svc):
-        """email reply with non-existent uuid raises."""
-        with pytest.raises(CommandValidationError, match="Message not found"):
-            dispatch(["email", "reply", "abc123"], {})
-
-    def test_email_reply_success(self, mock_email_svc):
-        """email reply opens compose form pre-populated."""
-        mock_email_svc.get_message.return_value = {
-            "uuid": "abc123",
-            "subject": "Original",
-            "from_addr": "sender@b.com",
-            "to_recipients": ["me@b.com"],
-            "body": "Hello!",
-            "account_email": "me@b.com",
-        }
-        result = dispatch(["email", "reply", "abc123"], {})
-        assert result["type"] == "form-required"
-        assert result["title"] == "Reply"
-        assert result["data"]["form"] == "email-send"
-        assert "Re: Original" in result["data"]["initialData"]["subject"]
-        assert "sender@b.com" in result["data"]["initialData"]["to"]
-
-    def test_email_forward_missing_uuid(self):
-        """email forward without uuid raises."""
-        with pytest.raises(CommandValidationError, match="Missing message UUID"):
-            dispatch(["email", "forward"], {})
-
-    def test_email_forward_not_found(self, mock_email_svc):
-        """email forward with non-existent uuid raises."""
-        with pytest.raises(CommandValidationError, match="Message not found"):
-            dispatch(["email", "forward", "abc123"], {})
-
-    def test_email_forward_success(self, mock_email_svc):
-        """email forward opens compose form pre-populated."""
-        mock_email_svc.get_message.return_value = {
-            "uuid": "abc123",
-            "subject": "Original",
-            "from_addr": "sender@b.com",
-            "body": "Hello!",
-            "account_email": "me@b.com",
-        }
-        result = dispatch(["email", "forward", "abc123"], {})
-        assert result["type"] == "form-required"
-        assert result["title"] == "Forward"
-        assert result["data"]["form"] == "email-send"
-        assert "Fwd: Original" in result["data"]["initialData"]["subject"]
-
     def test_email_list_body_preview_truncated(self, mock_email_svc):
         """email list truncates body to 2000 chars with [...] note."""
         mock_email_svc.search_messages.return_value = [
@@ -626,54 +519,109 @@ class TestEmailHandlers:
         msgs = result["data"]["messages"]
         assert msgs[0]["body"] == "Hello!"
 
-    def test_email_reply_truncates_long_body(self, mock_email_svc):
-        """email reply truncates body to 100 lines / 10K chars."""
-        long_body = "\n".join(f"Line {i}" for i in range(200))
-        mock_email_svc.get_message.return_value = {
-            "uuid": "abc123", "subject": "Original", "from_addr": "a@b.com",
-            "to_recipients": ["me@b.com"], "body": long_body, "account_email": "me@b.com",
-        }
-        result = dispatch(["email", "reply", "abc123"], {})
-        quoted = result["data"]["initialData"]["body"]
-        # Should have at most 103 lines (blank + 100 quoted + [...] note)
-        assert quoted.count("\n") <= 103, f"Too many lines: {quoted.count('\n')}"
-        assert "100 more lines" in quoted, "Expected truncation note in reply"
+    # ── View subcommand tests ───────────────────────────────────────────────
 
-    def test_email_forward_truncates_long_body(self, mock_email_svc):
-        """email forward truncates body to 100 lines / 10K chars."""
-        long_body = "\n".join(f"Line {i}" for i in range(200))
-        mock_email_svc.get_message.return_value = {
-            "uuid": "abc123", "subject": "Original", "from_addr": "a@b.com",
-            "body": long_body, "account_email": "me@b.com",
-        }
-        result = dispatch(["email", "forward", "abc123"], {})
-        body = result["data"]["initialData"]["body"]
-        assert "100 more lines" in body, "Expected truncation note in forward"
+    def test_email_list_inbox(self, mock_email_svc):
+        """email list inbox presets folder=Inbox."""
+        mock_email_svc.search_messages.return_value = []
+        result = dispatch(["email", "list", "inbox"], {})
+        assert result["type"] == "email-list"
+        call_kwargs = mock_email_svc.search_messages.call_args[0][0]
+        assert "Inbox" in call_kwargs.get("folder", [])
 
-    def test_email_forward_with_attachments(self, mock_email_svc, monkeypatch):
-        """email forward includes attachments from the original message."""
-        import base64
-        from unittest.mock import MagicMock
+    def test_email_list_draft(self, mock_email_svc):
+        """email list draft presets folder=Drafts and adds draft flags."""
+        mock_email_svc.search_messages.return_value = []
+        result = dispatch(["email", "list", "draft"], {})
+        assert result["type"] == "email-list"
+        assert result["data"].get("_isDraftView") is True
+        assert result["data"].get("idKey") == "email-draft-list"
+        call_kwargs = mock_email_svc.search_messages.call_args[0][0]
+        assert "Drafts" in call_kwargs.get("folder", [])
 
-        mock_store = MagicMock()
-        mock_store.retrieve.return_value = b"fake_pdf_content"
-        monkeypatch.setattr("lighterbird.server.command.handlers.email.AttachmentStore", lambda: mock_store)
+    def test_email_list_trash(self, mock_email_svc):
+        """email list trash presets folder=Trash and adds trash flags."""
+        mock_email_svc.search_messages.return_value = []
+        result = dispatch(["email", "list", "trash"], {})
+        assert result["type"] == "email-list"
+        assert result["data"].get("_isTrashView") is True
+        assert result["data"].get("idKey") == "email-trash-list"
+        call_kwargs = mock_email_svc.search_messages.call_args[0][0]
+        assert "Trash" in call_kwargs.get("folder", [])
 
-        mock_db = MagicMock()
-        mock_db.execute.return_value = [
-            {"filename": "doc.pdf", "content_id": "cid1"},
-        ]
-        mock_email_svc.db = mock_db
-        mock_email_svc.get_message.return_value = {
-            "uuid": "abc123", "subject": "Original", "from_addr": "a@b.com",
-            "body": "Hello!", "account_email": "me@b.com",
-        }
+    def test_email_list_outbox(self, mock_email_svc):
+        """email list outbox presets folder=Outbox and adds outbox flags."""
+        mock_email_svc.search_messages.return_value = []
+        result = dispatch(["email", "list", "outbox"], {})
+        assert result["type"] == "email-list"
+        assert result["data"].get("_isOutboxView") is True
+        call_kwargs = mock_email_svc.search_messages.call_args[0][0]
+        assert "Outbox" in call_kwargs.get("folder", [])
 
-        result = dispatch(["email", "forward", "abc123"], {})
-        files = result["data"]["initialData"].get("files", [])
-        assert len(files) == 1
-        assert files[0]["name"] == "doc.pdf"
-        assert files[0]["data"] == base64.b64encode(b"fake_pdf_content").decode("ascii")
+    def test_email_list_archive(self, mock_email_svc):
+        """email list archive presets folder=Archive."""
+        mock_email_svc.search_messages.return_value = []
+        result = dispatch(["email", "list", "archive"], {})
+        assert result["type"] == "email-list"
+        call_kwargs = mock_email_svc.search_messages.call_args[0][0]
+        assert "Archive" in call_kwargs.get("folder", [])
+
+    def test_email_list_junk(self, mock_email_svc):
+        """email list junk presets folder=Junk."""
+        mock_email_svc.search_messages.return_value = []
+        result = dispatch(["email", "list", "junk"], {})
+        assert result["type"] == "email-list"
+        call_kwargs = mock_email_svc.search_messages.call_args[0][0]
+        assert "Junk" in call_kwargs.get("folder", [])
+
+    def test_email_list_spam(self, mock_email_svc):
+        """email list spam presets folder=Spam."""
+        mock_email_svc.search_messages.return_value = []
+        result = dispatch(["email", "list", "spam"], {})
+        assert result["type"] == "email-list"
+        call_kwargs = mock_email_svc.search_messages.call_args[0][0]
+        assert "Spam" in call_kwargs.get("folder", [])
+
+    def test_email_list_all(self, mock_email_svc):
+        """email list all has no folder filter (dispatches to generic list)."""
+        mock_email_svc.search_messages.return_value = []
+        result = dispatch(["email", "list", "all"], {})
+        assert result["type"] == "email-list"
+        call_kwargs = mock_email_svc.search_messages.call_args[0][0]
+        # "all" view passes no folder filter — check it's omitted
+        assert call_kwargs.get("folder") is None or "folder" not in call_kwargs
+
+    # ── Draft command tests ────────────────────────────────────────────────
+
+    def test_email_draft_new_opens_form(self):
+        """email draft new returns form-required for composing."""
+        result = dispatch(["email", "draft", "new"], {})
+        assert result["type"] == "form-required"
+        assert result["data"]["form"] == "email-send"
+        assert result["title"] == "New Draft"
+
+    def test_email_draft_new_with_args(self):
+        """email draft new pre-populates form with provided args."""
+        result = dispatch(
+            ["email", "draft", "new", "to@b.com", "Subject"],
+            {"cc": "cc@b.com"},
+        )
+        assert result["type"] == "form-required"
+        data = result["data"]["initialData"]
+        assert data["to"] == "to@b.com"
+        assert data["subject"] == "Subject"
+        assert data["cc"] == "cc@b.com"
+
+    def test_email_draft_list(self, mock_email_svc):
+        """email draft list shows drafts folder (same as email list draft)."""
+        mock_email_svc.search_messages.return_value = []
+        result = dispatch(["email", "draft", "list"], {})
+        assert result["type"] == "email-list"
+        assert result["data"].get("_isDraftView") is True
+        assert result["data"].get("idKey") == "email-draft-list"
+        call_kwargs = mock_email_svc.search_messages.call_args[0][0]
+        assert "Drafts" in call_kwargs.get("folder", [])
+
 
 # ── Email folder handlers ─────────────────────────────────────────────────────
 
@@ -1130,16 +1078,7 @@ class TestUserProfilesHandlers:
 
 
 class TestDraftsHandlers:
-    def test_email_draft_list(self):
-        """email draft (no args) lists drafts."""
-        result = dispatch(["email", "draft"], {})
-        assert isinstance(result, dict)
-        assert "type" in result
-
-    def test_email_draft_recall_not_found(self):
-        """email draft recall <uuid> with non-existent draft raises."""
-        with pytest.raises(CommandValidationError, match="Draft not found"):
-            dispatch(["email", "draft", "recall", "nonexistent-uuid"], {})
+    """Non-email draft handlers (journal, todo, calendar, letter)."""
 
 
 # ── Letter handlers ──────────────────────────────────────────────────────────

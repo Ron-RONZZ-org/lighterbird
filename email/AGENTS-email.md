@@ -67,7 +67,7 @@ Backend IMAP operations (flag sync, trash move, permanent deletion) are deferred
 4. **`DeadLetterService`** — Stores entries that exhausted retries for manual review. Supports list, clear, and retry-back-to-backlog operations. The `operation` column is preserved through dead-letter cycles.
 5. **`FlagSyncService`** — Orchestrates push (backlog drain) and pull (CONDSTORE flag sync)
 
-Key rule: **hard-delete (`!email delete --hard`, batch-delete-hard, clear-trash) deletes the local DB row immediately** and enqueues an `'expunge'` backlog entry. The IMAP EXPUNGE happens asynchronously, giving instant UX — same contract as soft delete. `hard_delete_message()` returns a dict with `count`, `queued`, and `errors` — no longer raises on IMAP failure.
+Key rule: **hard-delete (batch-delete-hard via GUI, clear-trash, REST `POST /api/v1/email/messages/batch-delete`) deletes the local DB row immediately** and enqueues an `'expunge'` backlog entry. The IMAP EXPUNGE happens asynchronously, giving instant UX — same contract as soft delete. `hard_delete_message()` returns a dict with `count`, `queued`, and `errors` — no longer raises on IMAP failure. The CLI `!email delete` has been removed — use GUI REST endpoints for all delete operations.
 
 ### Pre-Sync Backlog Drain
 
@@ -137,8 +137,8 @@ Entries exceeding `MAX_RETRIES` (default: 10) are automatically moved to the `_d
     - **Deletion** (``DELETE /api/v1/drafts/<uuid>``): For email drafts with an IMAP presence, an ``expunge`` backlog entry is enqueued to remove the draft from the IMAP server.
     - **Folder resolution**: ``FolderMapper.resolve_drafts()`` resolves localized Drafts folder names using SPECIAL-USE ``\\Drafts`` or alias lists (``[Gmail]/Drafts``, ``Entwürfe``, ``Brouillons``, etc.).
 14. **``email_draft_uid_map`` SQLite table** — Tracks the correlation between local draft UUIDs and IMAP UIDs. Primary key is ``(account_email, folder_name, draft_uuid)``. Used to avoid SEARCH HEADER on subsequent saves and to enable IMAP→local inverse sync.
-15. **``!email draft`` opens Drafts folder pane** — ``!email draft`` opens the ``EmailListTab`` filtered to the Drafts folder (with ``_isDraftView``). ``!email draft recall <uuid>`` recalls a saved composition draft.
-16. **``!email trash list`` simplified to ``!email trash``** — The ``list`` sub-command is removed for consistency. ``!email trash`` opens the trash view directly.
+15. **View subcommands** — ``!email list draft`` and ``!email draft list`` both open the ``EmailListTab`` filtered to the Drafts folder (with ``_isDraftView``). ``!email list trash`` opens the trash view. Other view subcommands: ``inbox``, ``all``, ``outbox``, ``archive``, ``junk``, ``spam``. The legacy ``!email draft`` (bare) and ``!email trash`` commands have been removed — use the view subcommands instead.
+16. **``!email draft new``** — Opens the compose form for drafting a new email. All params are optional; any provided args pre-populate the form. The form auto-saves drafts as the user types via the frontend's draft REST API. ``!email draft recall`` has been removed — use ``GET /api/v1/drafts/<uuid>`` via the GUI for draft recall.
 17. **Pre-sync backlog drain contract** — ``EmailService.sync_account()`` drains all pending backlog entries (expunge, trash, flag sync) for the account BEFORE acquiring the IMAP sync lock. This prevents re-import of hard-deleted messages and ensures flag state consistency. The previously separate post-sync ``process_sync_backlog()`` has been removed — the pre-sync drain subsumes it. Any entries enqueued during sync (e.g. user flag toggles during the sync window) will be picked up by the next sync cycle or background worker. Best-effort contract: if the BacklogService lock is busy, sync proceeds without draining.
 
 18. **Enhanced local search (``!email search --header``)** — ``MessageService.search_messages()`` now searches **all** message fields when a free-text ``query`` is provided:

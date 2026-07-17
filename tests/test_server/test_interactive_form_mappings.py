@@ -236,8 +236,7 @@ _FORM_REQUIRED = {
     "journal.write",
     "email.sieve.add",
     "email.send",
-    "email.reply",
-    "email.forward",
+    "email.draft.new",
     "calendar.event.add",
     "user.saved-commands.add",
     "user.info.add",
@@ -336,7 +335,7 @@ class TestInteractiveFormMappings:
 
     def test_form_required_in_infer_command_path(self) -> None:
         """Every form-required command's form_type has a path in _inferCommandPath()."""
-        # email-send is shared by email.send, email.reply, email.forward
+        # email-send is shared by email.send and email.draft.new
         skip_shared = {"email-send"}
         missing = []
         for cmd in _FORM_REQUIRED:
