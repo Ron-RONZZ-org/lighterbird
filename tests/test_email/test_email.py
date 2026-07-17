@@ -742,8 +742,8 @@ class TestParser:
         assert len(data["_attachments_meta"]) == 1
         assert data["_attachments_meta"][0]["filename"] == "doc.pdf"
 
-    def test_parse_inline_image_skipped(self):
-        """Inline image without attachment disposition is not treated as attachment."""
+    def test_parse_inline_image_with_cid_captured(self):
+        """Inline image with Content-ID is captured as attachment (even without name/filename)."""
         from email.mime.base import MIMEBase
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
@@ -765,7 +765,36 @@ class TestParser:
         data = parse_email_message(
             msg, "user@example.com", "INBOX", 1, store_attachments=True,
         )
-        # Inline images without filename/attachment disposition are skipped
+        # Inline image with Content-ID is now captured (was previously skipped)
+        assert "_attachments_meta" in data
+        assert len(data["_attachments_meta"]) == 1
+        assert data["_attachments_meta"][0]["content_id"] == "logo@local"
+        assert data["_attachments_meta"][0]["mime_type"] == "image/png"
+
+    def test_parse_inline_image_without_cid_skipped(self):
+        """Inline image without Content-ID and without name/filename is skipped."""
+        from email.mime.base import MIMEBase
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+
+        from lighterbird.email.imap.parser import parse_email_message
+
+        msg = MIMEMultipart("related")
+        msg["Subject"] = "Inline Image no CID"
+        msg["From"] = "a@b.com"
+        msg["To"] = "c@d.com"
+        msg.attach(MIMEText("Body", "plain", "utf-8"))
+
+        inline = MIMEBase("image", "png")
+        inline.set_payload(b"\x89PNG mock")
+        # No Content-ID header added — should be skipped
+        inline.add_header("Content-Disposition", "inline")
+        msg.attach(inline)
+
+        data = parse_email_message(
+            msg, "user@example.com", "INBOX", 1, store_attachments=True,
+        )
+        # No Content-ID means no way to reference it — skip
         assert "_attachments_meta" not in data or len(data.get("_attachments_meta", [])) == 0
 
 

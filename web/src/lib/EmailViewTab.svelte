@@ -58,10 +58,25 @@
   /** Check if the email has an HTML body to render. */
   let hasHtml = $derived(!!(msg.html_body && msg.html_body.trim()));
 
-  /** Normalize the HTML body for iframe rendering. */
+  /** Normalize the HTML body for iframe rendering.
+   *  Rewrites ``cid:`` image references to our CID resolution API
+   *  so embedded images render correctly.
+   */
   let htmlContent = $derived.by(() => {
     if (!hasHtml) return "";
     let h = msg.html_body;
+    if (msg.uuid) {
+      // Rewrite src="cid:..." -> src="/api/v1/email/messages/{uuid}/cid/..."
+      h = h.replace(
+        /src=(["'])(?:cid:)([^"']+)\1/gi,
+        (_, quote, cid) => `src=${quote}/api/v1/email/messages/${msg.uuid}/cid/${cid}${quote}`,
+      );
+      // Also handle src=cid:... without quotes
+      h = h.replace(
+        /\bsrc=(?:cid:)(\S+?)(?:\s|>)/gi,
+        (_, cid) => `src="/api/v1/email/messages/${msg.uuid}/cid/${cid}" `,
+      );
+    }
     if (!/<\s*html\b/i.test(h)) {
       h = `<html><head><meta charset="utf-8"></head><body>${h}</body></html>`;
     }

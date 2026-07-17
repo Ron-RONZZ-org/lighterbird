@@ -228,6 +228,53 @@ def download_attachment(
     )
 
 
+@router.get("/messages/{message_uuid}/cid/{content_id}")
+def serve_cid_attachment(
+    message_uuid: str,
+    content_id: str,
+    email_svc: EmailService = Depends(get_email_service),
+):
+    """Serve an inline attachment (embedded image) by message UUID and Content-ID.
+
+    Resolves ``cid:`` references in HTML email bodies (e.g.
+    ``<img src=\"cid:image001.jpg@...\">``) to the actual attachment data.
+    The frontend rewrites ``cid:`` URLs in the HTML body to point here.
+
+    Returns the raw attachment bytes with the correct MIME type for inline
+    rendering (no Content-Disposition header so the browser displays inline).
+    """
+    from fastapi.responses import Response as FastResponse
+
+    from lighterbird.core.storage import AttachmentStore
+
+    row = email_svc.db.execute_one(
+        "SELECT filename, mime_type, content_id, message_uuid "
+        "FROM email_attachments WHERE message_uuid = ? AND content_id = ?",
+        (message_uuid, content_id),
+    )
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail=f"CID attachment not found: {content_id[:40]}",
+        )
+
+    store = AttachmentStore()
+    try:
+        data = store.retrieve(row["message_uuid"], row["content_id"])
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=404,
+            detail=f"CID attachment data not found on disk: {content_id[:40]}",
+        )
+
+    mime = row["mime_type"] or "application/octet-stream"
+    return FastResponse(
+        content=data,
+        media_type=mime,
+        # No Content-Disposition — browser renders inline
+    )
+
+
 @router.post("/import-eml", status_code=201)
 def import_eml(data: dict, email_svc: EmailService = Depends(get_email_service)):
     """Import a .eml file as an email draft."""

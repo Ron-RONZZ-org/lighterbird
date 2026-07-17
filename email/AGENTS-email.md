@@ -19,7 +19,9 @@ Email module, forked from [A-lien](../../A-lien). Provides IMAP sync, SMTP send,
 - **Passwords in system keyring only** — no `pasvorto` column in the accounts table
 - **Messages use IMAP UID for dedup** — `imap_uid` is the stable remote identifier
 - **HTML body is stored alongside plaintext** — both are preserved for the frontend to decide rendering
-- **Attachments are metadata-only in DB** — file blobs are extracted on demand via IMAP FETCH
+- **Attachments are metadata in DB + blobs on disk** — file blobs are stored via ``AttachmentStore`` (keyed by message UUID + content ID). The ``email_attachments`` table tracks metadata.
+- **Inline images (``cid:``) are stored as attachments** — MIME parts with ``Content-ID`` headers are captured as attachments even without explicit filename/name. The frontend rewrites ``cid:`` URLs in HTML bodies to the CID resolution API route.
+- **export_eml reconstructs full MIME** — ``MessageService.export_eml()`` builds a proper multipart/alternative (or multipart/mixed) with html_body and attachments, not a plain-text-only reconstruction.
 - **Flag changes sync back to IMAP server via backlog queue** — read/star/trash state is pushed via backlog
 - **Concurrent sync uses ThreadPoolExecutor** — one thread per account folder
 - **CONDSTORE (RFC 4551) for flag pull** — server-side flag changes (starred on phone) are pulled on sync
