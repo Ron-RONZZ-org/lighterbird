@@ -2,11 +2,15 @@
 
 Registered paths:
 
-    email.draft          — List / recall email drafts
     journal.draft        — List / recall journal drafts
     todo.draft           — List / recall todo drafts
     calendar.draft       — List / recall calendar event drafts
     letter.draft         — List / recall letter drafts
+
+Note: ``!email draft`` is now handled in ``email.py`` (view subcommands)
+and ``email_send.py`` (``!email draft new``).  The legacy
+``!email draft recall`` has been removed — use the GUI REST endpoints
+for draft recall.
 """
 
 from __future__ import annotations
@@ -18,7 +22,6 @@ from lighterbird.server.command.errors import CommandValidationError
 from lighterbird.server.command.registry import command
 
 DOMAIN_MAP = {
-    "email": "email",
     "journal": "journal",
     "todo": "todo",
     "calendar": "calendar-event",
@@ -26,7 +29,6 @@ DOMAIN_MAP = {
 }
 
 DOMAIN_LABELS = {
-    "email": "Email",
     "journal": "Journal",
     "todo": "Todo",
     "calendar": "Calendar Event",
@@ -70,36 +72,6 @@ def _handle_draft_list(domain: str, remaining: list[str]) -> dict[str, Any]:
             "drafts": _format_drafts(drafts, domain_label),
         },
     }
-
-
-@command("email.draft.recall")
-def email_draft_recall(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email draft recall [<uuid>]
-
-    List saved email drafts or recall a specific draft by UUID.
-    When recalled, opens the compose form with pre-filled data.
-    """
-    if remaining:
-        uuid = remaining[0]
-        draft = get_draft(uuid)
-        if not draft:
-            raise CommandValidationError(f"Draft not found: {uuid}")
-        if draft.get("domain") != "email":
-            raise CommandValidationError(f"Draft {uuid} is not an email draft.")
-        return {
-            "type": "form-required",
-            "title": "Recall Draft: " + draft.get("title", "(untitled)"),
-            "data": {
-                "form": "email-send",
-                "initialData": {
-                    **draft.get("data", {}),
-                    "_returnType": "email-list",
-                    "_returnTitle": "Emails",
-                    "_returnIdKey": "persistent-email-list",
-                },
-            },
-        }
-    return _handle_draft_list("email", remaining)
 
 
 @command("journal.draft")

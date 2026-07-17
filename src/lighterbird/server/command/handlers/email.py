@@ -1,14 +1,17 @@
 """Command handlers for the ``!email`` domain.
 
 Registered paths:
-    - email.list
-    - email.read
+    - email.list              (generic list with --folder/--sort/--cursor)
+    - email.list.inbox        (view subcommand — presets folder=Inbox)
+    - email.list.all          (view subcommand — no folder filter)
+    - email.list.draft        (view subcommand — presets folder=Drafts)
+    - email.list.trash        (view subcommand — presets folder=Trash)
+    - email.list.outbox       (view subcommand — presets folder=Outbox)
+    - email.list.archive      (view subcommand — presets folder=Archive)
+    - email.list.junk         (view subcommand — presets folder=Junk)
+    - email.list.spam         (view subcommand — presets folder=Spam)
     - email.send
-    - email.reply
-    - email.forward
     - email.search
-    - email.trash
-    - email.archive
     - email.account.add
     - email.account.list
     - email.account.modify
@@ -21,8 +24,7 @@ Registered paths:
 
 from __future__ import annotations
 
-import base64
-import json
+from collections.abc import Callable
 from typing import Any
 
 from lightercore.permissions import PermissionLevel
@@ -36,7 +38,10 @@ from lighterbird.server.command.handlers.email_eml import (  # noqa: F401
 )
 
 # Side-effect imports to register handlers split into sub-modules
-from lighterbird.server.command.handlers.email_send import email_send  # noqa: F401
+from lighterbird.server.command.handlers.email_send import (  # noqa: F401
+    email_send,
+    email_draft_new,
+)
 from lighterbird.server.command.handlers.email_folder import (  # noqa: F401
     email_folder_root,
     email_folder_list,
@@ -45,7 +50,6 @@ from lighterbird.server.command.handlers.email_folder import (  # noqa: F401
     email_folder_move,
     email_folder_delete,
 )
-from lighterbird.core.storage import AttachmentStore
 from lighterbird.server.command.registry import command
 from lighterbird.server.deps import get_email_service
 
@@ -61,37 +65,37 @@ def email_root(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         "data": {
             "_summary": (
                 "Available !email commands:\n"
-                "  !email list              — List inbox messages\n"
-                "  !email read <uuid>       — Read a message\n"
-                "  !email send              — Send an email\n"
-                "  !email reply <uuid>      — Reply to a message\n"
-                "  !email reply-all <uuid>  — Reply-all to a message\n"
-                "  !email forward <uuid>    — Forward a message\n"
-                "  !email search            — Search messages\n"
-                "  !email trash             — View trash\n"
-                "  !email delete <uuid>     — Trash a message\n"
-                "  !email archive <uuid>    — Archive a message\n"
-                "  !email move <uuid> --folder NAME  — Move to specific folder\n"
-                "  !email folder list       — List IMAP folders\n"
-                "  !email account list      — List email accounts\n"
-                "  !email account add       — Add an email account\n"
-                "  !email account modify    — Modify an email account\n"
-                "  !email account delete    — Delete an email account\n"
-                "  !email signature list    — List account signatures\n"
-                "  !email signature add     — Add a named global signature\n"
-                "  !email signature modify  — Modify a signature by UUID\n"
-                "  !email signature delete  — Delete a signature by UUID\n"
-                "  !email signature default — Show/set default signature\n"
-                "  !email sieve list        — List Sieve scripts\n"
-                "  !email sieve add         — Add a Sieve script\n"
-                "  !email sieve modify      — Modify a Sieve script\n"
-                "  !email sieve delete      — Delete a Sieve script\n"
-                "  !email sieve activate    — Activate on an account\n"
-                "  !email sieve deactivate  — Deactivate on an account\n"
-                "  !email draft             — View drafts folder\n"
-                "  !email draft recall <uuid> — Recall a saved draft\n"
-                "  !email export eml <uuid> — Export message as .eml file\n"
-                "  !email import eml <path> — Import .eml file as draft"
+                "  !email list                    — List messages (generic)\n"
+                "  !email list inbox              — View inbox\n"
+                "  !email list all                — View all (non-trash) folders\n"
+                "  !email list draft              — View drafts\n"
+                "  !email list trash              — View trash\n"
+                "  !email list outbox             — View outbox\n"
+                "  !email list archive            — View archive\n"
+                "  !email list junk               — View junk\n"
+                "  !email list spam               — View spam\n"
+                "  !email send                    — Send an email\n"
+                "  !email search                  — Search messages\n"
+                "  !email draft new               — Compose a new draft\n"
+                "  !email draft list              — List saved drafts\n"
+                "  !email folder list             — List IMAP folders\n"
+                "  !email account list            — List email accounts\n"
+                "  !email account add             — Add an email account\n"
+                "  !email account modify          — Modify an email account\n"
+                "  !email account delete          — Delete an email account\n"
+                "  !email signature list          — List account signatures\n"
+                "  !email signature add           — Add a named global signature\n"
+                "  !email signature modify        — Modify a signature by UUID\n"
+                "  !email signature delete        — Delete a signature by UUID\n"
+                "  !email signature default       — Show/set default signature\n"
+                "  !email sieve list              — List Sieve scripts\n"
+                "  !email sieve add               — Add a Sieve script\n"
+                "  !email sieve modify            — Modify a Sieve script\n"
+                "  !email sieve delete            — Delete a Sieve script\n"
+                "  !email sieve activate          — Activate on an account\n"
+                "  !email sieve deactivate        — Deactivate on an account\n"
+                "  !email export eml <uuid>       — Export message as .eml file\n"
+                "  !email import eml <path>       — Import .eml file as draft"
             ),
         },
     }
@@ -240,177 +244,65 @@ def email_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
     }
 
 
-@command("email.read", permission_level=PermissionLevel.READ)
-def email_read(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email read <uuid>"""
-    if not remaining:
-        raise CommandValidationError("Missing message UUID.", "Usage: !email read <uuid>")
-    uuid = remaining[0]
-    svc: EmailService = get_email_service()
-    msg = svc.get_message(uuid)
-    if not msg:
-        raise CommandValidationError(f"Message not found: {uuid[:8]}")
-    return {"type": "email", "title": msg.get("subject", "(no subject)"), "data": dict(msg)}
+# ── View subcommand factory ────────────────────────────────────────────────
 
 
-@command("email.reply", interactive=True, form_type="email-send")
-def email_reply(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email reply <uuid> [--all]
+def _build_view_handler(folder: str | None = None, **response_flags: Any) -> Callable:
+    """Factory for ``!email list <view>`` subcommand handlers.
 
-    Opens the compose form pre-populated as a reply to the given message.
-    Use ``--all`` to Reply-All (include all original recipients).
+    Each generated handler delegates to :func:`email_list` with the
+    *folder* preset as a flag, and optionally merges extra response
+    flags (e.g. ``_isTrashView``, ``_isDraftView``) into the result
+    data so the frontend can identify the view type.
+
+    Args:
+        folder: IMAP folder name to filter by, or ``None`` for no filter.
+        **response_flags: Extra keys injected into ``result["data"]``.
+
+    Returns:
+        A handler function compatible with ``@command()``.
     """
-    if not remaining:
-        raise CommandValidationError(
-            "Missing message UUID.",
-            "Usage: !email reply <uuid> [--all]",
-        )
-    uuid = remaining[0]
-    svc: EmailService = get_email_service()
-    msg = svc.get_message(uuid)
-    if not msg:
-        raise CommandValidationError(f"Message not found: {uuid[:8]}")
+    def handler(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+        effective = dict(flags)
+        if folder is not None:
+            effective["folder"] = folder
+        result = email_list(remaining, effective)
+        if response_flags:
+            result["data"] = {**result.get("data", {}), **response_flags}
+        return result
 
-    reply_all = "all" in flags
-
-    # Detect if message was sent by the user (e.g. in Sent folder).
-    # If so, reply to original recipients instead of self.
-    from_addr = (msg.get("from_addr") or "").lower()
-    account_email = (msg.get("account_email") or "").lower()
-    is_from_self = from_addr and account_email and account_email in from_addr
-
-    orig_to = (json.loads(msg.get("to_recipients", "[]"))
-               if isinstance(msg.get("to_recipients"), str)
-               else (msg.get("to_recipients") or []))
-    orig_cc = (json.loads(msg.get("cc_recipients", "[]"))
-               if isinstance(msg.get("cc_recipients"), str)
-               else (msg.get("cc_recipients") or []))
-
-    if is_from_self:
-        # Message sent by user — reply to original To recipients
-        to = ", ".join(orig_to) if orig_to else ""
-    else:
-        to = msg.get("from_addr", "")
-
-    cc = ""
-    if reply_all:
-        if is_from_self:
-            # Reply-all to self — include CC recipients alongside To
-            cc_list = [r.strip() for r in orig_cc if r.strip().lower() != account_email]
-            cc = ", ".join(cc_list) if cc_list else ""
-        else:
-            # Reply-all from someone else — include To + CC (excluding self)
-            to_list = [to]
-            for r in orig_to:
-                if r.strip().lower() != account_email:
-                    to_list.append(r.strip())
-            to = ", ".join(to_list)
-            cc_list = [r.strip() for r in orig_cc if r.strip().lower() != account_email]
-            cc = ", ".join(cc_list) if cc_list else ""
-
-    subject = msg.get("subject", "")
-    if not subject.lower().startswith("re:"):
-        subject = f"Re: {subject}"
-
-    body = msg.get("body", "") or ""
-    # Truncate quoted body to prevent context overflow from large emails
-    _MAX_QUOTE_LINES = 100
-    _MAX_QUOTE_CHARS = 10_000
-    lines = body.split("\n")
-    if len(lines) > _MAX_QUOTE_LINES or len(body) > _MAX_QUOTE_CHARS:
-        truncated = lines[:_MAX_QUOTE_LINES]
-        total_skipped = len(lines) - len(truncated)
-        truncated.append(f"[...{total_skipped} more lines, {len(body) - sum(len(l) + 1 for l in truncated)} more chars...]")
-        lines = truncated
-    quoted = "\n".join(f"> {line}" for line in lines)
-
-    initial_data: dict[str, Any] = {
-        "to": to,
-        "subject": subject,
-        "body": f"\n\n{quoted}",
-        "account": msg.get("account_email", ""),
-    }
-    if cc:
-        initial_data["cc"] = cc
-
-    return {
-        "type": "form-required",
-        "title": "Reply",
-        "data": {
-            "form": "email-send",
-            "initialData": initial_data,
-        },
-    }
+    return handler
 
 
-@command("email.forward", interactive=True, form_type="email-send")
-def email_forward(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email forward <uuid>
+_VIEW_SPECS: list[tuple[str, str | None, dict[str, Any]]] = [
+    ("inbox",   "Inbox",   {}),
+    ("all",     None,      {}),
+    ("draft",   "Drafts",  {"_isDraftView": True, "idKey": "email-draft-list"}),
+    ("trash",   "Trash",   {"_isTrashView": True, "idKey": "email-trash-list"}),
+    ("outbox",  "Outbox",  {"_isOutboxView": True}),
+    ("archive", "Archive", {}),
+    ("junk",    "Junk",    {}),
+    ("spam",    "Spam",    {}),
+]
 
-    Opens the compose form pre-populated as a forward of the given message.
+for _name, _folder, _extra in _VIEW_SPECS:
+    _fn = _build_view_handler(_folder, **_extra)
+    _fn.__name__ = f"email_list_{_name}"
+    command(f"email.list.{_name}")(_fn)
+
+
+# ── Draft list alias ──────────────────────────────────────────────────────
+
+
+@command("email.draft.list", permission_level=PermissionLevel.READ)
+def email_draft_list(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
+    """!email draft list
+
+    Show messages in the Drafts folder.  Delegates to :func:`email_list`
+    with folder preset — same as ``!email list draft`` but under the
+    ``!email draft`` group.
     """
-    if not remaining:
-        raise CommandValidationError(
-            "Missing message UUID.",
-            "Usage: !email forward <uuid>",
-        )
-    uuid = remaining[0]
-    svc: EmailService = get_email_service()
-    msg = svc.get_message(uuid)
-    if not msg:
-        raise CommandValidationError(f"Message not found: {uuid[:8]}")
-
-    subject = msg.get("subject", "")
-    if not subject.lower().startswith("fwd:"):
-        subject = f"Fwd: {subject}"
-
-    body = msg.get("body", "") or ""
-    # Truncate forwarded body to prevent context overflow from large emails
-    _MAX_FWD_LINES = 100
-    _MAX_FWD_CHARS = 10_000
-    lines = body.split("\n")
-    if len(lines) > _MAX_FWD_LINES or len(body) > _MAX_FWD_CHARS:
-        truncated = lines[:_MAX_FWD_LINES]
-        total_skipped = len(lines) - len(truncated)
-        truncated.append(f"[...{total_skipped} more lines, {len(body) - sum(len(l) + 1 for l in truncated)} more chars...]")
-        lines = truncated
-    truncated_body = "\n".join(lines)
-    header = f"--- Forwarded message ---\nFrom: {msg.get('from_addr', '')}\nSubject: {msg.get('subject', '')}\nDate: {msg.get('received_at', '')}\n\n"
-    forwarded = f"{header}{truncated_body}"
-
-    initial_data: dict[str, Any] = {
-        "subject": subject,
-        "body": f"\n\n{forwarded}",
-        "account": msg.get("account_email", ""),
-    }
-
-    # Include original attachments in the forward compose form
-    store = AttachmentStore()
-    attachment_rows = list(svc.db.execute(
-        "SELECT filename, content_id FROM email_attachments WHERE message_uuid = ?",
-        (uuid,),
-    ))
-    if attachment_rows:
-        files = []
-        for row in attachment_rows:
-            try:
-                raw = store.retrieve(uuid, row["content_id"])
-                data_b64 = base64.b64encode(raw).decode("ascii")
-                files.append({"name": row["filename"], "data": data_b64})
-            except (FileNotFoundError, OSError):
-                logger.warning("Missing attachment %s for message %s", row["content_id"][:12], uuid[:8])
-                continue
-        if files:
-            initial_data["files"] = files
-
-    return {
-        "type": "form-required",
-        "title": "Forward",
-        "data": {
-            "form": "email-send",
-            "initialData": initial_data,
-        },
-    }
+    return _build_view_handler("Drafts", _isDraftView=True, idKey="email-draft-list")(remaining, flags)
 
 
 def _build_search_filters(flags: dict[str, str],
@@ -547,116 +439,6 @@ def email_search(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
             "filters": frontend_filters,
             "query": query,
         },
-    }
-
-
-@command("email.delete",
-          flags=[
-              {"name": "hard", "type": "bool",
-               "help": "Permanently delete from IMAP server and local DB"},
-          ])
-def email_delete(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email delete <uuid> [--hard]
-
-    Default (soft): move to Trash folder on IMAP server.
-    With ``--hard``: permanently remove from IMAP server and local DB.
-    """
-    if not remaining:
-        raise CommandValidationError(
-            "Missing message UUID.",
-            "Usage: !email delete <uuid> [--hard]",
-        )
-    svc: EmailService = get_email_service()
-    uuid = remaining[0]
-    if "hard" in flags:
-        result = svc.msg_ops.hard_delete_message(uuid)
-        return {
-            "type": "status",
-            "title": "Permanently Deleted",
-            "data": {
-                "uuid": uuid[:8],
-                "count": result["count"],
-                "queued": result["queued"],
-            },
-        }
-    svc.trash_message(uuid)
-    return {"type": "status", "title": "Trashed", "data": {"uuid": uuid[:8]}}
-
-
-@command("email.archive")
-def email_archive(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email archive <uuid> [--folder NAME]
-
-    Move a message to the Archive folder (default: "Archive").
-    Use ``--folder`` to specify a different destination folder.
-    """
-    if not remaining:
-        raise CommandValidationError("Missing message UUID.", "Usage: !email archive <uuid>")
-    svc: EmailService = get_email_service()
-    folder = flags.get("folder", "Archive")
-    svc.move_message(remaining[0], folder)
-    return {"type": "status", "title": "Archived", "data": {"uuid": remaining[0][:8], "folder": folder}}
-
-
-@command("email.trash",
-          permission_level=PermissionLevel.READ)
-def email_trash(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email trash
-
-    Show messages in Trash folders.  Reuses the email list pane with
-    only Trash folders selected.  No soft-delete on selection (messages
-    are already in trash); only ``Ctrl+Delete`` / ``--hard`` for
-    permanent deletion.
-    """
-    # Delegate to email_list with folder=Trash, adding a flag so the
-    # frontend can identify this as a trash-only view.
-    result = email_list(remaining, {"folder": "Trash", **flags})
-    result["data"] = dict(result.get("data", {}))
-    result["data"]["_isTrashView"] = True
-    result["idKey"] = "email-trash-list"
-    return result
-
-
-@command("email.draft",
-          permission_level=PermissionLevel.READ)
-def email_draft_view(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email draft
-
-    Show messages in the Drafts folder.  Reuses the email list pane with
-    only Drafts folders selected.  Messages have the ``\\Draft`` flag on
-    the IMAP server.
-    """
-    result = email_list(remaining, {"folder": "Drafts", **flags})
-    result["data"] = dict(result.get("data", {}))
-    result["data"]["_isDraftView"] = True
-    result["idKey"] = "email-draft-list"
-    return result
-
-
-@command("email.move")
-def email_move(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
-    """!email move <uuid> --folder NAME
-
-    Move a message to a specific folder.
-    Use ``!email folders`` to see available folders.
-    """
-    if not remaining:
-        raise CommandValidationError(
-            "Missing message UUID.",
-            "Usage: !email move <uuid> --folder NAME",
-        )
-    folder = flags.get("folder", "")
-    if not folder:
-        raise CommandValidationError(
-            "Missing --folder flag.",
-            "Usage: !email move <uuid> --folder NAME",
-        )
-    svc: EmailService = get_email_service()
-    svc.move_message(remaining[0], folder)
-    return {
-        "type": "status",
-        "title": "Moved",
-        "data": {"uuid": remaining[0][:8], "folder": folder},
     }
 
 

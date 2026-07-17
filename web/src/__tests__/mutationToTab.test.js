@@ -87,16 +87,14 @@ describe("isMutationCommand", () => {
     expect(cfg.isDelete).toBe(false);
   });
 
-  it("returns config for email delete", () => {
+  it("returns null for removed email delete (UUID commands removed)", () => {
     const cfg = isMutationCommand(["email", "delete"]);
-    expect(cfg).not.toBeNull();
-    expect(cfg.isDelete).toBe(true);
+    expect(cfg).toBeNull();
   });
 
-  it("returns config for email archive", () => {
+  it("returns null for removed email archive (UUID commands removed)", () => {
     const cfg = isMutationCommand(["email", "archive"]);
-    expect(cfg).not.toBeNull();
-    expect(cfg.isDelete).toBe(true);
+    expect(cfg).toBeNull();
   });
 
   it("returns config for email sieve add (3 tokens)", () => {
