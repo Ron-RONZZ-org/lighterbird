@@ -41,15 +41,8 @@
     // Write to the global dirtyFormStore directly — this is called
     // synchronously from the child form's $effect, which correctly tracks
     // the child's dirty $derived as a dependency.  We bypass FormTab's
-    // own $effect for dirty-tracking (which would need formDirty as a
-    // reactive dependency) because:
-    //   1. Module-level $state writes (dirtyFormStore.setDirty) inside
-    //      a $effect body contribute to Svelte 5's flush depth and can
-    //      cascade past the 1000-iteration guard when formDirty changes
-    //      rapidly (keystrokes).
-    //   2. Writing directly from handleDirtyChange decouples dirty-state
-    //      propagation from FormTab's own reactive graph — the child's
-    //      $effect drives the update, not a chain through FormTab's $state.
+    // own $effect for dirty-tracking, decoupling dirty-state propagation
+    // from FormTab's reactive graph entirely.
     const tabId = tabStore.active?.id;
     if (tabId) {
       dirtyFormStore.setDirty(tabId, dirty);
@@ -75,18 +68,16 @@
       // dirty-tracking directly).
       if (!_registeredTabId) {
         _registeredTabId = tabId;
-        queueMicrotask(() => {
-          saveCallbackStore.setCallback(tabId, () => {
-            // Click the primary submit/save button in the form
-            const formEl = document.querySelector('.form-tab form');
-            if (formEl) {
-              const btn = formEl.querySelector('button[type="submit"]');
-              if (btn) { btn.click(); return; }
-              // Fallback: look for common save/submit button classes
-              const fallback = formEl.querySelector('.btn-primary, .btn-save, [class*="submit"]');
-              if (fallback) fallback.click();
-            }
-          });
+        saveCallbackStore.setCallback(tabId, () => {
+          // Click the primary submit/save button in the form
+          const formEl = document.querySelector('.form-tab form');
+          if (formEl) {
+            const btn = formEl.querySelector('button[type="submit"]');
+            if (btn) { btn.click(); return; }
+            // Fallback: look for common save/submit button classes
+            const fallback = formEl.querySelector('.btn-primary, .btn-save, [class*="submit"]');
+            if (fallback) fallback.click();
+          }
         });
       }
     }
