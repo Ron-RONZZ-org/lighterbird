@@ -42,6 +42,7 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 - `GET /api/v1/email/sync/progress/{task_id}` — poll sync progress (`status`, `current_folder`, `total_folders`, `folder_name`, `total_messages`, `new_messages`, `errors`)
 - `GET /api/v1/email/sync/status` — per-account sync state and whether startup sync is complete (polled by frontend every 10s to show ``SyncStatusBar``)
 - `POST /api/v1/email/send` — send email (body: to, subject, body, cc, bcc, attachments, signature, signature_format, in_reply_to, save_as_sample)
+- `GET /api/v1/email/signatures` — list all signatures with account-default enrichment (used by ComposeEmail and StatusPopup)
 - `GET /api/v1/calendar/events` — list events (filter: date range, calendar)
 - `POST /api/v1/calendar/events` — create event
 - `GET /api/v1/contacts` — list/search contacts

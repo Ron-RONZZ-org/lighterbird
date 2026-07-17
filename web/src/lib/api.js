@@ -164,6 +164,8 @@ export const email = {
 
   getMessage: (uuid) => request("GET", `/email/messages/${uuid}`),
 
+  listSignatures: () => request("GET", "/email/signatures"),
+
   send: (data) => request("POST", "/email/send", data),
 
   markRead: (uuid, read = true) =>

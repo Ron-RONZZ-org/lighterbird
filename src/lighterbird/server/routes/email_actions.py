@@ -11,8 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 
 from lighterbird.email.service import EmailService
-from lighterbird.server.deps import get_email_service
 from lighterbird.core.paths import safe_resolve_path
+from lighterbird.server.deps import get_email_service
 from lighterbird.server.schemas import (
     BatchDeleteRequest,
     BatchMoveRequest,
@@ -266,4 +266,31 @@ def email_preview(req: EmailPreviewRequest):
         attachment_base_url="/api/v1/email/attachments/",
     )
     return EmailPreviewResponse(html=html)
+
+
+@router.get("/signatures")
+def list_signatures(email_svc: EmailService = Depends(get_email_service)):
+    """List all configured signatures with account-default enrichment.
+
+    Returns the same data as the ``!email signature list`` CLI command.
+    """
+    sigs = email_svc.signatures.list_signatures()
+
+    # Enrich each signature with account default info
+    accounts = email_svc.list_accounts()
+    account_defaults: dict[str, list[str]] = {}
+    for acct in accounts:
+        default_uuid = email_svc.signatures.get_account_default_uuid(acct["email"])
+        if default_uuid:
+            account_defaults.setdefault(default_uuid, []).append(acct["email"])
+
+    enriched = []
+    for sig in sigs:
+        entry = dict(sig)
+        default_for = account_defaults.get(sig["uuid"], [])
+        if default_for:
+            entry["default_for"] = default_for
+        enriched.append(entry)
+
+    return {"signatures": enriched}
 
