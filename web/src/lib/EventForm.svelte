@@ -1,6 +1,7 @@
 <script>
   /** Event creation form — used when !calendar event add is typed interactively. */
 
+  import { onMount } from "svelte";
   import { calendar as calendarApi, drafts as draftsApi } from "./api.js";
 
   let { initialData = {}, onsubmit, onDirtyChange = () => {} } = $props();
@@ -60,7 +61,7 @@
   );
   $effect(() => { onDirtyChange(dirty); });
 
-  $effect(() => {
+  onMount(() => {
     calendarApi.listCalendars().then((data) => {
       calendars = data.calendars || [];
       if (calendars.length > 0 && !calendarUuid) {

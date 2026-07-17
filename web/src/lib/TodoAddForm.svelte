@@ -1,6 +1,7 @@
 <script>
   /** Todo creation form — supports templates, parent/dependency, file attachment. */
 
+  import { onMount } from "svelte";
   import { todo as todoApi, drafts as draftsApi } from "./api.js";
   import TemplateFieldInput from "./TemplateFieldInput.svelte";
   import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
@@ -98,7 +99,7 @@
   let showParentSuggestions = $state(false);
 
   // Load templates on mount
-  $effect(() => {
+  onMount(() => {
     loadTemplates();
   });
 

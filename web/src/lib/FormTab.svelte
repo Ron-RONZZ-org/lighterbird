@@ -11,7 +11,7 @@
    *   Level 3 — Sieve editor (dedicated): SieveEditorForm
    */
 
-  import { onDestroy } from "svelte";
+  import { onDestroy, untrack } from "svelte";
   import { tabStore } from "./tabStore.svelte.js";
   import { dirtyFormStore } from "./dirtyFormStore.svelte.js";
   import { saveCallbackStore } from "./saveCallbackStore.svelte.js";
@@ -25,7 +25,7 @@
   import SieveEditorForm from "./SieveEditorForm.svelte";
   import LetterForm from "./LetterForm.svelte";
 
-  let { data = {} } = $props();
+  let { data = {}, tabId } = $props();
   let formType = $derived(data?.form || "");
   let initialData = $derived(data?.initialData || {});
   let commandPath = $derived(data?.commandPath || _inferCommandPath(formType));
@@ -40,27 +40,28 @@
     formDirty = dirty;
   }
 
-  // Track the tab ID we registered with — used by onDestroy for cleanup.
-  let _registeredTabId = null;
-
   // Register a default save callback that clicks the form's submit button.
   // Individual forms (ComposeEmail, LetterForm) register their own save-draft
-  // callback which overrides this, so the UnsavedChangesDialog always works.
+  // callback (via onMount) which overrides this, so the UnsavedChangesDialog
+  // always works regardless of form type.
   //
   // Design constraints (Svelte 5 reactive system):
   //   1. formDirty MUST be read synchronously in the $effect body so Svelte 5
   //      tracks it as a dependency (queueMicrotask reads are invisible).
   //   2. Module-level $state writes (dirtyFormStore, saveCallbackStore) MUST
   //      be deferred via queueMicrotask to avoid contributing to the mount-time
-  //      flush depth, which can exceed Svelte 5's 1000-iteration guard.
+  //      flush depth.
   //   3. The $effect return (cleanup) MUST NOT write to module-level $state,
   //      because cleanup runs synchronously during $effect re-runs — if formDirty
   //      changes frequently (every keystroke), the synchronous clear+re-register
   //      cycle accumulates flush iterations.
   //   4. Therefore, cleanup is handled by onDestroy (runs once on teardown),
   //      not by the $effect return.
+  //   5. tabId is read via untrack(() => tabId) so it does not establish a
+  //      reactive dependency — the effect re-runs only when formDirty changes.
+  let _registeredTabId = null;
   $effect(() => {
-    const tabId = tabStore.active?.id;
+    const id = untrack(() => tabId);
     // Read formDirty synchronously to establish it as a reactive dependency.
     // Svelte 5's $effect only tracks signals accessed during the synchronous
     // execution of the effect function.  Reading inside queueMicrotask below
@@ -68,13 +69,13 @@
     // when the user makes a form dirty — the entire unsaved-changes guard
     // would silently break for every form type.
     const dirty = formDirty;
-    if (tabId && tabStore.active?.type === "form") {
+    if (id) {
       // Register save callback once on mount (skip on re-runs from formDirty
       // changes — the callback identity hasn't changed).
       if (!_registeredTabId) {
-        _registeredTabId = tabId;
+        _registeredTabId = id;
         queueMicrotask(() => {
-          saveCallbackStore.setCallback(tabId, () => {
+          saveCallbackStore.setCallback(id, () => {
             // Click the primary submit/save button in the form
             const formEl = document.querySelector('.form-tab form');
             if (formEl) {
@@ -89,7 +90,7 @@
       }
       // Sync dirty state (deferred — runs every time formDirty changes)
       queueMicrotask(() => {
-        dirtyFormStore.setDirty(tabId, dirty);
+        dirtyFormStore.setDirty(id, dirty);
       });
     }
     // NO return cleanup — module-level $state writes in the cleanup would
@@ -201,9 +202,8 @@
       const returnType = initialData?._returnType;
       const returnTitle = initialData?._returnTitle;
 
-      // Close form tab
-      const activeId = tabStore.active?.id;
-      if (activeId) tabStore.close(activeId);
+      // Close form tab using tabId prop (same as tabStore.active.id at submit time)
+      if (tabId) tabStore.close(tabId);
 
       // ── After letter send, open render page for print/PDF download ──
       // (must happen before early returns below and before result tab open)
@@ -242,13 +242,12 @@
   /** Cancel / close the form tab. Warns if there are unsaved changes
    *  via TabView's pendingCloseTab/UnsavedChangesDialog flow. */
   function handleCancel() {
-    const activeId = tabStore.active?.id;
-    if (!activeId) return;
+    if (!tabId) return;
     // Always dispatch so TabView's unified handleCloseTab manages the close.
     // When formDirty is false, it closes immediately; when true, it shows
     // the UnsavedChangesDialog.  This avoids duplicating the close logic
     // which can break if tabStore state shifts between active?.id and close().
-    window.dispatchEvent(new CustomEvent("request-close-tab", { detail: { tabId: activeId } }));
+    window.dispatchEvent(new CustomEvent("request-close-tab", { detail: { tabId } }));
   }
 
   /** Human-readable title for the form type. */
@@ -280,7 +279,7 @@
   {/if}
 
   {#if formType === "email-send"}
-    <ComposeEmail {initialData} onsubmit={handleFormSubmit} onDirtyChange={handleDirtyChange} />
+    <ComposeEmail {initialData} {tabId} onsubmit={handleFormSubmit} onDirtyChange={handleDirtyChange} />
   {:else if formType === "journal-write"}
     <JournalWrite {initialData} onsubmit={handleFormSubmit} onDirtyChange={handleDirtyChange} />
   {:else if formType === "todo-add"}
@@ -290,9 +289,9 @@
   {:else if formType === "email-sieve-add" || formType === "email-sieve-modify"}
     <SieveEditorForm data={formType === "email-sieve-modify" ? { script: initialData } : {}} />
   {:else if formType === "letter-add" || formType === "letter-send"}
-    <LetterForm {initialData} formType={formType === "letter-send" ? "send" : "add"} onsubmit={handleFormSubmit} onDirtyChange={handleDirtyChange} />
+    <LetterForm {initialData} {tabId} formType={formType === "letter-send" ? "send" : "add"} onsubmit={handleFormSubmit} onDirtyChange={handleDirtyChange} />
   {:else if commandPath.length > 0}
-    <DynamicForm {commandPath} {initialData} onsubmit={handleFormSubmit} onDirtyChange={handleDirtyChange} />
+    <DynamicForm {commandPath} {initialData} {tabId} onsubmit={handleFormSubmit} onDirtyChange={handleDirtyChange} />
   {:else}
     <p class="unknown-form">Unknown form type: {formType}</p>
   {/if}
