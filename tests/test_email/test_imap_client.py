@@ -819,6 +819,125 @@ class TestImapQuoteFolder:
         assert _imap_quote_folder('Folder\\Name') == '"Folder\\\\Name"'
 
 
+# ── fetch_message_body ────────────────────────────────────────────────────────
+
+
+class TestFetchMessageBody:
+    """Test fetch_message_body UUID fix — attachments stored under real msg UUID."""
+
+    @patch("lighterbird.email.imap.client.AttachmentStore")
+    @patch("lighterbird.email.imap.client.parse_email_message")
+    def test_attachments_stored_under_real_uuid(
+        self, mock_parse, mock_attach_store,
+    ):
+        """Attachments use the existing DB message UUID, not the freshly generated one."""
+        import email.mime.text
+        import email.mime.multipart
+
+        client = IMAPClient("imap.example.com")
+        mock_conn = MagicMock()
+        client._conn = mock_conn
+        mock_conn.select.return_value = ("OK", [])
+
+        # SIMULATE a multipart message with an inline image embedded
+        msg = email.mime.multipart.MIMEMultipart("related")
+        msg["Subject"] = "Inline IMG"
+        msg["From"] = "a@b.com"
+        msg["To"] = "c@d.com"
+        msg.attach(email.mime.text.MIMEText("Body", "plain", "utf-8"))
+        from email.mime.base import MIMEBase
+        inline = MIMEBase("image", "png")
+        inline.set_payload(b"\x89PNG mock")
+        inline.add_header("Content-ID", "<logo@local>")
+        inline.add_header("Content-Disposition", "inline")
+        msg.attach(inline)
+
+        # The IMAP FETCH returns the raw bytes of this message
+        raw_bytes = msg.as_bytes()
+        mock_conn.uid.return_value = ("OK", [(b"UID 42", raw_bytes)])
+
+        # parse_email_message returns data with a FRESH UUID that differs
+        # from the existing DB row's UUID (simulating the bug scenario).
+        fresh_uuid = "fresh-uuid-999"
+        parsed_data = {
+            "uuid": fresh_uuid,
+            "body": "Body",
+            "html_body": "",
+            "body_fetched": 0,
+            "subject": "Inline IMG",
+            "from_addr": "a@b.com",
+            "account_email": "user@example.com",
+            "folder_name": "INBOX",
+            "imap_uid": 42,
+            "_attachments_meta": [
+                {"filename": "logo@local", "mime_type": "image/png",
+                 "size": 9, "content_id": "logo@local"},
+            ],
+            "_attachments_data": [
+                {"content_id": "logo@local", "data": b"\x89PNG mock"},
+            ],
+        }
+        mock_parse.return_value = parsed_data
+
+        # The DB has an EXISTING message with a different UUID
+        real_uuid = "real-uuid-001"
+        mock_db = MagicMock()
+        mock_db.db.execute_one.return_value = {"uuid": real_uuid}
+        mock_db.db.execute.return_value = []
+
+        client.fetch_message_body("user@example.com", "INBOX", 42, mock_db)
+
+        # Verify the UPDATE used account+folder+uid (no UUID involvement)
+        update_call = mock_db.db.execute.call_args_list[0]
+        assert "UPDATE messages SET body" in str(update_call)
+
+        # Verify AttachmentStore.store() was called with the REAL UUID,
+        # not the fresh one — this was the bug.
+        mock_store_instance = mock_attach_store.return_value
+        store_call = mock_store_instance.store.call_args
+        assert store_call is not None, "AttachmentStore.store was never called"
+        stored_msg_uuid, stored_content_id, stored_data = store_call[0]
+        assert stored_msg_uuid == real_uuid, \
+            f"Expected real UUID {real_uuid}, got {stored_msg_uuid}"
+        assert stored_content_id == "logo@local"
+
+        # Verify email_attachments INSERT uses real UUID as message_uuid
+        insert_call = mock_db.db.execute.call_args_list[1]
+        insert_sql = insert_call[0][0]
+        insert_params = insert_call[0][1]
+        assert "INSERT OR IGNORE INTO email_attachments" in insert_sql
+        assert insert_params[1] == real_uuid, \
+            f"Expected message_uuid {real_uuid}, got {insert_params[1]}"
+
+    @patch("lighterbird.email.imap.client.AttachmentStore")
+    @patch("lighterbird.email.imap.client.parse_email_message")
+    def test_no_attachments_does_not_call_store(
+        self, mock_parse, mock_attach_store,
+    ):
+        """fetch_message_body without attachments does not call AttachmentStore."""
+        client = IMAPClient("imap.example.com")
+        mock_conn = MagicMock()
+        client._conn = mock_conn
+        mock_conn.select.return_value = ("OK", [])
+
+        raw_bytes = b"Subject: Test\r\n\r\nPlain text only"
+        mock_conn.uid.return_value = ("OK", [(b"UID 1", raw_bytes)])
+
+        mock_parse.return_value = {
+            "uuid": "fresh",
+            "body": "Plain text only",
+            "html_body": "",
+            "body_fetched": 0,
+        }
+        mock_db = MagicMock()
+        mock_db.db.execute_one.return_value = {"uuid": "real-uuid"}
+
+        client.fetch_message_body("user@example.com", "INBOX", 1, mock_db)
+
+        mock_store_instance = mock_attach_store.return_value
+        assert mock_store_instance.store.call_count == 0
+
+
 # ── IMAPClient.search_remote ──────────────────────────────────────────────────
 
 
