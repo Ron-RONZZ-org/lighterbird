@@ -4,6 +4,7 @@
   import { email as emailApi } from "./api.js";
   import { registerShortcuts } from "./keyboardShortcuts.svelte.js";
   import { openPrintWindow } from "./listTabShared.svelte.js";
+  import { resolveCidUrls } from "./emailCidResolver.js";
   import EmailHeaders from "./EmailHeaders.svelte";
   import EmailAttachmentBar from "./EmailAttachmentBar.svelte";
   import EmailConversationSidebar from "./EmailConversationSidebar.svelte";
@@ -64,19 +65,7 @@
    */
   let htmlContent = $derived.by(() => {
     if (!hasHtml) return "";
-    let h = msg.html_body;
-    if (msg.uuid) {
-      // Rewrite src="cid:..." -> src="/api/v1/email/messages/{uuid}/cid/..."
-      h = h.replace(
-        /src=(["'])(?:cid:)([^"']+)\1/gi,
-        (_, quote, cid) => `src=${quote}/api/v1/email/messages/${msg.uuid}/cid/${cid}${quote}`,
-      );
-      // Also handle src=cid:... without quotes
-      h = h.replace(
-        /\bsrc=(?:cid:)(\S+?)(?:\s|>)/gi,
-        (_, cid) => `src="/api/v1/email/messages/${msg.uuid}/cid/${cid}" `,
-      );
-    }
+    let h = resolveCidUrls(msg.html_body, msg.uuid);
     if (!/<\s*html\b/i.test(h)) {
       h = `<html><head><meta charset="utf-8"></head><body>${h}</body></html>`;
     }
