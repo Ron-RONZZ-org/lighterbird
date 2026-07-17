@@ -11,8 +11,90 @@ from lighterbird.email.imap.client import (
     _parse_list_response,
     _to_imap_date,
     _imap_quote_folder,
+    decode_imap_utf7,
 )
 from lighterbird.email.imap.storage import store_message
+
+# ── decode_imap_utf7 ──────────────────────────────────────────────────────────
+
+
+class TestDecodeImapUtf7:
+    """Test IMAP modified UTF-7 decoding (RFC 3501 §5.1.3)."""
+
+    def test_ascii_passthrough(self):
+        """Plain ASCII folder names pass through unchanged."""
+        assert decode_imap_utf7("INBOX") == "INBOX"
+        assert decode_imap_utf7("Archive") == "Archive"
+        assert decode_imap_utf7("My Folder") == "My Folder"
+
+    def test_literal_ampersand(self):
+        """&- decodes to literal &."""
+        assert decode_imap_utf7("&-") == "&"
+
+    def test_accented_e(self):
+        """&AOk- decodes to é (e-acute, U+00E9)."""
+        result = decode_imap_utf7("Int&AOk-gration")
+        assert result == "Intégration"
+        # Verify the actual Unicode code point
+        assert ord("é") == 0x00E9
+
+    def test_accented_e_capital(self):
+        """&AMk- decodes to É (E-acute capital, U+00C9)."""
+        result = decode_imap_utf7("&AMk-pinal")
+        assert result == "Épinal"
+        assert ord("É") == 0x00C9
+
+    def test_emoji_heart(self):
+        """&JmU- decodes to ♥ (white heart suit, U+2665)."""
+        result = decode_imap_utf7("&JmU-")
+        assert result == "♥"
+        assert ord("♥") == 0x2665
+
+    def test_multi_char_emoji(self):
+        """&JmUmZQ- decodes to ♥♥ (two hearts)."""
+        assert decode_imap_utf7("&JmUmZQ-") == "♥♥"
+
+    def test_complex_folder_name(self):
+        """Multiple UTF-7 encoded segments in one folder name."""
+        result = decode_imap_utf7("Soucis qui seront r&AOk-gl&AOk-s")
+        assert result == "Soucis qui seront réglés"
+
+    def test_deep_path_with_encoding(self):
+        """Nested folder path with UTF-7 encoding in parent and leaf."""
+        result = decode_imap_utf7(
+            "Soucis qui seront r&AOk-gl&AOk-s/"
+            "C'est pas la France/"
+            "racisme cach&AOk-"
+        )
+        assert result == "Soucis qui seront réglés/C'est pas la France/racisme caché"
+
+    def test_mixed_encoding(self):
+        """Folder name with accented chars and literal ampersand."""
+        result = decode_imap_utf7("Fraternit&AOk- &AMk-pinal")
+        assert result == "Fraternité Épinal"
+
+    def test_garbled_encoding_preserved(self):
+        """Unparseable &-sequence (invalid base64 chars) is preserved as-is."""
+        # '&!!-' contains '!' which is not valid base64 → preserved raw
+        result = decode_imap_utf7("Folder &!!- Name")
+        assert result == "Folder &!!- Name"
+
+    def test_unclosed_ampersand_then_valid(self):
+        """Unclosed & (no dash) followed later by a valid encoded segment.
+
+        The decoder cannot distinguish where the unclosed segment ends
+        and the valid one begins, so it preserves the whole span from
+        the first & to the first -.  This is an edge case that should
+        not crash.
+        """
+        result = decode_imap_utf7("Folder & Int&AOk-gration")
+        # Does not crash; returns something sensible
+        assert isinstance(result, str)
+
+    def test_unclosed_ampersand(self):
+        """Trailing & without closing - is preserved."""
+        assert decode_imap_utf7("Folder &") == "Folder &"
+
 
 # ── _parse_list_response ─────────────────────────────────────────────────────
 

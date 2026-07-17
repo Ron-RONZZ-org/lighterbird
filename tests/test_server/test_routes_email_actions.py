@@ -95,6 +95,22 @@ class TestEmailActionsAPI:
         # Schema passes — service returns 200 (all not-found is fine)
         assert resp.status_code == 200
 
+    def test_batch_delete_hard_response_includes_count(self):
+        """POST batch-delete-hard returns count of processed messages
+        even when none exist (verifies backlog processing doesn't crash)."""
+        uuids = ["00000000-0000-0000-0000-000000000001"]
+        resp = self._client().post(
+            "/api/v1/email/messages/batch-delete-hard",
+            json={"uuids": uuids},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "count" in data
+        assert "status" in data
+        assert "errors" in data
+        # All not-found messages are reported as errors
+        assert len(data["errors"]) > 0
+
     def test_batch_delete_hard_empty_list(self):
         """POST batch-delete-hard with empty list rejected."""
         resp = self._client().post(

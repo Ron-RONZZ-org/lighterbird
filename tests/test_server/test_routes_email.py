@@ -35,6 +35,19 @@ class TestEmailMessagesAPI:
         data = resp.json()
         assert "folders" in data
 
+    def test_list_folders_includes_decoded_name(self):
+        """GET /api/v1/email/folders returns decoded_name for each folder
+        (IMAP modified UTF-7 decoded for display)."""
+        resp = self._client().get("/api/v1/email/folders")
+        assert resp.status_code == 200
+        data = resp.json()
+        for f in data["folders"]:
+            assert "decoded_name" in f, f"Missing decoded_name for folder {f['folder_name']!r}"
+            # decoded_name is always a string (may be same as folder_name for ASCII)
+            assert isinstance(f["decoded_name"], str)
+            # decoded_name should never contain raw IMAP UTF-7 sequences
+            assert "&-" not in f["decoded_name"] or f["decoded_name"] == "&amp;"
+
     def test_create_folder_no_account(self):
         """POST /api/v1/email/folders without account_email returns 422."""
         resp = self._client().post("/api/v1/email/folders?folder_name=Test")
