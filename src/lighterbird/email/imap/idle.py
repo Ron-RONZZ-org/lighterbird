@@ -3,11 +3,24 @@
 Provides per-account IDLE threads that monitor for new messages and
 flag changes.  Calls back into the main worker to trigger incremental
 syncs.
+
+Usage::
+
+    idle_mgr = get_imap_idle_manager()
+    idle_mgr.start_for_account(
+        account_email="user@example.com",
+        host="imap.example.com", port=993, use_ssl=True,
+        username="user", password="...",
+        on_notification=my_callback,
+    )
+    ...
+    idle_mgr.stop_all()
 """
 
 from __future__ import annotations
 
 import logging
+import select
 import threading
 import time
 from datetime import UTC, datetime
@@ -23,13 +36,16 @@ _BASE_RETRY_DELAY = 30  # seconds
 _MAX_RETRY_DELAY = 300  # 5 minutes
 _MAX_RECONNECT_ATTEMPTS = 10
 
+# How often to check for stop event while in IDLE (seconds)
+_IDLE_POLL_INTERVAL = 30.0
+
 
 class IMAPIdleThread:
     """Single-account IDLE thread.
 
-    Connects to the IMAP server, SELECTs INBOX, and enters IDLE loop.
-    On server push notifications (EXISTS, FETCH FLAGS), calls the
-    callback.  Handles reconnection with exponential backoff.
+    Connects to the IMAP server, SELECTs INBOX, and enters IDLE loop
+    using RFC 2177.  On server push notifications (EXISTS, FLAGS), calls
+    the callback.  Handles reconnection with exponential backoff.
 
     Args:
         account_email: Account to monitor.
@@ -141,10 +157,15 @@ class IMAPIdleThread:
             self._stop_event.wait(delay)
 
     def _run_idle_loop(self) -> None:
-        """Connect, SELECT INBOX, and handle IDLE events."""
+        """Proper RFC 2177 IDLE loop with push notifications.
+
+        Connects, SELECTs INBOX, then repeatedly enters/exits IDLE to
+        receive push notifications (EXISTS, FLAGS) from the server.
+        Uses ``select.select()`` to poll for data with a timeout so the
+        thread can react to stop events.
+        """
         from lighterbird.email.imap.client import IMAPClient
 
-        # Detect whether server supports IDLE
         client = IMAPClient(self._host, self._port, self._use_ssl)
         try:
             client.connect(self._username, self._password)
@@ -159,7 +180,7 @@ class IMAPIdleThread:
                 )
                 return
 
-            # SELECT INBOX
+            # SELECT INBOX (read-only)
             ok, _uidvalidity, _modseq = client.select_folder_ex(
                 "INBOX", readonly=True,
             )
@@ -168,40 +189,78 @@ class IMAPIdleThread:
                 return
 
             while not self._stop_event.is_set():
-                # Enter IDLE
-                typ, data = client.conn._simple_command("IDLE")
-                if typ != "OK":
-                    logger.warning("[idle] IDLE not OK for %s: %s",
-                                   self.account_email, typ)
-                    break
-
-                # Tell server we're waiting
-                client.conn.send(b"DONE\r\n")
-                client.conn.send(b"IDLE\r\n")  # Re-enter IDLE
-
-                self._last_heartbeat = time.monotonic()
-
-                # Check for stop signal (short poll)
-                if self._stop_event.wait(30):  # Check every 30s
-                    client.conn.send(b"DONE\r\n")
-                    break
-
-                # Poll for changes via NOOP
+                # ── Enter IDLE (RFC 2177) ──────────────────────────────
                 try:
-                    typ, data = client.conn.noop()
-                    if typ == "OK":
-                        # Check for EXISTS/RECENT in untagged responses
-                        response_text = str(data or [])
-                        if "EXISTS" in response_text:
+                    tag = client.conn._command("IDLE")
+                except Exception:
+                    logger.warning("[idle] Failed to enter IDLE for %s", self.account_email)
+                    break
+
+                idle_start = time.monotonic()
+
+                # ── Process push notifications ─────────────────────────
+                while not self._stop_event.is_set():
+                    elapsed = time.monotonic() - idle_start
+                    if elapsed >= _IDLE_TIMEOUT:
+                        break  # Re-issue IDLE per RFC 2177
+
+                    remaining = min(_IDLE_TIMEOUT - elapsed, _IDLE_POLL_INTERVAL)
+                    try:
+                        r, _, _ = select.select([client.conn], [], [], remaining)
+                    except TypeError:
+                        # select() on SSL sockets may raise TypeError in some edge cases
+                        break
+
+                    if not r:
+                        # Timeout with no data — check stop_event and loop
+                        continue
+
+                    # Server pushed data — read the untagged response(s)
+                    try:
+                        line = client.conn._get_line()
+                    except Exception:
+                        break
+
+                    try:
+                        line_str = line.decode("ascii", errors="replace")
+                    except Exception:
+                        continue
+
+                    if "EXISTS" in line_str:
+                        self._on_notification(
+                            self.account_email, "INBOX", "exists",
+                        )
+                    if "FLAGS" in line_str or "FETCH" in line_str:
+                        self._on_notification(
+                            self.account_email, "INBOX", "flags",
+                        )
+
+                # ── Exit IDLE ──────────────────────────────────────────
+                try:
+                    client.conn.send(b"DONE\r\n")
+                    typ, _data = client.conn._command_complete(tag, "IDLE")
+                    # _data may contain untagged responses that accumulated
+                    # before DONE was processed — check for notifications
+                    if isinstance(_data, (list, tuple)):
+                        resp_text = " ".join(
+                            d.decode("ascii", errors="replace")
+                            if isinstance(d, bytes) else str(d)
+                            for d in _data
+                        )
+                        if "EXISTS" in resp_text:
                             self._on_notification(
                                 self.account_email, "INBOX", "exists",
                             )
-                        if "FLAGS" in response_text:
+                        if "FLAGS" in resp_text or "FETCH" in resp_text:
                             self._on_notification(
                                 self.account_email, "INBOX", "flags",
                             )
-                except Exception:
-                    break
+                except Exception as exc:
+                    logger.debug(
+                        "[idle] IDLE exit for %s: %s", self.account_email, exc,
+                    )
+
+                self._last_heartbeat = time.monotonic()
 
         except Exception as exc:
             logger.warning("[idle] Connection error for %s: %s",
@@ -269,6 +328,23 @@ class IMAPIdleManager:
         if thread:
             thread.stop()
 
+    def restart_for_account(
+        self,
+        account_email: str,
+        host: str, port: int, use_ssl: bool,
+        username: str, password: str,
+        on_notification: Callable[[str, str, str], None],
+    ) -> bool:
+        """Restart the IDLE thread for an account (stop then start)."""
+        with self._lock:
+            existing = self._threads.pop(account_email, None)
+        if existing:
+            existing.stop(timeout=2.0)
+        return self.start_for_account(
+            account_email, host, port, use_ssl,
+            username, password, on_notification,
+        )
+
     def stop_all(self) -> None:
         """Stop all IDLE threads."""
         with self._lock:
@@ -291,4 +367,36 @@ class IMAPIdleManager:
         return results
 
 
-__all__ = ["IMAPIdleThread", "IMAPIdleManager"]
+# ── Module-level singleton ──────────────────────────────────────────────
+
+_idle_manager: IMAPIdleManager | None = None
+_idle_manager_lock = threading.Lock()
+
+
+def get_imap_idle_manager() -> IMAPIdleManager:
+    """Get the application-wide IMAPIdleManager singleton."""
+    global _idle_manager
+    if _idle_manager is None:
+        with _idle_manager_lock:
+            if _idle_manager is None:
+                _idle_manager = IMAPIdleManager()
+    return _idle_manager
+
+
+def init_imap_idle_manager() -> IMAPIdleManager:
+    """Initialise (reinitialise) the IMAPIdleManager singleton."""
+    global _idle_manager
+    with _idle_manager_lock:
+        # Stop existing threads if any
+        if _idle_manager is not None:
+            _idle_manager.stop_all()
+        _idle_manager = IMAPIdleManager()
+    return _idle_manager
+
+
+__all__ = [
+    "IMAPIdleThread",
+    "IMAPIdleManager",
+    "get_imap_idle_manager",
+    "init_imap_idle_manager",
+]

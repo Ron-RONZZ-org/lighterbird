@@ -91,10 +91,65 @@ class TestSyncProgressTracker:
         assert p1["task_id"] != p2["task_id"]
 
 
+class TestSyncStatusEndpoint:
+    """Test the GET /api/v1/email/sync/status endpoint."""
+
+    def _client(self):
+        from lighterbird.server.deps import reset_services
+        reset_services()
+        return TestClient(create_app())
+
+    def test_sync_status_returns_startup_complete(self):
+        """GET /sync/status returns startup_complete even with no accounts."""
+        resp = self._client().get("/api/v1/email/sync/status")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "startup_complete" in data
+        assert "accounts" in data
+
+    def test_sync_status_no_accounts(self):
+        """With no accounts, startup is trivially complete."""
+        resp = self._client().get("/api/v1/email/sync/status")
+        data = resp.json()
+        assert data["startup_complete"] is True
+        assert data["accounts"] == []
+
+    def test_sync_status_structure(self):
+        """Response has the correct structure."""
+        resp = self._client().get("/api/v1/email/sync/status")
+        data = resp.json()
+        assert isinstance(data["startup_complete"], bool)
+        assert isinstance(data["accounts"], list)
+
+    def test_sync_status_account_has_expected_fields(self):
+        """Each account entry has expected fields."""
+        # Register a test account via sync state manager
+        from lighterbird.server.sync_state import get_sync_state_manager
+        state_mgr = get_sync_state_manager()
+        state_mgr.register_account("test@example.com")
+        try:
+            resp = self._client().get("/api/v1/email/sync/status")
+            data = resp.json()
+            assert len(data["accounts"]) >= 1
+            acct = data["accounts"][0]
+            assert "account_email" in acct
+            assert "status" in acct
+            assert "last_sync_at" in acct
+            assert "last_error" in acct
+            assert "idle_alive" in acct
+            assert "idle_supported" in acct
+            assert "last_idle_heartbeat" in acct
+            assert "reconnects" in acct
+        finally:
+            state_mgr.remove_account("test@example.com")
+
+
 class TestSyncProgressEndpoints:
     """Test the /api/v1/email/sync/start and progress endpoints."""
 
     def _client(self):
+        from lighterbird.server.deps import reset_services
+        reset_services()
         return TestClient(create_app())
 
     def test_sync_start_returns_task_id(self):

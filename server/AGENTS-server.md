@@ -11,6 +11,7 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 - **`app.py`** — FastAPI application factory, startup/shutdown lifecycle.  On startup the ``lifespan`` handler calls :func:`~lighterbird.core.config_defaults.seed_config_defaults` to create any missing config files (``system_prompt.md``, ``cowrite_style.md``, ``cowrite_style_email.md``, ``cowrite_style_journal.md``, ``cowrite_style_todo.md``, ``cowrite_style_letter.md``) with their shipped defaults.
 - **`routes/`** — API route handlers organized by domain (email, email_sync, email_actions, email_sieve, calendar, contacts, journal, todo, letter, profiles, chat, admin, cowrite)
 - **`sync_progress.py`** — Thread-safe in-memory sync progress tracker used by the async sync endpoints. Provides ``SyncProgressTracker`` class and ``get_sync_progress_tracker()`` singleton.
+- **`sync_state.py`** — Per-account sync state manager (thread-safe singleton) tracking startup sync completion and IDLE thread health. Provides ``SyncStateManager``, ``get_sync_state_manager()``, ``init_sync_state_manager()``.
 - **`command/`** — `!` command system: tree definition, parser, registry, response models, per-domain handlers
 - **`llm/`** — LLM integration: chat sessions, provider resolution, and the shared **tool_loop** module (multi-round tool-calling loop with human-in-the-loop support)
 - **`cowrite/`** — AI-assisted writing integration for form editors
@@ -39,6 +40,7 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 - `POST /api/v1/email/sync` — trigger IMAP sync (synchronous, returns result directly — used by CLI command handler)
 - `POST /api/v1/email/sync/start` — start async IMAP sync in background thread, returns `{ task_id }` immediately
 - `GET /api/v1/email/sync/progress/{task_id}` — poll sync progress (`status`, `current_folder`, `total_folders`, `folder_name`, `total_messages`, `new_messages`, `errors`)
+- `GET /api/v1/email/sync/status` — per-account sync state and whether startup sync is complete (polled by frontend every 10s to show ``SyncStatusBar``)
 - `POST /api/v1/email/send` — send email (body: to, subject, body, cc, bcc, attachments, signature, signature_format, in_reply_to, save_as_sample)
 - `GET /api/v1/calendar/events` — list events (filter: date range, calendar)
 - `POST /api/v1/calendar/events` — create event
