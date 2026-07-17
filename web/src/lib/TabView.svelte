@@ -295,12 +295,12 @@
 
 <div class="tab-view">
   <!-- Tab content: HomeTab is always mounted (keeps conversation state) -->
-  <div class="tab-content" class:active={tabStore.isHome} role="region" aria-label="Home tab">
+      <div class="tab-content" class:active={tabStore.isHome} role="region" aria-label="Home tab" data-testid="tab-panel">
     <HomeTab />
   </div>
   {#each tabStore.tabs as tab (tab.id)}
     {#if tab.id !== "home"}
-      <div class="tab-content" class:active={tab.id === tabStore.active?.id} role="region" aria-label={tab.title || "Tab content"}>
+      <div class="tab-content" class:active={tab.id === tabStore.active?.id} role="region" aria-label={tab.title || "Tab content"} data-testid="tab-panel">
         {#if tab.type === "loading"}
           <LoadingPopup message={tab.title} />
         {:else if tab.type === "status"}

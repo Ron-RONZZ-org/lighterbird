@@ -36,7 +36,7 @@ async function goHome() {
 }
 
 async function assertToolbarButton(text) {
-  const panel = page.locator('[aria-label="Tab content"]');
+  const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
   const btn = panel.locator(`button:has-text("${text}")`).first();
   const visible = await btn.isVisible().catch(() => false);
   assert(visible, `Expected toolbar button "${text}" to be visible`);
@@ -44,7 +44,7 @@ async function assertToolbarButton(text) {
 }
 
 async function assertNoToolbarButton(text) {
-  const panel = page.locator('[aria-label="Tab content"]');
+  const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
   const btn = panel.locator(`button:has-text("${text}")`).first();
   const visible = await btn.isVisible().catch(() => false);
   assert(!visible, `Expected toolbar button "${text}" to NOT be visible`);
@@ -75,7 +75,7 @@ async function openEmailTab(command, buttonText, timeoutMs = 120000) {
   await goHome();
   await typeCommand(command);
   await pressEnter();
-  const panel = page.locator('[aria-label="Tab content"]');
+  const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
   try {
     await panel.locator(`button:has-text("${buttonText}")`).waitFor({ state: "visible", timeout: timeoutMs });
   } catch {
@@ -217,7 +217,7 @@ async function runTests() {
     // Wait for the compose form to render
     await assertFormOpened("Compose Email");
 
-    const panel = page.locator('[aria-label="Tab content"]');
+    const panel = page.locator('.tab-content.active[data-testid="tab-panel"]');
     const toField = panel.locator('[placeholder*="recipient"]').first();
     const toExists = await toField.isVisible().catch(() => false);
     assert(toExists, "Compose form should have a To recipient field");
