@@ -293,71 +293,73 @@
   <div class="tab-content" class:active={tabStore.isHome} role="region" aria-label="Home tab">
     <HomeTab />
   </div>
-  {#if tabStore.active && !tabStore.isHome}
-    <div class="tab-content" class:active={true} role="region" aria-label="Tab content">
-      {#if tabStore.active.type === "loading"}
-        <LoadingPopup message={tabStore.active.title} />
-      {:else if tabStore.active.type === "status"}
-        <StatusPopup data={tabStore.active.data} />
-      {:else if tabStore.active.type === "email"}
-        <EmailViewTab data={tabStore.active.data} tabId={tabStore.active.id} />
-      {:else if tabStore.active.type === "events"}
-        <EventsPopup data={tabStore.active.data} />
-      {:else if tabStore.active.type === "error"}
-        <ErrorPopup data={tabStore.active.data} />
-      {:else if tabStore.active.type === "email-list" || tabStore.active.type === "email-trash-list" || tabStore.active.type === "email-draft-list"}
-        <EmailListTab
-          data={tabStore.active.data}
-          tabId={tabStore.active.id}
-          isTrashView={tabStore.active.type === "email-trash-list"}
-          isDraftView={tabStore.active.type === "email-draft-list"}
-        />
-      {:else if tabStore.active.type === "journal-list"}
-        <JournalListTab data={tabStore.active.data} tabId={tabStore.active.id} />
-      {:else if tabStore.active.type === "journal-view"}
-        <JournalViewTab data={tabStore.active.data} tabId={tabStore.active.id} />
-      {:else if tabStore.active.type === "contacts-list"}
-        <ContactsListTab data={tabStore.active.data} tabId={tabStore.active.id} />
-      {:else if tabStore.active.type === "contact-view"}
-        <ContactViewTab data={tabStore.active.data} tabId={tabStore.active.id} />
-      {:else if tabStore.active.type === "todo-list"}
-        <TodoListTab data={tabStore.active.data} tabId={tabStore.active.id} />
-      {:else if tabStore.active.type === "todo-view"}
-        <TodoViewTab data={tabStore.active.data} tabId={tabStore.active.id} />
-      {:else if tabStore.active.type === "calendar-events"}
-        <CalendarEventsListTab data={tabStore.active.data} tabId={tabStore.active.id} />
-      {:else if tabStore.active.type === "sieve-list"}
-        <SieveListTab data={tabStore.active.data} tabId={tabStore.active.id} />
-      {:else if tabStore.active.type === "sieve-editor"}
-        <SieveEditorForm data={tabStore.active.data} />
-      {:else if tabStore.active.type === "letter-list"}
-        <LetterListTab data={tabStore.active.data} tabId={tabStore.active.id} />
-      {:else if tabStore.active.type === "letter-view"}
-        <LetterViewTab data={tabStore.active.data} tabId={tabStore.active.id} />
-      {:else if tabStore.active.type === "saved-commands"}
-        <SavedCommandsTab data={tabStore.active.data} />
-      {:else if tabStore.active.type === "help"}
-        <HelpPopup data={tabStore.active.data} />
-      {:else if tabStore.active.type === "templates"}
-        <StatusPopup data={tabStore.active.data} />
-      {:else if tabStore.active.type === "folder-list"}
-        <EmailFolderTab data={tabStore.active.data} />
-      {:else if tabStore.active.type === "confirm_tool"}
-        <ConfirmToolDialog
-          batch={tabStore.active.data?.batch || []}
-          message={tabStore.active.data?.message || ""}
-          onConfirm={(decisions) => handleToolConfirm(tabStore.active, decisions)}
-          onDismiss={() => handleToolDismiss(tabStore.active)}
-        />
-      {:else if tabStore.active.type === "chat"}
-        <StatusPopup data={tabStore.active.data} />
-      {:else if tabStore.active.type === "form"}
-        <FormTab data={tabStore.active.data} tabId={tabStore.active.id} />
-      {:else}
-        <StatusPopup data={tabStore.active.data} />
-      {/if}
-    </div>
-  {/if}
+  {#each tabStore.tabs as tab (tab.id)}
+    {#if tab.id !== "home"}
+      <div class="tab-content" class:active={tab.id === tabStore.active?.id} role="region" aria-label={tab.title || "Tab content"}>
+        {#if tab.type === "loading"}
+          <LoadingPopup message={tab.title} />
+        {:else if tab.type === "status"}
+          <StatusPopup data={tab.data} />
+        {:else if tab.type === "email"}
+          <EmailViewTab data={tab.data} tabId={tab.id} />
+        {:else if tab.type === "events"}
+          <EventsPopup data={tab.data} />
+        {:else if tab.type === "error"}
+          <ErrorPopup data={tab.data} />
+        {:else if tab.type === "email-list" || tab.type === "email-trash-list" || tab.type === "email-draft-list"}
+          <EmailListTab
+            data={tab.data}
+            tabId={tab.id}
+            isTrashView={tab.type === "email-trash-list"}
+            isDraftView={tab.type === "email-draft-list"}
+          />
+        {:else if tab.type === "journal-list"}
+          <JournalListTab data={tab.data} tabId={tab.id} />
+        {:else if tab.type === "journal-view"}
+          <JournalViewTab data={tab.data} tabId={tab.id} />
+        {:else if tab.type === "contacts-list"}
+          <ContactsListTab data={tab.data} tabId={tab.id} />
+        {:else if tab.type === "contact-view"}
+          <ContactViewTab data={tab.data} tabId={tab.id} />
+        {:else if tab.type === "todo-list"}
+          <TodoListTab data={tab.data} tabId={tab.id} />
+        {:else if tab.type === "todo-view"}
+          <TodoViewTab data={tab.data} tabId={tab.id} />
+        {:else if tab.type === "calendar-events"}
+          <CalendarEventsListTab data={tab.data} tabId={tab.id} />
+        {:else if tab.type === "sieve-list"}
+          <SieveListTab data={tab.data} tabId={tab.id} />
+        {:else if tab.type === "sieve-editor"}
+          <SieveEditorForm data={tab.data} />
+        {:else if tab.type === "letter-list"}
+          <LetterListTab data={tab.data} tabId={tab.id} />
+        {:else if tab.type === "letter-view"}
+          <LetterViewTab data={tab.data} tabId={tab.id} />
+        {:else if tab.type === "saved-commands"}
+          <SavedCommandsTab data={tab.data} />
+        {:else if tab.type === "help"}
+          <HelpPopup data={tab.data} />
+        {:else if tab.type === "templates"}
+          <StatusPopup data={tab.data} />
+        {:else if tab.type === "folder-list"}
+          <EmailFolderTab data={tab.data} />
+        {:else if tab.type === "confirm_tool"}
+          <ConfirmToolDialog
+            batch={tab.data?.batch || []}
+            message={tab.data?.message || ""}
+            onConfirm={(decisions) => handleToolConfirm(tab, decisions)}
+            onDismiss={() => handleToolDismiss(tab)}
+          />
+        {:else if tab.type === "chat"}
+          <StatusPopup data={tab.data} />
+        {:else if tab.type === "form"}
+          <FormTab data={tab.data} tabId={tab.id} />
+        {:else}
+          <StatusPopup data={tab.data} />
+        {/if}
+      </div>
+    {/if}
+  {/each}
 
   <!-- Tab bar (hidden when only home tab exists) -->
   {#if tabStore.count > 1}
