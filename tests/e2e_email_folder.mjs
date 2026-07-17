@@ -35,7 +35,7 @@ async function runTests(page) {
     );
 
     // Tab content should show folder management UI (not accounts)
-    const content = await page.locator('[aria-label="Tab content"]').innerText();
+    const content = await page.locator('.tab-content.active[data-testid="tab-panel"]').innerText();
 
     // Should have folder-related controls
     const hasNewButton = content.includes("+ New") || content.includes("FOLDERS");
