@@ -153,6 +153,29 @@ class TestChatAPI:
             assert call_kwargs["dispatch_fn"] is not None
             assert call_kwargs["get_tool_level_fn"] is not None
 
+    def test_chat_resume_uses_llm_tools_callbacks(self):
+        """chat_resume passes LLM tool callbacks to resume_execution."""
+        from lighterbird.server.llm.provider import get_provider as get_llm_provider
+
+        with patch.object(
+            get_llm_provider(), "is_available", return_value=True
+        ), patch(
+            "lighterbird.server.routes.chat.resume_execution",
+            return_value="Resumed reply",
+        ) as mock_resume:
+            resp = self._client().post("/api/v1/chat/resume", json={
+                "session_id": "test-session",
+                "confirmed": True,
+            })
+            assert resp.status_code == 200
+
+            # Verify resume_execution was called with LLM tool callbacks
+            _, call_kwargs = mock_resume.call_args
+            assert call_kwargs["dispatch_fn"] is not None
+            assert call_kwargs["get_handler_metadata_fn"] is not None
+            assert call_kwargs["get_tool_level_fn"] is not None
+            assert call_kwargs["session_id"] == "test-session"
+
     def test_chat_notice_endpoint(self):
         """GET /api/v1/chat/notice returns notice info."""
         resp = self._client().get("/api/v1/chat/notice")
