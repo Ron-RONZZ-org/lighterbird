@@ -25,6 +25,7 @@ from lighterbird.server.llm.tools import (
     _llm_registry,
     dispatch_llm_tool,
     get_llm_tool_level,
+    get_llm_tool_metadata,
     get_llm_tool_names,
     get_llm_tools,
     is_llm_tool,
@@ -511,6 +512,49 @@ class TestEmailFind:
 
         assert result["success"] is False
         assert "DB error" in result["error"]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# get_llm_tool_metadata
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestGetLlmToolMetadata:
+    """Tests for get_llm_tool_metadata()."""
+
+    def setup_method(self):
+        _clear_registry()
+        @llm_tool(
+            name="meta.test",
+            description="A test tool",
+            params=[{"name": "x", "type": "string", "description": "Param X", "required": True}],
+            permission_level=PermissionLevel.WRITE,
+        )
+        def meta_test(x: str = "") -> dict:
+            return {"success": True, "data": x}
+
+    def test_known_tool_returns_entry(self):
+        """Known tool returns the full registry entry dict."""
+        entry = get_llm_tool_metadata("meta.test")
+        assert entry is not None
+        assert entry["name"] == "meta_test"
+        assert entry["description"] == "A test tool"
+        assert entry["permission_level"] == PermissionLevel.WRITE
+        assert entry["parameters"]["type"] == "object"
+        assert "handler" in entry  # callable
+
+    def test_unknown_tool_returns_none(self):
+        """Unknown path returns None."""
+        assert get_llm_tool_metadata("nonexistent") is None
+        assert get_llm_tool_metadata("") is None
+
+    def test_description_in_metadata(self):
+        """Description is present and non-empty for known tools."""
+        entry = get_llm_tool_metadata("meta.test")
+        assert entry["description"] == "A test tool"
+
+    def teardown_method(self):
+        _clear_registry()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
