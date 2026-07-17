@@ -17,6 +17,8 @@
   import ImportDialog from "./ImportDialog.svelte";
   import ProgressBar from "./ProgressBar.svelte";
   import SyncOverlay from "./SyncOverlay.svelte";
+  import SyncStatusBar from "./SyncStatusBar.svelte";
+  import { syncState, startPolling, stopPolling, refreshSyncStatus } from "./syncStore.svelte.js";
   import ScrollList from "@lightercore/ui/ScrollList.svelte";
   import {
     createSelectionManager,
@@ -47,62 +49,28 @@
   let nextCursor = $state("");
   let loadingMore = $state(false);
   let syncing = $state(false);
+  let manualSyncing = $state(false); // overlay shown only for manual sync
   let syncTaskId = $state(null);
   let syncProgress = $state(null);
   let syncPollTimer = $state(null);
   let syncError = $state("");
-  let _syncGuard = false;
 
-  // ── Blocking initial sync on mount ──────────────────────────────
-  let initialLoading = $state(true);
+  // ── Sync status polling ─────────────────────────────────────────
+  // Start polling for sync status on mount, stop on unmount
+  $effect(() => {
+    startPolling();
+    return () => stopPolling();
+  });
 
-  async function handleInitialSync() {
-    if (_syncGuard) return;
-    _syncGuard = true;
-    syncing = true;
-    syncProgress = null;
-    syncTaskId = null;
-    syncError = "";
-
-    try {
-      const syncOpts = {};
-      if (isTrashView) syncOpts.folderName = "Trash";
-      const startResult = await emailApi.syncStart(null, syncOpts);
-      syncTaskId = startResult.task_id;
-      await pollUntilComplete();
-    } catch (err) {
-      syncError = `Sync failed: ${err?.message || "Unknown error"}`;
-    } finally {
-      syncing = false;
-      initialLoading = false;
-      _syncGuard = false;
+  // Refresh the email list when sync state changes to "idle" (first sync done)
+  let _prevStartupComplete = true;
+  $effect(() => {
+    if (syncState.startupComplete && !_prevStartupComplete) {
+      // Startup just completed — refresh the list once
+      _prevStartupComplete = true;
+      refreshList();
     }
-    await refreshList();
-  }
-
-  function pollUntilComplete() {
-    return new Promise((resolve) => {
-      const poll = async () => {
-        if (!syncTaskId) { resolve(); return; }
-        try {
-          const prog = await emailApi.getSyncProgress(syncTaskId);
-          if (!prog) { resolve(); return; }
-          syncProgress = prog;
-          if (prog.status === "complete" || prog.status === "error") {
-            if (prog.errors?.length > 0) {
-              syncError = prog.errors.join("; ");
-            }
-            resolve();
-          } else {
-            syncPollTimer = setTimeout(poll, 1500);
-          }
-        } catch {
-          resolve();
-        }
-      };
-      syncPollTimer = setTimeout(poll, 500);
-    });
-  }
+  });
   // isTrashView / isDraftView are derived from the explicit prop (when
   // passed by TabView) or from initial data.  $derived ensures they stay
   // in sync when the user switches between tabs of different email-list
@@ -564,6 +532,7 @@
 
   async function handleSync() {
     if (syncing) return;
+    manualSyncing = true;
     syncing = true;
     syncProgress = null;
     syncTaskId = null;
@@ -578,6 +547,7 @@
     } catch (err) {
       syncError = `Sync failed to start: ${err?.message || err || "Unknown error"}`;
       syncing = false;
+      manualSyncing = false;
       clearSyncError();
     }
   }
@@ -601,6 +571,7 @@
         if (prog.status === "complete") {
           syncProgress = prog;
           syncing = false;
+          manualSyncing = false;
           syncTaskId = null;
           if (prog.errors && prog.errors.length > 0) {
             syncError = `Sync completed with errors: ${syncErrorMsg(prog.errors)}`;
@@ -610,6 +581,7 @@
         } else if (prog.status === "error") {
           syncProgress = prog;
           syncing = false;
+          manualSyncing = false;
           syncTaskId = null;
           syncError = `Sync failed: ${syncErrorMsg(prog.errors) || "Unknown error"}`;
           clearSyncError();
@@ -651,6 +623,7 @@
 
   function stopSync() {
     syncing = false;
+    manualSyncing = false;
     syncTaskId = null;
     syncProgress = null;
     if (syncPollTimer) { clearTimeout(syncPollTimer); syncPollTimer = null; }
@@ -727,14 +700,13 @@
     sel.handleKeydown(e);
   }
 
-  // ── Trigger blocking initial sync on mount ─────────────────────
+  // ── Load data from local DB on mount (non-blocking) ─────────────
+  let initialLoading = $state(true);
   $effect(() => {
     if (initialLoading) {
-      handleInitialSync();
+      refreshList();
+      initialLoading = false;
     }
-    return () => {
-      if (syncPollTimer) { clearTimeout(syncPollTimer); syncPollTimer = null; }
-    };
   });
 
   // Save config on tab close + stop sync polling
@@ -747,14 +719,14 @@
 
 <svelte:window onkeydown={handleWindowKeydown} />
 
-{#if initialLoading && syncing}
-  <SyncOverlay
-    {syncProgress}
-    title="Syncing email…"
-    {syncError}
-  />
-{:else}
 <div class="email-list-tab">
+  {#if manualSyncing}
+    <SyncOverlay
+      {syncProgress}
+      title="Syncing email…"
+      {syncError}
+    />
+  {/if}
   <!-- Toolbar -->
   <EmailListToolbar
     selectionMode={sel.selectionMode}
@@ -790,6 +762,11 @@
     onToggleAdvancedSearch={() => showAdvancedSearch = true}
     {syncing}
     {syncProgress}
+  />
+  <SyncStatusBar
+    statusClass={syncState.statusClass}
+    summary={syncState.summary}
+    onSync={handleSync}
   />
 
   {#if syncError}
@@ -929,8 +906,7 @@
       onClose={() => showAdvancedSearch = false}
     />
   {/if}
-    </div>
-  {/if}
+</div>
 
 <style>
   .list {

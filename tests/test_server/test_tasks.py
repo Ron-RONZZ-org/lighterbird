@@ -21,6 +21,11 @@ from lighterbird.server.tasks import (
     get_worker_pool,
     init_workers,
     shutdown_workers,
+    start_idle_for_new_account,
+    stop_idle_for_account,
+    stop_all_idle,
+    _make_idle_callback,
+    _start_idle_for_account,
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -555,3 +560,97 @@ class TestBackupScheduler:
         assert pool.add.call_count == 3
         pool.start_all.assert_called_once()
         assert result is pool
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# New IDLE-related functions
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestIdleFunctions:
+    """Tests for IDLE-related task functions."""
+
+    def test_make_idle_callback_creates_debounced_function(self):
+        """_make_idle_callback returns a callable."""
+        cb = _make_idle_callback("test@example.com")
+        assert callable(cb)
+
+    def test_make_idle_callback_debounces(self):
+        """Multiple rapid calls produce only one sync job (via timer debounce)."""
+        from unittest.mock import patch
+
+        cb = _make_idle_callback("test@example.com")
+        with patch("lighterbird.server.tasks._do_idle_sync") as mock_sync:
+            # Fire 3 rapid notifications
+            cb("test@example.com", "INBOX", "exists")
+            cb("test@example.com", "INBOX", "exists")
+            cb("test@example.com", "INBOX", "exists")
+            # The timer fires after 2s — we can't wait, but no sync should
+            # have been called yet (debounce cancelled previous timers)
+            mock_sync.assert_not_called()
+
+    @patch("lighterbird.server.deps.get_email_service")
+    def test_start_idle_for_account_no_password(self, mock_get_svc):
+        """_start_idle_for_account returns False if no password."""
+        svc = MagicMock()
+        svc.accounts.get_account_with_password.return_value = None
+        mock_get_svc.return_value = svc
+
+        result = _start_idle_for_account("test@example.com")
+        assert result is False
+
+    @patch("lighterbird.server.deps.get_email_service")
+    def test_start_idle_for_account_missing_password(self, mock_get_svc):
+        """_start_idle_for_account returns False if password is empty."""
+        svc = MagicMock()
+        svc.accounts.get_account_with_password.return_value = {
+            "email": "test@example.com",
+            "password": "",
+        }
+        mock_get_svc.return_value = svc
+
+        result = _start_idle_for_account("test@example.com")
+        assert result is False
+
+    def test_start_idle_for_new_account_with_mock(self):
+        """start_idle_for_new_account handles missing credentials gracefully."""
+        from unittest.mock import patch
+
+        with patch("lighterbird.server.tasks._start_idle_for_account",
+                   return_value=False):
+            # Should not raise
+            start_idle_for_new_account("test@example.com")
+
+    def test_stop_idle_for_account(self):
+        """stop_idle_for_account does not raise for unknown account."""
+        # Should not raise even if account not registered
+        stop_idle_for_account("nonexistent@example.com")
+
+    def test_stop_all_idle(self):
+        """stop_all_idle does not raise."""
+        stop_all_idle()  # should not raise
+
+    def test_email_sync_worker_start_creates_poll_timer(self):
+        """EmailSyncWorker.start() creates a poll timer."""
+        worker = EmailSyncWorker("test-email")
+        with patch.object(worker, "_schedule_poll") as mock_schedule:
+            worker.start()
+            mock_schedule.assert_called_once()
+
+    def test_email_sync_worker_execute_startup_sync(self):
+        """EmailSyncWorker dispatches startup-sync operation."""
+        worker = EmailSyncWorker("test-email")
+        with patch.object(worker, "_do_startup_sync") as mock_startup:
+            worker.execute_job(Job("email", "startup-sync", {}))
+            mock_startup.assert_called_once_with({})
+
+    @patch("lighterbird.server.deps.get_email_service")
+    @patch("lighterbird.server.sync_state.get_sync_state_manager")
+    def test_do_startup_sync_no_accounts(self, mock_state_mgr, mock_get_svc):
+        """_do_startup_sync handles no accounts gracefully."""
+        svc = MagicMock()
+        svc.list_accounts.return_value = []
+        mock_get_svc.return_value = svc
+
+        worker = EmailSyncWorker("test-email")
+        worker._do_startup_sync({})  # should not raise

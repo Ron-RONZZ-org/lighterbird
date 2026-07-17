@@ -18,6 +18,8 @@
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import EmailFolderTree from "./EmailFolderTree.svelte";
   import SyncOverlay from "./SyncOverlay.svelte";
+  import SyncStatusBar from "./SyncStatusBar.svelte";
+  import { syncState, startPolling, stopPolling } from "./syncStore.svelte.js";
   import FolderContextMenu from "./FolderContextMenu.svelte";
   import FolderDeleteDialog from "./FolderDeleteDialog.svelte";
   import { createCopyState } from "./listTabShared.svelte.js";
@@ -28,40 +30,49 @@
   let total = $derived(folders.length);
   let highlight = $derived(data?.highlight || "");
 
-  // ── Blocking sync on mount ─────────────────────────────────────────
-  let initialLoading = $state(true);
+  // ── Sync status polling ─────────────────────────────────────────
   let syncing = $state(false);
+  let manualSyncing = $state(false);
   let syncTaskId = $state(null);
   let syncProgress = $state(null);
   let syncPollTimer = $state(null);
   let syncError = $state("");
-  let _syncGuard = false;
 
-  async function handleInitialSync() {
-    if (_syncGuard) return;
-    _syncGuard = true;
+  // Start polling for sync status on mount, stop on unmount
+  $effect(() => {
+    startPolling();
+    return () => stopPolling();
+  });
+
+  function stopSync() {
+    syncing = false;
+    manualSyncing = false;
+    syncTaskId = null;
+    syncProgress = null;
+    if (syncPollTimer) { clearTimeout(syncPollTimer); syncPollTimer = null; }
+  }
+
+  async function handleManualFolderSync() {
+    if (syncing) return;
+    manualSyncing = true;
     syncing = true;
     syncProgress = null;
     syncTaskId = null;
     syncError = "";
     try {
-      // Folders-only sync: register folder hierarchy without downloading messages.
-      // This is fast — just an IMAP LIST per account, no message bodies.
       const startResult = await emailApi.syncStart(null, { foldersOnly: true });
       syncTaskId = startResult.task_id;
-      await pollUntilComplete();
+      await _pollUntilComplete();
     } catch (err) {
       syncError = `Sync failed: ${err?.message || "Unknown error"}`;
-      // Still need to show folders even if sync fails — load from local DB
     } finally {
       syncing = false;
-      initialLoading = false;
-      _syncGuard = false;
+      manualSyncing = false;
     }
     await refreshList();
   }
 
-  function pollUntilComplete() {
+  function _pollUntilComplete() {
     return new Promise((resolve) => {
       const poll = async () => {
         if (!syncTaskId) { resolve(); return; }
@@ -85,23 +96,18 @@
     });
   }
 
-  function stopSync() {
-    syncing = false;
-    syncTaskId = null;
-    syncProgress = null;
-    if (syncPollTimer) { clearTimeout(syncPollTimer); syncPollTimer = null; }
-  }
-
   // Sync from props on initial load or prop change (post-sync refresh)
   $effect(() => {
     if (data?.folders) folders = data.folders;
     if (data?.accounts) accounts = data.accounts;
   });
 
-  // Start blocking sync on mount
+  // Load data from local DB on mount (non-blocking)
+  let initialLoading = $state(true);
   $effect(() => {
     if (initialLoading) {
-      handleInitialSync();
+      refreshList();
+      initialLoading = false;
     }
     return () => { stopSync(); };
   });
@@ -409,7 +415,7 @@
     if (plain && e.key === "v") { toggleSelectionMode(); e.preventDefault(); return; }
     if ((e.ctrlKey || e.metaKey) && e.key === "r") {
       e.preventDefault();
-      handleInitialSync();
+      handleManualFolderSync();
       return;
     }
 
@@ -514,16 +520,22 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="folder-tab">
-  {#if initialLoading && syncing}
+  {#if manualSyncing}
     <SyncOverlay
       {syncProgress}
       title="Syncing folders…"
       {syncError}
       onCancel={stopSync}
     />
-  {:else}
-    <!-- ── Toolbar ──────────────────────────────────────────────────── -->
-    <div class="toolbar">
+  {/if}
+  <!-- ── Sync status bar ──────────────────────────────────── -->
+  <SyncStatusBar
+    statusClass={syncState.statusClass}
+    summary={syncState.summary}
+    onSync={() => {}}
+  />
+  <!-- ── Toolbar ──────────────────────────────────────────────────── -->
+  <div class="toolbar">
       <div class="left">
         {#if !selectionMode}
           <!-- View mode -->
@@ -533,7 +545,7 @@
           <button class="btn" onclick={toggleSelectionMode} title="Toggle multi-select mode (V)">
             Select <kbd>V</kbd>
           </button>
-          <button class="btn" onclick={() => { handleInitialSync(); }} disabled={syncing} title="Sync (Ctrl+R)">
+          <button class="btn" onclick={handleManualFolderSync} disabled={syncing} title="Sync (Ctrl+R)">
             {syncing ? "⟳ Syncing…" : "⟳ Sync <kbd>Ctrl+R</kbd>"}
           </button>
           <button class="btn" onclick={() => { showSearch = !showSearch; }} title="Search folders (F)">
@@ -669,7 +681,6 @@
         {/if}
       </p>
     {/if}
-  {/if}
 </div>
 
 <!-- ── Context menu ──────────────────────────────────────────────── -->

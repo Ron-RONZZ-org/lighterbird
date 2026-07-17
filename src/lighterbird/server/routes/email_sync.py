@@ -12,13 +12,59 @@ from fastapi import APIRouter, Depends, HTTPException
 from lighterbird.email.service import EmailService
 from lighterbird.server.deps import get_email_service
 from lighterbird.server.schemas import (
+    AccountSyncStatus,
     SyncProgressResponse,
     SyncRequest,
     SyncStartResponse,
+    SyncStatusResponse,
 )
 from lighterbird.server.sync_progress import get_sync_progress_tracker
 
 router = APIRouter(prefix="/api/v1/email", tags=["email"])
+
+
+@router.get("/sync/status", response_model=SyncStatusResponse)
+def get_sync_status():
+    """Return per-account sync state and whether startup sync is complete.
+
+    This endpoint is polled by the frontend to determine whether to
+    show the sync overlay (during initial startup) or a subtle sync
+    status bar (during normal operation).
+    """
+    from lighterbird.email.imap.idle import get_imap_idle_manager
+    from lighterbird.server.sync_state import get_sync_state_manager
+
+    state_mgr = get_sync_state_manager()
+    idle_mgr = get_imap_idle_manager()
+
+    all_states = state_mgr.all_states()
+    idle_statuses = idle_mgr.status_all()
+
+    # Merge idle thread status into account sync states
+    idle_map: dict[str, dict] = {}
+    for idle_info in idle_statuses:
+        acct = idle_info.get("account_email", "")
+        idle_map[acct] = idle_info
+
+    accounts = []
+    for acct_state in all_states:
+        acct_email = acct_state["account_email"]
+        idle_info = idle_map.get(acct_email, {})
+        accounts.append(AccountSyncStatus(
+            account_email=acct_email,
+            status=acct_state.get("status", "startup-syncing"),
+            last_sync_at=acct_state.get("last_sync_at"),
+            last_error=acct_state.get("last_error"),
+            idle_alive=idle_info.get("alive", False),
+            idle_supported=acct_state.get("idle_supported"),
+            last_idle_heartbeat=acct_state.get("last_idle_heartbeat"),
+            reconnects=idle_info.get("reconnects", 0),
+        ))
+
+    return SyncStatusResponse(
+        startup_complete=state_mgr.startup_completed,
+        accounts=accounts,
+    )
 
 
 @router.post("/sync/start", response_model=SyncStartResponse)

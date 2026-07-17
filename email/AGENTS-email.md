@@ -149,3 +149,22 @@ Entries exceeding `MAX_RETRIES` (default: 10) are automatically moved to the `_d
     - The ``--participant`` flag (search From/To/CC) now works on the local SQL path (previously only IMAP remote)
     - Body preview in search results uses **match-centered snippets** rather than simple prefix truncation
 19. **``_extract_match_snippet(body, query, context=100)``** — Module-level helper in ``messages.py`` that extracts a match-centered window from body text. Replaces the first-N-chars truncation when a search query is present.
+
+### Phase 6: IMAP IDLE Integration (Issue #240)
+
+Phase 5 built ``IMAPIdleThread`` and ``IMAPIdleManager`` in ``idle.py``, but they were never wired into the server lifecycle. Phase 6 (this phase) connects them:
+
+**Backend wiring:**
+- ``idle.py``: Fixed the IDLE loop to use proper RFC 2177 (``IDLE`` → block on server push via ``select.select()`` → ``DONE``), replacing the broken NOOP-polling implementation. Added ``get_imap_idle_manager()`` module-level singleton.
+- ``server/sync_state.py``: New ``SyncStateManager`` singleton — thread-safe per-account sync state tracking (``startup-syncing``, ``idle``, ``syncing``, ``error``, ``disabled``). Tracks startup completion across all accounts and fires ``on_startup_complete`` callbacks.
+- ``server/tasks.py``: ``EmailSyncWorker.start()`` now enqueues a ``startup-sync`` job. ``_do_startup_sync()`` runs initial full sync for all accounts, then starts IDLE threads. Added ``start_idle_for_new_account()`` / ``stop_idle_for_account()`` / ``stop_all_idle()`` for lifecycle management. Added 5-minute periodic polling fallback for servers without IDLE support (``_do_poll_check()``).
+- ``server/app.py``: ``init_sync_state_manager()`` in lifespan startup; ``stop_all_idle()`` in shutdown.
+- Account CRUD routes: Create → start IDLE; Update (password/IMAP change) → restart IDLE; Delete → stop IDLE.
+
+**Frontend:**
+- ``syncStore.svelte.js``: New reactive store polling ``GET /api/v1/email/sync/status`` every 10s. Exposes ``syncState`` (``startupComplete``, ``accounts``, ``summary``, ``statusClass``).
+- ``SyncStatusBar.svelte``: Thin non-blocking status bar showing sync/IDLE health (green ✓ for IDLE, amber ⟳ for syncing, red ⚠ for errors). Clickable to trigger manual sync.
+- ``EmailListTab.svelte``: Removed blocking ``SyncOverlay`` on mount. Now loads data from local DB immediately and shows\ ``SyncStatusBar`` instead. Manual sync (Ctrl+R) still shows ``SyncOverlay``.
+- ``EmailFolderTab.svelte``: Same pattern — removed blocking sync on mount.
+
+**Key constraint:** No new dependencies (stdlib ``imaplib``, ``select``, ``threading`` only).

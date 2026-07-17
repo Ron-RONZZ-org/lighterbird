@@ -134,6 +134,9 @@ export const email = {
   getSyncProgress: (taskId) =>
     request("GET", `/email/sync/progress/${encodeURIComponent(taskId)}`),
 
+  getSyncStatus: () =>
+    request("GET", "/email/sync/status"),
+
   listMessages: (params = {}, signal = null) => {
     const q = new URLSearchParams();
     if (params.account_email) q.set("account_email", params.account_email);

@@ -2,6 +2,8 @@
 
 Provides ``enqueue_*()`` functions called by route handlers and service
 facades to offload work (sync, push) to background threads.
+
+Also manages the startup sync and IMAP IDLE lifecycle.
 """
 
 from __future__ import annotations
@@ -18,6 +20,140 @@ logger = logging.getLogger(__name__)
 # ── Global worker pool (initialized by FastAPI lifespan) ──────────────────
 
 _pool = WorkerPool()
+
+# ── IDLE debounce timer (kept here so callbacks can reach it) ─────────────
+
+# Per-account debounce timers: account_email -> threading.Timer
+_idle_debounce: dict[str, threading.Timer | None] = {}
+_idle_debounce_lock = threading.Lock()
+
+
+def _do_idle_sync(account_email: str) -> None:
+    """Called by the IDLE debounce timer — enqueues an incremental sync."""
+    enqueue_email_sync(account_email)
+
+
+def _make_idle_callback(account_email: str):
+    """Return a debounced callback for IMAPIdleThread notifications.
+
+    If multiple EXISTS/FLAGS notifications arrive within 2 seconds,
+    only one sync job is enqueued.
+    """
+    def on_notification(acct_email: str, folder: str, event_type: str) -> None:
+        logger.debug("[idle] Notification on %s/%s: %s", acct_email, folder, event_type)
+        # Track notification in sync state
+        try:
+            from lighterbird.server.sync_state import get_sync_state_manager
+            state_mgr = get_sync_state_manager()
+            state_mgr.set_status(acct_email, "idle")
+        except Exception:
+            pass
+
+        # Debounce: cancel previous timer, schedule new one in 2s
+        with _idle_debounce_lock:
+            old = _idle_debounce.get(acct_email)
+            if old is not None:
+                old.cancel()
+            timer = threading.Timer(2.0, _do_idle_sync, args=[acct_email])
+            timer.daemon = True
+            timer.start()
+            _idle_debounce[acct_email] = timer
+
+    return on_notification
+
+
+def _start_idle_for_account(account_email: str) -> bool:
+    """Start an IDLE thread for a single account.
+
+    Returns True if started, False if already running or config missing.
+    """
+    from lighterbird.email.imap.idle import get_imap_idle_manager
+    from lighterbird.server.deps import get_email_service
+
+    svc = get_email_service()
+    full_acct = svc.accounts.get_account_with_password(account_email)
+    if not full_acct or not full_acct.get("password"):
+        logger.warning("[idle] No password for %s, skipping IDLE", account_email)
+        return False
+
+    idle_mgr = get_imap_idle_manager()
+    return idle_mgr.start_for_account(
+        account_email=account_email,
+        host=full_acct["imap_server"],
+        port=full_acct["imap_port"],
+        use_ssl=full_acct.get("imap_use_ssl", 1) == 1,
+        username=full_acct.get("imap_username", "") or account_email,
+        password=full_acct["password"],
+        on_notification=_make_idle_callback(account_email),
+    )
+
+
+def _start_idle_for_all_accounts() -> None:
+    """Start IDLE threads for all configured accounts."""
+    from lighterbird.server.deps import get_email_service
+    from lighterbird.server.sync_state import get_sync_state_manager
+
+    svc = get_email_service()
+    state_mgr = get_sync_state_manager()
+
+    for acct in svc.list_accounts():
+        email = acct["email"]
+        started = _start_idle_for_account(email)
+        if started:
+            state_mgr.set_status(email, "idle")
+            state_mgr.set_idle_status(email, alive=True, supported=True)
+            logger.info("[idle] IDLE thread started for %s", email)
+        else:
+            state_mgr.set_status(email, "disabled")
+            state_mgr.set_idle_status(email, alive=False, supported=False)
+            logger.info("[idle] IDLE not started for %s (no password or already running)", email)
+
+
+def start_idle_for_new_account(account_email: str) -> None:
+    """Start an IDLE thread for a newly created account."""
+    from lighterbird.server.sync_state import get_sync_state_manager
+
+    state_mgr = get_sync_state_manager()
+    state_mgr.register_account(account_email)
+
+    started = _start_idle_for_account(account_email)
+    if started:
+        state_mgr.set_status(account_email, "idle")
+        state_mgr.set_idle_status(account_email, alive=True, supported=True)
+    else:
+        state_mgr.set_status(account_email, "disabled")
+
+
+def stop_idle_for_account(account_email: str) -> None:
+    """Stop the IDLE thread for a deleted or updated account."""
+    from lighterbird.email.imap.idle import get_imap_idle_manager
+    from lighterbird.server.sync_state import get_sync_state_manager
+
+    idle_mgr = get_imap_idle_manager()
+    idle_mgr.stop_for_account(account_email)
+
+    state_mgr = get_sync_state_manager()
+    state_mgr.remove_account(account_email)
+
+    # Clean up any pending debounce timer
+    with _idle_debounce_lock:
+        old = _idle_debounce.pop(account_email, None)
+        if old is not None:
+            old.cancel()
+
+
+def stop_all_idle() -> None:
+    """Stop all IDLE threads and clean up."""
+    from lighterbird.email.imap.idle import get_imap_idle_manager
+
+    with _idle_debounce_lock:
+        for timer in _idle_debounce.values():
+            if timer is not None:
+                timer.cancel()
+        _idle_debounce.clear()
+
+    idle_mgr = get_imap_idle_manager()
+    idle_mgr.stop_all()
 
 
 def init_workers() -> WorkerPool:
@@ -44,6 +180,9 @@ def shutdown_workers(timeout: float = 5.0) -> None:
     Args:
         timeout: Max seconds to wait for active jobs to finish.
     """
+    # Stop IDLE threads first
+    stop_all_idle()
+
     _pool.stop_all(timeout=timeout)
     logger.info("[tasks] All workers stopped")
 
@@ -168,14 +307,83 @@ def enqueue_caldav_sync(calendar_uuid: str) -> None:
 
 
 class EmailSyncWorker(BackgroundWorker):
-    """BackgroundWorker subclass that handles email sync and trash jobs."""
+    """BackgroundWorker subclass that handles email sync and trash jobs.
+
+    On startup, enqueues an initial full sync for all accounts, then
+    transitions to IDLE mode (or periodic polling for non-IDLE servers).
+    """
+
+    _POLL_INTERVAL = 300  # 5 minutes between polling cycles for non-IDLE accounts
+
+    def __init__(self, name: str) -> None:
+        super().__init__(name)
+        self._poll_timer: threading.Timer | None = None
+
+    def start(self) -> None:
+        """Start the worker thread and enqueue startup sync."""
+        super().start()
+        # Enqueue startup sync — this will trigger after the worker
+        # thread has started consuming jobs.
+        self.enqueue(
+            Job(domain="email", operation="startup-sync", payload={})
+        )
+        logger.info("[tasks] Startup sync enqueued")
+        # Start periodic polling for non-IDLE accounts
+        self._schedule_poll()
+
+    def stop(self, timeout: float = 3.0) -> None:
+        """Stop the worker and cancel the poll timer."""
+        if self._poll_timer is not None:
+            self._poll_timer.cancel()
+            self._poll_timer = None
+        super().stop(timeout=timeout)
+
+    def _schedule_poll(self) -> None:
+        """Schedule a periodic poll for accounts without IDLE."""
+        if self._poll_timer is not None:
+            self._poll_timer.cancel()
+
+        timer = threading.Timer(self._POLL_INTERVAL, self._do_poll_check)
+        timer.daemon = True
+        timer.start()
+        self._poll_timer = timer
+
+    def _do_poll_check(self) -> None:
+        """Check for accounts without IDLE and enqueue sync for them."""
+        try:
+            from lighterbird.server.sync_state import get_sync_state_manager
+
+            state_mgr = get_sync_state_manager()
+            needs_poll = False
+            for acct_state in state_mgr.all_states():
+                # Enqueue sync for accounts without IDLE or with disconnected IDLE
+                if not acct_state.get("idle_alive", False):
+                    email = acct_state.get("account_email", "")
+                    if email:
+                        needs_poll = True
+                        self.enqueue(
+                            Job(
+                                domain="email",
+                                operation="sync",
+                                payload={"account_email": email},
+                            )
+                        )
+            if needs_poll:
+                logger.debug("[tasks] Poll check: enqueued sync for non-IDLE accounts")
+        except Exception as exc:
+            logger.warning("[tasks] Poll check failed: %s", exc)
+        finally:
+            # Reschedule for next cycle
+            self._schedule_poll()
 
     def execute_job(self, job: Job) -> None:
         if job.domain != "email":
             logger.debug("Ignoring non-email job: %s/%s", job.domain, job.operation)
             return
 
-        if job.operation == "sync":
+        if job.operation == "startup-sync":
+            self._do_startup_sync(job.payload)
+        elif job.operation == "sync":
             self._do_sync(job.payload)
         elif job.operation == "send":
             self._do_send(job.payload)
@@ -183,6 +391,60 @@ class EmailSyncWorker(BackgroundWorker):
             self._do_process_trash(job.payload)
         else:
             logger.warning("Unknown email operation: %s", job.operation)
+
+    @staticmethod
+    def _do_startup_sync(payload: dict) -> None:
+        """Run the initial full sync, then start IDLE threads."""
+        from lighterbird.server.deps import get_email_service
+        from lighterbird.server.sync_state import get_sync_state_manager
+
+        svc = get_email_service()
+        state_mgr = get_sync_state_manager()
+        accounts = svc.list_accounts()
+
+        if not accounts:
+            logger.info("[tasks] No email accounts configured, skipping startup sync")
+            return
+
+        # Register all accounts in sync state
+        for acct in accounts:
+            email = acct["email"]
+            state_mgr.register_account(email)
+
+        # Sync all accounts
+        logger.info("[tasks] Starting initial full sync for %d account(s)", len(accounts))
+        for acct in accounts:
+            email = acct["email"]
+            try:
+                state_mgr.set_status(email, "startup-syncing")
+                sr = svc.sync_account(email)
+                logger.info("[tasks] Startup sync for %s: %d total, %d new",
+                            email, sr.total, sr.new)
+
+                # Pull server-side flag changes via CONDSTORE (if supported)
+                pull_result = svc.msg_ops.flag_sync.pull_changes(email)
+                if pull_result:
+                    logger.info(
+                        "[tasks] Pulled %s flag changes for %s",
+                        sum(pull_result.values()), email,
+                    )
+
+                state_mgr.set_last_sync(email)
+            except Exception as e:
+                logger.error("[tasks] Startup sync failed for %s: %s", email, e)
+                state_mgr.set_status(email, "error", error=str(e))
+
+        # Drain pending flag sync backlog
+        try:
+            backlog = svc.process_sync_backlog()
+            if backlog:
+                logger.info("[tasks] Drained %d pending flag syncs from backlog", backlog)
+        except Exception as e:
+            logger.warning("[tasks] Backlog drain after startup failed: %s", e)
+
+        # Start IDLE threads after all accounts are synced
+        _start_idle_for_all_accounts()
+        logger.info("[tasks] Startup sync complete, IDLE threads started")
 
     @staticmethod
     def _do_sync(payload: dict) -> None:
@@ -503,4 +765,7 @@ __all__ = [
     "get_worker_pool",
     "init_workers",
     "shutdown_workers",
+    "start_idle_for_new_account",
+    "stop_idle_for_account",
+    "stop_all_idle",
 ]

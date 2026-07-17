@@ -73,6 +73,13 @@ def create_account(
         "smtp_username": data.email,
     }
     acct = email_svc.create_account(acct_data, data.password)
+    # Start IDLE thread for the new account
+    try:
+        from lighterbird.server.tasks import start_idle_for_new_account
+        start_idle_for_new_account(acct_data["email"])
+    except Exception:
+        logger = __import__("logging").getLogger(__name__)
+        logger.warning("Failed to start IDLE for new account %s", acct_data["email"])
     return _account_to_response(acct)
 
 
@@ -94,16 +101,35 @@ def update_account(
         updates["imap_server"] = data.imap_server
     if data.smtp_server is not None:
         updates["smtp_server"] = data.smtp_server
+    password_changed = data.password is not None
     if updates:
         email_svc.accounts.update(email, updates)
-    if data.password is not None:
+    if password_changed:
         email_svc.accounts.set_password(email, data.password)
+
+    # Restart IDLE thread if IMAP server or password changed
+    if password_changed or updates.get("imap_server") is not None:
+        try:
+            from lighterbird.server.tasks import stop_idle_for_account, start_idle_for_new_account
+            stop_idle_for_account(email)
+            start_idle_for_new_account(email)
+        except Exception:
+            logger = __import__("logging").getLogger(__name__)
+            logger.warning("Failed to restart IDLE for updated account %s", email)
 
     return {"status": "updated", "email": email}
 
 
 @router.delete("/accounts/{email}")
 def delete_account(email: str, email_svc: EmailService = Depends(get_email_service)):
+    # Stop IDLE thread before deleting the account
+    try:
+        from lighterbird.server.tasks import stop_idle_for_account
+        stop_idle_for_account(email)
+    except Exception:
+        logger = __import__("logging").getLogger(__name__)
+        logger.warning("Failed to stop IDLE for deleted account %s", email)
+
     deleted = email_svc.delete_account(email)
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Account not found: {email}")

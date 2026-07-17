@@ -53,6 +53,15 @@ async def lifespan(app: FastAPI):
         logger.warning("Sync log initialisation failed (non-fatal)")
     workers = init_workers()
     app.state.worker_pool = workers
+
+    # Initialise the sync state manager (tracks per-account sync status)
+    try:
+        from lighterbird.server.sync_state import init_sync_state_manager
+        init_sync_state_manager()
+        logger.info("[app] Sync state manager initialized")
+    except Exception:
+        logger.warning("[app] Sync state manager init failed (non-fatal)")
+
     yield
     shutdown_workers(timeout=5.0)
     # Clean up sync log handler

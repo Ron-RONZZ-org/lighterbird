@@ -89,6 +89,24 @@ class SyncProgressResponse(BaseModel):
     errors: list[str] = []
 
 
+class AccountSyncStatus(BaseModel):
+    """Per-account sync state for the /sync/status endpoint."""
+    account_email: str
+    status: str = "startup-syncing"
+    last_sync_at: str | None = None
+    last_error: str | None = None
+    idle_alive: bool = False
+    idle_supported: bool | None = None
+    last_idle_heartbeat: str | None = None
+    reconnects: int = 0
+
+
+class SyncStatusResponse(BaseModel):
+    """Overall sync status for all accounts."""
+    startup_complete: bool
+    accounts: list[AccountSyncStatus]
+
+
 class MessageResponse(BaseModel):
     uuid: str
     account_email: str
