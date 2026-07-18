@@ -1,43 +1,25 @@
-"""LLM tools for system-level operations.
+"""Lighterbird's system.now tool — re-exported from lightercore.
 
-Currently provides one tool:
-    - ``system.now`` — Current datetime in UTC and local timezone for
-      temporal reasoning.
+The canonical implementation lives in :mod:`lightercore.llm.tools.system`.
+This module re-exports the handler and calls ``@llm_tool`` as a plain
+function so that importing (or reloading) this module always triggers
+registration in the shared registry — regardless of module caching.
 """
 
-from __future__ import annotations
-
-from datetime import datetime, timezone
-
 from lightercore.permissions import PermissionLevel
+from lightercore.llm.tools import llm_tool
+from lightercore.llm.tools.system import llm_system_now
 
-from lighterbird.server.llm.tools import llm_tool
-
-
-@llm_tool(
+# Re-register at module level so import always triggers the @llm_tool
+# decorator.  Calling llm_tool(...) as a plain function (not a decorator)
+# works because the decorator factory returns a callable that registers.
+llm_tool(
     name="system.now",
     description=(
-        "Get the current datetime in UTC and the local timezone. "
+        "Get the current date and time in UTC and the local timezone. "
         "Use this for any temporal reasoning — determining what 'today' "
         "means, filtering by date, scheduling, or interpreting relative "
         "time references from the user."
     ),
     permission_level=PermissionLevel.READ,
-)
-def llm_system_now() -> dict:
-    """Return the current timestamp with timezone information.
-
-    Returns:
-        ``{"success": True, "data": {"utc": ..., "local": ..., "timezone": ..., "iso": ...}}``
-    """
-    now_utc = datetime.now(timezone.utc)
-    now_local = now_utc.astimezone()
-    return {
-        "success": True,
-        "data": {
-            "utc": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "local": now_local.isoformat(),
-            "timezone": str(now_local.tzinfo or "UTC"),
-            "iso": now_utc.isoformat(),
-        },
-    }
+)(llm_system_now)

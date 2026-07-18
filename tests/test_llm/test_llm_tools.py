@@ -566,6 +566,9 @@ class TestAllRegisteredTools:
     """Integration test: all domain modules load and register their tools."""
 
     _TOOL_MODULES = [
+        # lightercore bundled tools first (app modules below re-import from these)
+        "lightercore.llm.tools.system",
+        # app-specific domain tool modules
         "lighterbird.server.llm.tools.system",
         "lighterbird.server.llm.tools.email",
         "lighterbird.server.llm.tools.calendar",
