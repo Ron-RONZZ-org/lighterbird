@@ -8,7 +8,7 @@
   import PreviewDialog from "./PreviewDialog.svelte";
   import { banner } from "./bannerStore.svelte.js";
   import { saveCallbackStore } from "./saveCallbackStore.svelte.js";
-  import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
+  import { createCowrite, CowriteButton, CowritePanel } from "@lightercore/ui/cowrite/index.js";
   import MultiEntryField from "./MultiEntryField.svelte";
   import { renderMarkdown } from "./markdown.js";
   import TurndownService from "turndown";

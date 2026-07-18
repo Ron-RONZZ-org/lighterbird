@@ -7,11 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from lighterbird.core.ai import ProviderConfig
-from lighterbird.server.cowrite.engine import (
-    _clean_llm_response,
-    compute_diffs,
-    cowrite,
-)
+from lighterbird.server.cowrite.engine import cowrite
+from lightercore.cowrite.engine import _clean_llm_response, compute_diffs
 
 # ── _clean_llm_response ──────────────────────────────────────────────────────
 

@@ -4,7 +4,7 @@
   import { onMount } from "svelte";
   import { todo as todoApi, drafts as draftsApi } from "./api.js";
   import TemplateFieldInput from "./TemplateFieldInput.svelte";
-  import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
+  import { createCowrite, CowriteButton, CowritePanel } from "@lightercore/ui/cowrite/index.js";
   import MultiEntryField from "./MultiEntryField.svelte";
 
   let { initialData = {}, onsubmit, onDirtyChange = () => {} } = $props();

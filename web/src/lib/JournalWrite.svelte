@@ -2,7 +2,7 @@
   /** Journal entry write form — used when !journal write is typed interactively. */
 
   import { drafts as draftsApi } from "./api.js";
-  import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
+  import { createCowrite, CowriteButton, CowritePanel } from "@lightercore/ui/cowrite/index.js";
   import PreviewDialog from "./PreviewDialog.svelte";
   import { createPreviewState } from "./preview.svelte.js";
 

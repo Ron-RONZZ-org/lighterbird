@@ -1,32 +1,27 @@
-"""Editable co-writing style guide for the lighterbird LLM assistant.
+"""Editable co-writing style guide — app-specific defaults wrapping lightercore.
 
-Uses a **cascade model**:
+The cascade loading mechanism now lives in ``lightercore.cowrite.style``.
+This module provides lighterbird-specific defaults and the form_type →
+domain mapping, then delegates to lightercore.
 
-1. **General file** (``cowrite_style.md``) — cross-cutting rules that apply
-   to all domains: tone, language, active voice, etc.
-2. **Per-domain files** (``cowrite_style_{domain}.md``) — domain-specific
-   rules for email, journal, todo, and letter writing.  Auto-seeded with
-   focused defaults and appended to the general style when present.
-
-General file always loads first (if it exists); the domain-specific file
-is appended after.  Both are seeded on first access (lazy seeding).
-
-This file is the **style layer only**.  The protocol layer (JSON format,
-field preservation, response parsing) is hardcoded in
-``server/cowrite/engine.py`` and is NEVER user-editable.
+See :mod:`lightercore.cowrite.style` for the shared cascade logic.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
+from lightercore.cowrite.style import (
+    cowrite_style_domain_path as _core_domain_path,
+)
+from lightercore.cowrite.style import (
+    cowrite_style_path as _core_path,
+)
+from lightercore.cowrite.style import (
+    load_cowrite_style as _core_load,
+)
+from lightercore.paths import config_dir
 
-from lighterbird.core.paths import config_dir
+# ── Mapping form_type → domain slug ────────────────────────────────────────
 
-_COWRITE_GENERAL_FILENAME = "cowrite_style.md"
-_COWRITE_DOMAIN_PREFIX = "cowrite_style_"
-_COWRITE_DOMAIN_SUFFIX = ".md"
-
-# Map form_type → domain slug (used to build the per-domain filename).
 _FORM_TYPE_TO_DOMAIN: dict[str, str] = {
     "email-send": "email",
     "email-forward": "email",
@@ -99,97 +94,45 @@ def cowrite_style_path() -> str:
     Returns:
         ``~/.config/lighterbird/cowrite_style.md`` as a string.
     """
-    return str(config_dir() / _COWRITE_GENERAL_FILENAME)
+    return _core_path(config_dir())
 
 
 def cowrite_style_domain_path(domain: str) -> str:
     """Return the path to a domain-specific co-writing style file.
 
     Args:
-        domain: Domain slug (``"email"``, ``"journal"``, ``"todo"``,
-            ``"letter"``).
+        domain: Domain slug (``"email"``, ``"journal"``, etc.).
 
     Returns:
         ``~/.config/lighterbird/cowrite_style_{domain}.md`` as a string.
     """
-    return str(config_dir() / f"{_COWRITE_DOMAIN_PREFIX}{domain}{_COWRITE_DOMAIN_SUFFIX}")
-
-
-def _lazy_seed(path: Path, default: str) -> None:
-    """Write *default* to *path* if the file doesn't exist or is empty."""
-    try:
-        if path.is_file():
-            try:
-                if path.read_text(encoding="utf-8").strip():
-                    return
-            except OSError:
-                pass
-    except OSError:
-        pass
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(default, encoding="utf-8")
-    except OSError:
-        pass
-
-
-def _read_file(path: Path) -> str | None:
-    """Read and return *path* content, or ``None`` if missing/empty."""
-    try:
-        content = path.read_text(encoding="utf-8").strip()
-        return content if content else None
-    except OSError:
-        return None
+    return _core_domain_path(config_dir(), domain)
 
 
 def load_cowrite_style(form_type: str | None = None) -> str | None:
     """Load the co-writing style guide (general + per-domain cascade).
 
-    **Cascade order** (both optional):
-    1. Load general ``cowrite_style.md`` (if exists and non-empty).
-    2. If *form_type* is provided, resolve the domain slug, load the
-       domain-specific file (auto-seeding on first access), and append
-       it under a ``## Domain-specific Guide`` heading.
+    Delegates to ``lightercore.cowrite.style.load_cowrite_style`` with
+    lighterbird-specific defaults.
 
     Args:
-        form_type: Form type string (e.g. ``"email-send"``, ``"todo-add"``).
-            If ``None``, only the general file is loaded.
+        form_type: Form type (e.g. ``"email-send"``, ``"todo-add"``).
 
     Returns:
-        The combined style guide string, or ``None`` if nothing is
-        available (general file missing/empty and no domain file).
+        The combined style guide string, or ``None``.
     """
-    general_path = config_dir() / _COWRITE_GENERAL_FILENAME
-    parts: list[str] = []
-
-    # 1. General file — lazy seed on first access
-    general = _read_file(general_path)
-    if general is None:
-        _lazy_seed(general_path, DEFAULT_COWRITE_STYLE)
-        general = _read_file(general_path)
-    if general:
-        parts.append(general)
-
-    # 2. Domain-specific file (if form_type resolves to a known domain)
-    domain = _FORM_TYPE_TO_DOMAIN.get(form_type) if form_type else None
-    if domain:
-        domain_path = config_dir() / f"{_COWRITE_DOMAIN_PREFIX}{domain}{_COWRITE_DOMAIN_SUFFIX}"
-        domain_content = _read_file(domain_path)
-        if domain_content is None:
-            # Auto-seed with the appropriate default
-            _defaults = {
-                "email": DEFAULT_COWRITE_STYLE_EMAIL,
-                "journal": DEFAULT_COWRITE_STYLE_JOURNAL,
-                "todo": DEFAULT_COWRITE_STYLE_TODO,
-                "letter": DEFAULT_COWRITE_STYLE_LETTER,
-            }
-            if domain in _defaults:
-                _lazy_seed(domain_path, _defaults[domain])
-                domain_content = _read_file(domain_path)
-        if domain_content:
-            parts.append("## Domain-specific Guide\n\n" + domain_content)
-
-    return "\n\n".join(parts) if parts else None
+    return _core_load(
+        config_dir=config_dir(),
+        form_type=form_type,
+        form_type_to_domain=_FORM_TYPE_TO_DOMAIN,
+        defaults={
+            "general": DEFAULT_COWRITE_STYLE,
+            "email": DEFAULT_COWRITE_STYLE_EMAIL,
+            "journal": DEFAULT_COWRITE_STYLE_JOURNAL,
+            "todo": DEFAULT_COWRITE_STYLE_TODO,
+            "letter": DEFAULT_COWRITE_STYLE_LETTER,
+        },
+    )
 
 
 __all__ = [

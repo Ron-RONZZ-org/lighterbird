@@ -17,7 +17,7 @@
   import { saveCallbackStore } from "./saveCallbackStore.svelte.js";
   import LetterBodyEditor from "./LetterBodyEditor.svelte";
   import LetterAddressFields from "./LetterAddressFields.svelte";
-  import { createCowrite, CowriteButton, CowritePanel } from "./cowrite/index.js";
+  import { createCowrite, CowriteButton, CowritePanel } from "@lightercore/ui/cowrite/index.js";
   import MultiEntryField from "./MultiEntryField.svelte";
 
   let { initialData = {}, formType = "add", tabId = null, onsubmit, onDirtyChange } = $props();
