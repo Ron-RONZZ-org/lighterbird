@@ -96,7 +96,9 @@ class TestSyncStatusEndpoint:
 
     def _client(self):
         from lighterbird.server.deps import reset_services
+        from lighterbird.server.sync_state import init_sync_state_manager
         reset_services()
+        init_sync_state_manager()  # lifespan never fires without context manager
         return TestClient(create_app())
 
     def test_sync_status_returns_startup_complete(self):
@@ -123,12 +125,16 @@ class TestSyncStatusEndpoint:
 
     def test_sync_status_account_has_expected_fields(self):
         """Each account entry has expected fields."""
-        # Register a test account via sync state manager
+        client = self._client()
+        # Register a test account AFTER creating the client (reset_services
+        # inside _client() would otherwise wipe it).  Directly access the
+        # singleton sync state manager because the app lifespan never fires
+        # when TestClient is used outside a context manager.
         from lighterbird.server.sync_state import get_sync_state_manager
         state_mgr = get_sync_state_manager()
         state_mgr.register_account("test@example.com")
         try:
-            resp = self._client().get("/api/v1/email/sync/status")
+            resp = client.get("/api/v1/email/sync/status")
             data = resp.json()
             assert len(data["accounts"]) >= 1
             acct = data["accounts"][0]
