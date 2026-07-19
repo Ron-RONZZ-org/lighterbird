@@ -62,13 +62,21 @@
     return () => stopPolling();
   });
 
-  // Refresh the email list when sync state changes to "idle" (first sync done)
+  // Show overlay during background startup sync (first load with accounts)
+  let showStartupOverlay = $state(false);
+  $effect(() => {
+    showStartupOverlay = !syncState.startupComplete && syncState.accounts.length > 0;
+  });
+
+  // Refresh the email list when startup completes (background worker finished),
+  // then hide the overlay to avoid showing "No messages" mid-refresh.
   let _prevStartupComplete = true;
   $effect(() => {
     if (syncState.startupComplete && !_prevStartupComplete) {
-      // Startup just completed — refresh the list once
-      _prevStartupComplete = true;
-      refreshList();
+      _prevStartupComplete = syncState.startupComplete;
+      refreshList().then(() => { showStartupOverlay = false; });
+    } else {
+      _prevStartupComplete = syncState.startupComplete;
     }
   });
   // isTrashView / isDraftView are derived from the explicit prop (when
@@ -720,7 +728,7 @@
 <svelte:window onkeydown={handleWindowKeydown} />
 
 <div class="email-list-tab">
-  {#if manualSyncing}
+  {#if manualSyncing || showStartupOverlay}
     <SyncOverlay
       {syncProgress}
       title="Syncing email…"
