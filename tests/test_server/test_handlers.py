@@ -39,7 +39,7 @@ def mock_email_svc(monkeypatch):
         list_accounts=[],
         search_messages=[],
         list_messages=[],
-        get_message=None,
+        get=None,
         trash_message=None,
         export_eml=None,
         import_eml=None,

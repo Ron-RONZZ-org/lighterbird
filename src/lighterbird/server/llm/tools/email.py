@@ -139,7 +139,7 @@ def llm_email_read(uuid: str = "") -> dict:
         return {"success": False, "error": "uuid is required"}
     service = get_email_service()
     try:
-        msg = service.get_message(uuid)
+        msg = service.get(uuid)
         if not msg:
             return {"success": False, "error": f"Message not found: {uuid}"}
         return {"success": True, "data": dict(msg)}
@@ -226,7 +226,7 @@ def llm_email_reply(**kwargs: Any) -> dict:
 
     service = get_email_service()
     try:
-        original = service.get_message(uuid)
+        original = service.get(uuid)
         if not original:
             return {"success": False, "error": f"Original message not found: {uuid}"}
 
@@ -287,7 +287,7 @@ def llm_email_forward(**kwargs: Any) -> dict:
     service = get_email_service()
 
     try:
-        original = service.get_message(uuid)
+        original = service.get(uuid)
         if not original:
             return {"success": False, "error": f"Original message not found: {uuid}"}
 

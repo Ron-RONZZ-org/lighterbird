@@ -90,16 +90,16 @@ def svc(db):
 class TestGetMessage:
     def test_get_existing(self, svc, db):
         _insert_message(db, uuid="msg-001")
-        msg = svc.get_message("msg-001")
+        msg = svc.get("msg-001")
         assert msg is not None
         assert msg["uuid"] == "msg-001"
 
     def test_get_nonexistent(self, svc):
-        assert svc.get_message("nonexistent") is None
+        assert svc.get("nonexistent") is None
 
     def test_get_deleted_returns_none(self, svc, db):
         _insert_message(db, uuid="msg-001", is_deleted=1)
-        assert svc.get_message("msg-001") is None
+        assert svc.get("msg-001") is None
 
 
 class TestFindByUuidPrefix:

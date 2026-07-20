@@ -276,8 +276,8 @@ class EmailService:
 
     # ── Message queries ──────────────────────────────────────────────────
 
-    def get_message(self, uuid_: str):
-        return self.messages.get_message(uuid_)
+    def get(self, uuid_: str):
+        return self.messages.get(uuid_)
 
     def list_messages(self, account_email=None, folder=None, limit=50, offset=0, sort="newest"):
         return self.messages.list_messages(
@@ -406,7 +406,7 @@ class EmailService:
         return draft
 
     def get_conversation(self, uuid_: str, limit: int = 20) -> list[dict[str, Any]]:
-        msg = self.get_message(uuid_)
+        msg = self.get(uuid_)
         if not msg:
             return []
         return self.messages.find_conversation(
