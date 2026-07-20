@@ -49,7 +49,7 @@ class MessageService:
     def __init__(self, db):
         self.db = db
 
-    def get_message(self, uuid_: str) -> dict[str, Any] | None:
+    def get(self, uuid_: str) -> dict[str, Any] | None:
         """Get a non-deleted message by UUID."""
         return self.db.execute_one(
             "SELECT * FROM messages WHERE uuid = ? AND is_deleted = 0", (uuid_,)
@@ -280,7 +280,7 @@ class MessageService:
         """
         from lighterbird.core.storage import AttachmentStore
 
-        msg = self.get_message(uuid_)
+        msg = self.get(uuid_)
         if not msg:
             return None
 

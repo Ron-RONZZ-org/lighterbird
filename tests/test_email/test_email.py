@@ -122,7 +122,7 @@ class TestMessageService:
         )
 
         svc = MessageService(db)
-        msg = svc.get_message(msg_uuid)
+        msg = svc.get(msg_uuid)
         assert msg is not None
         assert msg["subject"] == "Hello"
         assert msg["body"] == "Test body"

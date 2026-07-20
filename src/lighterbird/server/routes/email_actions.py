@@ -151,7 +151,7 @@ def export_eml(uuid: str, email_svc: EmailService = Depends(get_email_service)):
     eml_text = email_svc.export_eml(uuid)
     if eml_text is None:
         raise HTTPException(status_code=404, detail=f"Message not found: {uuid[:8]}")
-    msg = email_svc.get_message(uuid)
+    msg = email_svc.get(uuid)
     subject = (msg or {}).get("subject", "") or ""
     base = re.sub(r'[^a-zA-Z0-9_-]', '', subject)[:48] or uuid[:12]
     filename = f"{base}.eml"

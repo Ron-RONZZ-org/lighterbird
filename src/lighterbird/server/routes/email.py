@@ -480,7 +480,7 @@ def list_messages(
 
 @router.get("/messages/{uuid}")
 def get_message(uuid: str, email_svc: EmailService = Depends(get_email_service)):
-    msg = email_svc.get_message(uuid)
+    msg = email_svc.get(uuid)
     if not msg:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Message not found: {uuid[:8]}")
@@ -493,7 +493,7 @@ def get_message(uuid: str, email_svc: EmailService = Depends(get_email_service))
     result = dict(msg)
     # Re-read after potential lazy fetch
     if msg.get("body_fetched") == 0:
-        fresh = email_svc.get_message(uuid)
+        fresh = email_svc.get(uuid)
         if fresh:
             result = dict(fresh)
 
@@ -597,7 +597,7 @@ def view_message_html(uuid: str, email_svc: EmailService = Depends(get_email_ser
     import html as html_mod
     import json as json_mod
 
-    msg = email_svc.get_message(uuid)
+    msg = email_svc.get(uuid)
     if not msg:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Message not found: {uuid[:8]}")
