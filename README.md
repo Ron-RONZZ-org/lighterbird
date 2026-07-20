@@ -2,52 +2,64 @@
 
 Lighterbird — email, contacts, calendar, todo, journal, and paper letters. A command-driven personal information manager (PIM) with built-in BYOK (Bring Your Own Key) LLM support. AGPL-3.0.
 
-## Philosophy: You see only what you need
+## Three Interaction Worlds
 
-Traditional PIM apps drown you in sidebars, nested menus, and feature flags. Lighterbird does the opposite:
+The command bar accepts three input types — **CLI** (`!commands`), **prompt templates** (`/*commands`), and **natural language** (plain text → LLM). Each operation benefits from whichever interface suits it best:
 
-```
-┌──────────────────────────────────────┐
-│ ❯ !account add ...                   │  ← Always-visible command bar
-├──────────────────────────────────────┤
-│                                      │
-│  Rich result area                    │  ← Shows only what you asked for
-│  (email reader, calendar grid,       │
-│   todo list, LLM chat, etc.)         │
-│                                      │
-└──────────────────────────────────────┘
-```
+| Interface | Best for | Example |
+|-----------|----------|---------|
+| **CLI** (`!`) | Batch ops, simple mutations, deterministic commands | `!email block add @spamdomain` |
+| **GUI** (click) | Browsing, complex forms, visual context | Reading email threads, calendar grid |
+| **LLM** (text) | Fuzzy recall, multi-step, natural language | "Show me emails from John last week" |
+
+## Quick examples
 
 - `!account add/list/modify/remove` — manage accounts
-- `!email` / `!todo` / `!calendar` / `!contact` / `!journal` — open domain list view (root command defaults to list)
+- `!email` / `!todo` / `!calendar` / `!contact` / `!journal` — open domain list view
 - `!todo add --tags work,urgent` — tag your todos; filter with `!todo list --tags work`
-- `!todo list --mode tree` — toggle between flat and tree view
-- `!todo list --sort priority` — sort by priority, due date, or title
+- `!email block add @spamdomain` — block a domain (hard Sieve reject)
+- `!email spam stats` — show Bayesian classifier and phishing feed statistics
 - `!email send --help` — see all flags and params in autocomplete
 - `!email/!todo/!journal/!contact/!calendar/!letter export` — export items as .eml, .ics, .vcf, .md
 - `!email/!todo/!journal/!contact/!calendar/!letter import` — import items from standard file formats
 - `!reset <path.7z>` — backup all data to a 7z archive, then reset to a fresh state
 - `!reset --no-backup` — reset WITHOUT backup (requires GUI confirmation)
-- **Multi-command input** — chain multiple `!` commands in one message: `!email account modify a@x.com --redetect !email account modify b@x.com --redetect`. Commands execute sequentially; `!` inside quoted strings is ignored.
+- **Multi-command input** — chain multiple `!` commands in one message
 - Just type naturally → ask the built-in LLM to do things on your behalf
 - As-you-type command suggestions with UUID/entity completion — no memorisation needed
+
+## Spam & Phishing Detection
+
+Three-tier protection accessible from the email view toolbar:
+
+| Button | Action | Mechanism |
+|--------|--------|-----------|
+| 🔴 **Block** (From row) | Hard reject via Sieve | Existing `!email block add` — blocks sender or domain entirely |
+| 🟡 **Spam** (From row) | Soft classification + move to \Spam | Bayesian token filter (chi-squared) trains on content; pre-baked seed table gives ~80% Day-1 accuracy |
+| 🟠 **Fraudulent** (From row) | Hard-delete + watchlist | Phishing feed integration (OpenPhish/PhishTank/PhishStats) + display-name spoof detection; does NOT train Bayesian model to avoid false positives on brand names |
+
+Marking messages as spam trains a per-user Bayesian token model. The CLI provides `!email spam stats` for classifier statistics. Reporting spam/fraud is done via the GUI buttons or LLM natural language (UUIDs are not CLI-friendly).
 
 ## Architecture
 
 ```
 lighterbird/
-├── core/          Forked from A-core       — DB, crypto, keyring, AI providers, paths
-├── email/         Forked from A-lien       — IMAP sync, SMTP send, accounts, Sieve
-├── calendar/      Forked from A-organizi   — CalDAV, events
-├── contacts/      Extracted from email     — Contact CRUD, VCF import/export
-├── journal/       Extracted from calendar  — Journal entries, labels
-├── todo/          Extracted from calendar  — Tasks, priorities, subtasks, dependencies
-├── profiles/      New module              — User identity profiles
-├── user_commands/ New module              — Saved command aliases with templates
-├── letter/        New module              — Paper letter management, PDF rendering
-├── reset/         New module              — Reset with backup and reinitialisation
-├── server/        FastAPI backend          — REST API, command system, static serving
-└── web/           Svelte 5 SPA             — Command-bar UI, rich result rendering
+├── core/              Forked from A-core      — DB, crypto, keyring, AI providers, paths
+├── email/             Forked from A-lien      — IMAP sync, SMTP send, accounts, Sieve
+│   └── filters/
+│       ├── spam.py         — Blocklist CRUD (hard block via Sieve reject)
+│       ├── spam_detect.py  — Bayesian classifier (chi-squared, token training)
+│       └── phishing.py     — Phishing feed integration + display-name spoof detection
+├── calendar/          Forked from A-organizi  — CalDAV, events
+├── contacts/          Extracted from email    — Contact CRUD, VCF import/export
+├── journal/           Extracted from calendar — Journal entries, labels
+├── todo/              Extracted from calendar — Tasks, priorities, subtasks, dependencies
+├── profiles/          New module              — User identity profiles
+├── user_commands/     New module              — Saved command aliases with templates
+├── letter/            New module              — Paper letter management, PDF rendering
+├── reset/             New module              — Reset with backup and reinitialisation
+├── server/            FastAPI backend         — REST API, command system, static serving
+└── web/               Svelte 5 SPA            — Command-bar UI, rich result rendering
 ```
 
 ## Stack
@@ -133,7 +145,7 @@ This sets `server.watch: null` and `server.hmr: false` — no chokidar watcher r
 uv run pytest tests/ -m "not e2e"
 ```
 
-This runs all backend tests (currently **225**). E2E tests are automatically skipped.
+This runs all backend tests (currently **207+**). E2E tests are automatically skipped.
 
 ### E2E Browser Tests (Playwright)
 
@@ -153,6 +165,16 @@ Run via pytest (auto-starts seeded server on a dynamic port):
 ```bash
 uv run pytest tests/test_e2e.py --e2e -v
 ```
+
+Available E2E test scripts:
+
+| Script | Description | Timeout |
+|--------|-------------|---------|
+| `playwright_e2e.mjs` | Quick smoke tests (account CRUD, tab completion, !help) | 120s |
+| `e2e_comprehensive.mjs` | Full suite (list, create, search, backup, sync, tab nav, LLM) | 180s |
+| `e2e_gui_smoke.mjs` | GUI smoke tests: DOM rendering, tab navigation, form popups | 180s |
+| `e2e_full.mjs` | Full coverage: every registered command, CRUD, search, export/import | 420s |
+| `e2e_email_spam_buttons.mjs` | Block/Spam buttons in email view, ConfirmDialog interaction | 120s |
 
 To preserve the temporary data directory for debugging after a failure:
 
@@ -211,6 +233,8 @@ The seed data includes:
 - A test contact (from ``test-contact.toml`` if present)
 - Sample todos, journal entry, and letter
 - A user profile (from ``test-profile.toml`` if present)
+- Spam detection schema (``spam_user_tokens``, ``phishing_feeds``, ``phishing_domains``, ``spam_feedback`` tables)
+- Pre-baked Bayesian seed table (``spam_tokens.json``) for Day-1 spam classification
 
 Use ``--seed-from <archive.7z>`` to restore from a backup archive. For persistent development, use ``--data-dir <path>`` instead of the default temp directory — data inside the directory will survive server restarts.
 

@@ -143,14 +143,21 @@ lighterbird/
 │       ├── calendar/            # CalDAV sync, events
 │       ├── contacts/            # Contact CRUD, VCF import/export
 │       ├── core/                # Re-exports from lightercore (DB, paths, exceptions, CRUD, backup) + keyring, AI providers
-│       ├── email/               # IMAP sync, SMTP send, accounts, Sieve, signatures
+│       ├── email/               # IMAP sync, SMTP send, accounts, Sieve, signatures, spam detection
+│       │   ├── filters/
+│       │   │   ├── spam.py           # Blocklist CRUD (hard block via Sieve reject)
+│       │   │   ├── spam_detect.py    # Bayesian classifier (chi-squared, token training)
+│       │   │   ├── spam_tokens.json  # Pre-baked seed table (~150 tokens)
+│       │   │   ├── phishing.py       # Phishing feed integration + display-name spoof
+│       │   │   └── phishing_brands.json  # Known brand -> domain mapping
 │       ├── journal/             # Journal entry CRUD, markdown export/import, labels
 │       ├── letter/              # Paper letter management, HTML/PDF rendering
 │       ├── profiles/            # User identity profiles
 │       ├── scripts/             # Dev tooling: seed data generator, dev CLI
 │       │   ├── __init__.py
 │       │   ├── dev_cli.py       # lighterbird-dev CLI entry point
-│       │   └── seed.py          # Seed data generator for test databases
+│       │   ├── seed.py          # Seed data generator for test databases
+│       │   └── seed_spam_tokens.py  # Regenerate Bayesian seed table from SpamAssassin corpus
 │       ├── server/                      # FastAPI web server: routes, middleware, command system
 │   └── llm/tools/               # Standalone LLM tool registry (44 tools, 8 domains)
 │       ├── todo/                # Task CRUD, priority formulas, subtasks, dependencies
@@ -160,6 +167,7 @@ lighterbird/
 │   ├── conftest.py              # Shared fixtures (E2E server, DB isolation)
 │   ├── test_e2e.py              # E2E test runner (wraps Playwright .mjs scripts)
 │   ├── e2e_comprehensive.mjs    # Comprehensive Playwright E2E tests
+│   ├── e2e_email_spam_buttons.mjs  # Block/Spam buttons in email view
 │   ├── playwright_e2e.mjs       # Focused Playwright E2E tests
 │   ├── test_core/
 │   ├── test_email/
