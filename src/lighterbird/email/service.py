@@ -635,6 +635,35 @@ class EmailService:
         return SpamManager(self._db)
 
     @property
+    def spam_detect(self):
+        """Get a SpamClassifier + SpamTrainer bundle.
+
+        Returns:
+            A simple namespace with ``classifier`` and ``trainer`` attrs.
+        """
+        from lighterbird.email.filters.spam_detect import (
+            SpamClassifier,
+            SpamTrainer,
+        )
+
+        class _SpamDetect:
+            classifier = SpamClassifier(self._db)
+            trainer = SpamTrainer(self._db)
+
+        return _SpamDetect()
+
+    @property
+    def phishing(self):
+        """Get a PhishingDetector instance.
+
+        Returns:
+            PhishingDetector bound to the email DB.
+        """
+        from lighterbird.email.filters.phishing import PhishingDetector
+
+        return PhishingDetector(self._db)
+
+    @property
     def db(self):
         return self._db
 

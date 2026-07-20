@@ -201,22 +201,50 @@ lighterbird/
 
 ---
 
-## GUI + CLI Parity (Aspirational)
+## Three Interaction Worlds: CLI / GUI / LLM
 
-**Full parity is the design goal**, but some features are inherently GUI-only or CLI-only. Exceptions are documented explicitly in this section. When adding a feature, implement both paths unless a documented exception applies.
+**The command system is the single unified backend engine. `!commands`, GUI panels, and LLM natural language are consumption interfaces into it.** Not every operation needs all three — choose the interface(s) that suit the operation's natural affordances.
+
+```
+                            ┌─────────────────┐
+                            │  Backend Engine  │
+                            │  (command tree)  │
+                            └────────┬────────┘
+                                     │
+                    ┌────────────────┼────────────────┐
+                    ▼                ▼                ▼
+              ┌──────────┐   ┌────────────┐   ┌────────────┐
+              │   CLI    │   │    GUI     │   │    LLM     │
+              │  (!cmd)  │   │  (click)   │   │ (natural)  │
+              └──────────┘   └────────────┘   └────────────┘
+```
+
+### Which interface for which operation?
+
+| Operation type | Best interface | Example | Why |
+|---------------|----------------|---------|-----|
+| Single-purpose mutations | CLI or GUI | `!email sync`, `!account add` | Few params, deterministic |
+| Data browsing / discovery | GUI (primary), CLI (optional) | List emails, view threads, calendar | UUIDs are not human-friendly CLI params |
+| Complex forms | GUI (primary), LLM (secondary) | Compose email, add calendar event | Too many fields for command flags |
+| Batch operations | CLI (primary), GUI (secondary) | `!email block add @spamdomain` | Scriptable, repeatable |
+| Fuzzy recall / ad-hoc queries | LLM (primary), CLI (optional) | "Show me emails from John last week" | Natural language excels at vague queries |
+| Writing / composition | GUI + LLM (cowrite) | Compose email, journal entry | Needs visual context + AI assistance |
+| System maintenance | CLI (primary) | `!sync`, `!reset` | Deterministic, dangerous — no ambiguity |
 
 ### Core rule
 
-- Every `!command` should have a corresponding GUI panel (form, tab, or overlay) accessible through the command bar or a toolbar button.
-- Every GUI form/panel should have a corresponding `!command` accessible via the centralized command box.
-- When adding a new feature, implement both the CLI handler (backend) and the GUI component (Svelte) simultaneously unless a documented exception applies.
 - The authoritative command metadata lives in `src/lighterbird/server/command/tree.py` (backend). The frontend fetches it on startup via `GET /api/v1/command/tree`. There is no hardcoded frontend tree — `commandTree.js` starts empty and is populated dynamically.
+- Every backend operation MUST be accessible through **at least one** consumption interface. It's acceptable for an operation to have only one (e.g., batch ops CLI-only; visual browsing GUI-only).
+- When adding a new operation, implement only the interface(s) justified by the table above. The old rule "implement both CLI and GUI" is retracted — the three-worlds table defines the default interface assignment.
+- The centralized command box accepts all three input types: `!commands` (CLI), `/*commands` (prefix/LLM templates), and plain text (natural language via `POST /api/v1/chat`).
 
 ### Documented exceptions
 
-| Feature | Path | Reasoning |
-|---------|------|-----------|
-| **LLM Co-writing** (`--cowrite`) | GUI only (`CowritePanel` + `POST /api/v1/cowrite`) | Cowriting requires diff visualization + per-field Accept/Reject workflow, which is impractical in CLI. The user must see LLM-proposed changes before applying them. |
+| Operation | Interface(s) | Reasoning |
+|-----------|-------------|-----------|
+| **Email composition** (`--cowrite`) | GUI + LLM only | Diff visualization + per-field Accept/Reject workflow. Impractical in CLI. |
+| **Email view / thread view** | GUI only | UUID-based `!email view <uuid>` was never used in practice — users click to browse. |
+| **Calendar day/week/month view** | GUI only | Visual grid is the natural representation. |
 | *(add new exceptions here)* | | |
 
 ## Testing
@@ -340,6 +368,7 @@ Backend list commands return typed responses that map to frontend components:
 | `!email export eml <uuid>` | download .eml | ExportDialog / direct download |
 | `!email import eml <path>` | `status` | ImportDialog |
 | `!email block list` | `block-list` | BlockedSendersListTab |
+| `!email spam stats` | `status` | StatusPopup |
 | `!email signature list` | `signature-list` | SignatureListTab |
 | `!journal list` / `!journal search` | `journal-list` | JournalListTab |
 | `!journal export md <uuid>` | `status` (markdown) | ExportDialog |

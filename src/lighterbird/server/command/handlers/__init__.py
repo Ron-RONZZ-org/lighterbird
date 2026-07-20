@@ -20,6 +20,7 @@ try:
         email_account,  # noqa: F401
         email_block,  # noqa: F401
         email_sieve,  # noqa: F401
+        email_spam,  # noqa: F401
         email_signature,  # noqa: F401
         help,  # noqa: F401
         journal,  # noqa: F401
@@ -47,6 +48,7 @@ group("contact", description="Contact management", default_action="list")
 group("todo", description="Task management", default_action="list")
 group("journal", description="Journal entries", default_action="list")
 group("email.block", description="Block senders/domains")
+group("email.spam", description="Spam classification statistics")
 group("email.signature", description="Email signature management", default_action="list")
 group("tag", description="Cross-domain tag management")
 group("contact.category", description="Contact category management")

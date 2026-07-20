@@ -389,6 +389,8 @@ class EmailSyncWorker(BackgroundWorker):
             self._do_send(job.payload)
         elif job.operation == "process_trash":
             self._do_process_trash(job.payload)
+        elif job.operation == "update_phishing_feeds":
+            self._do_update_phishing_feeds()
         else:
             logger.warning("Unknown email operation: %s", job.operation)
 
@@ -511,6 +513,23 @@ class EmailSyncWorker(BackgroundWorker):
                 result.get("retrying", 0),
                 result.get("failed", 0),
             )
+
+    @staticmethod
+    def _do_update_phishing_feeds() -> None:
+        """Download and refresh phishing feeds in the background."""
+        from lighterbird.server.deps import get_email_service
+
+        try:
+            svc = get_email_service()
+            from lighterbird.email.filters.phishing import PhishingFeedUpdater
+            updater = PhishingFeedUpdater(svc.db)
+            result = updater.update_all()
+            total = sum(result.values())
+            if total:
+                logger.info("[phishing] Feed update complete: %d domains across %d sources",
+                            total, len(result))
+        except Exception as exc:
+            logger.warning("[phishing] Feed update failed: %s", exc, exc_info=True)
 
     @staticmethod
     def _do_process_trash(payload: dict) -> None:
@@ -637,6 +656,25 @@ class CalDAVWorker(BackgroundWorker):
         logger.info(
             "Deleted event %s from calendar %s", event_uuid[:8], cal_uuid[:8]
         )
+
+
+# ── Phishing feed updater ─────────────────────────────────────────────────
+
+
+def enqueue_phishing_feed_update() -> None:
+    """Enqueue a phishing feed update job.
+
+    Downloads fresh OpenPhish/PhishTank/PhishStats feeds and upserts
+    domains into the ``phishing_feeds`` table.  Runs immediately on
+    the email worker.
+    """
+    worker = _pool.get("email")
+    if worker is None:
+        logger.warning("[tasks] Email worker not available for feed update")
+        return
+    worker.enqueue(
+        Job(domain="email", operation="update_phishing_feeds", payload={})
+    )
 
 
 # ── Backup scheduler ─────────────────────────────────────────────────────
