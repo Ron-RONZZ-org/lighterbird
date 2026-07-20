@@ -13,6 +13,7 @@ Code lives in `src/lighterbird/scripts/`.
 | `__init__.py` | Package init |
 | `seed.py` | `seed_data_dir(target_dir, dot_dev_path)` — populates a directory with all 8 domain databases (email, calendar, contacts, todo, journal, letters, profiles, user_commands) + a demo prompt command file, containing test data from ``.dev`` credentials |
 | `dev_cli.py` | `dev_main()` — CLI entry point registered as `lighterbird-dev` in `pyproject.toml` under `[project.scripts]` |
+| `seed_spam_tokens.py` | Regenerates the Bayesian seed token table from the SpamAssassin public corpus. Run: ``uv run python src/scripts/seed_spam_tokens.py``. Outputs ``src/lighterbird/email/filters/spam_tokens.json``. |
 
 ## Usage
 
