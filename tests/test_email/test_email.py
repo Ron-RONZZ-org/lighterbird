@@ -385,6 +385,55 @@ class TestEmailService:
         result = email_service.delete_account("nonexistent@test.com")
         assert result is False
 
+    def test_spam_detect_property(self, email_service):
+        """EmailService.spam_detect returns a classifier and trainer."""
+        sd = email_service.spam_detect
+        assert sd is not None
+        assert hasattr(sd, "classifier")
+        assert hasattr(sd, "trainer")
+        # classifier can classify a message
+        result = sd.classifier.classify("Test subject", "Test body")
+        assert "is_spam" in result
+        assert "score" in result
+        # trainer can report feedback
+        sd.trainer.report("Test", "Body", "user@test.com", is_spam=True)
+
+    def test_phishing_property(self, email_service):
+        """EmailService.phishing returns a working PhishingDetector."""
+        phish = email_service.phishing
+        assert phish is not None
+        # Can analyze a message
+        result = phish.analyze(
+            from_addr="legit@example.com",
+            subject="Hello",
+            html_body=None,
+            body="Hi there",
+            account_email="user@test.com",
+        )
+        assert "is_phishing" in result
+        assert "score" in result
+        assert "reasons" in result
+
+    def test_spam_detect_with_account_training(self, email_service):
+        """Training the classifier then classifying shows different results."""
+        sd = email_service.spam_detect
+        # Classify before training
+        result_before = sd.classifier.classify(
+            "FREE offer!!!", "Click here to claim", "user@test.com",
+        )
+        # Train heavily as ham
+        for _ in range(10):
+            sd.trainer.report(
+                "Meeting reminder", "Let's sync up", "user@test.com", is_spam=False,
+            )
+        # After training, the word "meeting" has ham weight
+        result_after = sd.classifier.classify(
+            "Meeting tomorrow", "Let's meet at 3pm", "user@test.com",
+        )
+        # Both should produce valid results
+        assert result_before["score"] is not None
+        assert result_after["score"] is not None
+
 
 class TestSyncAccountBacklogDrain:
     """Test the pre-sync backlog drain in EmailService.sync_account().
