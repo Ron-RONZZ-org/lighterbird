@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lighterbird.core.db import LighterbirdDB
+from lighterbird.core.db import LighterDB
 from lighterbird.core.paths import data_dir
 
 _CREATE_ACCOUNTS = """
@@ -445,7 +445,7 @@ def _load_sqlite_vec(conn: sqlite3.Connection) -> None:
         pass  # sqlite-vec not installed — writing samples work without vectors
 
 
-def ensure_vec_table(db: LighterbirdDB, dim: int = 1536) -> None:
+def ensure_vec_table(db: LighterDB, dim: int = 1536) -> None:
     """Create the ``vec_samples`` virtual table if it does not exist.
 
     Safe to call multiple times — the ``IF NOT EXISTS`` check is done
@@ -472,7 +472,7 @@ def ensure_vec_table(db: LighterbirdDB, dim: int = 1536) -> None:
         )
 
 
-def _migrate_existing_signatures(db: LighterbirdDB) -> None:
+def _migrate_existing_signatures(db: LighterDB) -> None:
     """Copy existing per-account signatures from accounts table to email_signatures.
 
     Runs once; subsequent calls are no-ops because of INSERT OR IGNORE.
@@ -498,7 +498,7 @@ def _migrate_existing_signatures(db: LighterbirdDB) -> None:
             pass  # best-effort migration
 
 
-def _migrate_signatures_v2(db: LighterbirdDB) -> None:
+def _migrate_signatures_v2(db: LighterDB) -> None:
     """Migrate from per-account signatures (Phase 1) to global signatures (Phase 2).
 
     Handles the transition where ``email_signatures`` still has the
@@ -576,12 +576,12 @@ def _migrate_signatures_v2(db: LighterbirdDB) -> None:
         pass
 
 
-def get_db(path: Path | str | None = None) -> LighterbirdDB:
+def get_db(path: Path | str | None = None) -> LighterDB:
     """Get the email database connection with schema initialized."""
     from sqlite3 import OperationalError
 
     resolved = Path(path) if path else _email_db_path()
-    db = LighterbirdDB(resolved, after_connect=_load_sqlite_vec)
+    db = LighterDB(resolved, after_connect=_load_sqlite_vec)
     for stmt in _SCHEMA_STATEMENTS:
         try:
             db.execute(stmt)

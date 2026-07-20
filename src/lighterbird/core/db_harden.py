@@ -93,11 +93,11 @@ def open_healthy_db(path: Path, *, backup: bool = False):
         backup: If True, create a rolling ``.bak`` copy after opening.
 
     Returns:
-        A ready-to-use ``LighterbirdDB`` instance.
+        A ready-to-use ``LighterDB`` instance.
     """
-    from lighterbird.core.db import LighterbirdDB
+    from lighterbird.core.db import LighterDB
 
-    db = LighterbirdDB(path)
+    db = LighterDB(path)
     if backup:
         backup_db(path)
     return db
@@ -108,7 +108,7 @@ def init_db(
     schema_sql: str | list[str],
     *,
     backup: bool = True,
-) -> LighterbirdDB:
+) -> LighterDB:
     """Create or open a database with schema initialization.
 
     Args:
@@ -117,14 +117,14 @@ def init_db(
         backup: If True, snapshot the DB before any DDL.
 
     Returns:
-        A ready-to-use ``LighterbirdDB`` instance.
+        A ready-to-use ``LighterDB`` instance.
     """
-    from lighterbird.core.db import LighterbirdDB
+    from lighterbird.core.db import LighterDB
 
     if backup:
         backup_db(path)
 
-    db = LighterbirdDB(path)
+    db = LighterDB(path)
     statements = [schema_sql] if isinstance(schema_sql, str) else schema_sql
     for stmt in statements:
         s = stmt.strip()

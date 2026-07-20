@@ -21,7 +21,7 @@ class DeadLetterService:
     CLI or API and can be cleared individually or in bulk.
 
     Args:
-        db: Database connection (LighterbirdDB).
+        db: Database connection (LighterDB).
     """
 
     def __init__(self, db: Any):

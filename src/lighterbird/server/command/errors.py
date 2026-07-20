@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from lighterbird.core.exceptions import LighterbirdError
+from lighterbird.core.exceptions import LighterError
 
 
-class CommandError(LighterbirdError):
+class CommandError(LighterError):
     """Base error for command dispatch."""
 
 

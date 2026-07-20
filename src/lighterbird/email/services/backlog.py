@@ -40,7 +40,7 @@ class BacklogService:
     rather than block.
 
     Args:
-        db: Database connection (LighterbirdDB).
+        db: Database connection (LighterDB).
         pool: IMAP connection pool for per-account reuse.
         folder_mapper: Folder name resolution service.
         dead_letter: Dead-letter service for entries exceeding max retries.

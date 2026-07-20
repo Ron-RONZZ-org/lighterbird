@@ -6,7 +6,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from lighterbird.core.exceptions import LighterbirdError
+from lighterbird.core.exceptions import LighterError
 from lighterbird.server.middleware import _error_response, add_middleware
 
 
@@ -19,7 +19,7 @@ class TestErrorResponse:
         assert "ValueError" in data
 
     def test_with_suggestion(self):
-        class ExWithDetails(LighterbirdError):
+        class ExWithDetails(LighterError):
             def __init__(self):
                 super().__init__("Custom error")
                 self.details = {"suggestion": "Try something else"}
@@ -39,7 +39,7 @@ class TestMiddlewareErrorHandlers:
 
         @app.get("/raise-lighterbird")
         async def _raise_lighterbird():
-            raise LighterbirdError("App error")
+            raise LighterError("App error")
 
         @app.get("/raise-value")
         async def _raise_value():

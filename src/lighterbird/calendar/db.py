@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lighterbird.core.db import LighterbirdDB
+from lighterbird.core.db import LighterDB
 from lighterbird.core.paths import data_dir
 
 _CREATE_CALENDARS = """
@@ -95,12 +95,12 @@ def _calendar_db_path() -> Path:
     return data_dir() / "calendar.db"
 
 
-def get_db(path: Path | str | None = None) -> LighterbirdDB:
+def get_db(path: Path | str | None = None) -> LighterDB:
     """Get the calendar database connection with schema initialized."""
     from sqlite3 import OperationalError
 
     resolved = Path(path) if path else _calendar_db_path()
-    db = LighterbirdDB(resolved)
+    db = LighterDB(resolved)
     for stmt in _CREATE_STMTS:
         try:
             db.execute(stmt)
