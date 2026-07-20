@@ -32,7 +32,7 @@ from lightercore.backup import (
     save_config as save_backup_config,
 )
 from lightercore.crud import CRUDService
-from lightercore.db import LighterbirdDB
+from lightercore.db import LighterDB
 from lightercore.exceptions import (
     AIError,
     AmbiguousIDError,
@@ -40,7 +40,7 @@ from lightercore.exceptions import (
     ConfigurationError,
     DatabaseError,
     DataError,
-    LighterbirdError,
+    LighterError,
     ProtectedPathError,
     SyncError,
 )
@@ -62,8 +62,8 @@ __all__ = [
     "ConfigurationError",
     "DataError",
     "DatabaseError",
-    "LighterbirdDB",
-    "LighterbirdError",
+    "LighterDB",
+    "LighterError",
     "ProtectedPathError",
     "SyncError",
     "add_strategy",

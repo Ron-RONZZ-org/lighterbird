@@ -81,7 +81,7 @@ class MessageService:
             conditions.append("m.account_email = ?")
             params.append(account_email)
         if folder:
-            conditions.append("m.folder_name = ?")
+            conditions.append("LOWER(m.folder_name) = LOWER(?)")
             params.append(folder)
         where = " AND ".join(conditions)
         order = "m.received_at DESC" if sort != "oldest" else "m.received_at ASC"
@@ -160,22 +160,24 @@ class MessageService:
         if filters.get("account"):
             conditions.append("m.account_email = ?")
             params.append(filters["account"])
-        # Folder filtering: list of folders to INCLUDE (by name)
+        # Folder filtering: list of folders to INCLUDE (by name).
+        # IMAP folder names are case-insensitive per RFC 3501 (e.g. "INBOX"
+        # vs "Inbox"), so we use LOWER() for case-insensitive comparison.
         folder_names = filters.get("folder")
         if folder_names:
             if isinstance(folder_names, str):
                 folder_names = [folder_names]
-            placeholders = ",".join("?" for _ in folder_names)
-            conditions.append(f"m.folder_name IN ({placeholders})")
+            low_placeholders = ",".join("LOWER(?)" for _ in folder_names)
+            conditions.append(f"LOWER(m.folder_name) IN ({low_placeholders})")
             params.extend(folder_names)
         # Exclude specific folders (e.g. Trash)
         exclude_folders = filters.get("exclude_folder")
         if exclude_folders:
             if isinstance(exclude_folders, str):
                 exclude_folders = [exclude_folders]
-            placeholders = ",".join("?" for _ in exclude_folders)
+            low_placeholders = ",".join("LOWER(?)" for _ in exclude_folders)
             conditions.append(
-                f"(m.folder_name IS NULL OR m.folder_name NOT IN ({placeholders}))"
+                f"(m.folder_name IS NULL OR LOWER(m.folder_name) NOT IN ({low_placeholders}))"
             )
             params.extend(exclude_folders)
 

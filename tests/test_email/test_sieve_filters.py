@@ -153,11 +153,11 @@ class TestCombinerHelpers:
 class TestSpamManager:
     @pytest.fixture
     def db(self, tmp_path: Path):
-        """Create a LighterbirdDB with spam_blocks table."""
-        from lighterbird.core.db import LighterbirdDB
+        """Create a LighterDB with spam_blocks table."""
+        from lighterbird.core.db import LighterDB
 
         db_path = tmp_path / "spam_test.db"
-        db = LighterbirdDB(db_path)
+        db = LighterDB(db_path)
         db.execute(
             "CREATE TABLE IF NOT EXISTS spam_blocks ("
             "  uuid TEXT PRIMARY KEY,"

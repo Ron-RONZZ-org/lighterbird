@@ -1,4 +1,4 @@
-"""Tests for lighterbird.core.db — LighterbirdDB."""
+"""Tests for lighterbird.core.db — LighterDB."""
 
 from __future__ import annotations
 
@@ -6,21 +6,21 @@ from pathlib import Path
 
 import pytest
 
-from lighterbird.core.db import LighterbirdDB
+from lighterbird.core.db import LighterDB
 from lighterbird.core.exceptions import ProtectedPathError
 from lighterbird.core.paths import protect_directory, safe_rmtree, safe_unlink
 
 
-class TestLighterbirdDB:
+class TestLighterDB:
     def test_creates_file(self, tmp_path: Path):
         db_path = tmp_path / "test.db"
-        db = LighterbirdDB(db_path)
+        db = LighterDB(db_path)
         db.execute("CREATE TABLE t (x INTEGER)")
         db.execute("INSERT INTO t VALUES (42)")
         assert db_path.exists()
 
     def test_per_thread_connections(self, tmp_path: Path):
-        db = LighterbirdDB(tmp_path / "threads.db")
+        db = LighterDB(tmp_path / "threads.db")
         db.execute("CREATE TABLE t (x INTEGER)")
         db.execute("INSERT INTO t VALUES (1)")
 
@@ -39,12 +39,12 @@ class TestLighterbirdDB:
         assert results[0]["x"] == 1
 
     def test_execute_one_returns_none(self, tmp_path: Path):
-        db = LighterbirdDB(tmp_path / "empty.db")
+        db = LighterDB(tmp_path / "empty.db")
         db.execute("CREATE TABLE t (x INTEGER)")
         assert db.execute_one("SELECT * FROM t") is None
 
     def test_execute_one_returns_row(self, tmp_path: Path):
-        db = LighterbirdDB(tmp_path / "single.db")
+        db = LighterDB(tmp_path / "single.db")
         db.execute("CREATE TABLE t (x INTEGER)")
         db.execute("INSERT INTO t VALUES (99)")
         row = db.execute_one("SELECT * FROM t")
@@ -52,7 +52,7 @@ class TestLighterbirdDB:
         assert row["x"] == 99
 
     def test_transaction_commit(self, tmp_path: Path):
-        db = LighterbirdDB(tmp_path / "txn.db")
+        db = LighterDB(tmp_path / "txn.db")
         db.execute("CREATE TABLE t (x INTEGER)")
         with db.transaction() as conn:
             conn.execute("INSERT INTO t VALUES (1)")
@@ -61,7 +61,7 @@ class TestLighterbirdDB:
         assert len(rows) == 2
 
     def test_transaction_rollback(self, tmp_path: Path):
-        db = LighterbirdDB(tmp_path / "rollback.db")
+        db = LighterDB(tmp_path / "rollback.db")
         db.execute("CREATE TABLE t (x INTEGER)")
         try:
             with db.transaction() as conn:
@@ -73,7 +73,7 @@ class TestLighterbirdDB:
         assert len(rows) == 0
 
     def test_init_schema(self, tmp_path: Path):
-        db = LighterbirdDB(tmp_path / "schema.db")
+        db = LighterDB(tmp_path / "schema.db")
         schema = {
             "users": "CREATE TABLE users (uuid TEXT PRIMARY KEY, name TEXT)",
             "posts": "CREATE TABLE posts (uuid TEXT PRIMARY KEY, title TEXT)",
@@ -83,21 +83,21 @@ class TestLighterbirdDB:
         assert db.table_exists("posts")
 
     def test_init_schema_idempotent(self, tmp_path: Path):
-        db = LighterbirdDB(tmp_path / "idemp.db")
+        db = LighterDB(tmp_path / "idemp.db")
         schema = {"t": "CREATE TABLE t (x INTEGER)"}
         db.init_schema(schema)
         db.init_schema(schema)  # Second call should not fail
         assert db.table_exists("t")
 
     def test_execute_many(self, tmp_path: Path):
-        db = LighterbirdDB(tmp_path / "many.db")
+        db = LighterDB(tmp_path / "many.db")
         db.execute("CREATE TABLE t (x INTEGER)")
         db.execute_many("INSERT INTO t VALUES (?)", [(1,), (2,), (3,)])
         rows = db.execute("SELECT x FROM t ORDER BY x")
         assert [r["x"] for r in rows] == [1, 2, 3]
 
     def test_get_pragma_table_info(self, tmp_path: Path):
-        db = LighterbirdDB(tmp_path / "pragma.db")
+        db = LighterDB(tmp_path / "pragma.db")
         db.execute("CREATE TABLE t (uuid TEXT PRIMARY KEY, name TEXT NOT NULL, age INTEGER)")
         info = db.get_pragma_table_info("t")
         columns = {r["name"]: r for r in info}
@@ -112,7 +112,7 @@ class TestPaths:
     def test_data_dir_default(self):
         from lighterbird.core.paths import data_dir
 
-        assert "lighterbird" in str(data_dir())
+        assert "unknownlighterapp" in str(data_dir())
 
     def test_data_dir_override(self, monkeypatch):
         from lighterbird.core.paths import data_dir
@@ -201,7 +201,7 @@ class TestKeyring:
 class TestCRUDService:
     @pytest.fixture
     def db(self, tmp_path: Path):
-        d = LighterbirdDB(tmp_path / "crud.db")
+        d = LighterDB(tmp_path / "crud.db")
         d.execute(
             "CREATE TABLE items ("
             "uuid TEXT PRIMARY KEY, name TEXT, value INTEGER, "

@@ -169,11 +169,11 @@ class TestSpamManagerUnit:
 
     @pytest.fixture
     def db(self):
-        """Create an in-memory LighterbirdDB with the spam_blocks schema loaded."""
+        """Create an in-memory LighterDB with the spam_blocks schema loaded."""
         from lighterbird.email.db import _CREATE_SPAM_BLOCKS
 
-        from lighterbird.core.db import LighterbirdDB
-        db = LighterbirdDB(":memory:")
+        from lighterbird.core.db import LighterDB
+        db = LighterDB(":memory:")
         db.execute(_CREATE_SPAM_BLOCKS)
         return db
 

@@ -99,7 +99,7 @@ def sync_account(
         username: Login username
         password: Login password
         account_email: Account email (primary key)
-        db_store: Object with .db (LighterbirdDB)
+        db_store: Object with .db (LighterDB)
         folders: Specific folders to sync (None = sync all discovered)
         force: If True, re-download all messages
         progress_tracker: Optional | SyncProgressTracker for progress reporting.
@@ -431,7 +431,7 @@ def _sync_imap_drafts_to_local(
 
     Args:
         client: Connected IMAPClient instance.
-        db_store: Object with ``.db`` (LighterbirdDB) attribute.
+        db_store: Object with ``.db`` (LighterDB) attribute.
         account_email: The account to process.
         folder_mapper: Optional FolderMapper for localized folder name
             resolution.  Falls back to ``"Drafts"`` if not provided.

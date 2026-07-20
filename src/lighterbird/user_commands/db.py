@@ -5,7 +5,7 @@ Follows the per-module SQLite file pattern from email/, contacts/, etc.
 
 from __future__ import annotations
 
-from lighterbird.core.db import LighterbirdDB
+from lighterbird.core.db import LighterDB
 from lighterbird.core.paths import data_dir
 
 _DB_PATH = data_dir() / "user_commands.db"
@@ -23,14 +23,14 @@ CREATE TABLE IF NOT EXISTS saved_commands (
 """,
 }
 
-_db: LighterbirdDB | None = None
+_db: LighterDB | None = None
 
 
-def get_db() -> LighterbirdDB:
+def get_db() -> LighterDB:
     """Get the singleton user_commands database."""
     global _db
     if _db is None:
-        _db = LighterbirdDB(_DB_PATH)
+        _db = LighterDB(_DB_PATH)
         _db.init_schema(_SCHEMA)
     return _db
 

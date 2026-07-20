@@ -6,7 +6,7 @@ with structured contact, demographic, and custom fields stored as JSON.
 
 from __future__ import annotations
 
-from lighterbird.core.db import LighterbirdDB
+from lighterbird.core.db import LighterDB
 from lighterbird.core.paths import data_dir
 
 _DB_PATH = data_dir() / "profiles.db"
@@ -40,14 +40,14 @@ _MIGRATE_NOTES = """
 ALTER TABLE user_profiles ADD COLUMN notes TEXT NOT NULL DEFAULT '';
 """
 
-_db: LighterbirdDB | None = None
+_db: LighterDB | None = None
 
 
-def get_db() -> LighterbirdDB:
+def get_db() -> LighterDB:
     """Get the singleton profiles database."""
     global _db
     if _db is None:
-        _db = LighterbirdDB(_DB_PATH)
+        _db = LighterDB(_DB_PATH)
         _db.init_schema(_SCHEMA)
         try:
             _db.execute(_MIGRATE_NOTES)

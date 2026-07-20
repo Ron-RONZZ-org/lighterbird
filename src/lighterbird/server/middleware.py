@@ -11,7 +11,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
-from lighterbird.core.exceptions import LighterbirdError
+from lighterbird.core.exceptions import LighterError
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +34,8 @@ def _error_response(status: int, exc: Exception) -> JSONResponse:
 def add_middleware(app: FastAPI) -> None:
     """Register all middleware on the FastAPI application."""
 
-    @app.exception_handler(LighterbirdError)
-    async def lighterbird_error_handler(request: Request, exc: LighterbirdError):
+    @app.exception_handler(LighterError)
+    async def lighterbird_error_handler(request: Request, exc: LighterError):
         return _error_response(400, exc)
 
     @app.exception_handler(ValueError)

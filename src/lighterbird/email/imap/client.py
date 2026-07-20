@@ -305,7 +305,7 @@ class IMAPClient:
         Args:
             account_email: The account this folder belongs to.
             folder_name: The server folder name.
-            db_store: Object with ``.db`` (LighterbirdDB) attribute.
+            db_store: Object with ``.db`` (LighterDB) attribute.
             special_use: Optional SPECIAL-USE flag (e.g. ``\\Trash``).
 
         Returns:
@@ -657,7 +657,7 @@ class IMAPClient:
             folder: IMAP folder name.
             account_email: Account email.
             folder_name: Local folder name (may differ from IMAP folder).
-            db_store: Object with .db (LighterbirdDB).
+            db_store: Object with .db (LighterDB).
             force: If True, re-download all messages.
             headers_only: If True, fetch only headers (lazy body).
 
@@ -802,7 +802,7 @@ class IMAPClient:
             account_email: Account email.
             folder_name: Folder name.
             imap_uid: IMAP UID of the message.
-            db_store: Object with ``.db`` (LighterbirdDB).
+            db_store: Object with ``.db`` (LighterDB).
 
         Returns:
             The updated message dict, or ``None`` on failure.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lighterbird.core.db import LighterbirdDB
+from lighterbird.core.db import LighterDB
 from lighterbird.core.paths import data_dir
 
 _CREATE_LETTERS = """
@@ -52,9 +52,9 @@ def _letter_db_path() -> Path:
     return data_dir() / "letters.db"
 
 
-def get_db(path: Path | str | None = None) -> LighterbirdDB:
+def get_db(path: Path | str | None = None) -> LighterDB:
     resolved = Path(path) if path else _letter_db_path()
-    db = LighterbirdDB(resolved)
+    db = LighterDB(resolved)
     for stmt in _SCHEMA_STMTS:
         db.execute(stmt)
     return db
