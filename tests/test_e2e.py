@@ -40,6 +40,11 @@ SCRIPTS: list[tuple[str, str, int]] = [
         "GUI smoke tests: DOM rendering, tab navigation, form popups, console-error tracking",
         180,
     ),
+    (
+        "e2e_email_spam_buttons.mjs",
+        "Email view Block and Spam buttons in EmailHeaders, ConfirmDialog interaction",
+        120,
+    ),
 ]
 
 # ── Tests ───────────────────────────────────────────────────────────────────
