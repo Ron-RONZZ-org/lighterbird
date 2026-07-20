@@ -207,6 +207,9 @@ export const email = {
 
   deleteFolder: (accountEmail, folderName) =>
     request("DELETE", `/email/folders/${encodeURIComponent(folderName)}?account_email=${encodeURIComponent(accountEmail)}`),
+
+  reportSpam: (uuid, type) =>
+    request("POST", "/email/spam/report", { uuid, type }),
 };
 
 // ── Calendar API ──────────────────────────────────────────────────────

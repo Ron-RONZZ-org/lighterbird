@@ -260,6 +260,70 @@ _MIGRATE_DEAD_LETTERS_OPERATION = """
 ALTER TABLE _dead_letters ADD COLUMN operation TEXT NOT NULL DEFAULT 'sync';
 """
 
+# ── Spam detection schema (Bayesian tokens + phishing feeds) ─────────────
+_CREATE_SPAM_USER_TOKENS = """
+CREATE TABLE IF NOT EXISTS spam_user_tokens (
+    token           TEXT NOT NULL,
+    account_email   TEXT NOT NULL,
+    spam_count      INTEGER NOT NULL DEFAULT 0,
+    ham_count       INTEGER NOT NULL DEFAULT 0,
+    last_seen_at    TEXT NOT NULL,
+    PRIMARY KEY (token, account_email)
+);
+"""
+
+_CREATE_PHISHING_FEEDS = """
+CREATE TABLE IF NOT EXISTS phishing_feeds (
+    domain      TEXT NOT NULL,
+    source      TEXT NOT NULL,
+    last_seen   TEXT NOT NULL,
+    PRIMARY KEY (domain, source)
+);
+"""
+
+_CREATE_PHISHING_DOMAINS = """
+CREATE TABLE IF NOT EXISTS phishing_domains (
+    domain          TEXT NOT NULL,
+    brand           TEXT,
+    reason          TEXT NOT NULL DEFAULT '',
+    reported_at     TEXT NOT NULL,
+    account_email   TEXT NOT NULL,
+    PRIMARY KEY (domain, account_email)
+);
+"""
+
+_CREATE_SPAM_FEEDBACK = """
+CREATE TABLE IF NOT EXISTS spam_feedback (
+    uuid            TEXT PRIMARY KEY,
+    message_uuid    TEXT NOT NULL REFERENCES messages(uuid) ON DELETE CASCADE,
+    account_email   TEXT NOT NULL,
+    feedback        TEXT NOT NULL CHECK(feedback IN ('spam', 'ham', 'fraud')),
+    created_at      TEXT NOT NULL
+);
+"""
+
+_MIGRATE_MESSAGES_SPAM = """
+ALTER TABLE messages ADD COLUMN is_spam INTEGER NOT NULL DEFAULT 0;
+"""
+_MIGRATE_MESSAGES_SPAM_SCORE = """
+ALTER TABLE messages ADD COLUMN spam_score REAL;
+"""
+_MIGRATE_MESSAGES_SPAM_REPORTED = """
+ALTER TABLE messages ADD COLUMN spam_reported INTEGER NOT NULL DEFAULT 0;
+"""
+_MIGRATE_MESSAGES_HAM_REPORTED = """
+ALTER TABLE messages ADD COLUMN ham_reported INTEGER NOT NULL DEFAULT 0;
+"""
+_MIGRATE_MESSAGES_PHISHING = """
+ALTER TABLE messages ADD COLUMN phishing_detected INTEGER NOT NULL DEFAULT 0;
+"""
+
+_IDX_SPAM_FEEDBACK_MSG = "CREATE INDEX IF NOT EXISTS idx_spam_feedback_msg ON spam_feedback(message_uuid);"
+
+_IDX_SPAM_USER_TOKENS_ACCT = "CREATE INDEX IF NOT EXISTS idx_spam_user_tokens_acct ON spam_user_tokens(account_email);"
+
+_IDX_PHISHING_FEEDS_DOMAIN = "CREATE INDEX IF NOT EXISTS idx_phishing_feeds_domain ON phishing_feeds(domain);"
+
 _SEND_QUEUE_TABLE = """
 CREATE TABLE IF NOT EXISTS send_queue (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -312,6 +376,19 @@ _SCHEMA_STATEMENTS: list[str] = [
     _DROP_LEGACY_ALDONAJXOJ,
     _SYNC_BACKLOG_TABLE,
     _SEND_QUEUE_TABLE,
+    # Spam/phishing schema
+    _CREATE_SPAM_USER_TOKENS,
+    _CREATE_PHISHING_FEEDS,
+    _CREATE_PHISHING_DOMAINS,
+    _CREATE_SPAM_FEEDBACK,
+    _MIGRATE_MESSAGES_SPAM,
+    _MIGRATE_MESSAGES_SPAM_SCORE,
+    _MIGRATE_MESSAGES_SPAM_REPORTED,
+    _MIGRATE_MESSAGES_HAM_REPORTED,
+    _MIGRATE_MESSAGES_PHISHING,
+    _IDX_SPAM_FEEDBACK_MSG,
+    _IDX_SPAM_USER_TOKENS_ACCT,
+    _IDX_PHISHING_FEEDS_DOMAIN,
     _CREATE_SPAM_BLOCKS,
     _CREATE_SIEVE_SCRIPTS,
     _CREATE_SIEVE_ACTIVATIONS,
