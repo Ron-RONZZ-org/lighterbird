@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from lightercore.llm.utils import build_messages
+from lighterllm.llm.utils import build_messages
 
 from lighterbird.server.llm.provider import LLMProviderWrapper
 

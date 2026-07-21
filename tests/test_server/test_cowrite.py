@@ -8,7 +8,8 @@ import pytest
 
 from lighterbird.core.ai import ProviderConfig
 from lighterbird.server.cowrite.engine import cowrite
-from lightercore.cowrite.engine import _clean_llm_response, compute_diffs
+from lightercore.text_utils import compute_diffs
+from lighterllm.cowrite.engine import _clean_llm_response
 
 # ── _clean_llm_response ──────────────────────────────────────────────────────
 

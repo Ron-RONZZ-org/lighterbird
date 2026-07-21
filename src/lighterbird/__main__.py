@@ -28,7 +28,7 @@ def _auto_configure_from_dev() -> None:
         return
     _auto_configured = True
 
-    from lightercore.llm.config import (
+    from lighterllm.llm.config import (
         ProviderConfig,
         load_active_config,
         save_active_config,

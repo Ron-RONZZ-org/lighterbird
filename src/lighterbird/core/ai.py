@@ -1,14 +1,14 @@
 """LLM provider abstraction — config, factory, and interface.
 
-Provider configuration now comes from ``lightercore.llm.config``.
+Provider configuration now comes from ``lighterllm.llm.config``.
 Providers are stateless and created on demand.
 Provider state (which provider is active) is managed by the server layer.
 """
 
 from __future__ import annotations
 
-from lightercore.llm import ProviderConfig
-from lightercore.llm.protocol import LLMProvider
+from lighterllm.llm import ProviderConfig
+from lighterllm.llm.protocol import LLMProvider
 
 
 def get_provider(config: ProviderConfig) -> LLMProvider:

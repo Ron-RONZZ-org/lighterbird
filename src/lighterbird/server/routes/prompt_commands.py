@@ -20,7 +20,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from lightercore.paths import config_dir
-from lightercore.prompt_commands import (
+from lighterllm.prompt_commands import (
     execute_prompt_command,
     expand_prompt_template,
     list_prompt_commands,
@@ -119,7 +119,7 @@ async def expand_endpoint(data: dict[str, Any]) -> dict[str, Any]:
 async def execute_endpoint(data: dict[str, Any]) -> dict[str, Any]:
     """Expand a prompt command and execute with multi-round tool-calling.
 
-    Delegates to :func:`~lightercore.prompt_commands.execute_prompt_command`
+    Delegates to :func:`~lighterllm.prompt_commands.execute_prompt_command`
     for the full pipeline: load → expand → message build → domain filter →
     tool loop → response formatting.
     """
@@ -218,7 +218,7 @@ async def execute_resume_endpoint(data: dict[str, Any]) -> dict[str, Any]:
 async def execute_stream_endpoint(data: dict[str, Any]) -> StreamingResponse:
     """Streaming variant of ``/execute`` — SSE without tool-calling.
 
-    Delegates to :func:`~lightercore.prompt_commands.prompt_command_event_stream`
+    Delegates to :func:`~lighterllm.prompt_commands.prompt_command_event_stream`
     for the shared SSE generation.
     """
     name = data.get("name", "").strip()

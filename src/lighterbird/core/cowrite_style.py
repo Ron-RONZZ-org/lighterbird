@@ -1,24 +1,24 @@
-"""Editable co-writing style guide — app-specific defaults wrapping lightercore.
+"""Editable co-writing style guide — app-specific defaults wrapping lighterllm.
 
-The cascade loading mechanism now lives in ``lightercore.cowrite.style``.
+The cascade loading mechanism now lives in ``lighterllm.cowrite.style``.
 This module provides lighterbird-specific defaults and the form_type →
-domain mapping, then delegates to lightercore.
+domain mapping, then delegates to lighterllm.
 
-See :mod:`lightercore.cowrite.style` for the shared cascade logic.
+See :mod:`lighterllm.cowrite.style` for the shared cascade logic.
 """
 
 from __future__ import annotations
 
-from lightercore.cowrite.style import (
+from lightercore.paths import config_dir
+from lighterllm.cowrite.style import (
     cowrite_style_domain_path as _core_domain_path,
 )
-from lightercore.cowrite.style import (
+from lighterllm.cowrite.style import (
     cowrite_style_path as _core_path,
 )
-from lightercore.cowrite.style import (
+from lighterllm.cowrite.style import (
     load_cowrite_style as _core_load,
 )
-from lightercore.paths import config_dir
 
 # ── Mapping form_type → domain slug ────────────────────────────────────────
 

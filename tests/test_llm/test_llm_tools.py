@@ -17,8 +17,8 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
-from lightercore.llm.base import ToolCall
-from lightercore.llm.tool_loop import tc_path
+from lighterllm.llm.base import ToolCall
+from lighterllm.llm.tool_loop import tc_path
 from lightercore.permissions import PermissionLevel
 
 from lighterbird.server.llm.tools import (
@@ -567,7 +567,7 @@ class TestAllRegisteredTools:
 
     _TOOL_MODULES = [
         # lightercore bundled tools first (app modules below re-import from these)
-        "lightercore.llm.tools.system",
+        "lighterllm.llm.tools.system",
         # app-specific domain tool modules
         "lighterbird.server.llm.tools.system",
         "lighterbird.server.llm.tools.email",

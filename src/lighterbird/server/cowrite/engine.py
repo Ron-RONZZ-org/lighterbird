@@ -1,11 +1,11 @@
-"""Co-writing engine — app-specific orchestration around the lightercore engine.
+"""Co-writing engine — app-specific orchestration around the lighterllm engine.
 
-The core co-writing logic (protocol prompt, diff computation, response
-parsing) now lives in ``lightercore.cowrite.engine``.  This module
+The core co-writing logic (protocol prompt, response
+parsing) now lives in ``lighterllm.cowrite.engine``.  This module
 handles lighterbird-specific wiring: provider creation, context gathering,
 and style loading.
 
-See :mod:`lightercore.cowrite.engine` for the shared implementation.
+See :mod:`lighterllm.cowrite.engine` for the shared implementation.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ async def cowrite(
     *,
     context_mode: str = "auto",
 ) -> dict[str, Any]:
-    """Run the co-writing flow: gather context, load style, delegate to lightercore.
+    """Run the co-writing flow: gather context, load style, delegate to lighterllm.
 
     Args:
         form_type: Type of form (``"email-send"``, ``"todo-add"``, etc.).
@@ -64,8 +64,8 @@ async def cowrite(
     # Get core provider (bypasses wrapper's system prompt)
     core = _get_core_provider(provider.config)
 
-    # Delegate to lightercore
-    from lightercore.cowrite.engine import cowrite as core_cowrite
+    # Delegate to lighterllm
+    from lighterllm.cowrite.engine import cowrite as core_cowrite
 
     return await core_cowrite(
         form_type=form_type,

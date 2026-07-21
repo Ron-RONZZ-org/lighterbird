@@ -1,6 +1,6 @@
 """Editable system prompt for the lighterbird LLM agent.
 
-Delegates to :class:`lightercore.system_prompt.SystemPromptManager` for
+Delegates to :class:`lighterllm.system_prompt.SystemPromptManager` for
 file-based prompt management with auto-seed on first run.
 
 The shipped default is defined here (app-specific content).
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lightercore.system_prompt import SystemPromptManager
+from lighterllm.system_prompt import SystemPromptManager
 
 from lighterbird.core.paths import config_dir
 

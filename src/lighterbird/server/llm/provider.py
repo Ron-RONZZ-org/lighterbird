@@ -1,7 +1,7 @@
 """LLM provider — thin wrapper around core providers.
 
 Configuration and named profiles are persisted in the system keyring via
-``lightercore.llm`` modules.  Core provider instances are created on each
+``lighterllm.llm`` modules.  Core provider instances are created on each
 call (stateless, per AGENTS-core.md).
 
 The system prompt is loaded from a user-editable file via
@@ -15,15 +15,15 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from lightercore.exceptions import AIError
-from lightercore.llm import ProviderConfig
-from lightercore.llm.base import ChatResult
-from lightercore.llm.config import (
+from lighterllm.llm import ProviderConfig
+from lighterllm.llm.base import ChatResult
+from lighterllm.llm.config import (
     clear_active_config,
     load_active_config,
     save_active_config,
 )
-from lightercore.llm.profiles import ProfileManager
-from lightercore.llm.utils import build_messages
+from lighterllm.llm.profiles import ProfileManager
+from lighterllm.llm.utils import build_messages
 
 from lighterbird.core.ai import get_provider as _create_core_provider
 from lighterbird.core.system_prompt import load_system_prompt, reload_system_prompt
@@ -112,7 +112,7 @@ class LLMProviderWrapper:
     ) -> ChatResult:
         """Send a chat completion with tool-calling support.
 
-        Delegates to the core provider's :meth:`~lightercore.llm.base.BaseLLMProvider.chat_with_tools`.
+        Delegates to the core provider's :meth:`~lighterllm.llm.base.BaseLLMProvider.chat_with_tools`.
         The system prompt is automatically prepended.
         """
         core = _create_core_provider(self.config)

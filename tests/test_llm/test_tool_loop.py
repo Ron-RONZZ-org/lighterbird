@@ -9,10 +9,10 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from lightercore.llm.base import ChatResult, ToolCall, defs_to_tools
+from lighterllm.llm.base import ChatResult, ToolCall, defs_to_tools
 
 # The tool_loop module — import from lightercore (shared)
-from lightercore.llm.tool_loop import (
+from lighterllm.llm.tool_loop import (
     _pending_executions,
     resume_execution,
     run_tool_loop,

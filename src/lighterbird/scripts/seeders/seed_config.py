@@ -9,7 +9,7 @@ from lighterbird.scripts.seeders._helpers import _parse_dot_dev
 
 def _seed_llm_config(creds: dict[str, str]) -> None:
     """Configure the LLM provider from .dev credentials if not already set."""
-    from lightercore.llm.config import (
+    from lighterllm.llm.config import (
         ProviderConfig,
         load_active_config,
         save_active_config,

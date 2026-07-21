@@ -1,7 +1,7 @@
 """Lighterbird LLM tools — dedicated AI-optimised tool handlers.
 
 Tools call domain services directly (no CLI pipeline) and use the
-shared infrastructure from :mod:`lightercore.llm.tools`.
+shared infrastructure from :mod:`lighterllm.llm.tools`.
 
 The core decorator, registry, and dispatch live in lightercore.
 This module re-exports them for internal consistency.  Domain-specific
@@ -23,7 +23,7 @@ Usage::
         ...
 """
 
-from lightercore.llm.tools import (  # noqa: F401
+from lighterllm.llm.tools import (  # noqa: F401
     _llm_registry,
     dispatch_llm_tool,
     get_llm_tool_level,

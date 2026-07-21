@@ -1,6 +1,6 @@
 """LLM provider implementations — OpenAI-compatible API and Ollama.
 
-Both providers now extend :class:`lightercore.llm.BaseLLMProvider` and
+Both providers now extend :class:`lighterllm.llm.BaseLLMProvider` and
 share the unified chat / command-generation infrastructure.  Only the
 domain-specific system prompt and default model differ.
 """
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from lightercore.llm import BaseLLMProvider, ProviderConfig
+from lighterllm.llm import BaseLLMProvider, ProviderConfig
 
 # ── Shared prompts for lighterbird ──────────────────────────────────────
 
