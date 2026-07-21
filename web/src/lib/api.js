@@ -175,7 +175,21 @@ export const email = {
   markRead: (uuid, read = true) =>
     request("PATCH", `/email/messages/${uuid}/read`, { read }),
 
-  trash: (uuid) => request("POST", `/email/messages/${uuid}/trash`),
+  /** Soft-delete with optional undo window. */
+  batchDelete: (uuids, delaySeconds = 0) =>
+    request("POST", "/email/messages/batch-delete", { uuids, delay_seconds: delaySeconds }),
+
+  /** Hard-delete with optional undo window. */
+  batchDeleteHard: (uuids, delaySeconds = 0) =>
+    request("POST", "/email/messages/batch-delete-hard", { uuids, delay_seconds: delaySeconds }),
+
+  /** Undo a pending email operation. */
+  undoAction: (operationId) =>
+    request("POST", `/email/actions/undo/${encodeURIComponent(operationId)}`),
+
+  /** Report spam/fraud with optional undo window. */
+  reportSpam: (uuid, type, delaySeconds = 0) =>
+    request("POST", "/email/spam/report", { uuid, type, delay_seconds: delaySeconds }),
 
   listAttachments: (uuid) => request("GET", `/email/messages/${uuid}/attachments`),
 
@@ -183,10 +197,19 @@ export const email = {
     window.open(`/api/v1/email/attachments/${attUuid}/download`, "_blank");
   },
 
-  batchDelete: (uuids) => request("POST", "/email/messages/batch-delete", { uuids }),
-  batchDeleteHard: (uuids) => request("POST", "/email/messages/batch-delete-hard", { uuids }),
-
   clearTrash: () => request("POST", "/email/trash/clear"),
+
+  /** List messages with optional filters. */
+  list: (params = {}) => {
+    const q = new URLSearchParams();
+    if (params.folder) q.set("folder", params.folder);
+    if (params.query) q.set("query", params.query);
+    if (params.limit) q.set("limit", String(params.limit));
+    if (params.sort) q.set("sort", params.sort);
+    if (params.read !== undefined) q.set("read", String(params.read));
+    if (params.account_email) q.set("account_email", params.account_email);
+    return request("GET", `/email/messages?${q}`);
+  },
 
   batchMove: (uuids, destinationFolder) =>
     request("POST", "/email/messages/batch-move", { uuids, destination_folder: destinationFolder }),

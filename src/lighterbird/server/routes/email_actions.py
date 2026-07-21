@@ -6,8 +6,10 @@ Extracted from email.py for AGENTS.md file-size compliance (<500 lines).
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
 from lighterbird.email.service import EmailService
@@ -17,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from lighterbird.server.schemas import (
     BatchDeleteRequest,
+    BatchDeleteResponse,
     BatchMoveRequest,
     BatchResultResponse,
     EmailPreviewRequest,
@@ -34,6 +37,68 @@ class SignatureUpdateRequest(BaseModel):
     model_config = {"extra": "forbid"}
 
 router = APIRouter(prefix="/api/v1/email", tags=["email"])
+
+
+def _schedule_undo_or_commit(
+    email_svc: EmailService,
+    action: str,
+    msg_uuid: str,
+    delay: float,
+    commit_cb: Any,
+) -> str | None:
+    """Helper: schedule an undoable operation or commit immediately.
+
+    If *delay* > 0, captures message state for revert, schedules an
+    undo operation, and returns the operation ID.  Otherwise calls
+    *commit_cb* immediately and returns None.
+
+    Returns:
+        Operation ID if undoable, None if committed immediately.
+    """
+    if delay <= 0:
+        commit_cb()
+        return None
+
+    from lighterbird.email.undo import get_undo_registry
+
+    # Capture current message state for potential revert
+    msg = email_svc.get(msg_uuid)
+    if not msg:
+        commit_cb()
+        return None
+
+    registry = get_undo_registry()
+    op_id = registry.schedule(
+        action=action,
+        msg_uuid=msg_uuid,
+        account_email=msg.get("account_email", ""),
+        folder_name=msg.get("folder_name"),
+        imap_uid=msg.get("imap_uid"),
+        delay=delay,
+    )
+
+    def _revert():
+        """Revert local DB state — reverse of the action."""
+        now = datetime.now(UTC).isoformat()
+        if action in ("trash", "spam", "fraud"):
+            # Un-delete: restore is_deleted=0, clear spam/phishing flags
+            email_svc.db.execute(
+                "UPDATE messages SET is_deleted = 0, is_spam = 0, "
+                "spam_reported = 0, phishing_detected = 0, "
+                "updated_at = ? WHERE uuid = ?",
+                (now, msg_uuid),
+            )
+        elif action == "hard_delete":
+            # Hard-delete undo: re-insert the captured message
+            cols = ", ".join(msg.keys())
+            placeholders = ", ".join("?" for _ in msg)
+            email_svc.db.execute(
+                f"INSERT OR REPLACE INTO messages ({cols}) VALUES ({placeholders})",
+                tuple(msg.values()),
+            )
+
+    registry.set_callbacks(op_id, _revert, commit_cb)
+    return op_id
 
 
 @router.post("/send", status_code=201)
@@ -71,26 +136,60 @@ def mark_read(
     return {"status": "ok"}
 
 
-@router.post("/messages/{uuid}/trash")
-def trash_message(
-    uuid: str,
-    email_svc: EmailService = Depends(get_email_service),
-):
-    """Soft-delete a single message."""
-    email_svc.trash_message(uuid)
-    return {"status": "trashed"}
-
-
-@router.post("/messages/batch-delete", response_model=BatchResultResponse)
+@router.post("/messages/batch-delete", response_model=BatchDeleteResponse)
 def batch_delete(
     req: BatchDeleteRequest,
     email_svc: EmailService = Depends(get_email_service),
 ):
-    """Soft-delete multiple messages at once."""
+    """Soft-delete message(s) with optional undo window.
+
+    When ``delay_seconds`` > 0, the IMAP backlog enqueue is deferred and
+    an ``operation_id`` is returned.  Call ``POST /email/actions/undo/{id}``
+    within the window to revert.
+    """
     result = email_svc.msg_ops.batch_trash_messages(req.uuids)
-    return BatchResultResponse(
-        status="ok",
+    op_id = None
+
+    if req.delay_seconds > 0 and req.uuids:
+        # Schedule undo only for the first UUID (single-message case)
+        from lighterbird.email.undo import get_undo_registry
+
+        msg = email_svc.get(req.uuids[0])
+        if msg:
+            registry = get_undo_registry()
+            op_id = registry.schedule(
+                action="trash",
+                msg_uuid=req.uuids[0],
+                account_email=msg.get("account_email", ""),
+                folder_name=msg.get("folder_name"),
+                imap_uid=msg.get("imap_uid"),
+                delay=req.delay_seconds,
+            )
+
+            def _revert():
+                now = datetime.now(UTC).isoformat()
+                email_svc.db.execute(
+                    "UPDATE messages SET is_deleted = 0, updated_at = ? WHERE uuid = ?",
+                    (now, req.uuids[0]),
+                )
+
+            def _commit():
+                # Re-enqueue trash backlog for the first UUID
+                fresh = email_svc.get(req.uuids[0])
+                if fresh and fresh.get("imap_uid"):
+                    email_svc.msg_ops.backlog.enqueue_trash(
+                        msg_uuid=req.uuids[0],
+                        account_email=fresh["account_email"],
+                        folder_name=fresh.get("folder_name"),
+                        imap_uid=fresh["imap_uid"],
+                    )
+
+            registry.set_callbacks(op_id, _revert, _commit)
+
+    return BatchDeleteResponse(
+        status="ok" if not op_id else "pending",
         count=result["count"],
+        operation_id=op_id,
     )
 
 
@@ -117,18 +216,60 @@ def clear_trash(
     }
 
 
-@router.post("/messages/batch-delete-hard", response_model=BatchResultResponse)
+@router.post("/messages/batch-delete-hard", response_model=BatchDeleteResponse)
 def batch_delete_hard(
     req: BatchDeleteRequest,
     email_svc: EmailService = Depends(get_email_service),
 ):
-    """Permanently delete multiple messages from local DB and IMAP server."""
+    """Permanently delete message(s) with optional undo window.
+
+    When ``delay_seconds`` > 0, the IMAP EXPUNGE backlog enqueue is
+    deferred and an ``operation_id`` is returned.  Call
+    ``POST /email/actions/undo/{id}`` within the window to revert.
+
+    When ``delay_seconds`` == 0 (default), behaves as before — local DB
+    deletion and IMAP backlog enqueue are immediate.
+    """
+    if req.delay_seconds > 0 and req.uuids:
+        # Defer everything — local DB not changed until timer fires
+        from lighterbird.email.undo import get_undo_registry
+
+        msg = email_svc.get(req.uuids[0])
+        if not msg:
+            return BatchDeleteResponse(
+                status="error", count=0,
+                errors=[f"{req.uuids[0][:8]}: message not found"],
+            )
+
+        registry = get_undo_registry()
+        op_id = registry.schedule(
+            action="hard_delete",
+            msg_uuid=req.uuids[0],
+            account_email=msg.get("account_email", ""),
+            folder_name=msg.get("folder_name"),
+            imap_uid=msg.get("imap_uid"),
+            delay=req.delay_seconds,
+        )
+
+        def _revert():
+            pass  # Nothing to revert — DB hasn't changed yet
+
+        def _commit():
+            email_svc.msg_ops.batch_hard_delete_messages(req.uuids)
+            email_svc.msg_ops.process_sync_backlog()
+
+        registry.set_callbacks(op_id, _revert, _commit)
+
+        return BatchDeleteResponse(
+            status="pending",
+            count=0,
+            operation_id=op_id,
+        )
+
+    # Immediate execution (delay == 0)
     result = email_svc.msg_ops.batch_hard_delete_messages(req.uuids)
-    # Process EXPUNGE backlog immediately so IMAP is cleaned up without
-    # waiting for the next sync cycle.  Without this, hard-deleted messages
-    # get re-inserted on the next IMAP sync (resurrection bug).
     email_svc.msg_ops.process_sync_backlog()
-    return BatchResultResponse(
+    return BatchDeleteResponse(
         status="ok" if not result.get("errors") else "partial",
         count=result["count"],
         errors=result.get("errors", []),

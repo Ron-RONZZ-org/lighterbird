@@ -151,8 +151,18 @@ class MarkReadRequest(BaseModel):
 
 class BatchDeleteRequest(BaseModel):
     uuids: list[str] = Field(..., min_length=1)
+    delay_seconds: float = Field(default=0.0, ge=0, description="Seconds to delay IMAP backlog enqueue (for undo)")
 
     model_config = {"extra": "forbid"}
+
+
+class BatchDeleteResponse(BaseModel):
+    status: str = "ok"
+    count: int
+    errors: list[str] = Field(default_factory=list,
+                               description="Per-UUID error messages for failed operations")
+    operation_id: str | None = Field(default=None,
+                                     description="Undo operation ID (if delay_seconds > 0)")
 
 
 class BatchMoveRequest(BaseModel):

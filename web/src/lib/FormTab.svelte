@@ -216,7 +216,7 @@
           tabStore.open(returnType || "status", returnTitle || "Done", freshData, { idKey: returnIdKey });
           if (renderUrl) window.open(renderUrl, "_blank");
           // Show confirmation banner for email sends
-          if (formType === "email-send") banner.show("Email sent ✓", "success");
+          if (formType === "email-send") banner.show("Queued for sending…", "success");
           return;
         } catch {
           // Refresh failed — fall through to open result tab
@@ -226,7 +226,7 @@
       tabStore.open(result.type || "status", result.title || "Done", result.data || {});
       if (renderUrl) window.open(renderUrl, "_blank");
       // Show confirmation banner for email sends (fallback path)
-      if (formType === "email-send") banner.show("Email sent ✓", "success");
+      if (formType === "email-send") banner.show("Queued for sending…", "success");
     } catch (err) {
       const msg = err.cause?.code === "ECONNREFUSED"
         ? "Cannot connect to the backend."

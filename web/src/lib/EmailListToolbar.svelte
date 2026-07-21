@@ -18,6 +18,7 @@
     onClearTrash = () => {},
     onRestore = () => {},
     onMove = () => {},
+    onSpam = () => {},
     onNew = null,
     onToggleSearch = () => {},
     onSearchInput = () => {},
@@ -64,6 +65,9 @@
         <button class="tool-btn danger" disabled={numSelected === 0} onclick={onDelete} title="Delete selected (Delete key)">Delete <kbd>Del</kbd></button>
       {/if}
       <button class="tool-btn danger" disabled={numSelected === 0} onclick={onHardDelete} title="Permanently delete from server (Ctrl+Delete)">Hard Del <kbd>⌃Del</kbd></button>
+      {#if !isTrashView}
+        <button class="tool-btn spam-btn" disabled={numSelected === 0} onclick={onSpam} title="Mark as spam (Ctrl+S)">Spam <kbd>⌃S</kbd></button>
+      {/if}
       {#if syncing && syncProgress}
         <div class="sync-progress">
           <ProgressBar
@@ -233,6 +237,8 @@
   .tool-btn:disabled { opacity: 0.4; cursor: default; }
   .tool-btn.active { border-color: #6a6a9a; background: #2a2a50; }
   .tool-btn.danger:hover:not(:disabled) { background: #6b2020; border-color: #8b3030; }
+  .tool-btn.spam-btn { border-color: #8b7a30; color: #d0a030; }
+  .tool-btn.spam-btn:hover:not(:disabled) { background: #3a2a0a; border-color: #8b7a30; }
   .tool-btn.primary { border-color: #3a6a3a; color: #7fdb7f; }
   .tool-btn.primary:hover { background: #1e3a1e; }
 

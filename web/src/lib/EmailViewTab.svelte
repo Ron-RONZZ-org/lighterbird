@@ -5,6 +5,7 @@
   import { registerShortcuts } from "./keyboardShortcuts.svelte.js";
   import { openPrintWindow } from "./listTabShared.svelte.js";
   import { resolveCidUrls } from "./emailCidResolver.js";
+  import { actionBanner } from "./actionBannerStore.svelte.js";
   import EmailHeaders from "./EmailHeaders.svelte";
   import EmailAttachmentBar from "./EmailAttachmentBar.svelte";
   import EmailConversationSidebar from "./EmailConversationSidebar.svelte";
@@ -15,6 +16,10 @@
     { key: "Ctrl+L", desc: "Forward", modifiers: "Ctrl", category: "Email Detail" },
     { key: "Ctrl+E", desc: "Export .eml", modifiers: "Ctrl", category: "Email Detail" },
     { key: "Ctrl+P", desc: "Print", modifiers: "Ctrl", category: "Email Detail" },
+    { key: "Delete", desc: "Move to Trash", category: "Email Detail" },
+    { key: "Ctrl+Delete", desc: "Permanently delete", modifiers: "Ctrl", category: "Email Detail" },
+    { key: "Ctrl+S", desc: "Report spam", modifiers: "Ctrl", category: "Email Detail" },
+    { key: "Ctrl+Shift+S", desc: "Report fraudulent", modifiers: "Ctrl+Shift", category: "Email Detail" },
   ]);
 
   let { data = {}, tabId } = $props();
@@ -59,10 +64,7 @@
   /** Check if the email has an HTML body to render. */
   let hasHtml = $derived(!!(msg.html_body && msg.html_body.trim()));
 
-  /** Normalize the HTML body for iframe rendering.
-   *  Rewrites ``cid:`` image references to our CID resolution API
-   *  so embedded images render correctly.
-   */
+  /** Normalize the HTML body for iframe rendering. */
   let htmlContent = $derived.by(() => {
     if (!hasHtml) return "";
     let h = resolveCidUrls(msg.html_body, msg.uuid);
@@ -195,14 +197,186 @@
     openPrintWindow(msg.subject || "(no subject)", headers, bodyContent);
   }
 
+  // ── Post-action helpers ────────────────────────────────────────────
+
+  /** Dispatch event so list tabs can update. */
+  function dispatchDeleted(action) {
+    window.dispatchEvent(new CustomEvent("email-deleted", {
+      detail: { uuid: msg.uuid, action },
+    }));
+  }
+
+  /** Navigate to next unread email after an action. */
+  async function navigateToNextUnread() {
+    try {
+      const result = await emailApi.list({ read: false, sort: "newest", limit: 1 });
+      const msgs = result.messages || [];
+      if (msgs.length > 0 && msgs[0].uuid !== msg.uuid) {
+        const next = msgs[0];
+        tabStore.open("email", next.subject || "(no subject)", next, {
+          idKey: `email-${next.uuid}`,
+          replaceable: false,
+        });
+      }
+    } catch { /* silent — no next unread is not an error */ }
+  }
+
+  /** Soft-delete with undo support. */
+  async function trash() {
+    if (!msg.uuid) return;
+    try {
+      const resp = await emailApi.batchDelete([msg.uuid], 5);
+      const opId = resp?.operation_id;
+
+      dispatchDeleted("trash");
+      tabStore.close(tabId);
+
+      const undoAction = opId
+        ? async () => {
+            try {
+              await emailApi.undoAction(opId);
+              // Re-fetch the message to restore it in UI
+              try {
+                const restored = await emailApi.getMessage(msg.uuid);
+                tabStore.open("email", restored.subject || "(no subject)", restored, {
+                  idKey: `email-${restored.uuid}`,
+                  replaceable: false,
+                });
+              } catch { /* silent */ }
+            } catch { /* undo failed — ignore */ }
+          }
+        : null;
+
+      actionBanner.show("Message moved to Trash", undoAction, "Undo");
+      navigateToNextUnread();
+    } catch { /* ignore */ }
+  }
+
+  /** Hard-delete with undo support. */
+  async function hardDelete() {
+    if (!msg.uuid) return;
+    try {
+      const resp = await emailApi.batchDeleteHard([msg.uuid], 5);
+      const opId = resp?.operation_id;
+
+      dispatchDeleted("hard_delete");
+      tabStore.close(tabId);
+
+      const undoAction = opId
+        ? async () => {
+            try {
+              await emailApi.undoAction(opId);
+              // Re-fetch the message to restore it in UI
+              try {
+                const restored = await emailApi.getMessage(msg.uuid);
+                tabStore.open("email", restored.subject || "(no subject)", restored, {
+                  idKey: `email-${restored.uuid}`,
+                  replaceable: false,
+                });
+              } catch { /* silent */ }
+            } catch { /* undo failed — ignore */ }
+          }
+        : null;
+
+      actionBanner.show("Message permanently deleted", undoAction, "Undo");
+      navigateToNextUnread();
+    } catch { /* ignore */ }
+  }
+
+  /** Report as spam with undo support. */
+  async function reportSpam() {
+    if (!msg.uuid) return;
+    try {
+      const resp = await emailApi.reportSpam(msg.uuid, "spam", 5);
+      const opId = resp?.operation_id;
+
+      dispatchDeleted("spam");
+      tabStore.close(tabId);
+
+      const undoAction = opId
+        ? async () => {
+            try {
+              await emailApi.undoAction(opId);
+              try {
+                const restored = await emailApi.getMessage(msg.uuid);
+                tabStore.open("email", restored.subject || "(no subject)", restored, {
+                  idKey: `email-${restored.uuid}`,
+                  replaceable: false,
+                });
+              } catch { /* silent */ }
+            } catch { /* undo failed */ }
+          }
+        : null;
+
+      actionBanner.show("Message reported as spam", undoAction, "Undo");
+      navigateToNextUnread();
+    } catch { /* ignore */ }
+  }
+
+  /** Report as fraudulent with undo support. */
+  async function reportFraud() {
+    if (!msg.uuid) return;
+    try {
+      const resp = await emailApi.reportSpam(msg.uuid, "fraud", 5);
+      const opId = resp?.operation_id;
+
+      dispatchDeleted("fraud");
+      tabStore.close(tabId);
+
+      const undoAction = opId
+        ? async () => {
+            try {
+              await emailApi.undoAction(opId);
+              try {
+                const restored = await emailApi.getMessage(msg.uuid);
+                tabStore.open("email", restored.subject || "(no subject)", restored, {
+                  idKey: `email-${restored.uuid}`,
+                  replaceable: false,
+                });
+              } catch { /* silent */ }
+            } catch { /* undo failed */ }
+          }
+        : null;
+
+      actionBanner.show("Message reported as fraudulent", undoAction, "Undo");
+      navigateToNextUnread();
+    } catch { /* ignore */ }
+  }
+
   function handleKeydown(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === "p") {
       e.preventDefault();
       printEmail();
+      return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "e") {
       e.preventDefault();
       exportEml();
+      return;
+    }
+    // Delete key — soft delete (trash)
+    if (!e.ctrlKey && !e.metaKey && !e.shiftKey && (e.key === "Delete" || e.key === "Del")) {
+      e.preventDefault();
+      trash();
+      return;
+    }
+    // Ctrl+Delete — hard delete
+    if ((e.ctrlKey || e.metaKey) && (e.key === "Delete" || e.key === "Del")) {
+      e.preventDefault();
+      hardDelete();
+      return;
+    }
+    // Ctrl+S — report spam
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "s") {
+      e.preventDefault();
+      reportSpam();
+      return;
+    }
+    // Ctrl+Shift+S — report fraudulent
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "s" || e.key === "S")) {
+      e.preventDefault();
+      reportFraud();
+      return;
     }
   }
 
@@ -224,14 +398,6 @@
       window.dispatchEvent(new CustomEvent("email-read-status-changed", {
         detail: { uuid: msg.uuid, is_read: true },
       }));
-    } catch { /* ignore */ }
-  }
-
-  async function trash() {
-    if (!msg.uuid) return;
-    try {
-      await fetch(`/api/v1/email/messages/${msg.uuid}/trash`, { method: "POST" });
-      tabStore.close(tabId);
     } catch { /* ignore */ }
   }
 </script>
@@ -263,8 +429,17 @@
       <button class="tool-btn" onclick={markRead} disabled={msg.is_read} title="Mark as read">
         <span class="tool-icon">✓</span> Read
       </button>
-      <button class="tool-btn trash-btn" onclick={trash} title="Trash">
-        <span class="tool-icon">🗑</span>
+      <button class="tool-btn trash-btn" onclick={trash} title="Move to Trash (Delete)">
+        <span class="tool-icon">🗑</span> <kbd>Del</kbd>
+      </button>
+      <button class="tool-btn danger-btn" onclick={hardDelete} title="Permanently delete (Ctrl+Delete)">
+        <span class="tool-icon">✕</span> Hard Del <kbd>⌃Del</kbd>
+      </button>
+      <button class="tool-btn spam-btn" onclick={reportSpam} title="Report as spam (Ctrl+S)">
+        <span class="tool-icon">⚠</span> Spam <kbd>⌃S</kbd>
+      </button>
+      <button class="tool-btn fraud-btn" onclick={reportFraud} title="Report as fraudulent (Ctrl+Shift+S)">
+        <span class="tool-icon">⚡</span> Fraud <kbd>⌃⇧S</kbd>
       </button>
       <button class="tool-btn" onclick={printEmail} title="Print (Ctrl+P)">
         <span class="tool-icon">🖨</span> Print <kbd>Ctrl+P</kbd>
@@ -358,6 +533,18 @@
     transition: background 0.1s, color 0.1s;
     white-space: nowrap;
   }
+  .tool-btn kbd {
+    display: inline-block;
+    padding: 0 3px;
+    font-family: monospace;
+    font-size: 0.65rem;
+    background: #222;
+    border: 1px solid #555;
+    border-radius: 3px;
+    color: #999;
+    line-height: 1.3;
+    margin-left: 1px;
+  }
   .tool-btn:hover {
     background: #2a2a44;
     color: #e0e0e0;
@@ -380,6 +567,30 @@
   .trash-btn:hover {
     border-color: #8b3a3a;
     color: #e06060;
+  }
+  .danger-btn {
+    color: #c44;
+  }
+  .danger-btn:hover {
+    border-color: #8b3a3a;
+    background: #3a1a1a;
+    color: #e06060;
+  }
+  .spam-btn {
+    color: #d0a030;
+  }
+  .spam-btn:hover {
+    border-color: #8b7a30;
+    background: #3a2a0a;
+    color: #e0c060;
+  }
+  .fraud-btn {
+    color: #c07040;
+  }
+  .fraud-btn:hover {
+    border-color: #8b5a3a;
+    background: #3a2a1a;
+    color: #e09060;
   }
 
   hr {
@@ -413,6 +624,4 @@
     line-height: 1.5;
     overflow-y: auto;
   }
-
-  /* Print — handled by dedicated print window, no SPA print styles needed */
 </style>

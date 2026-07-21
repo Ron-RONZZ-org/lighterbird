@@ -145,11 +145,12 @@ lighterbird/
 │       ├── core/                # Re-exports from lightercore (DB, paths, exceptions, CRUD, backup) + keyring, AI providers
 │       ├── email/               # IMAP sync, SMTP send, accounts, Sieve, signatures, spam detection
 │       │   ├── filters/
-│       │   │   ├── spam.py           # Blocklist CRUD (hard block via Sieve reject)
-│       │   │   ├── spam_detect.py    # Bayesian classifier (chi-squared, token training)
-│       │   │   ├── spam_tokens.json  # Pre-baked seed table (~150 tokens)
-│       │   │   ├── phishing.py       # Phishing feed integration + display-name spoof
-│       │   │   └── phishing_brands.json  # Known brand -> domain mapping
+│   │   │   ├── spam.py           # Blocklist CRUD (hard block via Sieve reject)
+│   │   │   ├── spam_detect.py    # Bayesian classifier (chi-squared, token training)
+│   │   │   ├── spam_tokens.json  # Pre-baked seed table (~150 tokens)
+│   │   │   ├── phishing.py       # Phishing feed integration + display-name spoof
+│   │   │   └── phishing_brands.json  # Known brand -> domain mapping
+│   │   ├── undo.py               # Deferred email operation with undo support (5s window)
 │       ├── journal/             # Journal entry CRUD, markdown export/import, labels
 │       ├── letter/              # Paper letter management, HTML/PDF rendering
 │       ├── profiles/            # User identity profiles

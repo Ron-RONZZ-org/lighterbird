@@ -13,6 +13,12 @@ Email module, forked from [A-lien](../../A-lien). Provides IMAP sync, SMTP send,
 - **`accounts/`** — Email account CRUD + keyring password management
 - **`filters/`** — Sieve filter CRUD + ManageSieve sync, SpamManager (block senders/domains + Sieve rule generation)
 - **`signatures/`** — Per-account email signature management
+- **`undo.py`** — Deferred email operation with undo support.  Thread-safe in-memory registry
+  for pending email operations (trash, hard-delete, spam, fraud) that can be reverted within a
+  5-second window via ``UndoRegistry``.  After the timer expires, IMAP backlog entries are
+  enqueued and the operation becomes permanent.  Used by ``POST /email/messages/batch-delete``,
+  ``POST /email/messages/batch-delete-hard``, and ``POST /email/spam/report`` when called with
+  ``delay_seconds > 0``.  The undo endpoint is ``POST /api/v1/email/actions/undo/{operation_id}``.
 
 ## Constraints and Invariants
 

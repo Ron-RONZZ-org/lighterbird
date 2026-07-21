@@ -24,11 +24,13 @@ The web frontend provides:
   - Disabled with animated spinner while command is running
 - **Tab-based output** — each command result opens as a new tab in the tab bar (below the output area). Supported tab types:
   - Status lists (messages, accounts, contacts, todos, journals, email drafts)
-  - Rich HTML email body (fallback to plain text) with toolbar (Reply, Reply All, Forward, Mark Read, Trash, Thread sidebar)
+  - Rich HTML email body (fallback to plain text) with toolbar (Reply, Reply All, Forward, Mark Read, Trash, Hard Del, Spam, Fraud, Export, Print, Thread sidebar)
   - Calendar events
   - Error reports with actionable suggestions
   - Help/command reference
   - Loading state with prominent spinner and "avoid clicking" hint
+- **ActionBanner** — undo-capable banner rendered at the top of TabView for email operations (trash, hard-delete, spam, fraud). Shows a message with an "Undo" button. Auto-dismisses after 5 seconds. Clicking Undo calls `POST /api/v1/email/actions/undo/{operation_id}` to revert the operation. Powered by `actionBannerStore.svelte.js` (module-level `$state` singleton).
+- **Email view tab** — `EmailViewTab.svelte` provides full keyboard shortcuts: `Delete` (soft-delete), `Ctrl+Delete` (hard-delete), `Ctrl+S` (report spam), `Ctrl+Shift+S` (report fraud). After an action, dispatches `email-deleted` custom event (handled in App.svelte to update list tabs), navigates to next unread email, and shows an ActionBanner with undo.
 - **Tab bar** — horizontal row at bottom of output area. Features:
   - Left-click tab to switch; ✕ button to close (all tabs except home are closable)
   - Alt+1/2/3/4 keyboard shortcuts to switch tabs

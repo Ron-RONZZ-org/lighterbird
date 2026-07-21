@@ -74,6 +74,43 @@
     return () => window.removeEventListener("email-read-status-changed", handler);
   });
 
+  // Refresh email list tabs when an email is deleted/trashed/spammed in another tab.
+  // Removes the deleted UUID from the list data.
+  $effect(() => {
+    function handler(e) {
+      const { uuid, action } = e.detail || {};
+      if (!uuid) return;
+      for (const t of tabStore.tabs) {
+        if (t.data?.messages && Array.isArray(t.data.messages)) {
+          const filtered = t.data.messages.filter((m) => m.uuid !== uuid);
+          // If the action is "moved" (trash/spam) rather than deleted,
+          // also update the message's is_deleted/is_spam flags instead
+          // of removing it entirely (the list may include trashed/spam
+          // messages depending on view).
+          if (action === "trash" || action === "spam" || action === "fraud") {
+            const updatedMessages = t.data.messages.map((m) => {
+              if (m.uuid !== uuid) return m;
+              if (action === "trash") return { ...m, is_deleted: 1 };
+              if (action === "spam") return { ...m, is_spam: 1, spam_reported: 1 };
+              if (action === "fraud") return { ...m, phishing_detected: 1, is_deleted: 1 };
+              return m;
+            });
+            if (updatedMessages.some((m, i) => m !== t.data.messages[i])) {
+              tabStore.update(t.id, { ...t.data, messages: updatedMessages });
+            }
+          } else {
+            // Hard delete: remove from list entirely
+            if (filtered.length !== t.data.messages.length) {
+              tabStore.update(t.id, { ...t.data, messages: filtered });
+            }
+          }
+        }
+      }
+    }
+    window.addEventListener("email-deleted", handler);
+    return () => window.removeEventListener("email-deleted", handler);
+  });
+
   /** Global keyboard shortcuts. */
   function handleGlobalKeydown(e) {
     // Alt+1/2/3/4 — switch to numbered tab
@@ -267,9 +304,9 @@
             }
           }
 
-          // Email send: show success banner
+          // Email send: show queued banner
           if (result.title === "Sent" && tokens[0] === "email" && tokens[1] === "send") {
-            banner.show("Message sent.", "success");
+            banner.show("Queued for sending…", "success");
           }
 
           // Delete mutations: show confirmation banner so the user knows
