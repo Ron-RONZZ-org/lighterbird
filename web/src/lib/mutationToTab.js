@@ -285,7 +285,7 @@ export const LIST_REFRESHERS = {
   "persistent-contacts-list":        (highlight) => contactsApi.list({ limit: 50 }).then(r => ({ ...r, highlight })),
   "persistent-calendar-events":      (highlight) => calendarApi.listEvents({ limit: 50 }).then(r => ({ ...r, highlight })),
   "persistent-letter-list":          (highlight) => lettersApi.list({ limit: 50 }).then(r => ({ ...r, highlight })),
-  "persistent-email-list":           (highlight) => emailApi.list({ limit: 50 }).then(r => ({ ...r, highlight })),
+  "persistent-email-list":           (highlight) => emailApi.list({ folder: "Inbox", sort: "newest" }).then(r => ({ ...r, highlight })),
   "persistent-block-list":           (highlight) => emailApi.listBlocks().then(r => ({ ...r, highlight })),
   "persistent-signature-list":       (highlight) => emailApi.listSignatures().then(r => ({ ...r, highlight })),
   "persistent-folder-list":          (highlight) => emailApi.listFolders().then(r => ({ ...r, highlight })),

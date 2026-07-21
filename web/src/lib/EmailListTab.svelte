@@ -40,6 +40,7 @@
     { key: "Ctrl+R", desc: "Sync emails", modifiers: "Ctrl", category: "Email List" },
     { key: "Ctrl+Shift+Delete", desc: "Empty Trash (trash view)", modifiers: "Ctrl+Shift", category: "Email List" },
     { key: "Ctrl+Delete", desc: "Permanently delete selected", modifiers: "Ctrl", category: "Email List" },
+    { key: "Ctrl+S", desc: "Mark selected as spam (selection mode)", modifiers: "Ctrl", category: "Email List" },
   ]);
 
   let { data = {}, isTrashView: _isTrashViewProp = null, isDraftView: _isDraftViewProp = null } = $props();
@@ -207,6 +208,14 @@
           }
           return true;
         }
+        // Ctrl+S: mark selected as spam
+        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "s" || e.key === "S")) {
+          if (sel.numSelected > 0 && !isTrashView) {
+            e.preventDefault();
+            confirmSpam = true;
+          }
+          return true;
+        }
         return false;
       },
     }
@@ -224,6 +233,7 @@
   let searchKey = $state(0); // increment to trigger re-search
   let confirmHardDelete = $state(false);
   let confirmClearTrash = $state(false);
+  let confirmSpam = $state(false);
 
   let exportItems = $derived(messages.filter(m => sel.selectedKeys.has(m.uuid)));
 
@@ -629,6 +639,23 @@
     }
   }
 
+  async function handleBatchSpam() {
+    const uuids = [...sel.selectedKeys];
+    if (uuids.length === 0) return;
+    confirmSpam = false;
+    try {
+      for (const uuid of uuids) {
+        await emailApi.reportSpam(uuid, "spam");
+      }
+      sel.toggleSelectionMode();
+      await refreshList();
+    } catch (err) {
+      tabStore.open("error", "Spam Report Failed", {
+        message: err.message || "Failed to report messages as spam",
+      });
+    }
+  }
+
   function stopSync() {
     syncing = false;
     manualSyncing = false;
@@ -755,6 +782,7 @@
     {isDraftView}
     onRestore={handleRestoreSelected}
     onMove={() => { if (sel.numSelected > 0) showMoveDialog = true; }}
+    onSpam={() => { if (sel.numSelected > 0 && !isTrashView) confirmSpam = true; }}
     onNew={handleNew}
     onToggleSearch={() => { showSearch = !showSearch; if (showSearch) requestAnimationFrame(() => document.querySelector(".search-input")?.focus()); }}
     onSearchInput={handleSearchInput}
@@ -869,6 +897,14 @@
         await hardDeleteSelected(uuids, () => refreshList());
       }}
       onDismiss={() => { confirmHardDelete = false; }}
+    />
+  {/if}
+
+  {#if confirmSpam}
+    <ConfirmDialog
+      message="Mark {sel.numSelected} message{sel.numSelected !== 1 ? 's' : ''} as spam? This will train the spam filter."
+      onConfirm={handleBatchSpam}
+      onDismiss={() => { confirmSpam = false; }}
     />
   {/if}
 

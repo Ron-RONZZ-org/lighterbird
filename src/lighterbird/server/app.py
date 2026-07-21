@@ -27,6 +27,7 @@ from lighterbird.server.routes.email_blocks import router as email_blocks_router
 from lighterbird.server.routes.email_spam import router as email_spam_router
 from lighterbird.server.routes.email_sieve import router as email_sieve_router
 from lighterbird.server.routes.email_sync import router as email_sync_router
+from lighterbird.server.routes.email_undo import router as email_undo_router
 from lighterbird.server.routes.journal import router as journal_router
 from lighterbird.server.routes.letters import router as letters_router
 from lighterbird.server.routes.llm import router as llm_router
@@ -101,6 +102,7 @@ def create_app(static_dir: str | Path | None = None) -> FastAPI:
     app.include_router(email_spam_router)
     app.include_router(email_sieve_router)
     app.include_router(email_sync_router)
+    app.include_router(email_undo_router)
     app.include_router(calendar_router)
     app.include_router(admin_router)
     app.include_router(command_router)

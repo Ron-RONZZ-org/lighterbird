@@ -42,6 +42,10 @@ Python web server for lighterbird. Serves the Svelte SPA, exposes a REST/WebSock
 - `GET /api/v1/email/sync/progress/{task_id}` — poll sync progress (`status`, `current_folder`, `total_folders`, `folder_name`, `total_messages`, `new_messages`, `errors`)
 - `GET /api/v1/email/sync/status` — per-account sync state and whether startup sync is complete (polled by frontend every 10s to show ``SyncStatusBar``)
 - `POST /api/v1/email/send` — send email (body: to, subject, body, cc, bcc, attachments, signature, signature_format, in_reply_to, save_as_sample)
+- `POST /api/v1/email/messages/batch-delete` — soft-delete message(s). Supports `delay_seconds` (default 0) for undo. When >0, returns `operation_id` for undo via `POST /api/v1/email/actions/undo/{id}`.
+- `POST /api/v1/email/messages/batch-delete-hard` — hard-delete message(s). Same `delay_seconds` undo support.
+- `POST /api/v1/email/spam/report` — report as spam/fraud/ham. Supports `delay_seconds` undo for spam and fraud.
+- `POST /api/v1/email/actions/undo/{operation_id}` — revert a pending trash/hard-delete/spam/fraud operation within its 5-second window.
 - `GET /api/v1/email/signatures` — list all signatures with account-default enrichment (used by ComposeEmail and StatusPopup)
 - `GET /api/v1/calendar/events` — list events (filter: date range, calendar)
 - `POST /api/v1/calendar/events` — create event

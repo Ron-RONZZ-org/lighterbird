@@ -71,6 +71,7 @@
   import FormTab from "./FormTab.svelte";
   import LetterListTab from "./LetterListTab.svelte";
   import LetterViewTab from "./LetterViewTab.svelte";
+  import ActionBanner from "./ActionBanner.svelte";
   import KeyboardShortcutOverlay from "./KeyboardShortcutOverlay.svelte";
   import SavedCommandsTab from "./SavedCommandsTab.svelte";
   import EmailFolderTab from "./EmailFolderTab.svelte";
@@ -294,6 +295,7 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="tab-view">
+  <ActionBanner />
   <!-- Tab content: HomeTab is always mounted (keeps conversation state) -->
       <div class="tab-content" class:active={tabStore.isHome} role="region" aria-label="Home tab" data-testid="tab-panel">
     <HomeTab />
