@@ -45,6 +45,11 @@ SCRIPTS: list[tuple[str, str, int]] = [
         "Email view Block and Spam buttons in EmailHeaders, ConfirmDialog interaction",
         120,
     ),
+    (
+        "e2e_email_tab_actions.mjs",
+        "Email tab actions: keyboard shortcuts (Delete, Ctrl+Delete, Ctrl+S, Ctrl+Shift+S), ActionBanner undo, cross-tab refresh",
+        180,
+    ),
 ]
 
 # ── Tests ───────────────────────────────────────────────────────────────────

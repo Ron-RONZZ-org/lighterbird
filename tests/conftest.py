@@ -124,6 +124,14 @@ def e2e_server(request: pytest.FixtureRequest) -> Iterator[dict[str, Any]]:
     # Sync the env dict so the subprocess uses the same paths.
     env["LIGHTERBIRD_CONFIG_DIR"] = str(tmp_dir / "config")
 
+    # Seed E2E test messages (dummy emails for view/delete/spam tests)
+    from seed_e2e_messages import seed_email_messages
+    try:
+        seed_email_messages(str(tmp_dir))
+        print(f"[e2e] Seeded E2E test messages")
+    except Exception as exc:
+        print(f"[e2e] Warning: failed to seed E2E test messages: {exc}")
+
     print(f"[e2e] Seeded data at: {tmp_dir}")
 
     # ── 4. Start uvicorn subprocess ──────────────────────────────────────

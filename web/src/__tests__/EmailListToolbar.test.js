@@ -41,6 +41,7 @@ describe("EmailListToolbar", () => {
     onExport: () => {},
     onSync: () => {},
     onToggleAdvancedSearch: () => {},
+    onSpam: () => {},
   };
 
   describe("view mode toolbar", () => {
@@ -131,6 +132,34 @@ describe("EmailListToolbar", () => {
   // isTrashView logic as view mode, tested above.  ListSearchBar manages
   // its own focus state internally; action buttons only appear after the
   // search is "confirmed" (blur), which jsdom doesn't fully replicate.
+
+  describe("spam button", () => {
+    it('shows "Spam" button with ⌃S hint when selection mode and NOT trash view', () => {
+      const { container } = render(EmailListToolbar, {
+        props: { ...defaultProps, selectionMode: true, numSelected: 1, isTrashView: false },
+      });
+      const spamBtn = container.querySelector('[title*="Spam"]');
+      expect(spamBtn).toBeTruthy();
+      expect(spamBtn.textContent).toContain("Spam");
+      expect(spamBtn.textContent).toContain("⌃S");
+    });
+
+    it('hides "Spam" button in trash view selection mode', () => {
+      const { container } = render(EmailListToolbar, {
+        props: { ...defaultProps, selectionMode: true, numSelected: 1, isTrashView: true },
+      });
+      expect(container.textContent).not.toContain("Spam");
+    });
+
+    it('disables "Spam" button when nothing is selected', () => {
+      const { container } = render(EmailListToolbar, {
+        props: { ...defaultProps, selectionMode: true, numSelected: 0, isTrashView: false },
+      });
+      const spamBtn = container.querySelector('[title*="Spam"]');
+      expect(spamBtn).toBeTruthy();
+      expect(spamBtn.disabled).toBe(true);
+    });
+  });
 
   describe("shortcut hints in buttons", () => {
     it('shows Ctrl+E hint on Export button', () => {
