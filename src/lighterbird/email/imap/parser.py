@@ -109,7 +109,12 @@ def parse_email_message(
         payload = msg.get_payload(decode=True)
         if payload:
             charset = msg.get_content_charset() or "utf-8"
-            body = payload.decode(charset, errors="replace")
+            decoded = payload.decode(charset, errors="replace")
+            ct = msg.get_content_type()
+            if ct == "text/html":
+                html_body = decoded
+            else:
+                body = decoded
 
     data: dict[str, Any] = {
         "uuid": str(uuid_mod.uuid4()),

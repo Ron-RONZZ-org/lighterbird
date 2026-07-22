@@ -185,14 +185,10 @@ class MsgQueueMixin:
             html_body = ""
             final_body = body_text
             if body_format == "markdown" and body_text:
-                try:
-                    import mistune
+                from lighterbird.server.render_utils import convert_to_html
 
-                    html_body = mistune.html(body_text)
-                    final_body = body_text
-                except ImportError:
-                    html_body = ""
-                    final_body = body_text
+                html_body = convert_to_html(body_text, "markdown")
+                final_body = body_text
             elif body_format == "html":
                 html_body = body_text
                 final_body = ""

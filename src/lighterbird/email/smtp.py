@@ -125,21 +125,22 @@ class SMTPClient:
         full_body = body
         _html_body = html_body or ""
 
-        if signature_format in ("html", "markdown") and _html_body:
-            # Render signature and append to html_body
-            rendered_sig = self._render_signature(_sig, signature_format)
-            if rendered_sig:
-                _html_body += f"\n\n{rendered_sig}"
-            # Also append plain version to plain body if there is one
-            if _sig and full_body:
+        if _sig:
+            # Always render signature to HTML and append to html_body
+            # when an HTML body exists (regardless of signature format).
+            # Previously the "plain" format was only appended to the plain
+            # text body, causing the HTML part to have no signature — the
+            # recipient's email client would either show no signature or
+            # fall back to plain text where newlines collapse to spaces.
+            if _html_body:
+                rendered_sig = self._render_signature(_sig, signature_format)
+                if rendered_sig:
+                    _html_body += f"\n\n{rendered_sig}"
+            # Append raw signature to plain body (always — the MIME
+            # multipart/alternative includes both parts)
+            if full_body:
                 full_body += f"\n\n--\n{_sig}"
-            elif _sig:
-                full_body = _sig
-        else:
-            # Plain signature — append to plain body (original behaviour)
-            if _sig and full_body:
-                full_body += f"\n\n--\n{_sig}"
-            elif _sig:
+            else:
                 full_body = _sig
 
         has_attachments = bool(attachments)

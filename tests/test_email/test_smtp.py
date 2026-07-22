@@ -375,19 +375,21 @@ class TestSMTPClientSendEmailSignatureFormat:
         import base64
         import re
 
-        # Find first base64 blob after text/plain + base64 headers
-        # Actual format uses \n not \r\n
+        # Find base64 content after text/plain + base64 headers.
+        # Base64 may span multiple lines (wrapped at 76 chars).
         match = re.search(
             r"Content-Type: text/plain; charset=\"utf-8\"\n"
             r".*?"
             r"Content-Transfer-Encoding: base64\n\n"
-            r"([A-Za-z0-9+/=]+?)\n",
+            r"((?:[A-Za-z0-9+/=]+\n?)+?)"
+            r"\n--",
             msg_str,
             re.DOTALL,
         )
         if match:
             try:
-                return base64.b64decode(match.group(1)).decode("utf-8")
+                raw = match.group(1).replace("\n", "")
+                return base64.b64decode(raw).decode("utf-8")
             except Exception:
                 pass
         return ""
@@ -396,27 +398,35 @@ class TestSMTPClientSendEmailSignatureFormat:
         """Extract the HTML part from a multipart message."""
         import re
 
-        # Look for HTML content between Content-Type: text/html and the next boundary
+        # Look for base64 content between Content-Type: text/html and the
+        # next MIME boundary.  Base64 may span multiple lines (wrapped at
+        # 76 chars by Python's email library).
         match = re.search(
             r"Content-Type: text/html; charset=\"utf-8\"\n"
             r".*?"
             r"Content-Transfer-Encoding: base64\n\n"
-            r"([A-Za-z0-9+/=]+?)\n",
+            r"((?:[A-Za-z0-9+/=]+\n?)+?)"
+            r"\n--",
             msg_str,
             re.DOTALL,
         )
         if match:
-            raw = match.group(1)
+            raw = match.group(1).replace("\n", "")
             import base64
 
             try:
                 return base64.b64decode(raw).decode("utf-8")
             except Exception:
-                return raw
+                pass
         return ""
 
     def test_plain_signature_with_html_body(self, connected):
-        """Plain signature with html_body appends to plain body, not rendered."""
+        """Plain signature with html_body appends to BOTH plain and HTML parts.
+
+        The plain signature is rendered to HTML (escaped + <pre> with
+        white-space:pre-wrap) and appended to html_body so the recipient's
+        email client shows the signature in the HTML version too.
+        """
         msg_id = connected.send_email(
             from_addr="a@b.com",
             to=["b@b.com"],
@@ -432,8 +442,10 @@ class TestSMTPClientSendEmailSignatureFormat:
         plain_part = self._decode_plain_part(msg_str)
         # Plain signature appears in the decoded plain text part
         assert "John" in plain_part
-        # HTML body does NOT contain plain signature (it was not rendered)
-        assert "John" not in html_part
+        # Plain signature now also appears in the HTML body, rendered
+        # as escaped HTML wrapped in <pre> with white-space:pre-wrap
+        assert "John" in html_part
+        assert "&lt;pre" in html_part or "<pre" in html_part
 
     def test_html_signature_appends_to_html_body(self, connected):
         """HTML signature with html_body appends rendered sig to html_body."""
