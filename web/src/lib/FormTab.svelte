@@ -207,11 +207,12 @@
 
       // ── Shared post-submission navigation ────────────────────────────
 
-      // Read return-to-list values BEFORE closing (component may unmount)
-      const returnIdKey = initialData?._returnIdKey;
+      // Read return-to-list values BEFORE closing (component may unmount).
+      // For email send, always redirect to outbox regardless of caller.
+      const returnIdKey = formType === "email-send" ? "persistent-email-outbox-list" : initialData?._returnIdKey;
       const highlightUuid = result.data?.uuid;
-      const returnType = initialData?._returnType;
-      const returnTitle = initialData?._returnTitle;
+      const returnType = formType === "email-send" ? "email-outbox-list" : initialData?._returnType;
+      const returnTitle = formType === "email-send" ? "Outbox" : initialData?._returnTitle;
 
       // Close form tab using tabId prop (same as tabStore.active.id at submit time)
       if (tabId) tabStore.close(tabId);
@@ -227,7 +228,7 @@
           tabStore.open(returnType || "status", returnTitle || "Done", freshData, { idKey: returnIdKey });
           if (renderUrl) window.open(renderUrl, "_blank");
           // Show confirmation banner for email sends
-          if (formType === "email-send") banner.show("Queued for sending…", "success");
+          if (formType === "email-send") banner.show("Queued for sending — check Outbox", "success");
           return;
         } catch {
           // Refresh failed — fall through to open result tab
@@ -237,7 +238,7 @@
       tabStore.open(result.type || "status", result.title || "Done", result.data || {});
       if (renderUrl) window.open(renderUrl, "_blank");
       // Show confirmation banner for email sends (fallback path)
-      if (formType === "email-send") banner.show("Queued for sending…", "success");
+      if (formType === "email-send") banner.show("Queued for sending — check Outbox", "success");
     } catch (err) {
       const msg = err.cause?.code === "ECONNREFUSED"
         ? "Cannot connect to the backend."

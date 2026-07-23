@@ -306,9 +306,9 @@
             }
           }
 
-          // Email send: show queued banner
-          if (result.title === "Sent" && tokens[0] === "email" && tokens[1] === "send") {
-            banner.show("Queued for sending…", "success");
+          // Email send: show queued banner (redirect to outbox)
+          if (result.title === "Queued for Delivery" && tokens[0] === "email" && tokens[1] === "send") {
+            banner.show("Queued for sending — check Outbox", "success");
           }
 
           // Delete mutations: show confirmation banner so the user knows

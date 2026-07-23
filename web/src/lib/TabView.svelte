@@ -86,6 +86,7 @@
     "email-list": EmailListTab,
     "email-trash-list": EmailListTab,
     "email-draft-list": EmailListTab,
+    "email-outbox-list": EmailListTab,
     "journal-list": JournalListTab,
     "journal-view": JournalViewTab,
     "contacts-list": ContactsListTab,
@@ -188,7 +189,7 @@
 
   // Tab types that manage their own Escape (selection mode, search, dialogs)
   const LIST_TAB_TYPES = new Set([
-    "email-list", "journal-list", "contacts-list", "todo-list",
+    "email-list", "email-outbox-list", "journal-list", "contacts-list", "todo-list",
     "calendar-events", "sieve-list", "letter-list", "folder-list",
     "block-list", "signature-list",
   ]);
@@ -313,12 +314,13 @@
           <EventsPopup data={tab.data} />
         {:else if tab.type === "error"}
           <ErrorPopup data={tab.data} />
-        {:else if tab.type === "email-list" || tab.type === "email-trash-list" || tab.type === "email-draft-list"}
+        {:else if tab.type === "email-list" || tab.type === "email-trash-list" || tab.type === "email-draft-list" || tab.type === "email-outbox-list"}
           <EmailListTab
             data={tab.data}
             tabId={tab.id}
             isTrashView={tab.type === "email-trash-list"}
             isDraftView={tab.type === "email-draft-list"}
+            isOutboxView={tab.type === "email-outbox-list"}
           />
         {:else if tab.type === "journal-list"}
           <JournalListTab data={tab.data} tabId={tab.id} />
@@ -467,6 +469,7 @@
       "email-list": "✉",
       "email-trash-list": "🗑",
       "email-draft-list": "✎",
+      "email-outbox-list": "📤",
       "journal-list": "📓",
       "journal-view": "📓",
       "contacts-list": "👤",

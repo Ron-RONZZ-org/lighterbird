@@ -43,7 +43,7 @@
     { key: "Ctrl+S", desc: "Mark selected as spam (selection mode)", modifiers: "Ctrl", category: "Email List" },
   ]);
 
-  let { data = {}, isTrashView: _isTrashViewProp = null, isDraftView: _isDraftViewProp = null } = $props();
+  let { data = {}, isTrashView: _isTrashViewProp = null, isDraftView: _isDraftViewProp = null, isOutboxView: _isOutboxViewProp = null } = $props();
   let messages = $state([]);
   let total = $derived(messages.length);
   let hasMore = $state(false);
@@ -63,6 +63,28 @@
     return () => stopPolling();
   });
 
+  // ── Outbox auto-refresh ─────────────────────────────────────────
+  // When viewing the outbox, poll every 3s to auto-update when emails
+  // are processed by the background send queue (moved from Outbox to Sent).
+  let _outboxPollTimer = $state(null);
+  $effect(() => {
+    if (isOutboxView) {
+      _outboxPollTimer = setInterval(async () => {
+        try {
+          const result = await emailApi.list({ folder: "Outbox", sort: "newest", limit: 50 });
+          const tabId = tabStore.findByKey(ownIdKey) || tabStore.active.id;
+          tabStore.safeUpdate(tabId, result);
+        } catch { /* silent */ }
+      }, 3000);
+    }
+    return () => {
+      if (_outboxPollTimer) {
+        clearInterval(_outboxPollTimer);
+        _outboxPollTimer = null;
+      }
+    };
+  });
+
   // Show overlay during background startup sync (first load with accounts)
   let showStartupOverlay = $state(false);
   $effect(() => {
@@ -80,19 +102,21 @@
       _prevStartupComplete = syncState.startupComplete;
     }
   });
-  // isTrashView / isDraftView are derived from the explicit prop (when
-  // passed by TabView) or from initial data.  $derived ensures they stay
-  // in sync when the user switches between tabs of different email-list
-  // subtypes (email-list / email-trash-list / email-draft-list), because
-  // EmailListTab stays mounted within the same {:else if} branch.
+  // isTrashView / isDraftView / isOutboxView are derived from the
+  // explicit prop (when passed by TabView) or from initial data.
+  // $derived ensures they stay in sync when the user switches between
+  // tabs of different email-list subtypes, because EmailListTab stays
+  // mounted within the same {:else if} branch.
   let isTrashView = $derived(_isTrashViewProp !== null ? _isTrashViewProp : !!data?._isTrashView);
   let isDraftView = $derived(_isDraftViewProp !== null ? _isDraftViewProp : !!data?._isDraftView);
+  let isOutboxView = $derived(_isOutboxViewProp !== null ? _isOutboxViewProp : !!data?._isOutboxView);
 
-  // Own idKey for tab targeting.  Derived from stable isTrashView/isDraftView
-  // so it survives safeUpdate (which strips _isTrashView/_isDraftView from data).
+  // Own idKey for tab targeting.  Derived from stable view flags so it
+  // survives safeUpdate (which strips _is*View flags from data).
   let ownIdKey = $derived(
     isTrashView ? "persistent-email-trash-list"
     : isDraftView ? "persistent-email-draft-list"
+    : isOutboxView ? "persistent-email-outbox-list"
     : "persistent-email-list"
   );
 
@@ -292,7 +316,8 @@
   }
 
   function handleNew() {
-    tabStore.open("form", "Compose Email", { form: "email-send", initialData: { _returnIdKey: "persistent-email-list" } }, {
+    const returnIdKey = isOutboxView ? "persistent-email-outbox-list" : "persistent-email-list";
+    tabStore.open("form", "Compose Email", { form: "email-send", initialData: { _returnIdKey: returnIdKey } }, {
       idKey: "email-compose",
     });
   }

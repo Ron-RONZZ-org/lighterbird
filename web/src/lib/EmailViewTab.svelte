@@ -20,6 +20,8 @@
     { key: "Ctrl+Delete", desc: "Permanently delete", modifiers: "Ctrl", category: "Email Detail" },
     { key: "Ctrl+S", desc: "Report spam", modifiers: "Ctrl", category: "Email Detail" },
     { key: "Ctrl+Shift+S", desc: "Report fraudulent", modifiers: "Ctrl+Shift", category: "Email Detail" },
+    { key: "Ctrl+Right", desc: "Next unread", modifiers: "Ctrl", category: "Email Detail" },
+    { key: "Ctrl+Left", desc: "Next unread", modifiers: "Ctrl", category: "Email Detail" },
   ]);
 
   let { data = {}, tabId } = $props();
@@ -206,141 +208,121 @@
     }));
   }
 
-  /** Navigate to next unread email after an action. */
-  async function navigateToNextUnread() {
+  /** Fetch the most recent unread email (different from current msg). */
+  async function fetchNextUnread() {
     try {
-      const result = await emailApi.list({ read: false, sort: "newest", limit: 1 });
+      const result = await emailApi.listMessages({ read: false, sort: "newest", limit: 1 });
       const msgs = result.messages || [];
       if (msgs.length > 0 && msgs[0].uuid !== msg.uuid) {
-        const next = msgs[0];
-        tabStore.open("email", next.subject || "(no subject)", next, {
-          idKey: `email-${next.uuid}`,
-          replaceable: false,
-        });
+        return msgs[0];
       }
-    } catch { /* silent — no next unread is not an error */ }
+    } catch { /* silent */ }
+    return null;
+  }
+
+  /** Replace the current tab content with the next unread email. */
+  async function showNextUnread() {
+    const next = await fetchNextUnread();
+    if (next) {
+      msg = next;
+      tabStore.update(tabId, next, next.subject || "(no subject)", `email-${next.uuid}`);
+    }
+  }
+
+  /** Replace the current tab content with the next unread email
+   *  (same as showNextUnread — both arrows do the same). */
+  async function showPrevUnread() {
+    await showNextUnread();
+  }
+
+  /**
+   * Shared delete/post-action logic.
+   * Fetches the next unread FIRST, then on success updates the current
+   * tab in-place instead of closing+reopening.  The tab stays at the
+   * same position in the tab bar with zero tab creation/destruction.
+   *
+   * @param {Function} apiCall - async function that performs the API call
+   * @param {string} actionName - event detail action ("trash"|"hard_delete"|"spam"|"fraud")
+   * @param {string} bannerMsg - message for the action banner
+   */
+  async function _performDeleteAction(apiCall, actionName, bannerMsg) {
+    if (!msg.uuid) return;
+
+    // Save original before we change anything (needed for undo)
+    const originalMsg = { ...msg };
+
+    // Fetch next unread BEFORE the API call (so we can update in-place)
+    const nextMsg = await fetchNextUnread();
+
+    try {
+      const resp = await apiCall();
+      const opId = resp?.operation_id;
+
+      dispatchDeleted(actionName);
+
+      if (nextMsg) {
+        // Same tab, new content — update data, title, and idKey
+        msg = nextMsg;
+        tabStore.update(tabId, nextMsg, nextMsg.subject || "(no subject)", `email-${nextMsg.uuid}`);
+      } else {
+        // No more unread — close the tab
+        tabStore.close(tabId);
+      }
+
+      const undoAction = opId
+        ? async () => {
+            try {
+              await emailApi.undoAction(opId);
+              // Re-fetch the restored message and open in a new tab
+              try {
+                const restored = await emailApi.getMessage(originalMsg.uuid);
+                tabStore.open("email", restored.subject || "(no subject)", restored, {
+                  idKey: `email-${restored.uuid}`,
+                  replaceable: false,
+                });
+              } catch { /* silent */ }
+            } catch { /* undo failed — ignore */ }
+          }
+        : null;
+
+      actionBanner.show(bannerMsg, undoAction, "Undo");
+    } catch { /* ignore */ }
   }
 
   /** Soft-delete with undo support. */
   async function trash() {
-    if (!msg.uuid) return;
-    try {
-      const resp = await emailApi.batchDelete([msg.uuid], 5);
-      const opId = resp?.operation_id;
-
-      dispatchDeleted("trash");
-      tabStore.close(tabId);
-
-      const undoAction = opId
-        ? async () => {
-            try {
-              await emailApi.undoAction(opId);
-              // Re-fetch the message to restore it in UI
-              try {
-                const restored = await emailApi.getMessage(msg.uuid);
-                tabStore.open("email", restored.subject || "(no subject)", restored, {
-                  idKey: `email-${restored.uuid}`,
-                  replaceable: false,
-                });
-              } catch { /* silent */ }
-            } catch { /* undo failed — ignore */ }
-          }
-        : null;
-
-      actionBanner.show("Message moved to Trash", undoAction, "Undo");
-      navigateToNextUnread();
-    } catch { /* ignore */ }
+    await _performDeleteAction(
+      () => emailApi.batchDelete([msg.uuid], 5),
+      "trash",
+      "Message moved to Trash",
+    );
   }
 
   /** Hard-delete with undo support. */
   async function hardDelete() {
-    if (!msg.uuid) return;
-    try {
-      const resp = await emailApi.batchDeleteHard([msg.uuid], 5);
-      const opId = resp?.operation_id;
-
-      dispatchDeleted("hard_delete");
-      tabStore.close(tabId);
-
-      const undoAction = opId
-        ? async () => {
-            try {
-              await emailApi.undoAction(opId);
-              // Re-fetch the message to restore it in UI
-              try {
-                const restored = await emailApi.getMessage(msg.uuid);
-                tabStore.open("email", restored.subject || "(no subject)", restored, {
-                  idKey: `email-${restored.uuid}`,
-                  replaceable: false,
-                });
-              } catch { /* silent */ }
-            } catch { /* undo failed — ignore */ }
-          }
-        : null;
-
-      actionBanner.show("Message permanently deleted", undoAction, "Undo");
-      navigateToNextUnread();
-    } catch { /* ignore */ }
+    await _performDeleteAction(
+      () => emailApi.batchDeleteHard([msg.uuid], 5),
+      "hard_delete",
+      "Message permanently deleted",
+    );
   }
 
   /** Report as spam with undo support. */
   async function reportSpam() {
-    if (!msg.uuid) return;
-    try {
-      const resp = await emailApi.reportSpam(msg.uuid, "spam", 5);
-      const opId = resp?.operation_id;
-
-      dispatchDeleted("spam");
-      tabStore.close(tabId);
-
-      const undoAction = opId
-        ? async () => {
-            try {
-              await emailApi.undoAction(opId);
-              try {
-                const restored = await emailApi.getMessage(msg.uuid);
-                tabStore.open("email", restored.subject || "(no subject)", restored, {
-                  idKey: `email-${restored.uuid}`,
-                  replaceable: false,
-                });
-              } catch { /* silent */ }
-            } catch { /* undo failed */ }
-          }
-        : null;
-
-      actionBanner.show("Message reported as spam", undoAction, "Undo");
-      navigateToNextUnread();
-    } catch { /* ignore */ }
+    await _performDeleteAction(
+      () => emailApi.reportSpam(msg.uuid, "spam", 5),
+      "spam",
+      "Message reported as spam",
+    );
   }
 
   /** Report as fraudulent with undo support. */
   async function reportFraud() {
-    if (!msg.uuid) return;
-    try {
-      const resp = await emailApi.reportSpam(msg.uuid, "fraud", 5);
-      const opId = resp?.operation_id;
-
-      dispatchDeleted("fraud");
-      tabStore.close(tabId);
-
-      const undoAction = opId
-        ? async () => {
-            try {
-              await emailApi.undoAction(opId);
-              try {
-                const restored = await emailApi.getMessage(msg.uuid);
-                tabStore.open("email", restored.subject || "(no subject)", restored, {
-                  idKey: `email-${restored.uuid}`,
-                  replaceable: false,
-                });
-              } catch { /* silent */ }
-            } catch { /* undo failed */ }
-          }
-        : null;
-
-      actionBanner.show("Message reported as fraudulent", undoAction, "Undo");
-      navigateToNextUnread();
-    } catch { /* ignore */ }
+    await _performDeleteAction(
+      () => emailApi.reportSpam(msg.uuid, "fraud", 5),
+      "fraud",
+      "Message reported as fraudulent",
+    );
   }
 
   function handleKeydown(e) {
@@ -378,6 +360,18 @@
       reportFraud();
       return;
     }
+    // Ctrl+Right — next unread
+    if ((e.ctrlKey || e.metaKey) && (e.key === "ArrowRight")) {
+      e.preventDefault();
+      showNextUnread();
+      return;
+    }
+    // Ctrl+Left — previous unread
+    if ((e.ctrlKey || e.metaKey) && (e.key === "ArrowLeft")) {
+      e.preventDefault();
+      showPrevUnread();
+      return;
+    }
   }
 
   // Auto-mark as read when the email is opened
@@ -408,6 +402,9 @@
   <div class="email-view">
     <!-- Toolbar -->
     <div class="toolbar">
+      <button class="tool-btn nav-arrow" onclick={showPrevUnread} title="Next unread (Ctrl+Left)">
+        <span class="tool-icon">◀</span>
+      </button>
       <button class="tool-btn" onclick={reply} title="Reply (Ctrl+R)">
         <span class="tool-icon">↩</span> Reply
       </button>
@@ -445,6 +442,9 @@
         <span class="tool-icon">🖨</span> Print <kbd>Ctrl+P</kbd>
       </button>
       <div class="toolbar-spacer"></div>
+      <button class="tool-btn nav-arrow" onclick={showNextUnread} title="Next unread (Ctrl+Right)">
+        <span class="tool-icon">▶</span>
+      </button>
       <button
         class="tool-btn conv-btn"
         class:active={showConversation}
@@ -560,6 +560,10 @@
   }
   .tool-icon {
     font-size: 0.85rem;
+  }
+  .nav-arrow {
+    font-size: 0.8rem;
+    padding: 3px 6px;
   }
   .toolbar-spacer {
     flex: 1;
