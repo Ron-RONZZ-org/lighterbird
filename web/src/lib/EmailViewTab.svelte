@@ -199,6 +199,15 @@
     openPrintWindow(msg.subject || "(no subject)", headers, bodyContent);
   }
 
+  // ── All-read state ────────────────────────────────────────────────
+  // Special object shown when there are no more unread emails.
+
+  const _ALL_READ_TITLE = "All Caught Up";
+  const _ALL_READ_DATA = { _allRead: true };
+
+  /** True when the view is showing the "all read" congratulations screen. */
+  let isAllRead = $derived(msg?._allRead === true);
+
   // ── Post-action helpers ────────────────────────────────────────────
 
   /** Dispatch event so list tabs can update. */
@@ -220,26 +229,35 @@
     return null;
   }
 
-  /** Replace the current tab content with the next unread email. */
+  /** Switch the current tab to the next unread email, or show the
+   *  congratulations screen if no more unread emails exist. */
   async function showNextUnread() {
     const next = await fetchNextUnread();
     if (next) {
       msg = next;
       tabStore.update(tabId, next, next.subject || "(no subject)", `email-${next.uuid}`);
+    } else {
+      showAllRead();
     }
   }
 
-  /** Replace the current tab content with the next unread email
-   *  (same as showNextUnread — both arrows do the same). */
+  /** Same as showNextUnread — both arrows do the same. */
   async function showPrevUnread() {
     await showNextUnread();
+  }
+
+  /** Switch the current tab to the "all caught up" congratulations screen. */
+  function showAllRead() {
+    msg = _ALL_READ_DATA;
+    tabStore.update(tabId, _ALL_READ_DATA, _ALL_READ_TITLE, "email-all-read");
   }
 
   /**
    * Shared delete/post-action logic.
    * Fetches the next unread FIRST, then on success updates the current
-   * tab in-place instead of closing+reopening.  The tab stays at the
-   * same position in the tab bar with zero tab creation/destruction.
+   * tab in-place.  The tab never closes — if no more unread, it shows
+   * a congratulations screen instead.  The undo always restores the
+   * original message in the same tab.
    *
    * @param {Function} apiCall - async function that performs the API call
    * @param {string} actionName - event detail action ("trash"|"hard_delete"|"spam"|"fraud")
@@ -261,32 +279,23 @@
       dispatchDeleted(actionName);
 
       if (nextMsg) {
-        // Same tab, new content — update data, title, and idKey
+        // Same tab, new email — update data, title, and idKey
         msg = nextMsg;
         tabStore.update(tabId, nextMsg, nextMsg.subject || "(no subject)", `email-${nextMsg.uuid}`);
       } else {
-        // No more unread — close the tab
-        tabStore.close(tabId);
+        // No more unread — show congratulations screen in the same tab
+        showAllRead();
       }
 
       const undoAction = opId
         ? async () => {
             try {
               await emailApi.undoAction(opId);
-              // Re-fetch the restored message
+              // Re-fetch the restored message and show it in the same tab
               try {
                 const restored = await emailApi.getMessage(originalMsg.uuid);
-                if (nextMsg) {
-                  // Tab is still open (showing next unread) — update in-place
-                  msg = restored;
-                  tabStore.update(tabId, restored, restored.subject || "(no subject)", `email-${restored.uuid}`);
-                } else {
-                  // Tab was closed (no more unread) — open a new one
-                  tabStore.open("email", restored.subject || "(no subject)", restored, {
-                    idKey: `email-${restored.uuid}`,
-                    replaceable: false,
-                  });
-                }
+                msg = restored;
+                tabStore.update(tabId, restored, restored.subject || "(no subject)", `email-${restored.uuid}`);
               } catch { /* silent */ }
             } catch { /* undo failed — ignore */ }
           }
@@ -406,95 +415,109 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="email-wrapper">
-  <div class="email-view">
-    <!-- Toolbar -->
-    <div class="toolbar">
-      <button class="tool-btn nav-arrow" onclick={showPrevUnread} title="Next unread (Ctrl+Left)">
-        <span class="tool-icon">◀</span>
-      </button>
-      <button class="tool-btn" onclick={reply} title="Reply (Ctrl+R)">
-        <span class="tool-icon">↩</span> Reply
-      </button>
-      <button class="tool-btn" onclick={replyAll} title="Reply All (Ctrl+Shift+R)">
-        <span class="tool-icon">↩↩</span> Reply All
-      </button>
-      <button class="tool-btn" onclick={forward} title="Forward (Ctrl+L)">
-        <span class="tool-icon">→</span> Forward
-      </button>
-      <button class="tool-btn" onclick={exportEml} title="Export .eml (Ctrl+E)">
-        <span class="tool-icon">⬇</span> Export <kbd>E</kbd>
-      </button>
-      {#if hasHtml}
-        <button class="tool-btn" onclick={toggleRender} title="Toggle HTML/plain text">
-          <span class="tool-icon">{useHtml ? "🔤" : "🌐"}</span>
-          {useHtml ? "Plain" : "HTML"}
+  {#if isAllRead}
+    <!-- All caught up — congratulations screen -->
+    <div class="all-read-screen">
+      <div class="all-read-content">
+        <div class="all-read-icon">✓</div>
+        <h2 class="all-read-title">{_ALL_READ_TITLE}</h2>
+        <p class="all-read-message">Hurray! You have read all your emails!</p>
+        <button class="all-read-btn" onclick={() => tabStore.goHome()}>
+          Back to Home
         </button>
-      {/if}
-      <button class="tool-btn" onclick={markRead} disabled={msg.is_read} title="Mark as read">
-        <span class="tool-icon">✓</span> Read
-      </button>
-      <button class="tool-btn trash-btn" onclick={trash} title="Move to Trash (Delete)">
-        <span class="tool-icon">🗑</span> <kbd>Del</kbd>
-      </button>
-      <button class="tool-btn danger-btn" onclick={hardDelete} title="Permanently delete (Ctrl+Delete)">
-        <span class="tool-icon">✕</span> Hard Del <kbd>⌃Del</kbd>
-      </button>
-      <button class="tool-btn spam-btn" onclick={reportSpam} title="Report as spam (Ctrl+S)">
-        <span class="tool-icon">⚠</span> Spam <kbd>⌃S</kbd>
-      </button>
-      <button class="tool-btn fraud-btn" onclick={reportFraud} title="Report as fraudulent (Ctrl+Shift+S)">
-        <span class="tool-icon">⚡</span> Fraud <kbd>⌃⇧S</kbd>
-      </button>
-      <button class="tool-btn" onclick={printEmail} title="Print (Ctrl+P)">
-        <span class="tool-icon">🖨</span> Print <kbd>Ctrl+P</kbd>
-      </button>
-      <div class="toolbar-spacer"></div>
-      <button class="tool-btn nav-arrow" onclick={showNextUnread} title="Next unread (Ctrl+Right)">
-        <span class="tool-icon">▶</span>
-      </button>
-      <button
-        class="tool-btn conv-btn"
-        class:active={showConversation}
-        onclick={toggleConversation}
-        title="Conversation history"
-      >
-        <span class="tool-icon">💬</span>
-        Thread
-      </button>
+      </div>
+    </div>
+  {:else}
+    <div class="email-view">
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <button class="tool-btn nav-arrow" onclick={showPrevUnread} title="Next unread (Ctrl+Left)">
+          <span class="tool-icon">◀</span>
+        </button>
+        <button class="tool-btn" onclick={reply} title="Reply (Ctrl+R)">
+          <span class="tool-icon">↩</span> Reply
+        </button>
+        <button class="tool-btn" onclick={replyAll} title="Reply All (Ctrl+Shift+R)">
+          <span class="tool-icon">↩↩</span> Reply All
+        </button>
+        <button class="tool-btn" onclick={forward} title="Forward (Ctrl+L)">
+          <span class="tool-icon">→</span> Forward
+        </button>
+        <button class="tool-btn" onclick={exportEml} title="Export .eml (Ctrl+E)">
+          <span class="tool-icon">⬇</span> Export <kbd>E</kbd>
+        </button>
+        {#if hasHtml}
+          <button class="tool-btn" onclick={toggleRender} title="Toggle HTML/plain text">
+            <span class="tool-icon">{useHtml ? "🔤" : "🌐"}</span>
+            {useHtml ? "Plain" : "HTML"}
+          </button>
+        {/if}
+        <button class="tool-btn" onclick={markRead} disabled={msg.is_read} title="Mark as read">
+          <span class="tool-icon">✓</span> Read
+        </button>
+        <button class="tool-btn trash-btn" onclick={trash} title="Move to Trash (Delete)">
+          <span class="tool-icon">🗑</span> <kbd>Del</kbd>
+        </button>
+        <button class="tool-btn danger-btn" onclick={hardDelete} title="Permanently delete (Ctrl+Delete)">
+          <span class="tool-icon">✕</span> Hard Del <kbd>⌃Del</kbd>
+        </button>
+        <button class="tool-btn spam-btn" onclick={reportSpam} title="Report as spam (Ctrl+S)">
+          <span class="tool-icon">⚠</span> Spam <kbd>⌃S</kbd>
+        </button>
+        <button class="tool-btn fraud-btn" onclick={reportFraud} title="Report as fraudulent (Ctrl+Shift+S)">
+          <span class="tool-icon">⚡</span> Fraud <kbd>⌃⇧S</kbd>
+        </button>
+        <button class="tool-btn" onclick={printEmail} title="Print (Ctrl+P)">
+          <span class="tool-icon">🖨</span> Print <kbd>Ctrl+P</kbd>
+        </button>
+        <div class="toolbar-spacer"></div>
+        <button class="tool-btn nav-arrow" onclick={showNextUnread} title="Next unread (Ctrl+Right)">
+          <span class="tool-icon">▶</span>
+        </button>
+        <button
+          class="tool-btn conv-btn"
+          class:active={showConversation}
+          onclick={toggleConversation}
+          title="Conversation history"
+        >
+          <span class="tool-icon">💬</span>
+          Thread
+        </button>
+      </div>
+
+      <!-- Headers (extracted) -->
+      <EmailHeaders {msg} />
+
+      <!-- Attachments (extracted, self-fetching) -->
+      <EmailAttachmentBar msgUuid={msg.uuid || ""} attachmentCount={msg.attachment_count || 0} />
+
+      <hr />
+
+      <!-- Body: HTML iframe or plain text -->
+      <div class="body-area">
+        {#if hasHtml && useHtml}
+          <!-- svelte-ignore a11y_distracting_elements -->
+          <iframe
+            class="html-frame"
+            srcdoc={htmlContent}
+            sandbox="allow-same-origin"
+            title="Email body"
+          ></iframe>
+        {:else}
+          <pre class="plain-text">{msg.body || "(no body)"}</pre>
+        {/if}
+      </div>
     </div>
 
-    <!-- Headers (extracted) -->
-    <EmailHeaders {msg} />
-
-    <!-- Attachments (extracted, self-fetching) -->
-    <EmailAttachmentBar msgUuid={msg.uuid || ""} attachmentCount={msg.attachment_count || 0} />
-
-    <hr />
-
-    <!-- Body: HTML iframe or plain text -->
-    <div class="body-area">
-      {#if hasHtml && useHtml}
-        <!-- svelte-ignore a11y_distracting_elements -->
-        <iframe
-          class="html-frame"
-          srcdoc={htmlContent}
-          sandbox="allow-same-origin"
-          title="Email body"
-        ></iframe>
-      {:else}
-        <pre class="plain-text">{msg.body || "(no body)"}</pre>
-      {/if}
-    </div>
-  </div>
-
-  <!-- Conversation sidebar (extracted) -->
-  <EmailConversationSidebar
-    show={showConversation}
-    {conversation}
-    loading={conversationLoading}
-    currentUuid={msg.uuid || ""}
-    onClose={() => { showConversation = false; }}
-  />
+    <!-- Conversation sidebar (extracted) -->
+    <EmailConversationSidebar
+      show={showConversation}
+      {conversation}
+      loading={conversationLoading}
+      currentUuid={msg.uuid || ""}
+      onClose={() => { showConversation = false; }}
+    />
+  {/if}
 </div>
 
 <style>
@@ -634,5 +657,49 @@
     font-size: 0.82rem;
     line-height: 1.5;
     overflow-y: auto;
+  }
+
+  /* ── All-read screen ─────────────────────────────────── */
+  .all-read-screen {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+  .all-read-content {
+    text-align: center;
+    max-width: 400px;
+  }
+  .all-read-icon {
+    font-size: 2.5rem;
+    color: #4a6;
+    margin-bottom: 0.75rem;
+  }
+  .all-read-title {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: #e0e0e0;
+    margin-bottom: 0.5rem;
+  }
+  .all-read-message {
+    font-size: 0.95rem;
+    color: #999;
+    margin-bottom: 1.5rem;
+    line-height: 1.5;
+  }
+  .all-read-btn {
+    padding: 0.5rem 1.5rem;
+    border: 1px solid #4a6;
+    border-radius: 4px;
+    background: transparent;
+    color: #4a6;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 0.85rem;
+    transition: background 0.1s;
+  }
+  .all-read-btn:hover {
+    background: #1a3a2a;
   }
 </style>
