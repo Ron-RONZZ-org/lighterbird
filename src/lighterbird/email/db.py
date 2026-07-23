@@ -324,6 +324,36 @@ _IDX_SPAM_USER_TOKENS_ACCT = "CREATE INDEX IF NOT EXISTS idx_spam_user_tokens_ac
 
 _IDX_PHISHING_FEEDS_DOMAIN = "CREATE INDEX IF NOT EXISTS idx_phishing_feeds_domain ON phishing_feeds(domain);"
 
+# ── Spam similarity schema (MinHash signatures + content hash tracking) ──
+_CREATE_SPAM_SIGNATURES = """
+CREATE TABLE IF NOT EXISTS spam_signatures (
+    message_uuid    TEXT NOT NULL,
+    account_email   TEXT NOT NULL,
+    signature       BLOB NOT NULL,       -- 128 x 4 = 512 bytes of uint32 LE
+    content_hash    TEXT NOT NULL,        -- SHA-256 of normalized text
+    num_tokens      INTEGER NOT NULL,    -- token count for size normalization
+    created_at      TEXT NOT NULL,
+    PRIMARY KEY (message_uuid),
+    FOREIGN KEY (message_uuid) REFERENCES messages(uuid) ON DELETE CASCADE
+);
+"""
+
+_CREATE_SPAM_CONTENT_HASHES = """
+CREATE TABLE IF NOT EXISTS spam_content_hashes (
+    content_hash    TEXT NOT NULL,
+    sender_domain   TEXT NOT NULL,        -- domain of the original sender
+    account_email   TEXT NOT NULL,
+    first_seen_at   TEXT NOT NULL,
+    last_seen_at    TEXT NOT NULL,
+    occurrence_count INTEGER NOT NULL DEFAULT 1,
+    subject_snippet TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (content_hash, sender_domain, account_email)
+);
+"""
+
+_IDX_SPAM_CONTENT_HASHES_ACCT = "CREATE INDEX IF NOT EXISTS idx_spam_content_hashes_acct ON spam_content_hashes(account_email);"
+_IDX_SPAM_SIGNATURES_ACCT = "CREATE INDEX IF NOT EXISTS idx_spam_signatures_acct ON spam_signatures(account_email);"
+
 _SEND_QUEUE_TABLE = """
 CREATE TABLE IF NOT EXISTS send_queue (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -390,6 +420,11 @@ _SCHEMA_STATEMENTS: list[str] = [
     _IDX_SPAM_USER_TOKENS_ACCT,
     _IDX_PHISHING_FEEDS_DOMAIN,
     _CREATE_SPAM_BLOCKS,
+    # Spam similarity schema
+    _CREATE_SPAM_SIGNATURES,
+    _CREATE_SPAM_CONTENT_HASHES,
+    _IDX_SPAM_CONTENT_HASHES_ACCT,
+    _IDX_SPAM_SIGNATURES_ACCT,
     _CREATE_SIEVE_SCRIPTS,
     _CREATE_SIEVE_ACTIVATIONS,
     _MIGRATE_ACCOUNTS_MANAGESIEVE,

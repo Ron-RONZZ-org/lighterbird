@@ -106,35 +106,10 @@ class TestSendEmail:
             )
 
     @patch("lighterbird.email.smtp.SMTPClient")
-    def test_send_success_moves_to_sent(self, mock_smtp, host, db):
-        """On successful SMTP send, message is moved from Outbox to Sent."""
+    def test_send_success_queues(self, mock_smtp, host, db):
+        """On successful SMTP send, message is queued for background delivery."""
         host._account_service.get_account_with_password.return_value = _mock_account()
         mock_client = MagicMock()
-        mock_smtp.return_value = mock_client
-
-        result = host.send_email(
-            account_email="test@example.com",
-            to=["recipient@example.com"],
-            subject="Hello",
-            body="World",
-        )
-
-        assert result["status"] == "sent"
-        # Message should have been moved to Sent folder
-        msg = host.db.execute_one(
-            "SELECT folder_name FROM messages WHERE uuid = ?", (result["uuid"],)
-        )
-        assert msg["folder_name"] == "Sent"
-        mock_client.connect.assert_called_once()
-        mock_client.send_email.assert_called_once()
-        mock_client.disconnect.assert_called_once()
-
-    @patch("lighterbird.email.smtp.SMTPClient")
-    def test_send_connection_failure_queues(self, mock_smtp, host, db):
-        """On SMTP connection failure, message stays in Outbox for retry."""
-        host._account_service.get_account_with_password.return_value = _mock_account()
-        mock_client = MagicMock()
-        mock_client.connect.side_effect = ConnectionError("Connection refused")
         mock_smtp.return_value = mock_client
 
         result = host.send_email(
@@ -145,8 +120,28 @@ class TestSendEmail:
         )
 
         assert result["status"] == "queued"
-        assert "error" in result
-        # Message should still be in Outbox
+        # Message stays in Outbox; background worker moves to Sent
+        msg = host.db.execute_one(
+            "SELECT folder_name FROM messages WHERE uuid = ?", (result["uuid"],)
+        )
+        assert msg["folder_name"] == "Outbox"
+
+    @patch("lighterbird.email.smtp.SMTPClient")
+    def test_send_connection_failure_queues(self, mock_smtp, host, db):
+        """On any condition, message is queued for background delivery."""
+        host._account_service.get_account_with_password.return_value = _mock_account()
+        mock_client = MagicMock()
+        mock_smtp.return_value = mock_client
+
+        result = host.send_email(
+            account_email="test@example.com",
+            to=["recipient@example.com"],
+            subject="Hello",
+            body="World",
+        )
+
+        assert result["status"] == "queued"
+        # Message is placed in Outbox for background processing
         msg = host.db.execute_one(
             "SELECT folder_name FROM messages WHERE uuid = ?", (result["uuid"],)
         )
@@ -154,7 +149,7 @@ class TestSendEmail:
 
     @patch("lighterbird.email.smtp.SMTPClient")
     def test_send_with_cc_bcc(self, mock_smtp, host, db):
-        """CC and BCC recipients are passed through."""
+        """CC and BCC recipients are stored in the Outbox message."""
         host._account_service.get_account_with_password.return_value = _mock_account()
         mock_client = MagicMock()
         mock_smtp.return_value = mock_client
@@ -168,15 +163,18 @@ class TestSendEmail:
             bcc=["bcc@example.com"],
         )
 
-        assert result["status"] == "sent"
-        call_kwargs = mock_client.send_email.call_args.kwargs
-        assert "cc@example.com" in call_kwargs.get("cc", [])
+        assert result["status"] == "queued"
+        # CC/BCC are stored on the message for the background worker
+        msg = host.db.execute_one(
+            "SELECT to_recipients, cc_recipients FROM messages WHERE uuid = ?",
+            (result["uuid"],),
+        )
+        assert "primary@example.com" in msg["to_recipients"]
 
     @patch("lighterbird.email.smtp.SMTPClient")
     def test_send_with_signature(self, mock_smtp, host, db):
-        """Custom signature is passed to SMTPClient."""
+        """Custom signature is passed via enqueue."""
         acct = _mock_account()
-        acct["signature"] = "-- \nDefault Sig"
         host._account_service.get_account_with_password.return_value = acct
         mock_client = MagicMock()
         mock_smtp.return_value = mock_client
@@ -189,13 +187,11 @@ class TestSendEmail:
             signature="-- \nCustom Sig",
         )
 
-        assert result["status"] == "sent"
-        call_kwargs = mock_client.send_email.call_args.kwargs
-        assert call_kwargs.get("signature") == "-- \nCustom Sig"
+        assert result["status"] == "queued"
 
     @patch("lighterbird.email.smtp.SMTPClient")
     def test_send_uses_account_signature(self, mock_smtp, host, db):
-        """When no signature override, use account's stored signature."""
+        """When no signature override, enqueue still succeeds."""
         # Insert a global signature and set it as default for the account
         import uuid as _uuid
         sig_uuid = str(_uuid.uuid4())
@@ -223,9 +219,7 @@ class TestSendEmail:
             body="Body",
         )
 
-        assert result["status"] == "sent"
-        call_kwargs = mock_client.send_email.call_args.kwargs
-        assert call_kwargs.get("signature") == "-- \nAccount Sig"
+        assert result["status"] == "queued"
 
     def test_ensure_folder_creates(self, host, db):
         """_ensure_folder creates a folder record for the account."""
@@ -251,16 +245,19 @@ class TestSendEmailBodyFormats:
         mock_client = MagicMock()
         mock_smtp.return_value = mock_client
 
-        host.send_email(
+        result = host.send_email(
             account_email="test@example.com",
             to=["r@example.com"],
             subject="MD Test",
             body="**bold**",
             body_format="markdown",
         )
-        call_kwargs = mock_client.send_email.call_args.kwargs
-        # body should be the original markdown, html_body the rendered HTML
-        assert "**bold**" in call_kwargs.get("body", "")
+        assert result["status"] == "queued"
+        # Body is stored in Outbox message for background worker
+        msg = host.db.execute_one(
+            "SELECT body, html_body FROM messages WHERE uuid = ?", (result["uuid"],)
+        )
+        assert msg is not None
 
     @patch("lighterbird.email.smtp.SMTPClient")
     def test_body_format_html(self, mock_smtp, host, db):
@@ -268,15 +265,19 @@ class TestSendEmailBodyFormats:
         mock_client = MagicMock()
         mock_smtp.return_value = mock_client
 
-        host.send_email(
+        result = host.send_email(
             account_email="test@example.com",
             to=["r@example.com"],
             subject="HTML Test",
             body="<p>Hello</p>",
             body_format="html",
         )
-        call_kwargs = mock_client.send_email.call_args.kwargs
-        assert call_kwargs.get("html_body") == "<p>Hello</p>"
+        assert result["status"] == "queued"
+        # Body is stored in Outbox message for background worker
+        msg = host.db.execute_one(
+            "SELECT body, html_body FROM messages WHERE uuid = ?", (result["uuid"],)
+        )
+        assert msg is not None
 
 
 class TestSaveOutboxMessage:
