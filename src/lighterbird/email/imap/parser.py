@@ -14,6 +14,27 @@ from typing import Any
 from lighterbird.email.imap.helpers import decode_mime_header, parse_address_list
 
 
+def _decode_payload(part: Any) -> bytes | None:
+    """Safely decode a MIME part's payload.
+
+    Wraps ``get_payload(decode=True)`` in try/except because some email
+    servers send messages with malformed Content-Transfer-Encoding
+    (corrupted base64, truncated quoted-printable, etc.) which would
+    otherwise abort the entire message parse.  Returns ``None`` on
+    decoding failure.
+    """
+    try:
+        return part.get_payload(decode=True)
+    except (LookupError, ValueError, TypeError, MemoryError) as exc:
+        import logging
+        ct = part.get_content_type()
+        ct_e = part.get("Content-Transfer-Encoding", "?")
+        logging.getLogger(__name__).warning(
+            "MIME decode error: ct=%s cte=%s: %s", ct, ct_e, exc,
+        )
+        return None
+
+
 def parse_email_message(
     msg: Any,
     account_email: str,
@@ -65,8 +86,24 @@ def parse_email_message(
             disp = str(part.get("Content-Disposition") or "")
             filename = part.get_filename()
 
-            if "attachment" in disp or filename:
-                payload = part.get_payload(decode=True)
+            if "attachment" in disp:
+                # RFC 2183: Content-Disposition: attachment → save as file
+                payload = _decode_payload(part)
+                content_id = (part.get("Content-ID") or str(uuid_mod.uuid4())).strip("<>")
+                att = {
+                    "filename": filename or "attachment",
+                    "mime_type": ct,
+                    "size": len(payload) if payload else 0,
+                    "content_id": content_id,
+                    "data": payload if store_attachments else None,
+                }
+                attachments.append(att)
+            elif filename and ct not in ("text/plain", "text/html"):
+                # Has a filename AND is not a text part — treat as inline
+                # resource / attachment.  Text parts with a filename
+                # (e.g. ``inline; filename="message.html"``) are NOT
+                # attachments per RFC 2183 — their body is extracted below.
+                payload = _decode_payload(part)
                 content_id = (part.get("Content-ID") or str(uuid_mod.uuid4())).strip("<>")
                 att = {
                     "filename": filename or "attachment",
@@ -86,8 +123,8 @@ def parse_email_message(
                 has_cid = bool(part.get("Content-ID"))
                 name = part.get_param("name", None, "Content-Type") or ""
                 if name or has_cid:
+                    payload = _decode_payload(part)
                     content_id = (part.get("Content-ID") or str(uuid_mod.uuid4())).strip("<>")
-                    payload = part.get_payload(decode=True)
                     attachments.append({
                         "filename": name or content_id,
                         "mime_type": ct,
@@ -95,18 +132,18 @@ def parse_email_message(
                         "content_id": content_id,
                         "data": payload if store_attachments else None,
                     })
-            elif ct == "text/plain" and not body and not filename:
-                payload = part.get_payload(decode=True)
+            elif ct == "text/plain" and not body:
+                payload = _decode_payload(part)
                 if payload:
                     charset = part.get_content_charset() or "utf-8"
                     body = payload.decode(charset, errors="replace")
-            elif ct == "text/html" and not html_body and not filename:
-                payload = part.get_payload(decode=True)
+            elif ct == "text/html" and not html_body:
+                payload = _decode_payload(part)
                 if payload:
                     charset = part.get_content_charset() or "utf-8"
                     html_body = payload.decode(charset, errors="replace")
     else:
-        payload = msg.get_payload(decode=True)
+        payload = _decode_payload(msg)
         if payload:
             charset = msg.get_content_charset() or "utf-8"
             decoded = payload.decode(charset, errors="replace")
