@@ -421,7 +421,7 @@
       <div class="all-read-content">
         <div class="all-read-icon">✓</div>
         <h2 class="all-read-title">{_ALL_READ_TITLE}</h2>
-        <p class="all-read-message">Hurray! You have read all your emails!</p>
+        <p class="all-read-message">Hurray! You are all up-to-date!<br>No more unread emails.</p>
         <button class="all-read-btn" onclick={() => tabStore.goHome()}>
           Back to Home
         </button>
