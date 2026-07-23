@@ -53,6 +53,10 @@ def spam_stats(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         svc.db.execute_one("SELECT COUNT(*) AS cnt FROM phishing_domains") or {}
     ).get("cnt", 0) or 0
 
+    # Similarity detector stats
+    similar = svc.similarity
+    sim_stats = similar.get_stats()
+
     # Messages flagged
     spam_msg_count = (
         svc.db.execute_one("SELECT COUNT(*) AS cnt FROM messages WHERE is_spam = 1")
@@ -76,6 +80,9 @@ def spam_stats(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         "",
         f"Phishing feed domains:   {total_feed_domains}",
         f"Phishing watchlist size: {watchlist_count}",
+        "",
+        f"Similarity signatures:   {sim_stats.get('signatures', 0)}",
+        f"Content hash entries:    {sim_stats.get('content_hashes', 0)}",
     ]
 
     if detail and total_tokens > 0:

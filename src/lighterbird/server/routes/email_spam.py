@@ -6,6 +6,7 @@ Provides endpoints for:
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -13,6 +14,8 @@ from pydantic import BaseModel, Field
 
 from lighterbird.email.service import EmailService
 from lighterbird.server.deps import get_email_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/email/spam", tags=["email-spam"])
 
@@ -93,6 +96,16 @@ def report_spam(
             email_svc.db.execute(
                 "UPDATE messages SET spam_score = ? WHERE uuid = ?",
                 (result["score"], data.uuid),
+            )
+        # Store similarity data for future near-duplicate detection
+        try:
+            email_svc.similarity.add_spam(
+                data.uuid, subject, body, account_email,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to store similarity data for %s", data.uuid,
+                exc_info=True,
             )
 
         # Defer IMAP backlog if undo requested
@@ -189,6 +202,14 @@ def report_spam(
             email_svc.db.execute(
                 "UPDATE messages SET spam_score = ? WHERE uuid = ?",
                 (result["score"], data.uuid),
+            )
+        # Remove similarity data (false positive — don't match against this)
+        try:
+            email_svc.similarity.remove_message(data.uuid)
+        except Exception:
+            logger.warning(
+                "Failed to remove similarity data for %s", data.uuid,
+                exc_info=True,
             )
 
     response = {

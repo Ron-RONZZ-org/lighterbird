@@ -228,6 +228,20 @@ class EmailService:
         # Any entries enqueued during sync (e.g. user flag toggles during
         # the sync window) will be picked up by the background worker or
         # the next sync cycle.
+
+        # Step 3: Post-sync spam classification for newly synced messages
+        try:
+            classified = self._classify_new_messages(email)
+            if classified:
+                logger.info(
+                    "Classified %d new messages for %s", classified, email,
+                )
+        except Exception:
+            logger.warning(
+                "Post-sync spam classification failed for %s",
+                email, exc_info=True,
+            )
+
         return result
 
     def sync_all(self, force: bool = False,
@@ -662,6 +676,122 @@ class EmailService:
         from lighterbird.email.filters.phishing import PhishingDetector
 
         return PhishingDetector(self._db)
+
+    @property
+    def similarity(self):
+        """Get a SpamSimilarityDetector instance.
+
+        Returns:
+            SpamSimilarityDetector bound to the email DB.
+        """
+        from lighterbird.email.filters.spam_similarity import (
+            SpamSimilarityDetector,
+        )
+        return SpamSimilarityDetector(self._db)
+
+    # ── Sieve blocklist resync ──────────────────────────────────────────
+
+    def resync_block_sieve(self) -> int:
+        """After blocklist changes, re-sync combined Sieve for all accounts.
+
+        Iterates all accounts with ManageSieve configured and calls
+        ``_combine_and_sync()`` so that the updated blocklist reject rules
+        are pushed to the server.
+
+        Returns:
+            Number of accounts re-synced.
+        """
+        accounts = self.db.execute(
+            "SELECT email FROM accounts WHERE managesieve_host != ''"
+        )
+        count = 0
+        for acct in accounts:
+            try:
+                self.sieve._combine_and_sync(acct["email"])
+                count += 1
+            except Exception:
+                logger.warning(
+                    "Sieve resync failed for %s", acct["email"], exc_info=True,
+                )
+        return count
+
+    # ── Post-sync spam classification ────────────────────────────────────
+
+    def _classify_new_messages(self, account_email: str) -> int:
+        """Run spam detectors on unclassified messages for an account.
+
+        Selects messages with ``spam_score IS NULL`` (newly synced, never
+        classified) and runs all three detectors — Bayesian, phishing, and
+        similarity — on each.  Stores results on the message row.
+
+        The combined score is taken as the **max** of Bayesian and
+        similarity scores.  Phishing detection is orthogonal and sets
+        ``phishing_detected`` independently.
+
+        Args:
+            account_email: Account to classify messages for.
+
+        Returns:
+            Number of messages classified.
+        """
+        spam_detect = self.spam_detect
+        phish = self.phishing
+        similar = self.similarity
+
+        unclassified = self._db.execute(
+            "SELECT uuid, subject, body, html_body, from_addr "
+            "FROM messages "
+            "WHERE account_email = ? AND spam_score IS NULL",
+            (account_email,),
+        )
+        if not unclassified:
+            return 0
+
+        count = 0
+        for msg in unclassified:
+            try:
+                subject = msg["subject"] or ""
+                body = msg["body"] or ""
+                html_body = msg.get("html_body")
+                from_addr = msg.get("from_addr", "")
+
+                # Bayesian
+                bayesian = spam_detect.classifier.classify(
+                    subject, body, account_email,
+                )
+
+                # Phishing
+                phish_result = phish.analyze(
+                    from_addr, subject, html_body, body, account_email,
+                )
+
+                # Similarity
+                sim_result = similar.check_similarity(
+                    subject, body, account_email,
+                )
+
+                # Combined score: max of Bayesian and similarity
+                combined = max(
+                    bayesian.get("score", 0.0),
+                    sim_result.get("score", 0.0),
+                )
+                is_spam = combined >= 0.9 or phish_result.get("is_phishing", False)
+
+                self._db.execute(
+                    "UPDATE messages SET spam_score = ?, is_spam = ?, "
+                    "phishing_detected = ? WHERE uuid = ?",
+                    (round(combined, 4), int(is_spam),
+                     int(phish_result.get("is_phishing", False)),
+                     msg["uuid"]),
+                )
+                count += 1
+            except Exception:
+                logger.warning(
+                    "Failed to classify message %s", msg["uuid"], exc_info=True,
+                )
+                continue
+
+        return count
 
     @property
     def db(self):
