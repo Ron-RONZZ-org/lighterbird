@@ -273,13 +273,20 @@
         ? async () => {
             try {
               await emailApi.undoAction(opId);
-              // Re-fetch the restored message and open in a new tab
+              // Re-fetch the restored message
               try {
                 const restored = await emailApi.getMessage(originalMsg.uuid);
-                tabStore.open("email", restored.subject || "(no subject)", restored, {
-                  idKey: `email-${restored.uuid}`,
-                  replaceable: false,
-                });
+                if (nextMsg) {
+                  // Tab is still open (showing next unread) — update in-place
+                  msg = restored;
+                  tabStore.update(tabId, restored, restored.subject || "(no subject)", `email-${restored.uuid}`);
+                } else {
+                  // Tab was closed (no more unread) — open a new one
+                  tabStore.open("email", restored.subject || "(no subject)", restored, {
+                    idKey: `email-${restored.uuid}`,
+                    replaceable: false,
+                  });
+                }
               } catch { /* silent */ }
             } catch { /* undo failed — ignore */ }
           }
