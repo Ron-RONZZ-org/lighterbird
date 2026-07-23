@@ -1,6 +1,22 @@
 <script>
   let { data = {} } = $props();
   let msg = $derived(data);
+
+  /** Strip HTML tags and decode common entities for plain-text display. */
+  function stripHtml(html) {
+    const text = html.replace(/<[^>]*>/g, "");
+    return text
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&#?\w+;/g, "")  // remove any remaining entities
+      .trim();
+  }
+
+  let displayBody = $derived(msg.body || (msg.html_body ? stripHtml(msg.html_body) : "(no body)"));
 </script>
 
 <div class="email">
@@ -27,7 +43,7 @@
     <span class="value">{msg.is_read ? "yes" : "no"}</span>
   </div>
   <hr />
-  <div class="body-text">{msg.body || "(no body)"}</div>
+  <div class="body-text">{displayBody}</div>
 </div>
 
 <style>
