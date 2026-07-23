@@ -163,6 +163,7 @@ class TestSpamManager:
             "  uuid TEXT PRIMARY KEY,"
             "  type TEXT NOT NULL,"
             "  pattern TEXT NOT NULL,"
+            "  note TEXT NOT NULL DEFAULT '',"
             "  created_at TEXT,"
             "  updated_at TEXT"
             ")"
