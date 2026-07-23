@@ -487,7 +487,7 @@ def get_message(uuid: str, email_svc: EmailService = Depends(get_email_service))
 
     # Lazy body fetch: if this message was synced header-only, download the
     # full message body (and attachments) on demand.
-    if not msg.get("body_fetched", 1) and msg.get("imap_uid") and msg.get("account_email") and msg.get("folder_name"):
+    if not msg.get("body_fetched", 0) and msg.get("imap_uid") and msg.get("account_email") and msg.get("folder_name"):
         _lazy_fetch_body(email_svc, msg)
 
     result = dict(msg)
@@ -618,7 +618,7 @@ def view_message_html(uuid: str, email_svc: EmailService = Depends(get_email_ser
     from_addr = html_mod.escape(msg.get("from_addr", ""))
     to_addr = html_mod.escape(to_str)
     date = html_mod.escape(msg.get("received_at", ""))
-    body = html_mod.escape(msg.get("body", "(no body)"))
+    body = html_mod.escape(msg.get("body") or msg.get("html_body", "") or "(no body)")
 
     return HTMLResponse(
         _EMAIL_HTML_TMPL.format(
