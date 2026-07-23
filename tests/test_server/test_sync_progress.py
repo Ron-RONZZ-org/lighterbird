@@ -213,3 +213,65 @@ class TestSyncProgressEndpoints:
                 if data["status"] in ("complete", "error"):
                     return  # Success! Task finished.
         assert False, "Sync task did not reach complete/error status within 10s"
+
+    def test_progress_decodes_imap_utf7_folder_name(self):
+        """The progress endpoint decodes IMAP modified UTF-7 folder names.
+
+        Folder names from IMAP use modified UTF-7 (RFC 3501 §5.1.3).
+        The sync progress endpoint must decode them so the frontend
+        displays proper Unicode (accents, emoji) in the progress bar.
+        """
+        # Use the app-level tracker singleton so the API can find the task.
+        from lighterbird.server.sync_progress import get_sync_progress_tracker
+
+        client = self._client()
+        start_resp = client.post("/api/v1/email/sync/start", json={})
+        task_id = start_resp.json()["task_id"]
+
+        # Directly inject a folder update with a modified UTF-7 name.
+        # "&AMk-l&AOA-" is the IMAP UTF-7 encoding of "Élà".
+        tracker = get_sync_progress_tracker()
+        tracker.set_total_folders(task_id, 5)
+        tracker.update_folder(task_id, 1, "&AMk-l&AOA-")
+
+        # Poll progress and verify the folder name is decoded.
+        prog_resp = client.get(f"/api/v1/email/sync/progress/{task_id}")
+        assert prog_resp.status_code == 200
+        data = prog_resp.json()
+        assert data["folder_name"] == "Élà", (
+            f"Expected 'Élà' but got {data['folder_name']!r}"
+        )
+
+    def test_progress_passes_through_ascii_folder_name(self):
+        """Pure ASCII folder names pass through unchanged."""
+        from lighterbird.server.sync_progress import get_sync_progress_tracker
+
+        client = self._client()
+        start_resp = client.post("/api/v1/email/sync/start", json={})
+        task_id = start_resp.json()["task_id"]
+
+        tracker = get_sync_progress_tracker()
+        tracker.set_total_folders(task_id, 3)
+        tracker.update_folder(task_id, 2, "INBOX")
+
+        prog_resp = client.get(f"/api/v1/email/sync/progress/{task_id}")
+        assert prog_resp.status_code == 200
+        data = prog_resp.json()
+        assert data["folder_name"] == "INBOX"
+
+    def test_progress_empty_folder_name(self):
+        """Empty folder_name is returned as-is (empty string)."""
+        from lighterbird.server.sync_progress import get_sync_progress_tracker
+
+        client = self._client()
+        start_resp = client.post("/api/v1/email/sync/start", json={})
+        task_id = start_resp.json()["task_id"]
+
+        tracker = get_sync_progress_tracker()
+        tracker.set_total_folders(task_id, 3)
+        tracker.update_folder(task_id, 1, "")
+
+        prog_resp = client.get(f"/api/v1/email/sync/progress/{task_id}")
+        assert prog_resp.status_code == 200
+        data = prog_resp.json()
+        assert data["folder_name"] == ""

@@ -18,6 +18,7 @@ from lighterbird.server.schemas import (
     SyncStartResponse,
     SyncStatusResponse,
 )
+from lighterbird.email.imap.client import decode_imap_utf7
 from lighterbird.server.sync_progress import get_sync_progress_tracker
 
 router = APIRouter(prefix="/api/v1/email", tags=["email"])
@@ -159,9 +160,16 @@ def sync_email_start(
 
 @router.get("/sync/progress/{task_id}", response_model=SyncProgressResponse)
 def get_sync_progress(task_id: str):
-    """Poll progress of a sync task started via ``POST /api/v1/email/sync``."""
+    """Poll progress of a sync task started via ``POST /api/v1/email/sync``.
+
+    Folder names from IMAP are stored in modified UTF-7 encoding (RFC 3501
+    §5.1.3).  Decode them before returning so the frontend displays proper
+    Unicode (accents, emoji, etc.) in the progress bar.
+    """
     tracker = get_sync_progress_tracker()
     progress = tracker.get(task_id)
     if progress is None:
         raise HTTPException(status_code=404, detail=f"Sync task not found: {task_id}")
+    if progress.get("folder_name"):
+        progress["folder_name"] = decode_imap_utf7(progress["folder_name"])
     return SyncProgressResponse(**progress)
