@@ -18,6 +18,7 @@
   class="sync-status-bar status-{statusClass}"
   onclick={onSync}
   title="Click to sync now"
+  role="status"
   aria-live="polite"
 >
   {#if statusClass === "syncing"}
