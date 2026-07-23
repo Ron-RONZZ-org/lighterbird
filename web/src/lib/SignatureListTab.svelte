@@ -250,6 +250,7 @@
           aria-selected={isSelected(sig.uuid)}
           tabindex={selectionMode ? (i === focusedIndex ? 0 : -1) : 0}
           onclick={() => handleRowClick(sig.uuid)}
+          onkeydown={(e) => { if (e.key === "Enter") handleRowClick(sig.uuid); }}
         >
           <span class="checkbox-cell">
             {#if selectionMode}

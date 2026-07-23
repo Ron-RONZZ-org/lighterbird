@@ -211,6 +211,7 @@
         <div class="row edit-row">
           <span class="badge {block.type}">{block.type}</span>
           <span class="pattern">{block.pattern}</span>
+          <!-- svelte-ignore a11y_autofocus -->
           <input
             class="edit-input"
             type="text"
@@ -234,6 +235,7 @@
           aria-selected={isSelected(block.uuid)}
           tabindex={selectionMode ? (i === focusedIndex ? 0 : -1) : 0}
           onclick={() => handleRowClick(block.uuid)}
+          onkeydown={(e) => { if (e.key === "Enter") handleRowClick(block.uuid); }}
         >
           <span class="checkbox-cell">
             {#if selectionMode}
