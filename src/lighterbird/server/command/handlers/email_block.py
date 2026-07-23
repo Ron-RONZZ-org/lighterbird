@@ -60,6 +60,7 @@ def block_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
     if domain_flag:
         block = svc.spam.block_domain(domain_flag, note=note)
+        svc.resync_block_sieve()
         label = f"@{block['pattern']}"
         return {
             "type": "status", "title": "Block Added",
@@ -69,6 +70,7 @@ def block_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
 
     if sender_flag:
         block = svc.spam.block_sender(sender_flag, note=note)
+        svc.resync_block_sieve()
         label = block["pattern"]
         return {
             "type": "status", "title": "Block Added",
@@ -81,9 +83,11 @@ def block_add(remaining: list[str], flags: dict[str, str]) -> dict[str, Any]:
         raw = remaining[0]
         if raw.startswith("@"):
             block = svc.spam.block_domain(raw[1:], note=note)
+            svc.resync_block_sieve()
             label = f"@{block['pattern']}"
         elif "@" in raw:
             block = svc.spam.block_sender(raw, note=note)
+            svc.resync_block_sieve()
             label = block["pattern"]
         else:
             raise CommandValidationError(

@@ -51,4 +51,5 @@ def delete_block(
     if not block:
         raise HTTPException(status_code=404, detail=f"Block not found: {block_uuid}")
     email_svc.spam.unblock(block_uuid)
+    email_svc.resync_block_sieve()
     return {"status": "deleted", "uuid": block_uuid}

@@ -131,7 +131,12 @@ class SieveRemoteMixin:
             )
 
     def _combine_and_sync(self, account_email: str) -> None:
-        """Combine all active scripts for an account and sync to ManageSieve."""
+        """Combine all active scripts for an account and sync to ManageSieve.
+
+        Automatically includes the virtual ``_spam_blocks`` script (generated
+        from the blocklist) so that sender/domain blocks are enforced
+        server-side.
+        """
         from lighterbird.email.filters.combiner import combine_scripts
         from lighterbird.email.filters.sieve import validate_sieve
 
@@ -144,10 +149,17 @@ class SieveRemoteMixin:
                 (account_email,),
             )
         )
-        if not rows:
-            return
 
         scripts = [{"name": r["name"], "content": r["content"]} for r in rows]
+
+        # Append virtual _spam_blocks script (blocklist → Sieve reject rules)
+        virtual = self._spam_blocks_virtual(account_email)
+        if virtual:
+            scripts.append({"name": "_spam_blocks", "content": virtual["content"]})
+
+        if not scripts:
+            return
+
         combined, _warnings = combine_scripts(scripts)
 
         is_valid, err = validate_sieve(combined)
