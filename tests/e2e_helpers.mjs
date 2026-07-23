@@ -47,7 +47,7 @@ export async function typeCommand(cmd) {
   await input.click();
   await input.fill("");
   await sleep(30);
-  await input.pressSequentially(cmd, { delay: 5 });
+  await input.pressSequentially(cmd, { delay: 50 });
   await sleep(150);
 }
 

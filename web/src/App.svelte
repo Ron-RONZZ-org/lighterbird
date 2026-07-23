@@ -4,6 +4,8 @@
   import { popup } from "./lib/popupStore.svelte.js";
   import { tabStore } from "./lib/tabStore.svelte.js";
   import { dirtyFormStore } from "./lib/dirtyFormStore.svelte.js";
+  // Expose tabStore globally for E2E test access (bypasses Enter-key cascade #258).
+  if (typeof window !== "undefined") window.__tabStore = tabStore;
   import { banner } from "./lib/bannerStore.svelte.js";
   import { execute } from "./lib/commandExecutor.js";
   import { shouldIntercept } from "./lib/commandRouter.js";

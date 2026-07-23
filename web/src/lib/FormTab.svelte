@@ -38,7 +38,19 @@
 
   function handleDirtyChange(dirty) {
     formDirty = dirty;
+    // Write to the global dirtyFormStore directly — this is called
+    // synchronously from the child form's $effect, which correctly tracks
+    // the child's dirty $derived as a dependency.  We bypass FormTab's
+    // own $effect for dirty-tracking, decoupling dirty-state propagation
+    // from FormTab's reactive graph entirely.
+    const tabId = tabStore.active?.id;
+    if (tabId) {
+      dirtyFormStore.setDirty(tabId, dirty);
+    }
   }
+
+  // Track the tab ID we registered with — used by onDestroy for cleanup.
+  let _registeredTabId = null;
 
   // Register a default save callback that clicks the form's submit button.
   // Individual forms (ComposeEmail, LetterForm) register their own save-draft
@@ -59,7 +71,6 @@
   //      not by the $effect return.
   //   5. tabId is read via untrack(() => tabId) so it does not establish a
   //      reactive dependency — the effect re-runs only when formDirty changes.
-  let _registeredTabId = null;
   $effect(() => {
     const id = untrack(() => tabId);
     // Read formDirty synchronously to establish it as a reactive dependency.
