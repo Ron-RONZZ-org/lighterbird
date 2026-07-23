@@ -122,11 +122,11 @@ const MUTATION_MAP = {
 
   // ── Email ────────────────────────────────────────────────────────
   "email send": {
-    listTokens: ["email", "list"],
-    listIdKey: "email-list",
-    type: "email-list",
+    listTokens: ["email", "list", "outbox"],
+    listIdKey: "email-outbox-list",
+    type: "email-outbox-list",
     isDelete: false,
-    title: "Inbox",
+    title: "Outbox",
   },
 
   // ── Sieve scripts ────────────────────────────────────────────────
@@ -286,6 +286,7 @@ export const LIST_REFRESHERS = {
   "persistent-calendar-events":      (highlight) => calendarApi.listEvents({ limit: 50 }).then(r => ({ ...r, highlight })),
   "persistent-letter-list":          (highlight) => lettersApi.list({ limit: 50 }).then(r => ({ ...r, highlight })),
   "persistent-email-list":           (highlight) => emailApi.list({ folder: "Inbox", sort: "newest" }).then(r => ({ ...r, highlight })),
+  "persistent-email-outbox-list":    (highlight) => emailApi.list({ folder: "Outbox", sort: "newest" }).then(r => ({ ...r, highlight })),
   "persistent-block-list":           (highlight) => emailApi.listBlocks().then(r => ({ ...r, highlight })),
   "persistent-signature-list":       (highlight) => emailApi.listSignatures().then(r => ({ ...r, highlight })),
   "persistent-folder-list":          (highlight) => emailApi.listFolders().then(r => ({ ...r, highlight })),
